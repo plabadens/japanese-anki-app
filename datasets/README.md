@@ -2,9 +2,9 @@
 
 These are pinned linguistic data sources for offline processing. Do not replace them with proprietary Rikaitan downloads.
 
-## UniDic
+## MeCab and UniDic
 
-See [`unidic/README.md`](unidic/README.md) for the pinned official UniDic CWJ 3.1.1 source archive, license, attribution, and deterministic runtime-asset packaging.
+See [`mecab/README.md`](mecab/README.md) and [`unidic/README.md`](unidic/README.md) for the pinned morphology engine, official UniDic CWJ 3.1.1 source archive, licenses, attribution, and deterministic runtime-asset packaging.
 
 ## JMdict
 

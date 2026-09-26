@@ -44,18 +44,24 @@ class OfflineDictionary(context: Context) : AutoCloseable {
         }
     }
 
-    fun search(surface: String, limit: Int = 50, offset: Int = 0): List<DictionaryEntry> {
+    fun search(surface: String, lemma: String? = null, limit: Int = 50, offset: Int = 0): List<DictionaryEntry> {
         val query = surface.trim()
         if (query.isEmpty()) return emptyList()
         require(limit in 1..100 && offset >= 0)
+        val terms = listOfNotNull(query, lemma?.trim()?.takeIf(String::isNotEmpty)).distinct()
+        val placeholders = terms.joinToString(",") { "?" }
+        val lemmaTerm = terms.getOrElse(1) { query }
+        val selectionArgs = terms + terms + listOf(query, query, lemmaTerm, limit.toString(), offset.toString())
         val db = database ?: error("Offline dictionary is not ready.")
         return db.rawQuery(
             """SELECT e.id, f.expression, f.reading, e.senses
                FROM forms f JOIN entries e ON e.id=f.entry_id
-               WHERE f.expression=? OR f.reading=?
-               ORDER BY CASE WHEN f.expression=? THEN 0 ELSE 1 END, f.expression, f.reading, e.id
+               WHERE f.expression IN ($placeholders) OR f.reading IN ($placeholders)
+               ORDER BY CASE WHEN f.expression=? THEN 0 WHEN f.reading=? THEN 1
+                             WHEN f.expression=? THEN 2 ELSE 3 END,
+                        f.expression, f.reading, e.id
                LIMIT ? OFFSET ?""".trimIndent(),
-            arrayOf(query, query, query, limit.toString(), offset.toString()),
+            selectionArgs.toTypedArray(),
         ).use { cursor ->
             val idColumn = cursor.getColumnIndexOrThrow("id")
             val expressionColumn = cursor.getColumnIndexOrThrow("expression")

@@ -34,6 +34,18 @@ def main() -> None:
             ("食べる", "たべる"),
         ).fetchone()
         assert result and "to eat" in result[0]
+        query, lemma = "食べた", "食べる"
+        terms = [query, lemma]
+        placeholders = ",".join("?" for _ in terms)
+        matches = connection.execute(
+            f"""SELECT e.id, f.expression, f.reading FROM forms f JOIN entries e ON e.id=f.entry_id
+                WHERE f.expression IN ({placeholders}) OR f.reading IN ({placeholders})
+                ORDER BY CASE WHEN f.expression=? THEN 0 WHEN f.reading=? THEN 1
+                              WHEN f.expression=? THEN 2 ELSE 3 END,
+                         f.expression, f.reading, e.id LIMIT ? OFFSET ?""",
+            terms + terms + [query, query, lemma, "50", "0"],
+        ).fetchall()
+        assert matches and matches[0][1:] == ("食べる", "たべる")
         pitches = connection.execute(
             "SELECT accent FROM pitch WHERE expression=? AND reading=? ORDER BY source_order",
             ("猫", "ねこ"),

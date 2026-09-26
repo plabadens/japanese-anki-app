@@ -24,15 +24,18 @@ java -cp "$gradle_lib/*" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler \
   app/src/main/java/dev/pierre/japaneseanki/AnkiFieldSerializer.kt \
   app/src/main/java/dev/pierre/japaneseanki/ManualNoteDraft.kt \
   app/src/main/java/dev/pierre/japaneseanki/PitchAccent.kt \
+  app/src/main/java/dev/pierre/japaneseanki/JapaneseMorphology.kt \
   app/src/test/java/dev/pierre/japaneseanki/TargetSpanTest.kt \
   app/src/test/java/dev/pierre/japaneseanki/AnkiFieldContractTest.kt \
   app/src/test/java/dev/pierre/japaneseanki/AnkiFieldSerializerTest.kt \
   app/src/test/java/dev/pierre/japaneseanki/ManualNoteDraftTest.kt \
-  app/src/test/java/dev/pierre/japaneseanki/PitchAccentTest.kt
+  app/src/test/java/dev/pierre/japaneseanki/PitchAccentTest.kt \
+  app/src/test/java/dev/pierre/japaneseanki/JapaneseMorphologyTest.kt
 
 java -cp "$classes:$runtime_cp" org.junit.runner.JUnitCore \
   dev.pierre.japaneseanki.TargetSpanTest \
   dev.pierre.japaneseanki.AnkiFieldContractTest \
   dev.pierre.japaneseanki.AnkiFieldSerializerTest \
   dev.pierre.japaneseanki.ManualNoteDraftTest \
-  dev.pierre.japaneseanki.PitchAccentTest
+  dev.pierre.japaneseanki.PitchAccentTest \
+  dev.pierre.japaneseanki.JapaneseMorphologyTest

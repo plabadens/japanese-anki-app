@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -66,11 +67,13 @@ class MainActivity : ComponentActivity() {
     private var ankiDroidInstalled by mutableStateOf(false)
     private var apiPermissionGranted by mutableStateOf(false)
     private lateinit var offlineDictionary: OfflineDictionary
+    private lateinit var offlineAnalyzer: OfflineJapaneseAnalyzer
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         sharedText.value = textFromIntent(intent)
         offlineDictionary = sharedDictionary(this)
+        offlineAnalyzer = OfflineJapaneseAnalyzer.shared(this)
         val preferences = getSharedPreferences("draft", MODE_PRIVATE)
         val settings = getSharedPreferences("settings", MODE_PRIVATE)
         if (preferences.getString("submission_status", null) == "done") {
@@ -120,6 +123,15 @@ class MainActivity : ComponentActivity() {
             var dictionaryLoading by remember { mutableStateOf(false) }
             var dictionaryError by remember { mutableStateOf<String?>(null) }
             var dictionaryInfo by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+            var analyzerReady by remember { mutableStateOf(false) }
+            var analyzerLoading by remember { mutableStateOf(false) }
+            var analyzerProgress by remember { mutableStateOf(0f) }
+            var analyzerError by remember { mutableStateOf<String?>(null) }
+            var tokenizationLoading by remember { mutableStateOf(false) }
+            var tokenizationError by remember { mutableStateOf<String?>(null) }
+            var analysisRetry by remember { mutableStateOf(0) }
+            var japaneseTokens by remember { mutableStateOf<List<JapaneseToken>>(emptyList()) }
+            val analyzedTarget = target?.let { resolveAnalyzedLemma(japaneseTokens, it) }
             var dictionaryEntries by remember { mutableStateOf<List<DictionaryEntry>>(emptyList()) }
             var dictionarySearchLoading by remember { mutableStateOf(false) }
             var dictionaryHasMore by remember { mutableStateOf(false) }
@@ -168,6 +180,9 @@ class MainActivity : ComponentActivity() {
                 pitchAccentText.isNotBlank() || definition.isNotBlank() || sentenceReading.isNotBlank()
             val clearDraft = {
                 editor = TextFieldValue("")
+                japaneseTokens = emptyList()
+                tokenizationLoading = false
+                tokenizationError = null
                 target = null
                 vocabulary = ""
                 vocabularyReading = ""
@@ -183,6 +198,25 @@ class MainActivity : ComponentActivity() {
                 selectedDictionaryEntry = null
                 selectedDictionaryEntryId = null
                 selectedSenseIndices = emptySet()
+            }
+            val selectTarget: (TargetSpan?) -> Unit = { selected ->
+                val previousTarget = target
+                if (selected != previousTarget) {
+                    if (hasTargetData) dependentFieldsStale = true
+                    leaveSentenceTargetUnannotated = false
+                    leaveVocabularyUnannotated = false
+                }
+                target = selected
+                if (selected != null && vocabulary.isBlank()) {
+                    val surface = selected.textIn(editor.text).orEmpty()
+                    val lemma = resolveAnalyzedLemma(japaneseTokens, selected)
+                    vocabulary = lemma?.expression ?: surface
+                    if (lemma != null && vocabularyReading.isBlank() && !leaveVocabularyUnannotated &&
+                        containsKanji(lemma.expression)
+                    ) {
+                        vocabularyReading = lemma.reading
+                    }
+                }
             }
 
             androidx.compose.runtime.LaunchedEffect(dictionaryRetry) {
@@ -200,7 +234,71 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            androidx.compose.runtime.LaunchedEffect(dictionaryReady, target, editor.text, dictionaryRetry) {
+            androidx.compose.runtime.LaunchedEffect(dictionaryRetry) {
+                analyzerLoading = true
+                analyzerError = null
+                analyzerProgress = 0f
+                try {
+                    withContext(Dispatchers.IO) { offlineAnalyzer.prepare { analyzerProgress = it } }
+                    analyzerReady = true
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: LinkageError) {
+                    analyzerError = "MeCab native analysis could not load. Manual entry remains available."
+                } catch (_: Exception) {
+                    analyzerError = "UniDic could not be installed. Check available storage and retry."
+                } finally {
+                    analyzerLoading = false
+                }
+            }
+
+            androidx.compose.runtime.LaunchedEffect(analyzerReady, editor.text, analysisRetry) {
+                if (!analyzerReady || editor.text.isBlank()) {
+                    japaneseTokens = emptyList()
+                    tokenizationLoading = false
+                    return@LaunchedEffect
+                }
+                tokenizationLoading = true
+                tokenizationError = null
+                try {
+                    kotlinx.coroutines.delay(150)
+                    japaneseTokens = withContext(Dispatchers.IO) { offlineAnalyzer.analyze(editor.text) }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    japaneseTokens = emptyList()
+                    tokenizationError = "Could not analyze this sentence. Select a target or enter values manually."
+                } finally {
+                    tokenizationLoading = false
+                }
+            }
+
+            androidx.compose.runtime.LaunchedEffect(
+                target, editor.text, japaneseTokens, vocabulary, vocabularyReading,
+                leaveVocabularyUnannotated, dependentFieldsStale,
+            ) {
+                val targetSpan = target ?: return@LaunchedEffect
+                val targetText = targetSpan.textIn(editor.text) ?: return@LaunchedEffect
+                val resolved = resolveAnalyzedLemma(japaneseTokens, targetSpan) ?: return@LaunchedEffect
+                val shouldResolveSurface = vocabulary.isBlank() ||
+                    (!dependentFieldsStale && vocabulary == targetText)
+                if (shouldResolveSurface) vocabulary = resolved.expression
+                if ((shouldResolveSurface || vocabulary == resolved.expression) && vocabularyReading.isBlank() &&
+                    !leaveVocabularyUnannotated && containsKanji(resolved.expression)
+                ) vocabularyReading = resolved.reading
+            }
+
+            androidx.compose.runtime.LaunchedEffect(target, editor.text, japaneseTokens, sentenceReading, leaveSentenceTargetUnannotated) {
+                val targetSpan = target ?: return@LaunchedEffect
+                val targetText = targetSpan.textIn(editor.text) ?: return@LaunchedEffect
+                if (sentenceReading.isNotBlank() || leaveSentenceTargetUnannotated || !containsKanji(targetText)) {
+                    return@LaunchedEffect
+                }
+                sentenceReading = resolveSurfaceReading(japaneseTokens, targetSpan)
+                    ?.takeIf(String::isNotBlank) ?: return@LaunchedEffect
+            }
+
+            androidx.compose.runtime.LaunchedEffect(dictionaryReady, target, editor.text, dictionaryRetry, japaneseTokens) {
                 val targetText = target?.textIn(editor.text)
                 if (!dictionaryReady || targetText == null) {
                     dictionaryEntries = emptyList()
@@ -210,7 +308,7 @@ class MainActivity : ComponentActivity() {
                     dictionarySearchLoading = true
                     try {
                         val entries = withContext(Dispatchers.IO) {
-                            offlineDictionary.search(targetText)
+                            offlineDictionary.search(targetText, analyzedTarget?.expression)
                         }
                         dictionaryEntries = entries
                         dictionaryError = null
@@ -278,6 +376,7 @@ class MainActivity : ComponentActivity() {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("JMdict © James William Breen and EDRDG; CC BY-SA 4.0. ${dictionaryInfo["jmdict_source"].orEmpty()}")
                             Text("The pitch accent notation, verb particle data, phonetics, homonyms, and other additions or modifications to EDICT, KANJIDIC, or KRADFILE were provided by Uros O. through his free database. Kanjium CC BY-SA 4.0. ${dictionaryInfo["kanjium_commit"].orEmpty()}")
+                            Text("MeCab 0.996 © Taku Kudo and Nippon Telegraph and Telephone Corporation; BSD license.")
                             Text("UniDic CWJ 3.1.1 © the UniDic Consortium and Teruaki Oka; distributed under the included BSD license.")
                             Text("Local license copies are bundled with the app. JMdict data is updated through app releases.")
                             TextButton(onClick = {
@@ -315,6 +414,9 @@ class MainActivity : ComponentActivity() {
                             editor = TextFieldValue(incoming, selection = TextRange(incoming.length))
                             if (hasTargetData) dependentFieldsStale = true
                             target = null
+                            japaneseTokens = emptyList()
+                            tokenizationError = null
+                            tokenizationLoading = analyzerReady
                             showReplace = false
                             sharedText.value = null
                         }) { Text("Replace") }
@@ -467,14 +569,27 @@ class MainActivity : ComponentActivity() {
                         }
                         if (dictionaryError != null) {
                             Text(dictionaryError!!, style = MaterialTheme.typography.bodyMedium)
-                            TextButton(onClick = { dictionaryRetry++ }) { Text("Retry dictionary setup") }
+                            TextButton(onClick = { dictionaryRetry++ }) { Text("Retry offline data setup") }
+                        }
+                        if (analyzerLoading) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                Text("Installing UniDic: ${(analyzerProgress * 100).toInt()}% (about 725 MB)…")
+                            }
+                        }
+                        if (analyzerError != null) {
+                            Text(analyzerError!!, style = MaterialTheme.typography.bodyMedium)
+                            TextButton(onClick = { dictionaryRetry++ }) { Text("Retry analyzer setup") }
                         }
                         OutlinedTextField(
                             value = editor,
                             onValueChange = { updated ->
                                 if (updated.text != editor.text) {
                                     if (target != null || hasTargetData) dependentFieldsStale = true
-                                    target = null
+                                    selectTarget(null)
+                                    japaneseTokens = emptyList()
+                                    tokenizationError = null
+                                    tokenizationLoading = analyzerReady
                                 }
                                 editor = updated
                             },
@@ -482,21 +597,47 @@ class MainActivity : ComponentActivity() {
                             label = { Text("Japanese sentence") },
                             minLines = 3,
                         )
+                        if (analyzerReady) {
+                            Text("Analyzed tokens — tap one to select it as the target")
+                            Row(
+                                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                japaneseTokens.forEach { token ->
+                                    val selected = target == token.span
+                                    val onSelect = {
+                                        selectTarget(token.span)
+                                        editor = editor.copy(selection = TextRange(token.span.start, token.span.end))
+                                    }
+                                    if (selected) {
+                                        Button(onClick = onSelect) { Text(token.surface) }
+                                    } else {
+                                        OutlinedButton(onClick = onSelect) { Text(token.surface) }
+                                    }
+                                }
+                            }
+                            if (tokenizationLoading) Text("Analyzing sentence…")
+                            if (tokenizationError != null) {
+                                Text(tokenizationError!!, style = MaterialTheme.typography.bodyMedium)
+                                TextButton(onClick = { analysisRetry++ }) { Text("Retry sentence analysis") }
+                            }
+                        }
                         OutlinedButton(
                             onClick = {
-                                val newTarget = TargetSpan.fromSelection(
-                                    editor.text,
-                                    editor.selection.start,
-                                    editor.selection.end,
+                                selectTarget(
+                                    TargetSpan.fromSelection(
+                                        editor.text,
+                                        editor.selection.start,
+                                        editor.selection.end,
+                                    ),
                                 )
-                                if (newTarget != target && hasTargetData) dependentFieldsStale = true
-                                target = newTarget
-                                if (vocabulary.isBlank()) vocabulary = newTarget?.textIn(editor.text).orEmpty()
                             },
                             enabled = editor.selection.start != editor.selection.end,
                         ) { Text("Use selected text as target") }
+                        val targetText = target?.textIn(editor.text)
+                        val lemmaLabel = analyzedTarget?.expression?.let { " → $it" }.orEmpty()
                         Text(
-                            target?.textIn(editor.text)?.let { "Target: $it" }
+                            targetText?.let { "Target: $it$lemmaLabel" }
                                 ?: "Select text in the sentence to choose a target.",
                             style = MaterialTheme.typography.bodyLarge,
                         )
@@ -508,11 +649,12 @@ class MainActivity : ComponentActivity() {
                         }
                         if (target?.textIn(editor.text) != null) {
                             Text("Offline dictionary matches", style = MaterialTheme.typography.titleMedium)
+                            analyzedTarget?.let { Text("Also searching analyzed lemma: ${it.expression}") }
                             when {
                                 !dictionaryReady && dictionaryLoading -> Text("Dictionary is being prepared…")
                                 !dictionaryReady -> Text("Dictionary unavailable; complete the vocabulary manually.")
                                 dictionarySearchLoading -> Text("Searching JMdict…")
-                                dictionaryEntries.isEmpty() -> Text("No exact spelling/reading match. Manual entry remains available.")
+                                dictionaryEntries.isEmpty() -> Text("No spelling, reading, or analyzer-lemma match. Manual entry remains available.")
                             }
                             dictionaryEntries.forEach { entry ->
                                 OutlinedButton(
@@ -523,9 +665,13 @@ class MainActivity : ComponentActivity() {
                                         }
                                         vocabulary = entry.expression
                                         vocabularyReading = entry.reading
-                                        val targetText = target?.textIn(editor.text).orEmpty()
-                                        if (sentenceReading.isBlank() && containsKanji(targetText)) {
-                                            sentenceReading = entry.reading
+                                        val targetSpan = target
+                                        val targetText = targetSpan?.textIn(editor.text).orEmpty()
+                                        val surfaceReading = targetSpan?.let {
+                                            resolveSurfaceReading(japaneseTokens, it)
+                                        }
+                                        if (sentenceReading.isBlank() && containsKanji(targetText) && surfaceReading != null) {
+                                            sentenceReading = surfaceReading
                                         }
                                         leaveVocabularyUnannotated = false
                                         val isSameEntry = selectedDictionaryEntry?.id == entry.id
@@ -563,7 +709,11 @@ class MainActivity : ComponentActivity() {
                                         dictionarySearchLoading = true
                                         try {
                                             val more = withContext(Dispatchers.IO) {
-                                                offlineDictionary.search(query, offset = dictionaryEntries.size)
+                                                offlineDictionary.search(
+                                                    query,
+                                                    analyzedTarget?.expression,
+                                                    offset = dictionaryEntries.size,
+                                                )
                                             }
                                             dictionaryEntries = dictionaryEntries + more
                                             dictionaryHasMore = more.size == 50
@@ -631,7 +781,7 @@ class MainActivity : ComponentActivity() {
                                     leaveVocabularyUnannotated = false
                                 },
                                 modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Vocabulary reading") },
+                                label = { Text("Vocabulary reading (UniDic suggestion, editable)") },
                                 singleLine = true,
                             )
                             OutlinedTextField(
@@ -680,7 +830,7 @@ class MainActivity : ComponentActivity() {
                                 value = sentenceReading,
                                 onValueChange = { sentenceReading = it; leaveSentenceTargetUnannotated = false },
                                 modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Selected sentence span reading") },
+                                label = { Text("Selected sentence span reading (UniDic suggestion, editable)") },
                                 singleLine = true,
                             )
                             Row {

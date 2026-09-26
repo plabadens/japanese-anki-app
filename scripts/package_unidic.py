@@ -23,7 +23,7 @@ def package(archive: Path, output: Path) -> None:
             info.compress_type = zipfile.ZIP_DEFLATED
             info.create_system = 3
             info.external_attr = 0o100644 << 16
-            with source.open(source_name) as input_file, destination.open(info, "w", force_zip64=True) as output_file:
+            with source.open(source_name) as input_file, destination.open(info, "w") as output_file:
                 shutil.copyfileobj(input_file, output_file)
 
 

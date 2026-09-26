@@ -8,6 +8,8 @@ plugins {
 
 val unidicRuntimeArchive = providers.environmentVariable("UNIDIC_RUNTIME_ARCHIVE").orNull
     ?: error("Build inside the Nix development shell to provide pinned UniDic data")
+val mecabSourceDir = providers.environmentVariable("MECAB_SOURCE_DIR").orNull
+    ?: error("Build inside the Nix development shell to provide pinned MeCab source")
 val packageUniDic = tasks.register<Copy>("packageUniDicRuntime") {
     from(unidicRuntimeArchive)
     into(layout.buildDirectory.dir("generated/unidicAssets"))
@@ -26,6 +28,9 @@ android {
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+        externalNativeBuild {
+            cmake { arguments += "-DMECAB_SOURCE_DIR=$mecabSourceDir" }
+        }
     }
 
     androidResources {
@@ -47,6 +52,13 @@ android {
 
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "4.1.2"
+        }
+    }
 }
 
 tasks.named("preBuild").configure { dependsOn(packageUniDic) }

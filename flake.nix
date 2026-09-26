@@ -8,6 +8,13 @@
       system = "x86_64-linux";
       pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
       jdk = pkgs.jdk17;
+      mecabSource = pkgs.fetchFromGitHub {
+        owner = "taku910";
+        repo = "mecab";
+        rev = "5a7db65493a0b57d5fc31734e65300320aaf94c8";
+        hash = "sha256-elB0Zr8DDkw3IZvvqVG+OBspZxFLPnvUSM9SRSILYWs=";
+        rootDir = "mecab";
+      };
       unidicArchive = pkgs.fetchurl {
         url = "https://clrd.ninjal.ac.jp/unidic_archive/cwj/3.1.1/unidic-cwj-3.1.1.zip";
         hash = "sha256-b1R6PnFWOaPgF4oi35QiOhR9lazrESpZDy1oTGRK0xA=";
@@ -24,6 +31,7 @@
       android = androidEnv.composeAndroidPackages {
         platformVersions = [ "35" "37" ];
         buildToolsVersions = [ "36.0.0" ];
+        cmakeVersions = [ "4.1.2" ];
         includeNDK = true;
         ndkVersions = [ "27.2.12479018" ];
         includeEmulator = false;
@@ -37,6 +45,7 @@
         ANDROID_SDK_ROOT = "${android.androidsdk}/libexec/android-sdk";
         # Gradle's Java fallback avoids native-service failures in restricted build containers.
         GRADLE_OPTS = "-Dorg.gradle.native=false";
+        MECAB_SOURCE_DIR = "${mecabSource}";
         UNIDIC_RUNTIME_ARCHIVE = "${unidicRuntime}";
         LANG = "C.UTF-8";
         LC_ALL = "C.UTF-8";
