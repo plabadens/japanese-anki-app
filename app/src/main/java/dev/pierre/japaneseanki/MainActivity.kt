@@ -207,6 +207,12 @@ class MainActivity : ComponentActivity() {
                                 ?: "Select text in the sentence to choose a target.",
                             style = MaterialTheme.typography.bodyLarge,
                         )
+                        if (dependentFieldsStale && target?.textIn(editor.text) == null) {
+                            Text(
+                                "Previous vocabulary and reading work was kept. Select a new target to review it.",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
                         if (target?.textIn(editor.text) != null) {
                             Text("Vocabulary", style = MaterialTheme.typography.titleMedium)
                             OutlinedTextField(
