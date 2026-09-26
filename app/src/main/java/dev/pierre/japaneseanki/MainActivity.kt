@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
 import android.content.pm.PackageManager
+import org.json.JSONArray
+import org.json.JSONObject
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -118,6 +120,7 @@ class MainActivity : ComponentActivity() {
             var tags by remember { mutableStateOf(preferences.getString("tags", defaultTags).orEmpty()) }
             var showReplace by remember { mutableStateOf(false) }
             var showSources by remember { mutableStateOf(false) }
+            var showSentenceFurigana by remember { mutableStateOf(false) }
             var dictionaryRetry by remember { mutableStateOf(0) }
             var dictionaryReady by remember { mutableStateOf(false) }
             var dictionaryLoading by remember { mutableStateOf(false) }
@@ -131,6 +134,10 @@ class MainActivity : ComponentActivity() {
             var tokenizationError by remember { mutableStateOf<String?>(null) }
             var analysisRetry by remember { mutableStateOf(0) }
             var japaneseTokens by remember { mutableStateOf<List<JapaneseToken>>(emptyList()) }
+            var furiganaCorrections by remember {
+                mutableStateOf(decodeFuriganaCorrections(preferences.getString("sentence_furigana_corrections", null)))
+            }
+            val sentenceFurigana = sentenceFuriganaSpans(editor.text, japaneseTokens, target, furiganaCorrections)
             val analyzedTarget = target?.let { resolveAnalyzedLemma(japaneseTokens, it) }
             var dictionaryEntries by remember { mutableStateOf<List<DictionaryEntry>>(emptyList()) }
             var dictionarySearchLoading by remember { mutableStateOf(false) }
@@ -181,8 +188,10 @@ class MainActivity : ComponentActivity() {
             val clearDraft = {
                 editor = TextFieldValue("")
                 japaneseTokens = emptyList()
+                furiganaCorrections = emptyList()
                 tokenizationLoading = false
                 tokenizationError = null
+                showSentenceFurigana = false
                 target = null
                 vocabulary = ""
                 vocabularyReading = ""
@@ -207,6 +216,11 @@ class MainActivity : ComponentActivity() {
                     leaveVocabularyUnannotated = false
                 }
                 target = selected
+                if (selected != null && sentenceReading.isBlank() && !leaveSentenceTargetUnannotated) {
+                    sentenceReading = resolveSurfaceReading(
+                        editor.text, japaneseTokens, selected, furiganaCorrections,
+                    ).orEmpty()
+                }
                 if (selected != null && vocabulary.isBlank()) {
                     val surface = selected.textIn(editor.text).orEmpty()
                     val lemma = resolveAnalyzedLemma(japaneseTokens, selected)
@@ -288,14 +302,18 @@ class MainActivity : ComponentActivity() {
                 ) vocabularyReading = resolved.reading
             }
 
-            androidx.compose.runtime.LaunchedEffect(target, editor.text, japaneseTokens, sentenceReading, leaveSentenceTargetUnannotated) {
+            androidx.compose.runtime.LaunchedEffect(
+                target, editor.text, japaneseTokens, sentenceReading,
+                leaveSentenceTargetUnannotated, furiganaCorrections,
+            ) {
                 val targetSpan = target ?: return@LaunchedEffect
                 val targetText = targetSpan.textIn(editor.text) ?: return@LaunchedEffect
                 if (sentenceReading.isNotBlank() || leaveSentenceTargetUnannotated || !containsKanji(targetText)) {
                     return@LaunchedEffect
                 }
-                sentenceReading = resolveSurfaceReading(japaneseTokens, targetSpan)
-                    ?.takeIf(String::isNotBlank) ?: return@LaunchedEffect
+                sentenceReading = resolveSurfaceReading(
+                    editor.text, japaneseTokens, targetSpan, furiganaCorrections,
+                )?.takeIf(String::isNotBlank) ?: return@LaunchedEffect
             }
 
             androidx.compose.runtime.LaunchedEffect(dictionaryReady, target, editor.text, dictionaryRetry, japaneseTokens) {
@@ -416,6 +434,7 @@ class MainActivity : ComponentActivity() {
                             target = null
                             japaneseTokens = emptyList()
                             tokenizationError = null
+                            showSentenceFurigana = false
                             tokenizationLoading = analyzerReady
                             showReplace = false
                             sharedText.value = null
@@ -442,6 +461,7 @@ class MainActivity : ComponentActivity() {
                 dependentFieldsStale = dependentFieldsStale,
                 translation = translation,
                 notes = notes,
+                sentenceFurigana = sentenceFurigana,
             )
             val validationErrors = noteDraft.validationErrors()
             val fieldsByName = noteDraft.fieldsByName()
@@ -522,7 +542,7 @@ class MainActivity : ComponentActivity() {
                 editor.text, editor.selection, target, vocabulary, vocabularyReading, pitchAccentText, definition,
                 sentenceReading, leaveSentenceTargetUnannotated, leaveVocabularyUnannotated,
                 dependentFieldsStale, translation, notes, tags, selectedModelId, selectedDeckId,
-                selectedDictionaryEntryId, selectedSenseIndices,
+                selectedDictionaryEntryId, selectedSenseIndices, furiganaCorrections,
             ) {
                 preferences.edit()
                     .putString("sentence", editor.text)
@@ -545,6 +565,7 @@ class MainActivity : ComponentActivity() {
                     .putLong("deck_id", selectedDeckId ?: -1)
                     .putLong("dictionary_entry_id", selectedDictionaryEntryId ?: -1)
                     .putStringSet("dictionary_sense_indices", selectedSenseIndices.mapTo(mutableSetOf()) { it.toString() })
+                    .putString("sentence_furigana_corrections", encodeFuriganaCorrections(furiganaCorrections))
                     .apply()
             }
 
@@ -589,6 +610,7 @@ class MainActivity : ComponentActivity() {
                                     selectTarget(null)
                                     japaneseTokens = emptyList()
                                     tokenizationError = null
+                                    showSentenceFurigana = false
                                     tokenizationLoading = analyzerReady
                                 }
                                 editor = updated
@@ -614,6 +636,37 @@ class MainActivity : ComponentActivity() {
                                     } else {
                                         OutlinedButton(onClick = onSelect) { Text(token.surface) }
                                     }
+                                }
+                            }
+                            if (sentenceFurigana.isNotEmpty()) {
+                                TextButton(onClick = { showSentenceFurigana = !showSentenceFurigana }) {
+                                    Text(if (showSentenceFurigana) "Hide sentence furigana edits" else
+                                        "Review sentence furigana (${sentenceFurigana.size} spans)")
+                                }
+                            }
+                            if (showSentenceFurigana) {
+                                Text("Offline suggestions; edit or clear non-target readings")
+                                sentenceFurigana.forEach { annotation ->
+                                    OutlinedTextField(
+                                        value = annotation.reading,
+                                        onValueChange = { reading ->
+                                            val correction = FuriganaCorrection(
+                                                editor.text, annotation.span, annotation.surface, reading,
+                                            )
+                                            furiganaCorrections = (furiganaCorrections.filterNot {
+                                                it.sentence == correction.sentence && it.span == correction.span &&
+                                                    it.surface == correction.surface
+                                            } + correction).takeLast(500)
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        label = { Text("${annotation.surface} reading") },
+                                        supportingText = {
+                                            Text(if (annotation.reading.isBlank()) {
+                                                "Unresolved; optional outside the selected target."
+                                            } else "UniDic suggestion — verify or correct it.")
+                                        },
+                                        singleLine = true,
+                                    )
                                 }
                             }
                             if (tokenizationLoading) Text("Analyzing sentence…")
@@ -668,9 +721,11 @@ class MainActivity : ComponentActivity() {
                                         val targetSpan = target
                                         val targetText = targetSpan?.textIn(editor.text).orEmpty()
                                         val surfaceReading = targetSpan?.let {
-                                            resolveSurfaceReading(japaneseTokens, it)
+                                            resolveSurfaceReading(editor.text, japaneseTokens, it, furiganaCorrections)
                                         }
-                                        if (sentenceReading.isBlank() && containsKanji(targetText) && surfaceReading != null) {
+                                        if (sentenceReading.isBlank() && !leaveSentenceTargetUnannotated &&
+                                            containsKanji(targetText) && surfaceReading != null
+                                        ) {
                                             sentenceReading = surfaceReading
                                         }
                                         leaveVocabularyUnannotated = false
@@ -1110,6 +1165,38 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private fun decodeFuriganaCorrections(raw: String?): List<FuriganaCorrection> {
+    if (raw.isNullOrBlank()) return emptyList()
+    return runCatching {
+        val array = JSONArray(raw)
+        buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val sentence = item.optString("sentence")
+                val surface = item.optString("surface")
+                val span = TargetSpan(item.optInt("start", -1), item.optInt("end", -1))
+                if (surface.isNotEmpty() && span.textIn(sentence) == surface) {
+                    add(FuriganaCorrection(sentence, span, surface, item.optString("reading")))
+                }
+            }
+        }
+    }.getOrDefault(emptyList())
+}
+
+private fun encodeFuriganaCorrections(corrections: List<FuriganaCorrection>): String =
+    JSONArray().apply {
+        corrections.takeLast(500).forEach { correction ->
+            put(
+                JSONObject()
+                    .put("sentence", correction.sentence)
+                    .put("start", correction.span.start)
+                    .put("end", correction.span.end)
+                    .put("surface", correction.surface)
+                    .put("reading", correction.reading),
+            )
+        }
+    }.toString()
+
 private fun clearPersistedDraft(preferences: SharedPreferences) {
     val draftKeys = listOf(
         "sentence", "selection_start", "selection_end", "target_start", "target_end",
@@ -1117,6 +1204,7 @@ private fun clearPersistedDraft(preferences: SharedPreferences) {
         "leave_sentence_target_unannotated", "leave_vocabulary_unannotated", "dependent_fields_stale",
         "translation", "notes", "tags", "submission_status", "pending_model_id", "pending_deck_id",
         "pending_sentence", "pending_lemma", "dictionary_entry_id", "dictionary_sense_indices",
+        "sentence_furigana_corrections",
     )
     preferences.edit().also { editor -> draftKeys.forEach(editor::remove) }.commit()
 }

@@ -16,6 +16,7 @@ data class ManualNoteDraft(
     val vocabularyAudioFilename: String? = null,
     val imageFilename: String? = null,
     val notes: String = "",
+    val sentenceFurigana: List<FuriganaSpan> = emptyList(),
 ) {
     fun validationErrors(): List<String> = buildList {
         val targetText = target?.textIn(sentence)
@@ -33,6 +34,17 @@ data class ManualNoteDraft(
         ) add("Add the vocabulary reading or explicitly leave it unannotated.")
         if (sentenceReading.any { it == '[' || it == ']' }) add("Target reading contains reserved furigana syntax.")
         if (vocabularyReading.any { it == '[' || it == ']' }) add("Vocabulary reading contains reserved furigana syntax.")
+        if (sentenceFurigana.any { it.reading.any { character -> character == '[' || character == ']' } }) {
+            add("Sentence furigana contains reserved syntax.")
+        }
+        if (sentenceFurigana.any { annotation ->
+                annotation.span.textIn(sentence) != annotation.surface ||
+                    target?.let { annotation.span.start < it.end && annotation.span.end > it.start } == true
+            }
+        ) add("Sentence furigana no longer matches the sentence or target.")
+        if (sentenceFurigana.filter { it.reading.isNotBlank() }.sortedBy { it.span.start }
+                .zipWithNext().any { (first, second) -> first.span.end > second.span.start }
+        ) add("Sentence furigana spans overlap.")
         if (pitch != null && pitch.reading != vocabularyReading.trim()) {
             add("Pitch pattern is stale for the current vocabulary reading.")
         }
@@ -55,6 +67,7 @@ data class ManualNoteDraft(
             sentence,
             selectedTarget,
             sentenceReading,
+            sentenceFurigana,
         ) ?: return null
         val vocabFurigana = AnkiFieldSerializer.furiganaWord(vocabulary, vocabularyReading) ?: return null
 

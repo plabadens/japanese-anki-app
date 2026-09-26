@@ -10,16 +10,52 @@ internal data class JapaneseToken(
 )
 
 internal data class AnalyzedLemma(val expression: String, val reading: String)
+data class FuriganaSpan(val span: TargetSpan, val surface: String, val reading: String)
+internal data class FuriganaCorrection(
+    val sentence: String,
+    val span: TargetSpan,
+    val surface: String,
+    val reading: String,
+)
 
-internal fun resolveSurfaceReading(tokens: List<JapaneseToken>, target: TargetSpan): String? {
+internal fun sentenceFuriganaSpans(
+    sentence: String,
+    tokens: List<JapaneseToken>,
+    target: TargetSpan?,
+    corrections: List<FuriganaCorrection>,
+): List<FuriganaSpan> {
+    val correctionsByToken = corrections.associateBy { Triple(it.sentence, it.span, it.surface) }
+    return tokens.mapNotNull { token ->
+        if (!containsKanji(token.surface) || token.span.textIn(sentence) != token.surface ||
+            target?.let { token.span.start < it.end && token.span.end > it.start } == true
+        ) return@mapNotNull null
+        val reading = correctionsByToken[Triple(sentence, token.span, token.surface)]?.reading
+            ?: token.surfaceReading
+        FuriganaSpan(token.span, token.surface, reading)
+    }
+}
+
+internal fun resolveSurfaceReading(
+    sentence: String,
+    tokens: List<JapaneseToken>,
+    target: TargetSpan,
+    corrections: List<FuriganaCorrection> = emptyList(),
+): String? {
     val selected = tokens.filter { it.span.start >= target.start && it.span.end <= target.end }
     if (selected.isEmpty() || selected.first().span.start != target.start ||
         selected.last().span.end != target.end ||
         selected.sumOf { it.span.end - it.span.start } != target.end - target.start ||
-        selected.any { it.partOfSpeech.startsWith("補助記号") } ||
-        selected.any { containsKanji(it.surface) && it.surfaceReading.isBlank() }
+        selected.joinToString("") { it.surface } != target.textIn(sentence) ||
+        selected.any { it.partOfSpeech.startsWith("補助記号") }
     ) return null
-    return selected.joinToString("") { if (containsKanji(it.surface)) it.surfaceReading else it.surface }
+    val correctionsByToken = corrections.associateBy { Triple(it.sentence, it.span, it.surface) }
+    val readings = selected.map { token ->
+        correctionsByToken[Triple(sentence, token.span, token.surface)]?.reading ?: token.surfaceReading
+    }
+    if (selected.indices.any { containsKanji(selected[it].surface) && readings[it].isBlank() }) return null
+    return selected.indices.joinToString("") { index ->
+        if (containsKanji(selected[index].surface)) readings[index] else selected[index].surface
+    }
 }
 
 internal fun resolveAnalyzedLemma(tokens: List<JapaneseToken>, target: TargetSpan): AnalyzedLemma? {

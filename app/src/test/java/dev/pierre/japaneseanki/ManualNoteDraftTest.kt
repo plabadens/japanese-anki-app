@@ -53,6 +53,27 @@ class ManualNoteDraftTest {
         assertEquals(AnkiFieldContract.requiredFields.toSet(), fields.keys)
     }
 
+    @Test fun nonTargetFuriganaDoesNotChangeTheTargetOccurrenceOrSentenceText() {
+        val fields = draft(sentenceReading = "ねこ", vocabularyReading = "ねこ")
+            .copy(sentenceFurigana = listOf(FuriganaSpan(TargetSpan(2, 4), "走る", "はしる")))
+            .fieldsByName()
+        assertEquals("<b>猫[ねこ]</b>が走[はし]る", fields!!["SentFurigana"])
+        assertEquals("<b>猫</b>が走る", fields["SentKanji"])
+    }
+
+    @Test fun unresolvedNonTargetFuriganaIsOptionalButReservedSyntaxIsRejected() {
+        val base = draft(sentenceReading = "ねこ", vocabularyReading = "ねこ")
+        val unresolved = base.copy(
+            sentenceFurigana = listOf(FuriganaSpan(TargetSpan(2, 4), "走る", "")),
+        )
+        assertTrue(unresolved.validationErrors().isEmpty())
+        assertEquals("<b>猫[ねこ]</b>が走る", unresolved.fieldsByName()!!["SentFurigana"])
+        assertFalse(
+            base.copy(sentenceFurigana = listOf(FuriganaSpan(TargetSpan(2, 4), "走る", "[はし]")))
+                .validationErrors().isEmpty(),
+        )
+    }
+
     @Test fun definitionLinesRemainSeparateSenseItems() {
         val fields = draft(sentenceReading = "ねこ", vocabularyReading = "ねこ")
             .copy(definition = "cat\nfeline")
