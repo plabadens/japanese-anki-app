@@ -18,6 +18,10 @@ class AnkiFieldSerializerTest {
         assertEquals("one&lt;br&gt;<br>two &amp; three", AnkiFieldSerializer.plainText("one<br>\ntwo & three"))
     }
 
+    @Test fun fieldDelimiterCannotCorruptAnkiFieldSerialization() {
+        assertEquals("a�b", AnkiFieldSerializer.plainText("a\u001fb"))
+    }
+
     @Test fun definitionsKeepSenseBoundariesAndEscapeMarkup() {
         assertEquals(
             "<ol><li>one</li><li>&lt;two&gt;</li></ol>",

@@ -54,11 +54,14 @@ class DuplicateKey private constructor(val sentence: String, val lemma: String) 
         /** Remove only app-generated highlight markup and HTML escaping. */
         fun fromFields(serializedSentence: String, vocabularyLemma: String): DuplicateKey =
             DuplicateKey(
-                sentence = decodeGeneratedEntities(
-                    serializedSentence.replace(Regex("(?i)</?(?:b|strong)\\b[^>]*>"), ""),
-                ).trim(),
-                lemma = vocabularyLemma.trim(),
+                sentence = canonicalField(serializedSentence),
+                lemma = canonicalField(vocabularyLemma),
             )
+
+        private fun canonicalField(serialized: String): String =
+            decodeGeneratedEntities(
+                serialized.replace(Regex("(?i)</?(?:b|strong)\\b[^>]*>"), ""),
+            ).trim()
 
         private fun decodeGeneratedEntities(text: String): String {
             val out = StringBuilder(text.length)

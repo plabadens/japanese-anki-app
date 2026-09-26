@@ -45,6 +45,7 @@ class AnkiFieldContractTest {
             ),
         )
         assertFalse(exported.matches(DuplicateKey.fromFields("猫 と犬 &amp;鳥", "犬")))
+        assertTrue(exported.matches(DuplicateKey.fromFields("猫と犬 &amp;鳥", "<b>犬</b>")))
         assertFalse(exported.matches(DuplicateKey.fromFields("猫と犬 &amp;鳥", "猫")))
     }
 }

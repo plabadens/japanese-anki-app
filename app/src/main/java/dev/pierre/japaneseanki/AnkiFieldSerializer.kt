@@ -68,6 +68,7 @@ object AnkiFieldSerializer {
                     '>' -> "&gt;"
                     '"' -> "&quot;"
                     '\'' -> "&#39;"
+                    '\u001f' -> "�"
                     else -> char.toString()
                 },
             )

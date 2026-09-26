@@ -1,6 +1,7 @@
 package dev.pierre.japaneseanki
 
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -9,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -38,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
@@ -63,7 +66,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         sharedText.value = textFromIntent(intent)
         val preferences = getSharedPreferences("draft", MODE_PRIVATE)
+        if (preferences.getString("submission_status", null) == "done") {
+            clearPersistedDraft(preferences)
+        }
         setContent {
+            val coroutineScope = rememberCoroutineScope()
             val apiPermissionLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.RequestPermission(),
             ) { granted -> apiPermissionGranted = granted }
@@ -112,11 +119,39 @@ class MainActivity : ComponentActivity() {
             }
             var showModelMenu by remember { mutableStateOf(false) }
             var showDeckMenu by remember { mutableStateOf(false) }
+            var isSubmitting by remember { mutableStateOf(false) }
+            var submitMessage by remember { mutableStateOf<String?>(null) }
+            var recoveryRequired by remember {
+                mutableStateOf(preferences.getString("submission_status", null) == "started")
+            }
+            var recoveryMessage by remember {
+                mutableStateOf(
+                    if (preferences.getString("submission_status", null) == "started") {
+                        "A previous Send was interrupted. Verify its outcome before retrying."
+                    } else null,
+                )
+            }
+            var recoveryDuplicate by remember { mutableStateOf(false) }
             val selectedModel = noteTypes.firstOrNull { it.id == selectedModelId }
             val selectedDeck = decks.firstOrNull { it.id == selectedDeckId }
             val incoming = sharedText.value
             val hasTargetData = vocabulary.isNotBlank() || vocabularyReading.isNotBlank() ||
                 pitchAccentText.isNotBlank() || definition.isNotBlank() || sentenceReading.isNotBlank()
+            val clearDraft = {
+                editor = TextFieldValue("")
+                target = null
+                vocabulary = ""
+                vocabularyReading = ""
+                pitchAccentText = ""
+                definition = ""
+                sentenceReading = ""
+                leaveSentenceTargetUnannotated = false
+                leaveVocabularyUnannotated = false
+                dependentFieldsStale = false
+                translation = ""
+                notes = ""
+                tags = ""
+            }
 
             androidx.compose.runtime.LaunchedEffect(incoming) {
                 if (incoming != null) {
@@ -129,6 +164,14 @@ class MainActivity : ComponentActivity() {
                         showReplace = true
                     }
                 }
+            }
+            if (isSubmitting) {
+                AlertDialog(
+                    onDismissRequest = {},
+                    title = { Text("Sending to AnkiDroid") },
+                    text = { Text("The note snapshot is frozen until AnkiDroid confirms the result.") },
+                    confirmButton = {},
+                )
             }
             if (showReplace && incoming != null) {
                 AlertDialog(
@@ -167,6 +210,49 @@ class MainActivity : ComponentActivity() {
                 notes = notes,
             )
             val validationErrors = noteDraft.validationErrors()
+            val fieldsByName = noteDraft.fieldsByName()
+            val modelMapping = selectedModel?.let {
+                AnkiFieldContract.mapToModelOrder(it.fields, fieldsByName.orEmpty())
+            }
+            val canSend = apiPermissionGranted && selectedModel != null && selectedDeck != null &&
+                fieldsByName != null && modelMapping?.isValid == true && validationErrors.isEmpty() &&
+                !setupLoading && setupError == null && !recoveryRequired && !isSubmitting
+
+            androidx.compose.runtime.LaunchedEffect(
+                recoveryRequired, apiPermissionGranted, noteTypes, decks, setupReload,
+            ) {
+                if (!recoveryRequired || !apiPermissionGranted) return@LaunchedEffect
+                val pendingModelId = preferences.getLong("pending_model_id", -1)
+                val model = noteTypes.firstOrNull { it.id == pendingModelId }
+                val sentence = preferences.getString("pending_sentence", null)
+                val lemma = preferences.getString("pending_lemma", null)
+                val values = if (sentence != null && lemma != null) {
+                    mapOf("SentKanji" to sentence, "VocabKanji" to lemma)
+                } else null
+                if (model == null || values == null) {
+                    recoveryMessage = "Previous Send was interrupted. Restore API access and the selected note type/deck to check before retrying."
+                    return@LaunchedEffect
+                }
+                recoveryMessage = "Checking AnkiDroid for the pending note…"
+                try {
+                    val duplicate = withContext(Dispatchers.IO) {
+                        AnkiDroidGateway(contentResolver).hasMatchingNoteInAnyDeck(model, values)
+                    }
+                    if (duplicate) {
+                        recoveryDuplicate = true
+                        recoveryMessage = "A matching note exists in AnkiDroid. The interrupted Send may have succeeded, possibly in another deck; do not retry without checking."
+                    } else {
+                        clearPendingSubmission(preferences)
+                        recoveryRequired = false
+                        recoveryDuplicate = false
+                        recoveryMessage = "No matching note was found; it is safe to retry Send."
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    recoveryMessage = "Could not verify the interrupted Send. Retry the check or inspect AnkiDroid before resolving it."
+                }
+            }
 
             androidx.compose.runtime.LaunchedEffect(ankiDroidInstalled, apiPermissionGranted, setupReload) {
                 if (!ankiDroidInstalled || !apiPermissionGranted) {
@@ -457,12 +543,101 @@ class MainActivity : ComponentActivity() {
                                 }) { Text("Grant AnkiDroid API permission") }
                             }
                         }
+                        submitMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                        recoveryMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                        if (recoveryRequired && recoveryDuplicate) {
+                            TextButton(onClick = {
+                                clearPendingSubmission(preferences)
+                                recoveryRequired = false
+                                recoveryDuplicate = false
+                                submitMessage = "Pending Send resolved. The draft is unchanged; normal duplicate blocking still applies."
+                            }) { Text("Treat pending Send as complete") }
+                            TextButton(onClick = {
+                                clearPendingSubmission(preferences)
+                                recoveryRequired = false
+                                recoveryDuplicate = false
+                                submitMessage = "Pending Send cleared. Verify the destination before retrying."
+                            }) { Text("I checked; allow retry") }
+                        } else if (recoveryRequired && recoveryMessage?.startsWith("Could not verify") == true) {
+                            TextButton(onClick = { setupReload++ }) { Text("Retry pending-send check") }
+                        }
                         Text(
                             "Draft autosaves on this device. Dictionary lookup is not connected yet.",
                             style = MaterialTheme.typography.bodyMedium,
                         )
-                        Button(onClick = {}, enabled = false) {
-                            Text("Send to AnkiDroid — setup required")
+                        Button(
+                            enabled = canSend,
+                            onClick = {
+                                val model = selectedModel ?: return@Button
+                                val deck = selectedDeck ?: return@Button
+                                val fields = fieldsByName ?: return@Button
+                                val mapping = modelMapping?.takeIf { it.isValid } ?: return@Button
+                                val tagSet = tags.trim().split(Regex("\\s+")).filter(String::isNotBlank).toSet()
+                                isSubmitting = true
+                                submitMessage = null
+                                coroutineScope.launch {
+                                    try {
+                                        val outcome = withContext(Dispatchers.IO) {
+                                            val gateway = AnkiDroidGateway(contentResolver)
+                                            if (gateway.hasDuplicate(model, deck, fields)) {
+                                                preferences.edit().putString("submission_status", "blocked").commit()
+                                                "duplicate"
+                                            } else {
+                                                val pendingSaved = preferences.edit()
+                                                    .putString("submission_status", "started")
+                                                    .putLong("pending_model_id", model.id)
+                                                    .putLong("pending_deck_id", deck.id)
+                                                    .putString("pending_sentence", fields.getValue("SentKanji"))
+                                                    .putString("pending_lemma", fields.getValue("VocabKanji"))
+                                                    .commit()
+                                                check(pendingSaved) { "Could not save submission recovery data." }
+                                                val inserted = gateway.insertNote(model, deck, mapping.values, tagSet)
+                                                val foundInDestination = gateway.hasDuplicate(model, deck, fields)
+                                                val foundAnywhere = foundInDestination ||
+                                                    gateway.hasMatchingNoteInAnyDeck(model, fields)
+                                                when {
+                                                    inserted == 1 && foundInDestination -> {
+                                                        check(preferences.edit().putString("submission_status", "done").commit())
+                                                        clearPersistedDraft(preferences)
+                                                        "created"
+                                                    }
+                                                    inserted == 1 || foundAnywhere -> "uncertain"
+                                                    else -> {
+                                                        clearPendingSubmission(preferences)
+                                                        "failed"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        when (outcome) {
+                                            "duplicate" -> submitMessage = "Blocked: a note with this sentence and vocabulary lemma already exists in the selected note type and deck."
+                                            "created" -> {
+                                                clearDraft()
+                                                submitMessage = "Note added to ${deck.name}."
+                                            }
+                                            "uncertain" -> {
+                                                recoveryRequired = true
+                                                recoveryDuplicate = false
+                                                recoveryMessage = "AnkiDroid returned an uncertain result. Checking whether the note was added…"
+                                            }
+                                            else -> submitMessage = "AnkiDroid did not add the note. You can safely review and retry."
+                                        }
+                                    } catch (cancelled: CancellationException) {
+                                        throw cancelled
+                                    } catch (_: Exception) {
+                                        if (preferences.getString("submission_status", null) == "started") {
+                                            recoveryRequired = true
+                                            recoveryMessage = "Could not confirm Send. Checking whether the note was added…"
+                                        } else {
+                                            submitMessage = "Could not send the note. Check AnkiDroid API access and retry."
+                                        }
+                                    } finally {
+                                        isSubmitting = false
+                                    }
+                                }
+                            },
+                        ) {
+                            Text(if (isSubmitting) "Sending…" else "Send to AnkiDroid")
                         }
                     }
                 }
@@ -499,6 +674,27 @@ class MainActivity : ComponentActivity() {
         }
         return value?.toString()?.takeIf(String::isNotBlank)
     }
+}
+
+private fun clearPersistedDraft(preferences: SharedPreferences) {
+    val draftKeys = listOf(
+        "sentence", "selection_start", "selection_end", "target_start", "target_end",
+        "vocabulary", "vocabulary_reading", "pitch_accent", "definition", "sentence_reading",
+        "leave_sentence_target_unannotated", "leave_vocabulary_unannotated", "dependent_fields_stale",
+        "translation", "notes", "tags", "submission_status", "pending_model_id", "pending_deck_id",
+        "pending_sentence", "pending_lemma",
+    )
+    preferences.edit().also { editor -> draftKeys.forEach(editor::remove) }.commit()
+}
+
+private fun clearPendingSubmission(preferences: SharedPreferences) {
+    preferences.edit()
+        .remove("submission_status")
+        .remove("pending_model_id")
+        .remove("pending_deck_id")
+        .remove("pending_sentence")
+        .remove("pending_lemma")
+        .commit()
 }
 
 private fun TextRange.coerceIn(min: Int, max: Int): TextRange =

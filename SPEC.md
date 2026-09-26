@@ -4,7 +4,7 @@
 
 **Distribution:** Personal, sideloaded Android application.
 
-**Implementation status:** An initial Compose editor, local draft persistence, target-span validation, Android text-entry intents, AnkiDroid package detection, manual vocabulary/definition/reading entry, controlled field serialization/mapping, duplicate-key comparison, manual pitch editing, and stale-value blocking after sentence/target edits are implemented. AnkiDroid API permission requesting and provider-backed note-type/deck selection are implemented against the v2.24.1 contract but untested on-device; note creation/export, bundled linguistic processing, automatic enrichment/audio, media workflows, full acceptance testing, and reproducible APK builds remain unimplemented and unverified.
+**Implementation status:** An initial Compose editor, local draft persistence, target-span validation, Android text-entry intents, AnkiDroid package detection, manual vocabulary/definition/reading entry, controlled field serialization/mapping, duplicate-key comparison, manual pitch editing, and stale-value blocking after sentence/target edits are implemented. AnkiDroid API permission requesting, provider-backed note-type/deck selection, manual note insertion, deck-scoped duplicate blocking, and interrupted-send reconciliation are wired against the v2.24.1 source contract but untested on-device; provider behavior with trailing empty fields is a known release gate. Bundled linguistic processing, automatic enrichment/audio, media workflows, settings, full acceptance testing, and reproducible APK builds remain unimplemented and unverified.
 
 ## 1. Purpose
 
@@ -416,7 +416,7 @@ Allowed collection access is limited to what creation needs: model/deck inspecti
 
 Do not create decks, change note types, update preexisting notes, delete collection content, or trigger synchronization.
 
-The exact supported AnkiDroid release/API dependency must be pinned and validated before release. Do not claim support for every historical AnkiDroid version based only on an API specification number.
+The provider constants and insert/query behavior currently reference AnkiDroid v2.24.1 source commit `9f579c10bb151146728220729c510acbbd8faba7`. This source reference is not proof of runtime compatibility; the exact supported AnkiDroid release must be pinned and validated on-device before release. Do not claim support for every historical AnkiDroid version based only on an API specification number. In this source version, `Utils.splitFields()` drops trailing empty strings; verify how provider insertion handles the required empty trailing fields in the reference schema. Never pad an extra/user-owned field to work around this without approval.
 
 ### 9.2 Export eligibility
 
