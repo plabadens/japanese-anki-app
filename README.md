@@ -23,4 +23,4 @@ No Android emulator MCP server is connected or discoverable in this session, and
 
 ## Current implementation
 
-The first slice provides the Compose editor, durable one-draft text/selection/target persistence, target selection from the current text selection, and Android `SEND` / `PROCESS_TEXT` text entry. Linguistic enrichment, note-type/deck setup, AnkiDroid export, media, and the remaining specification are not implemented yet.
+The editor now supports durable manual sentence/target/vocabulary/reading/definition/translation/notes/tags entry, required-field readiness feedback, Android `SEND` / `PROCESS_TEXT` text entry, safe field serialization, and name-based required-field mapping. Automated dictionary/furigana/pitch enrichment, note-type/deck discovery, AnkiDroid export, audio, image handling, settings, and the remaining specification are not implemented yet.
