@@ -6,6 +6,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AnkiFieldContractTest {
+    @Test fun parsesTagsWithoutBreakingHierarchy() {
+        assertEquals(setOf("JLPT::N4", "japanese::mining"), AnkiFieldContract.parseTags("  JLPT::N4   japanese::mining JLPT::N4 "))
+    }
+
     @Test fun mapsRequiredFieldsByNameAndLeavesExtrasEmpty() {
         val fields = listOf("Custom", "VocabKanji", "SentKanji") +
             AnkiFieldContract.requiredFields.filterNot { it == "VocabKanji" || it == "SentKanji" }

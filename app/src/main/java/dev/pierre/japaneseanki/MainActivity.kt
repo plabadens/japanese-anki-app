@@ -66,6 +66,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         sharedText.value = textFromIntent(intent)
         val preferences = getSharedPreferences("draft", MODE_PRIVATE)
+        val settings = getSharedPreferences("settings", MODE_PRIVATE)
         if (preferences.getString("submission_status", null) == "done") {
             clearPersistedDraft(preferences)
         }
@@ -104,7 +105,8 @@ class MainActivity : ComponentActivity() {
             var dependentFieldsStale by remember { mutableStateOf(preferences.getBoolean("dependent_fields_stale", false)) }
             var translation by remember { mutableStateOf(preferences.getString("translation", "").orEmpty()) }
             var notes by remember { mutableStateOf(preferences.getString("notes", "").orEmpty()) }
-            var tags by remember { mutableStateOf(preferences.getString("tags", "").orEmpty()) }
+            var defaultTags by remember { mutableStateOf(settings.getString("default_tags", "").orEmpty()) }
+            var tags by remember { mutableStateOf(preferences.getString("tags", defaultTags).orEmpty()) }
             var showReplace by remember { mutableStateOf(false) }
             var noteTypes by remember { mutableStateOf<List<AnkiNoteType>>(emptyList()) }
             var decks by remember { mutableStateOf<List<AnkiDeck>>(emptyList()) }
@@ -150,7 +152,7 @@ class MainActivity : ComponentActivity() {
                 dependentFieldsStale = false
                 translation = ""
                 notes = ""
-                tags = ""
+                tags = defaultTags
             }
 
             androidx.compose.runtime.LaunchedEffect(incoming) {
@@ -278,6 +280,10 @@ class MainActivity : ComponentActivity() {
                         setupLoading = false
                     }
                 }
+            }
+
+            androidx.compose.runtime.LaunchedEffect(defaultTags) {
+                settings.edit().putString("default_tags", defaultTags).apply()
             }
 
             androidx.compose.runtime.LaunchedEffect(
@@ -455,6 +461,14 @@ class MainActivity : ComponentActivity() {
                                 label = { Text("Tags (optional)") },
                                 singleLine = true,
                             )
+                            OutlinedTextField(
+                                value = defaultTags,
+                                onValueChange = { defaultTags = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("Default tags for new notes") },
+                                supportingText = { Text("Hierarchical tags such as JLPT::N4 are supported.") },
+                                singleLine = true,
+                            )
                         }
                         if (target != null) {
                             if (dependentFieldsStale) {
@@ -572,7 +586,7 @@ class MainActivity : ComponentActivity() {
                                 val deck = selectedDeck ?: return@Button
                                 val fields = fieldsByName ?: return@Button
                                 val mapping = modelMapping?.takeIf { it.isValid } ?: return@Button
-                                val tagSet = tags.trim().split(Regex("\\s+")).filter(String::isNotBlank).toSet()
+                                val tagSet = AnkiFieldContract.parseTags(tags)
                                 isSubmitting = true
                                 submitMessage = null
                                 coroutineScope.launch {

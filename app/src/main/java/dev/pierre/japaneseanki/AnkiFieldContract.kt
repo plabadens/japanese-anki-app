@@ -2,6 +2,9 @@ package dev.pierre.japaneseanki
 
 /** Required names are mapped by name; model order and extra fields are user-owned. */
 object AnkiFieldContract {
+    fun parseTags(raw: String): Set<String> =
+        raw.trim().split(Regex("\\s+")).filter(String::isNotBlank).toSet()
+
     val requiredFields = listOf(
         "SentKanji",
         "SentFurigana",
