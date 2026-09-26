@@ -9,6 +9,7 @@ nix develop
 ./scripts/test-core.sh
 python3 scripts/test-build-dictionary.py
 python3 scripts/build_dictionary.py
+python3 scripts/test-dictionary-asset.py
 gradle testDebugUnitTest assembleDebug
 ```
 
@@ -26,4 +27,4 @@ No Android emulator MCP server is connected or discoverable in this session, and
 
 ## Current implementation
 
-The editor now supports durable manual sentence/target/vocabulary/reading/definition/translation/notes/tags entry, default tags, required-field readiness feedback, stale-value blocking after sentence/target edits, manual pitch entry/contour, Android `SEND` / `PROCESS_TEXT`, AnkiDroid permission requesting and note-type/deck selection, safe field mapping/serialization, duplicate blocking, and provider-backed note insertion with interrupted-send reconciliation. The provider contract references AnkiDroid v2.24.1 commit `9f579c10bb151146728220729c510acbbd8faba7`; device/API behavior and insertion with trailing empty fields remain unverified release gates. Full Android build/APK verification is still blocked by unavailable Maven/Google repository access. Pinned JMdict and Kanjium source snapshots, attribution, and a reproducibly built SQLite asset are under `datasets/` and `app/src/main/assets/`; runtime installation and lookup are not yet connected. Automatic linguistic enrichment, audio, image/media import, settings, and the remaining specification are not implemented yet.
+The editor now supports durable manual sentence/target/vocabulary/reading/definition/translation/notes/tags entry, default tags, required-field readiness feedback, stale-value blocking after sentence/target edits, manual pitch entry/contour, Android `SEND` / `PROCESS_TEXT`, AnkiDroid permission requesting and note-type/deck selection, safe field mapping/serialization, duplicate blocking, and provider-backed note insertion with interrupted-send reconciliation. The provider contract references AnkiDroid v2.24.1 commit `9f579c10bb151146728220729c510acbbd8faba7`; device/API behavior and insertion with trailing empty fields remain unverified release gates. Full Android build/APK verification is still blocked by unavailable Maven/Google repository access. Pinned JMdict and Kanjium source snapshots, attribution, and a reproducibly built SQLite asset are under `datasets/` and `app/src/main/assets/`; first-launch installation, exact-target dictionary lookup/sense selection, and pitch lookup are wired. Morphological tokenization/inflection lookup, automatic sentence furigana, audio, image/media import, full settings, and the remaining specification are not implemented yet.

@@ -45,9 +45,9 @@ def main() -> None:
         senses = connection.execute("SELECT senses FROM entries WHERE id=10").fetchone()[0]
         assert '"first meaning"' in senses and '"second meaning"' in senses
         pitch = connection.execute(
-            "SELECT part_of_speech, accent FROM pitch ORDER BY accent",
+            "SELECT part_of_speech, accent FROM pitch ORDER BY source_order",
         ).fetchall()
-        assert pitch == [("名", 0), ("副", 1), ("名", 2)]
+        assert pitch == [("名", 0), ("名", 2), ("副", 1)]
         connection.close()
     print("dictionary builder self-check passed")
 

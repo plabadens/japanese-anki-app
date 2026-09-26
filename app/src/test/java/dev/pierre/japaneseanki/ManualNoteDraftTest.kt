@@ -53,6 +53,13 @@ class ManualNoteDraftTest {
         assertEquals(AnkiFieldContract.requiredFields.toSet(), fields.keys)
     }
 
+    @Test fun definitionLinesRemainSeparateSenseItems() {
+        val fields = draft(sentenceReading = "ねこ", vocabularyReading = "ねこ")
+            .copy(definition = "cat\nfeline")
+            .fieldsByName()
+        assertEquals("<ol><li>cat</li><li>feline</li></ol>", fields!!["VocabDef"])
+    }
+
     @Test fun kanaOnlyContentDoesNotRequireManualReadingConfirmation() {
         val kana = draft().copy(sentence = "ねこがはしる", target = TargetSpan(0, 2), vocabulary = "ねこ")
         assertTrue(kana.validationErrors().isEmpty())

@@ -1,7 +1,9 @@
 package dev.pierre.japaneseanki
 
+import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -21,11 +23,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -61,10 +65,12 @@ class MainActivity : ComponentActivity() {
     private val sharedText = mutableStateOf<String?>(null)
     private var ankiDroidInstalled by mutableStateOf(false)
     private var apiPermissionGranted by mutableStateOf(false)
+    private lateinit var offlineDictionary: OfflineDictionary
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         sharedText.value = textFromIntent(intent)
+        offlineDictionary = sharedDictionary(this)
         val preferences = getSharedPreferences("draft", MODE_PRIVATE)
         val settings = getSharedPreferences("settings", MODE_PRIVATE)
         if (preferences.getString("submission_status", null) == "done") {
@@ -108,6 +114,27 @@ class MainActivity : ComponentActivity() {
             var defaultTags by remember { mutableStateOf(settings.getString("default_tags", "").orEmpty()) }
             var tags by remember { mutableStateOf(preferences.getString("tags", defaultTags).orEmpty()) }
             var showReplace by remember { mutableStateOf(false) }
+            var showSources by remember { mutableStateOf(false) }
+            var dictionaryRetry by remember { mutableStateOf(0) }
+            var dictionaryReady by remember { mutableStateOf(false) }
+            var dictionaryLoading by remember { mutableStateOf(false) }
+            var dictionaryError by remember { mutableStateOf<String?>(null) }
+            var dictionaryInfo by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+            var dictionaryEntries by remember { mutableStateOf<List<DictionaryEntry>>(emptyList()) }
+            var dictionarySearchLoading by remember { mutableStateOf(false) }
+            var dictionaryHasMore by remember { mutableStateOf(false) }
+            var selectedDictionaryEntry by remember { mutableStateOf<DictionaryEntry?>(null) }
+            var selectedDictionaryEntryId by remember {
+                mutableStateOf(preferences.getLong("dictionary_entry_id", -1).takeIf { it > 0 })
+            }
+            var selectedSenseIndices by remember {
+                mutableStateOf(
+                    preferences.getStringSet("dictionary_sense_indices", null)
+                        ?.mapNotNull(String::toIntOrNull)?.toSet() ?: setOf(0),
+                )
+            }
+            var pitchCandidates by remember { mutableStateOf<List<DictionaryPitch>>(emptyList()) }
+            var pitchLookupLoading by remember { mutableStateOf(false) }
             var noteTypes by remember { mutableStateOf<List<AnkiNoteType>>(emptyList()) }
             var decks by remember { mutableStateOf<List<AnkiDeck>>(emptyList()) }
             var setupLoading by remember { mutableStateOf(false) }
@@ -153,6 +180,82 @@ class MainActivity : ComponentActivity() {
                 translation = ""
                 notes = ""
                 tags = defaultTags
+                selectedDictionaryEntry = null
+                selectedDictionaryEntryId = null
+                selectedSenseIndices = emptySet()
+            }
+
+            androidx.compose.runtime.LaunchedEffect(dictionaryRetry) {
+                dictionaryLoading = true
+                dictionaryError = null
+                try {
+                    dictionaryInfo = withContext(Dispatchers.IO) { offlineDictionary.prepare() }
+                    dictionaryReady = true
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    dictionaryError = "Offline dictionary could not be prepared. Manual note entry remains available."
+                } finally {
+                    dictionaryLoading = false
+                }
+            }
+
+            androidx.compose.runtime.LaunchedEffect(dictionaryReady, target, editor.text, dictionaryRetry) {
+                val targetText = target?.textIn(editor.text)
+                if (!dictionaryReady || targetText == null) {
+                    dictionaryEntries = emptyList()
+                    dictionaryHasMore = false
+                    selectedDictionaryEntry = null
+                } else {
+                    dictionarySearchLoading = true
+                    try {
+                        val entries = withContext(Dispatchers.IO) {
+                            offlineDictionary.search(targetText)
+                        }
+                        dictionaryEntries = entries
+                        dictionaryError = null
+                        dictionaryHasMore = entries.size == 50
+                        val restoredEntry = entries.firstOrNull {
+                            it.id == selectedDictionaryEntryId &&
+                                it.expression == vocabulary && it.reading == vocabularyReading
+                        }
+                        selectedDictionaryEntry = restoredEntry
+                        selectedSenseIndices = if (restoredEntry != null) {
+                            preferences.getStringSet("dictionary_sense_indices", null)
+                                ?.mapNotNull(String::toIntOrNull)?.filter { it in restoredEntry.senses.indices }
+                                ?.toSet() ?: setOf(0)
+                        } else emptySet()
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        dictionaryError = "Dictionary lookup failed; enter the vocabulary manually."
+                    } finally {
+                        dictionarySearchLoading = false
+                    }
+                }
+            }
+
+            androidx.compose.runtime.LaunchedEffect(dictionaryReady, vocabulary, vocabularyReading, dictionaryRetry) {
+                if (!dictionaryReady || vocabulary.isBlank() || vocabularyReading.isBlank()) {
+                    pitchCandidates = emptyList()
+                    return@LaunchedEffect
+                }
+                pitchLookupLoading = true
+                try {
+                    val candidates = withContext(Dispatchers.IO) {
+                        offlineDictionary.pitch(vocabulary, vocabularyReading)
+                    }.filter { PitchAccent.create(vocabularyReading, it.accent) != null }
+                    pitchCandidates = candidates
+                    if (pitchAccentText.isBlank() && candidates.isNotEmpty()) {
+                        pitchAccentText = candidates.first().accent.toString()
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    pitchCandidates = emptyList()
+                } finally {
+                    pitchLookupLoading = false
+                }
             }
 
             androidx.compose.runtime.LaunchedEffect(incoming) {
@@ -166,6 +269,32 @@ class MainActivity : ComponentActivity() {
                         showReplace = true
                     }
                 }
+            }
+            if (showSources) {
+                AlertDialog(
+                    onDismissRequest = { showSources = false },
+                    title = { Text("Data sources and licenses") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("JMdict © James William Breen and EDRDG; CC BY-SA 4.0. ${dictionaryInfo["jmdict_source"].orEmpty()}")
+                            Text("The pitch accent notation, verb particle data, phonetics, homonyms, and other additions or modifications to EDICT, KANJIDIC, or KRADFILE were provided by Uros O. through his free database. Kanjium CC BY-SA 4.0. ${dictionaryInfo["kanjium_commit"].orEmpty()}")
+                            Text("Local license copies are bundled with the app. JMdict data is updated through app releases.")
+                            TextButton(onClick = {
+                                runCatching {
+                                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.edrdg.org/edrdg/licence.html")))
+                                }
+                            }) { Text("Open EDRDG license") }
+                            TextButton(onClick = {
+                                runCatching {
+                                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://creativecommons.org/licenses/by-sa/4.0/")))
+                                }
+                            }) { Text("Open CC BY-SA 4.0") }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showSources = false }) { Text("Done") }
+                    },
+                )
             }
             if (isSubmitting) {
                 AlertDialog(
@@ -290,6 +419,7 @@ class MainActivity : ComponentActivity() {
                 editor.text, editor.selection, target, vocabulary, vocabularyReading, pitchAccentText, definition,
                 sentenceReading, leaveSentenceTargetUnannotated, leaveVocabularyUnannotated,
                 dependentFieldsStale, translation, notes, tags, selectedModelId, selectedDeckId,
+                selectedDictionaryEntryId, selectedSenseIndices,
             ) {
                 preferences.edit()
                     .putString("sentence", editor.text)
@@ -310,6 +440,8 @@ class MainActivity : ComponentActivity() {
                     .putString("tags", tags)
                     .putLong("model_id", selectedModelId ?: -1)
                     .putLong("deck_id", selectedDeckId ?: -1)
+                    .putLong("dictionary_entry_id", selectedDictionaryEntryId ?: -1)
+                    .putStringSet("dictionary_sense_indices", selectedSenseIndices.mapTo(mutableSetOf()) { it.toString() })
                     .apply()
             }
 
@@ -325,6 +457,17 @@ class MainActivity : ComponentActivity() {
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         Text("Japanese Anki", style = MaterialTheme.typography.headlineMedium)
+                        TextButton(onClick = { showSources = true }) { Text("Sources & licenses") }
+                        if (dictionaryLoading) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                Text("Preparing offline dictionary for first use…")
+                            }
+                        }
+                        if (dictionaryError != null) {
+                            Text(dictionaryError!!, style = MaterialTheme.typography.bodyMedium)
+                            TextButton(onClick = { dictionaryRetry++ }) { Text("Retry dictionary setup") }
+                        }
                         OutlinedTextField(
                             value = editor,
                             onValueChange = { updated ->
@@ -363,12 +506,112 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         if (target?.textIn(editor.text) != null) {
+                            Text("Offline dictionary matches", style = MaterialTheme.typography.titleMedium)
+                            when {
+                                !dictionaryReady && dictionaryLoading -> Text("Dictionary is being prepared…")
+                                !dictionaryReady -> Text("Dictionary unavailable; complete the vocabulary manually.")
+                                dictionarySearchLoading -> Text("Searching JMdict…")
+                                dictionaryEntries.isEmpty() -> Text("No exact spelling/reading match. Manual entry remains available.")
+                            }
+                            dictionaryEntries.forEach { entry ->
+                                OutlinedButton(
+                                    onClick = {
+                                        val changedEntry = vocabulary != entry.expression || vocabularyReading != entry.reading
+                                        if (changedEntry && (pitchAccentText.isNotBlank() || definition.isNotBlank())) {
+                                            dependentFieldsStale = true
+                                        }
+                                        vocabulary = entry.expression
+                                        vocabularyReading = entry.reading
+                                        val targetText = target?.textIn(editor.text).orEmpty()
+                                        if (sentenceReading.isBlank() && containsKanji(targetText)) {
+                                            sentenceReading = entry.reading
+                                        }
+                                        leaveVocabularyUnannotated = false
+                                        val isSameEntry = selectedDictionaryEntry?.id == entry.id
+                                        val hasManualDefinition = definition.isNotBlank() && !isSameEntry
+                                        selectedDictionaryEntry = entry
+                                        selectedDictionaryEntryId = entry.id
+                                        selectedSenseIndices = when {
+                                            isSameEntry -> selectedSenseIndices
+                                            hasManualDefinition || entry.senses.isEmpty() -> emptySet()
+                                            else -> setOf(0)
+                                        }
+                                        if (!hasManualDefinition && !isSameEntry) {
+                                            definition = entry.senses.firstOrNull()?.glosses?.joinToString("; ").orEmpty()
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Column(horizontalAlignment = Alignment.Start) {
+                                        Text("${entry.expression} · ${entry.reading}")
+                                        Text(
+                                            entry.senses.firstOrNull()?.glosses?.joinToString("; ").orEmpty(),
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                        Text(
+                                            entry.senses.firstOrNull()?.partsOfSpeech?.joinToString(", ").orEmpty(),
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    }
+                                }
+                            }
+                            if (dictionaryHasMore && !dictionarySearchLoading) {
+                                TextButton(onClick = {
+                                    val query = target?.textIn(editor.text) ?: return@TextButton
+                                    coroutineScope.launch {
+                                        dictionarySearchLoading = true
+                                        try {
+                                            val more = withContext(Dispatchers.IO) {
+                                                offlineDictionary.search(query, offset = dictionaryEntries.size)
+                                            }
+                                            dictionaryEntries = dictionaryEntries + more
+                                            dictionaryHasMore = more.size == 50
+                                        } catch (cancelled: CancellationException) {
+                                            throw cancelled
+                                        } catch (_: Exception) {
+                                            dictionaryError = "Could not load more dictionary matches."
+                                        } finally {
+                                            dictionarySearchLoading = false
+                                        }
+                                    }
+                                }) { Text("Load more matches") }
+                            }
+                            selectedDictionaryEntry?.let { entry ->
+                                Text("Select the applicable JMdict senses:", style = MaterialTheme.typography.titleSmall)
+                                entry.senses.forEachIndexed { index, sense ->
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Checkbox(
+                                            checked = index in selectedSenseIndices,
+                                            onCheckedChange = { checked ->
+                                                val newSelection = if (checked) {
+                                                    selectedSenseIndices + index
+                                                } else {
+                                                    selectedSenseIndices - index
+                                                }
+                                                selectedSenseIndices = newSelection
+                                                definition = newSelection.sorted().mapNotNull { selected ->
+                                                    entry.senses.getOrNull(selected)?.glosses?.joinToString("; ")
+                                                }.joinToString("\n")
+                                            },
+                                        )
+                                        Column {
+                                            Text(sense.glosses.joinToString("; "))
+                                            if (sense.partsOfSpeech.isNotEmpty()) {
+                                                Text(sense.partsOfSpeech.joinToString(", "), style = MaterialTheme.typography.bodySmall)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             Text("Vocabulary", style = MaterialTheme.typography.titleMedium)
                             OutlinedTextField(
                                 value = vocabulary,
                                 onValueChange = {
                                     if (it != vocabulary && hasTargetData) dependentFieldsStale = true
                                     vocabulary = it
+                                    selectedDictionaryEntry = null
+                                    selectedDictionaryEntryId = null
+                                    selectedSenseIndices = emptySet()
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 label = { Text("Lemma or manual vocabulary") },
@@ -381,6 +624,9 @@ class MainActivity : ComponentActivity() {
                                         dependentFieldsStale = true
                                     }
                                     vocabularyReading = it
+                                    selectedDictionaryEntry = null
+                                    selectedDictionaryEntryId = null
+                                    selectedSenseIndices = emptySet()
                                     leaveVocabularyUnannotated = false
                                 },
                                 modifier = Modifier.fillMaxWidth(),
@@ -397,6 +643,20 @@ class MainActivity : ComponentActivity() {
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 singleLine = true,
                             )
+                            when {
+                                pitchLookupLoading -> Text("Checking the offline Kanjium pitch data…")
+                                dictionaryReady && pitchCandidates.isEmpty() && vocabulary.isNotBlank() && vocabularyReading.isNotBlank() ->
+                                    Text("No matching Kanjium pitch record; unknown pitch remains empty.")
+                            }
+                            if (pitchCandidates.isNotEmpty()) {
+                                Text("Kanjium patterns (first source-listed pattern selected by default):")
+                                pitchCandidates.forEach { candidate ->
+                                    val label = candidate.partOfSpeech.ifBlank { "Pitch" }
+                                    TextButton(onClick = { pitchAccentText = candidate.accent.toString() }) {
+                                        Text("$label: ${candidate.accent}")
+                                    }
+                                }
+                            }
                             when {
                                 pitch != null -> PitchDiagram(pitch)
                                 pitchAccentText.isNotBlank() -> Text(
@@ -435,7 +695,7 @@ class MainActivity : ComponentActivity() {
                             }
                             OutlinedTextField(
                                 value = definition,
-                                onValueChange = { definition = it },
+                                onValueChange = { definition = it; selectedSenseIndices = emptySet() },
                                 modifier = Modifier.fillMaxWidth(),
                                 label = { Text("English definition (required)") },
                                 minLines = 2,
@@ -688,6 +948,15 @@ class MainActivity : ComponentActivity() {
         }
         return value?.toString()?.takeIf(String::isNotBlank)
     }
+
+    companion object {
+        @Volatile private var dictionaryInstance: OfflineDictionary? = null
+
+        private fun sharedDictionary(context: Context): OfflineDictionary =
+            dictionaryInstance ?: synchronized(this) {
+                dictionaryInstance ?: OfflineDictionary(context).also { dictionaryInstance = it }
+            }
+    }
 }
 
 private fun clearPersistedDraft(preferences: SharedPreferences) {
@@ -696,7 +965,7 @@ private fun clearPersistedDraft(preferences: SharedPreferences) {
         "vocabulary", "vocabulary_reading", "pitch_accent", "definition", "sentence_reading",
         "leave_sentence_target_unannotated", "leave_vocabulary_unannotated", "dependent_fields_stale",
         "translation", "notes", "tags", "submission_status", "pending_model_id", "pending_deck_id",
-        "pending_sentence", "pending_lemma",
+        "pending_sentence", "pending_lemma", "dictionary_entry_id", "dictionary_sense_indices",
     )
     preferences.edit().also { editor -> draftKeys.forEach(editor::remove) }.commit()
 }

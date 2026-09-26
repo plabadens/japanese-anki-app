@@ -111,11 +111,12 @@ def build(
                 reading TEXT NOT NULL,
                 part_of_speech TEXT NOT NULL,
                 accent INTEGER NOT NULL,
+                source_order INTEGER NOT NULL,
                 PRIMARY KEY(expression, reading, part_of_speech, accent)
             ) WITHOUT ROWID;
-            CREATE INDEX pitch_lookup ON pitch(expression, reading);
+            CREATE INDEX pitch_lookup ON pitch(expression, reading, source_order);
             CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;
-            PRAGMA user_version=1;
+            PRAGMA user_version=2;
             """,
         )
         entry_count = 0
@@ -146,7 +147,7 @@ def build(
                 connection.executemany("INSERT INTO forms VALUES (?, ?, ?)", form_batch)
 
         pitch_count = 0
-        pitch_batch: list[tuple[str, str, str, int]] = []
+        pitch_batch: list[tuple[str, str, str, int, int]] = []
         with kanjium.open(encoding="utf-8-sig") as source:
             for line_number, line in enumerate(source, 1):
                 fields = line.rstrip("\n\r").split("\t")
@@ -154,17 +155,19 @@ def build(
                     raise ValueError(f"Invalid Kanjium row at line {line_number}")
                 expression, reading, raw_accents = fields
                 reading = reading or expression
-                for part_of_speech, accent in pitch_alternatives(raw_accents, line_number):
-                    pitch_batch.append((expression, reading, part_of_speech, accent))
+                for alternative, (part_of_speech, accent) in enumerate(
+                    pitch_alternatives(raw_accents, line_number),
+                ):
+                    pitch_batch.append((expression, reading, part_of_speech, accent, line_number * 100 + alternative))
                     pitch_count += 1
                 if len(pitch_batch) >= 5000:
-                    connection.executemany("INSERT OR IGNORE INTO pitch VALUES (?, ?, ?, ?)", pitch_batch)
+                    connection.executemany("INSERT OR IGNORE INTO pitch VALUES (?, ?, ?, ?, ?)", pitch_batch)
                     pitch_batch.clear()
             if pitch_batch:
-                connection.executemany("INSERT OR IGNORE INTO pitch VALUES (?, ?, ?, ?)", pitch_batch)
+                connection.executemany("INSERT OR IGNORE INTO pitch VALUES (?, ?, ?, ?, ?)", pitch_batch)
 
         metadata = {
-            "schema_version": "1",
+            "schema_version": "2",
             "jmdict_sha256": sha256(jmdict),
             "kanjium_sha256": sha256(kanjium),
             "kanjium_commit": KANJIUM_COMMIT,

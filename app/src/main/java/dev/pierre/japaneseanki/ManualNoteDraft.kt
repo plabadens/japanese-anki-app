@@ -65,7 +65,7 @@ data class ManualNoteDraft(
             "SentAudio" to sentenceAudioFilename?.let { AnkiFieldSerializer.audioReference(it) }.orEmpty(),
             "VocabKanji" to AnkiFieldSerializer.plainText(vocabulary),
             "VocabFurigana" to vocabFurigana,
-            "VocabDef" to AnkiFieldSerializer.definition(listOf(definition)),
+            "VocabDef" to AnkiFieldSerializer.definition(definition.split(Regex("\\r\\n|\\n|\\r"))),
             "VocabPitch" to pitch?.fieldMarkup.orEmpty(),
             "VocabAudio" to vocabularyAudioFilename?.let { AnkiFieldSerializer.audioReference(it) }.orEmpty(),
             "Image" to imageFilename?.let { AnkiFieldSerializer.imageReference(it) }.orEmpty(),
@@ -76,13 +76,14 @@ data class ManualNoteDraft(
         )
     }
 
-    private fun containsKanji(text: String): Boolean {
-        var index = 0
-        while (index < text.length) {
-            val codePoint = text.codePointAt(index)
-            if (Character.UnicodeScript.of(codePoint) == Character.UnicodeScript.HAN) return true
-            index += Character.charCount(codePoint)
-        }
-        return false
+}
+
+internal fun containsKanji(text: String): Boolean {
+    var index = 0
+    while (index < text.length) {
+        val codePoint = text.codePointAt(index)
+        if (Character.UnicodeScript.of(codePoint) == Character.UnicodeScript.HAN) return true
+        index += Character.charCount(codePoint)
     }
+    return false
 }
