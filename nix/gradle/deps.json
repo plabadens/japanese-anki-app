@@ -1,0 +1,4 @@
+{
+  "!comment": "Nixpkgs Gradle MITM dependency lock. Generate/update with scripts/update-gradle-deps.sh after Maven/Google access is available.",
+  "!version": 1
+}

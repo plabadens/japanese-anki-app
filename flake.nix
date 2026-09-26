@@ -1,5 +1,5 @@
 {
-  description = "Japanese Anki Card Creator Android build environment";
+  description = "Japanese Anki Card Creator Android build";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
@@ -37,23 +37,97 @@
         includeEmulator = false;
         includeSystemImages = false;
       };
+      sdkRoot = "${android.androidsdk}/libexec/android-sdk";
+
+      mkAndroidApk = { apkPath, outputName, task }:
+        pkgs.stdenv.mkDerivation (finalAttrs: {
+          pname = "japanese-anki-card-creator";
+          version = "0.1.0";
+          src = self;
+
+          nativeBuildInputs = [ jdk pkgs.gradle ];
+          buildInputs = [ android.androidsdk ];
+          env = {
+            JAVA_HOME = "${jdk}";
+            ANDROID_HOME = sdkRoot;
+            ANDROID_SDK_ROOT = sdkRoot;
+            ANDROID_NDK_HOME = "${sdkRoot}/ndk/27.2.12479018";
+            MECAB_SOURCE_DIR = "${mecabSource}";
+            UNIDIC_RUNTIME_ARCHIVE = "${unidicRuntime}";
+            GRADLE_OPTS = "-Dorg.gradle.native=false";
+          };
+
+          gradleBuildTask = task;
+          gradleCheckTask = "testDebugUnitTest";
+          gradleFlags = [
+            "-Pandroid.aapt2FromMavenOverride=${sdkRoot}/build-tools/36.0.0/aapt2"
+            "-Dorg.gradle.java.home=${jdk}"
+          ];
+          doCheck = true;
+
+          mitmCache = pkgs.gradle.fetchDeps {
+            inherit (finalAttrs) pname;
+            pkg = finalAttrs.finalPackage;
+            data = ./nix/gradle/deps.json;
+            silent = false;
+            useBwrap = false;
+          };
+
+          installPhase = ''
+            install -D -m 0644 "${apkPath}" "$out/${outputName}"
+          '';
+
+          meta = {
+            description = "Japanese Anki Card Creator Android APK";
+            platforms = [ system ];
+          };
+        });
+
+      releaseApk = mkAndroidApk {
+        task = "assembleRelease";
+        apkPath = "app/build/outputs/apk/release/app-release-unsigned.apk";
+        outputName = "japanese-anki-unsigned.apk";
+      };
+      debugApk = mkAndroidApk {
+        task = "assembleDebug";
+        apkPath = "app/build/outputs/apk/debug/app-debug.apk";
+        outputName = "japanese-anki-debug.apk";
+      };
+      coreTests = pkgs.runCommand "japanese-anki-core-tests" {
+        nativeBuildInputs = [ jdk pkgs.gradle pkgs.python3 ];
+      } ''
+        cp -r ${self} source
+        chmod -R u+w source
+        cd source
+        python3 scripts/test-build-dictionary.py
+        python3 scripts/test-dictionary-asset.py
+        python3 scripts/test-package-unidic.py
+        bash scripts/test-core.sh
+        mkdir -p "$out"
+        printf 'Core tests passed.\n' > "$out/result"
+      '';
     in {
+      packages.${system} = {
+        default = releaseApk;
+        apk = releaseApk;
+        debugApk = debugApk;
+      };
+
+      checks.${system}.core = coreTests;
+
       devShells.${system}.default = pkgs.mkShell {
         packages = [ jdk pkgs.gradle android.androidsdk android.platform-tools pkgs.git pkgs.python3 ];
         JAVA_HOME = jdk.home;
-        ANDROID_HOME = "${android.androidsdk}/libexec/android-sdk";
-        ANDROID_SDK_ROOT = "${android.androidsdk}/libexec/android-sdk";
-        # Gradle's Java fallback avoids native-service failures in restricted build containers.
-        GRADLE_OPTS = "-Dorg.gradle.native=false";
+        ANDROID_HOME = sdkRoot;
+        ANDROID_SDK_ROOT = sdkRoot;
         MECAB_SOURCE_DIR = "${mecabSource}";
         UNIDIC_RUNTIME_ARCHIVE = "${unidicRuntime}";
+        GRADLE_OPTS = "-Dorg.gradle.native=false";
         LANG = "C.UTF-8";
         LC_ALL = "C.UTF-8";
         shellHook = ''
           export PATH="$ANDROID_HOME/platform-tools:$PATH"
-          if [ ! -f local.properties ]; then
-            printf 'sdk.dir=%s\\n' "$ANDROID_HOME" > local.properties
-          fi
+          printf 'sdk.dir=%s\n' "$ANDROID_HOME" > local.properties
         '';
       };
     };

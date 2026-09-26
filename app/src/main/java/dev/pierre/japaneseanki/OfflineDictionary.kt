@@ -4,7 +4,6 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import java.io.File
 import java.io.FileOutputStream
-import java.util.zip.GZIPInputStream
 
 /** One-time private copy of the bundled, read-only JMdict/Kanjium index. */
 class OfflineDictionary(context: Context) : AutoCloseable {
@@ -24,12 +23,11 @@ class OfflineDictionary(context: Context) : AutoCloseable {
         val temporaryFile = File(appContext.filesDir, "japanese-dictionary.tmp")
         temporaryFile.delete()
         try {
-            appContext.assets.open("dictionary.sqlite.gz").use { asset ->
-                GZIPInputStream(asset.buffered()).use { input ->
-                    FileOutputStream(temporaryFile).use { output ->
-                        input.copyTo(output, bufferSize = 64 * 1024)
-                        output.fd.sync()
-                    }
+            // Android's asset pipeline expands the source .gz and strips its suffix.
+            appContext.assets.open("dictionary.sqlite").buffered().use { input ->
+                FileOutputStream(temporaryFile).use { output ->
+                    input.copyTo(output, bufferSize = 64 * 1024)
+                    output.fd.sync()
                 }
             }
             check(temporaryFile.renameTo(databaseFile)) { "Could not install the offline dictionary." }

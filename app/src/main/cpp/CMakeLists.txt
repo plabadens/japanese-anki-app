@@ -45,3 +45,6 @@ target_compile_definitions(japaneseanki_mecab PRIVATE
 )
 target_compile_features(japaneseanki_mecab PRIVATE cxx_std_14)
 target_compile_options(japaneseanki_mecab PRIVATE -Wno-register)
+if(ANDROID)
+    target_link_options(japaneseanki_mecab PRIVATE "-Wl,-z,max-page-size=16384")
+endif()

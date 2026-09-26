@@ -8,6 +8,12 @@ import android.content.pm.PackageManager
 import org.json.JSONArray
 import org.json.JSONObject
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import android.speech.tts.TextToSpeech
+import android.speech.tts.Voice
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -19,11 +25,13 @@ import kotlinx.coroutines.withContext
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.horizontalScroll
@@ -40,6 +48,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -59,7 +68,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.TextRange
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.VisualTransformation
 
 private const val ANKIDROID_READ_WRITE_PERMISSION =
     "com.ichi2.anki.permission.READ_WRITE_DATABASE"
@@ -70,6 +81,52 @@ class MainActivity : ComponentActivity() {
     private var apiPermissionGranted by mutableStateOf(false)
     private lateinit var offlineDictionary: OfflineDictionary
     private lateinit var offlineAnalyzer: OfflineJapaneseAnalyzer
+    private var textToSpeech: TextToSpeech? = null
+    private val offlineJapaneseVoices = mutableStateOf<List<Voice>>(emptyList())
+    private val textToSpeechEngine = mutableStateOf<String?>(null)
+    private val textToSpeechReady = mutableStateOf(false)
+    private val textToSpeechError = mutableStateOf(false)
+
+    private fun initializeTextToSpeech() {
+        textToSpeech?.shutdown()
+        textToSpeech = null
+        textToSpeechReady.value = false
+        textToSpeechError.value = false
+        offlineJapaneseVoices.value = emptyList()
+        textToSpeechEngine.value = null
+        val handler = Handler(Looper.getMainLooper())
+        var created: TextToSpeech? = null
+        try {
+            created = TextToSpeech(applicationContext) { status ->
+                handler.post {
+                    val service = created ?: return@post
+                    if (textToSpeech !== service) return@post
+                    if (status == TextToSpeech.SUCCESS) {
+                        textToSpeechEngine.value = service.defaultEngine
+                        offlineJapaneseVoices.value = service.voices.orEmpty()
+                            .filter {
+                                it.locale.language == "ja" && !it.isNetworkConnectionRequired &&
+                                    "notInstalled" !in it.features
+                            }
+                            .sortedBy { it.name }
+                    } else {
+                        textToSpeechError.value = true
+                    }
+                    textToSpeechReady.value = true
+                }
+            }
+            textToSpeech = created
+        } catch (_: Exception) {
+            textToSpeechError.value = true
+            textToSpeechReady.value = true
+        }
+    }
+
+    override fun onDestroy() {
+        textToSpeech?.shutdown()
+        textToSpeech = null
+        super.onDestroy()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -86,6 +143,9 @@ class MainActivity : ComponentActivity() {
             val apiPermissionLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.RequestPermission(),
             ) { granted -> apiPermissionGranted = granted }
+            val ttsVoiceDataLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.StartActivityForResult(),
+            ) { initializeTextToSpeech() }
             var editor by remember {
                 mutableStateOf(
                     TextFieldValue(
@@ -120,6 +180,19 @@ class MainActivity : ComponentActivity() {
             var tags by remember { mutableStateOf(preferences.getString("tags", defaultTags).orEmpty()) }
             var showReplace by remember { mutableStateOf(false) }
             var showSources by remember { mutableStateOf(false) }
+            var showSettings by remember { mutableStateOf(false) }
+            var settingsDefaultTags by remember { mutableStateOf("") }
+            var azureKey by remember { mutableStateOf("") }
+            var azureKeyVisible by remember { mutableStateOf(false) }
+            var azureRegion by remember { mutableStateOf("") }
+            var azureVoice by remember { mutableStateOf("") }
+            var azureRate by remember { mutableStateOf(1f) }
+            var androidTtsVoiceName by remember { mutableStateOf("") }
+            var androidTtsRate by remember { mutableStateOf(1f) }
+            var settingsLoading by remember { mutableStateOf(false) }
+            var settingsSaving by remember { mutableStateOf(false) }
+            var settingsError by remember { mutableStateOf<String?>(null) }
+            var showAndroidVoiceMenu by remember { mutableStateOf(false) }
             var showSentenceFurigana by remember { mutableStateOf(false) }
             var dictionaryRetry by remember { mutableStateOf(0) }
             var dictionaryReady by remember { mutableStateOf(false) }
@@ -241,7 +314,8 @@ class MainActivity : ComponentActivity() {
                     dictionaryReady = true
                 } catch (cancelled: CancellationException) {
                     throw cancelled
-                } catch (_: Exception) {
+                } catch (error: Exception) {
+                    Log.e("OfflineDictionary", "Could not prepare the bundled dictionary", error)
                     dictionaryError = "Offline dictionary could not be prepared. Manual note entry remains available."
                 } finally {
                     dictionaryLoading = false
@@ -258,8 +332,10 @@ class MainActivity : ComponentActivity() {
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (error: LinkageError) {
+                    Log.e("OfflineAnalyzer", "Could not load MeCab native analysis", error)
                     analyzerError = "MeCab native analysis could not load. Manual entry remains available."
-                } catch (_: Exception) {
+                } catch (error: Exception) {
+                    Log.e("OfflineAnalyzer", "Could not prepare UniDic analysis", error)
                     analyzerError = "UniDic could not be installed. Check available storage and retry."
                 } finally {
                     analyzerLoading = false
@@ -385,6 +461,194 @@ class MainActivity : ComponentActivity() {
                         showReplace = true
                     }
                 }
+            }
+            if (showSettings) {
+                AlertDialog(
+                    onDismissRequest = { if (!settingsSaving) showSettings = false },
+                    title = { Text("Settings") },
+                    text = {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Text("New-note defaults", style = MaterialTheme.typography.titleMedium)
+                            OutlinedTextField(
+                                value = settingsDefaultTags,
+                                onValueChange = { settingsDefaultTags = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("Default tags") },
+                                supportingText = { Text("Hierarchical tags such as JLPT::N4 are supported.") },
+                                singleLine = true,
+                                enabled = !settingsLoading && !settingsSaving,
+                            )
+                            Text("Cloud speech", style = MaterialTheme.typography.titleMedium)
+                            Text("Optional Azure settings. The key is encrypted with Android Keystore and stays on this device.")
+                            if (settingsLoading) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                    Text("Loading saved settings…")
+                                }
+                            }
+                            OutlinedTextField(
+                                value = azureKey,
+                                onValueChange = { azureKey = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("Azure subscription key") },
+                                visualTransformation = if (azureKeyVisible) VisualTransformation.None
+                                    else PasswordVisualTransformation(),
+                                singleLine = true,
+                                enabled = !settingsLoading && !settingsSaving,
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Checkbox(
+                                    checked = azureKeyVisible,
+                                    onCheckedChange = { azureKeyVisible = it },
+                                    enabled = !settingsLoading && !settingsSaving,
+                                )
+                                Text("Show key")
+                            }
+                            OutlinedTextField(
+                                value = azureRegion,
+                                onValueChange = { azureRegion = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("Azure region") },
+                                singleLine = true,
+                                enabled = !settingsLoading && !settingsSaving,
+                            )
+                            OutlinedTextField(
+                                value = azureVoice,
+                                onValueChange = { azureVoice = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("Japanese Azure voice name") },
+                                singleLine = true,
+                                enabled = !settingsLoading && !settingsSaving,
+                            )
+                            Text("Azure speech rate: ${"%.2f".format(azureRate)}×")
+                            Slider(
+                                value = azureRate,
+                                onValueChange = { azureRate = it },
+                                valueRange = 0.5f..2f,
+                                steps = 29,
+                                enabled = !settingsLoading && !settingsSaving,
+                            )
+                            Text("On-device speech", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                when {
+                                    !textToSpeechReady.value -> "Checking installed text-to-speech voices…"
+                                    textToSpeechError.value -> "Android could not initialize a text-to-speech engine."
+                                    textToSpeechEngine.value != null -> "System engine: ${textToSpeechEngine.value}"
+                                    else -> "No system text-to-speech engine was reported."
+                                },
+                            )
+                            TextButton(onClick = {
+                                runCatching {
+                                    ttsVoiceDataLauncher.launch(Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA))
+                                }.onFailure { settingsError = "Could not open Android text-to-speech settings." }
+                            }) { Text("Manage installed voice data") }
+                            if (textToSpeechError.value) {
+                                TextButton(onClick = { initializeTextToSpeech() }) { Text("Retry voice discovery") }
+                            }
+                            if (offlineJapaneseVoices.value.isNotEmpty()) {
+                                Box {
+                                    OutlinedButton(
+                                        onClick = { showAndroidVoiceMenu = true },
+                                        enabled = !settingsLoading && !settingsSaving,
+                                    ) {
+                                        val selectedVoice = offlineJapaneseVoices.value.firstOrNull {
+                                            it.name == androidTtsVoiceName
+                                        }
+                                        Text(selectedVoice?.let { "${it.locale.displayName} · ${it.name}" }
+                                            ?: "Choose installed offline Japanese voice")
+                                    }
+                                    DropdownMenu(
+                                        expanded = showAndroidVoiceMenu,
+                                        onDismissRequest = { showAndroidVoiceMenu = false },
+                                    ) {
+                                        offlineJapaneseVoices.value.forEach { voice ->
+                                            DropdownMenuItem(
+                                                text = { Text("${voice.locale.displayName} · ${voice.name}") },
+                                                onClick = {
+                                                    androidTtsVoiceName = voice.name
+                                                    showAndroidVoiceMenu = false
+                                                },
+                                            )
+                                        }
+                                    }
+                                }
+                                if (androidTtsVoiceName.isNotBlank() &&
+                                    offlineJapaneseVoices.value.none { it.name == androidTtsVoiceName }
+                                ) Text("Saved voice is no longer installed or offline-capable.")
+                            } else if (textToSpeechReady.value) {
+                                Text("No installed offline Japanese voice was found. Add one in Android settings.")
+                            }
+                            Text("Android speech rate: ${"%.2f".format(androidTtsRate)}×")
+                            Slider(
+                                value = androidTtsRate,
+                                onValueChange = { androidTtsRate = it },
+                                valueRange = 0.5f..2f,
+                                steps = 29,
+                                enabled = !settingsLoading && !settingsSaving,
+                            )
+                            Text("Speech generation is not active yet; these preferences are saved for the audio layer.")
+                            settingsError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(
+                            enabled = !settingsLoading && !settingsSaving,
+                            onClick = {
+                                val key = azureKey.trim()
+                                val region = azureRegion.trim()
+                                val voice = azureVoice.trim()
+                                when {
+                                    key.isNotEmpty() && (region.isEmpty() || voice.isEmpty()) ->
+                                        settingsError = "Enter an Azure region and voice when a key is configured."
+                                    region.isNotEmpty() && !region.matches(Regex("[A-Za-z0-9-]+")) ->
+                                        settingsError = "Enter a valid Azure region name."
+                                    else -> {
+                                        settingsSaving = true
+                                        settingsError = null
+                                        coroutineScope.launch {
+                                            try {
+                                                withContext(Dispatchers.IO) {
+                                                    val edit = settings.edit()
+                                                        .putString("default_tags", settingsDefaultTags)
+                                                        .putString("azure_region", region)
+                                                        .putString("azure_voice", voice)
+                                                        .putFloat("azure_rate", azureRate)
+                                                        .putString("android_tts_voice", androidTtsVoiceName)
+                                                        .putFloat("android_tts_rate", androidTtsRate)
+                                                    if (key.isBlank()) {
+                                                        edit.remove("azure_key_encrypted")
+                                                    } else {
+                                                        edit.putString("azure_key_encrypted", EncryptedSecretStore.encrypt(key))
+                                                    }
+                                                    check(edit.commit()) { "Could not persist settings." }
+                                                    if (key.isBlank()) runCatching { EncryptedSecretStore.removeKey() }
+                                                }
+                                                defaultTags = settingsDefaultTags
+                                                showSettings = false
+                                            } catch (cancelled: CancellationException) {
+                                                throw cancelled
+                                            } catch (_: Exception) {
+                                                settingsError = "Settings could not be saved. The Azure key was not stored in plain text."
+                                            } finally {
+                                                settingsSaving = false
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                        ) { Text(if (settingsSaving) "Saving…" else "Save settings") }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            enabled = !settingsSaving,
+                            onClick = { showSettings = false },
+                        ) { Text("Cancel") }
+                    },
+                )
             }
             if (showSources) {
                 AlertDialog(
@@ -538,6 +802,35 @@ class MainActivity : ComponentActivity() {
                 settings.edit().putString("default_tags", defaultTags).apply()
             }
 
+            androidx.compose.runtime.LaunchedEffect(showSettings) {
+                if (!showSettings) return@LaunchedEffect
+                settingsLoading = true
+                settingsSaving = false
+                settingsError = null
+                azureKeyVisible = false
+                try {
+                    val key = withContext(Dispatchers.IO) {
+                        runCatching {
+                            EncryptedSecretStore.decrypt(settings.getString("azure_key_encrypted", null))
+                        }
+                    }
+                    azureKey = key.getOrElse { "" }
+                    if (key.isFailure) settingsError = "The saved Azure key could not be opened. Enter it again."
+                    azureRegion = settings.getString("azure_region", "").orEmpty()
+                    azureVoice = settings.getString("azure_voice", "").orEmpty()
+                    azureRate = settings.getFloat("azure_rate", 1f).coerceIn(0.5f, 2f)
+                    androidTtsVoiceName = settings.getString("android_tts_voice", "").orEmpty()
+                    androidTtsRate = settings.getFloat("android_tts_rate", 1f).coerceIn(0.5f, 2f)
+                    settingsDefaultTags = defaultTags
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    settingsError = "Could not load saved speech settings."
+                } finally {
+                    settingsLoading = false
+                }
+            }
+
             androidx.compose.runtime.LaunchedEffect(
                 editor.text, editor.selection, target, vocabulary, vocabularyReading, pitchAccentText, definition,
                 sentenceReading, leaveSentenceTargetUnannotated, leaveVocabularyUnannotated,
@@ -581,7 +874,14 @@ class MainActivity : ComponentActivity() {
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         Text("Japanese Anki", style = MaterialTheme.typography.headlineMedium)
-                        TextButton(onClick = { showSources = true }) { Text("Sources & licenses") }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(onClick = {
+                                settingsLoading = true
+                                showSettings = true
+                                if (!textToSpeechReady.value && textToSpeech == null) initializeTextToSpeech()
+                            }) { Text("Settings") }
+                            TextButton(onClick = { showSources = true }) { Text("Sources & licenses") }
+                        }
                         if (dictionaryLoading) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -925,14 +1225,6 @@ class MainActivity : ComponentActivity() {
                                 onValueChange = { tags = it },
                                 modifier = Modifier.fillMaxWidth(),
                                 label = { Text("Tags (optional)") },
-                                singleLine = true,
-                            )
-                            OutlinedTextField(
-                                value = defaultTags,
-                                onValueChange = { defaultTags = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Default tags for new notes") },
-                                supportingText = { Text("Hierarchical tags such as JLPT::N4 are supported.") },
                                 singleLine = true,
                             )
                         }
