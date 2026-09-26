@@ -120,6 +120,20 @@ class MainActivity : ComponentActivity() {
                 )
             }
 
+            val noteDraft = ManualNoteDraft(
+                sentence = editor.text,
+                target = target,
+                sentenceReading = sentenceReading,
+                leaveSentenceTargetUnannotated = leaveSentenceTargetUnannotated,
+                vocabulary = vocabulary,
+                vocabularyReading = vocabularyReading,
+                leaveVocabularyUnannotated = leaveVocabularyUnannotated,
+                definition = definition,
+                translation = translation,
+                notes = notes,
+            )
+            val validationErrors = noteDraft.validationErrors()
+
             androidx.compose.runtime.LaunchedEffect(
                 editor.text, editor.selection, target, vocabulary, vocabularyReading, definition,
                 sentenceReading, leaveSentenceTargetUnannotated, leaveVocabularyUnannotated,
@@ -265,6 +279,18 @@ class MainActivity : ComponentActivity() {
                                 label = { Text("Tags (optional)") },
                                 singleLine = true,
                             )
+                        }
+                        if (target != null) {
+                            if (validationErrors.isEmpty()) {
+                                Text("Required note text is complete.", style = MaterialTheme.typography.bodyMedium)
+                            } else {
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text("Still needed", style = MaterialTheme.typography.titleSmall)
+                                    validationErrors.forEach { issue ->
+                                        Text("• $issue", style = MaterialTheme.typography.bodyMedium)
+                                    }
+                                }
+                            }
                         }
                         Text(
                             "Draft autosaves on this device. Dictionary lookup and AnkiDroid setup are not connected yet.",
