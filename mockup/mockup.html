@@ -1,0 +1,302 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sentence Mining — Full Screen Walkthrough</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  body{width:auto; height:auto; overflow:visible; background:var(--paper); color:var(--ink); font-family:var(--font-display); -webkit-font-smoothing:antialiased;}
+  .page{max-width:1180px; margin:0 auto; padding:56px 28px 84px;}
+
+  header.intro{max-width:780px; margin-bottom:26px;}
+  .eyebrow{font-family:var(--font-mono); font-size:11.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin:0 0 10px;}
+  h1{font-size:clamp(28px,4vw,40px); line-height:1.12; margin:0 0 16px; text-wrap:balance; font-weight:600; letter-spacing:-.01em;}
+  .lede{font-size:17px; line-height:1.6; color:var(--ink); margin:0 0 10px;}
+  .lede + .lede{color:var(--muted);}
+
+  .warncall{border:1px solid var(--accent); border-radius:14px; padding:16px 18px; margin-bottom:44px; background:var(--accent-soft);}
+  .warncall .head{display:flex; gap:10px; align-items:center; margin-bottom:8px;}
+  .warncall .mark{font-family:var(--font-mono); font-size:11px; font-weight:700; color:var(--accent); border:1px solid var(--accent); border-radius:999px; padding:2px 9px; flex:none;}
+  .warncall p{margin:0 0 8px; font-size:14px; line-height:1.6; color:var(--ink);}
+  .warncall ul{margin:0; padding-left:18px; font-size:13.5px; line-height:1.65; color:var(--ink);}
+  .warncall code{font-family:var(--font-mono); font-size:12.5px; background:rgba(0,0,0,.06); padding:1px 5px; border-radius:4px;}
+  .warncall .open{border-top:1px dashed var(--accent); margin-top:12px; padding-top:12px; font-style:italic; color:var(--ink);}
+
+  h2{font-size:23px; margin:0 0 6px; font-weight:600;}
+  h3.sub{font-size:14.5px; margin:0 0 4px; font-weight:600;}
+  .section-lede{font-size:15px; color:var(--muted); margin:0 0 26px; max-width:660px; line-height:1.55;}
+  section{margin-bottom:64px;}
+
+  .stance{display:flex; gap:34px; flex-wrap:wrap;}
+  .stance-col{flex:1; min-width:280px;}
+  .stance-col p{font-size:14.5px; line-height:1.7; color:var(--muted); margin:0 0 12px;}
+  .stance-col p b{color:var(--ink); font-weight:600;}
+  .chain-block{margin-top:8px;}
+  .chain-label{font-family:var(--font-mono); font-size:10px; text-transform:uppercase; letter-spacing:.07em; color:var(--muted); margin-bottom:6px;}
+  .chain{display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin-bottom:14px;}
+  .chain .box{border:1px solid var(--rule); border-radius:9px; padding:6px 10px; font-family:var(--font-mono); font-size:10.5px; background:var(--field-bg); display:flex; align-items:center; gap:7px; white-space:nowrap;}
+  .chain .tag{font-size:8.5px; padding:1.5px 6px; border-radius:999px; font-family:var(--font-ui); letter-spacing:.02em;}
+  .chain .tag.local{background:var(--accent-soft); color:var(--accent);}
+  .chain .tag.cloud{background:var(--warn-soft); color:var(--warn);}
+  .chain .arrow{color:var(--muted); font-size:14px;}
+  .stance-note{font-size:13px; color:var(--muted); font-style:italic; margin-top:2px;}
+
+  .principles{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px;}
+  .principle{border:1px solid var(--rule); border-radius:14px; padding:16px 18px; background:var(--field-bg);}
+  .principle .num{font-family:var(--font-mono); font-size:10.5px; color:var(--accent); letter-spacing:.06em;}
+  .principle h3{margin:6px 0 6px; font-size:15px; font-weight:600;}
+  .principle p{margin:0; font-size:13.5px; line-height:1.55; color:var(--muted);}
+
+  .filmstrip{display:flex; gap:24px; overflow-x:auto; padding:6px 2px 14px; align-items:flex-start;}
+  .frame{flex:0 0 auto; width:220px;}
+  .shot{width:220px; border-radius:14px; border:1px solid var(--rule); display:block; box-shadow:0 12px 26px -16px rgba(20,18,14,.4);}
+  .frame-caption{font-family:var(--font-mono); font-size:10.5px; color:var(--muted); text-align:center; margin-top:9px; line-height:1.5;}
+
+  .film-note{font-size:13.5px; color:var(--muted); font-style:italic; margin:2px 0 20px; max-width:660px;}
+  .mechanism{font-size:14px; line-height:1.6; margin-top:4px; max-width:660px;}
+  .mechanism b{font-weight:600;}
+  .mechanism + .mechanism{margin-top:14px;}
+
+  .rulecall{border:1px solid var(--rule); border-radius:12px; padding:14px 16px; background:var(--field-bg); font-size:13.5px; line-height:1.6; color:var(--ink); max-width:660px; margin:18px 0 8px;}
+  .rulecall b{color:var(--accent);}
+
+  .decisionbar{display:flex; gap:14px; flex-wrap:wrap;}
+  .dcol{flex:1; min-width:220px; border-radius:14px; padding:16px 18px; border:1px solid var(--rule);}
+  .dcol h4{margin:0 0 8px; font-size:12.5px; font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.06em;}
+  .dcol ul{margin:0; padding-left:16px; font-size:13.5px; line-height:1.65; color:var(--ink);}
+  .dcol.always{background:var(--accent-soft);}
+  .dcol.always h4{color:var(--accent);}
+  .dcol.rare{background:var(--field-bg);}
+  .dcol.rare h4{color:var(--muted);}
+  .dcol.auto{background:var(--field-bg); border-style:dashed;}
+  .dcol.auto h4{color:var(--muted);}
+
+  .furi-legend{display:flex; gap:14px; flex-wrap:wrap; margin:6px 0 18px;}
+  .furi-item{border:1px solid var(--rule); border-radius:12px; padding:14px 16px; background:var(--field-bg); flex:1; min-width:190px;}
+  .furi-item .sample{font-family:var(--font-ui); font-size:17px; margin-bottom:8px;}
+  .furi-item p{margin:0; font-size:12.5px; color:var(--muted); line-height:1.55;}
+  .furi-gap{text-decoration:underline dotted var(--muted); text-underline-offset:3px;}
+  ruby.doc{ruby-align:center;} ruby.doc rt{font-size:9px; color:var(--muted);}
+
+  .scenario-list{margin:8px 0 0; padding-left:18px; font-size:13.5px; line-height:1.75; color:var(--ink); max-width:640px;}
+  .scenario-list b{font-weight:600;}
+
+  .other-directions{border-top:1px solid var(--rule); margin-top:8px; padding-top:34px;}
+  .other-directions h3{font-size:14px; margin:0 0 10px; font-weight:600;}
+  .other-directions .row{display:flex; gap:20px; flex-wrap:wrap;}
+  .other-directions .item{flex:1; min-width:230px; font-size:13.5px; line-height:1.6; color:var(--muted);}
+  .other-directions .item b{color:var(--ink); font-weight:600;}
+
+  .toc{display:flex; flex-wrap:wrap; gap:8px 18px; font-family:var(--font-mono); font-size:12px; margin:0 0 40px; padding:16px 18px; border:1px solid var(--rule); border-radius:14px; background:var(--field-bg);}
+  .toc a{color:var(--muted); text-decoration:none;}
+  .toc a:hover{color:var(--ink); text-decoration:underline;}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="intro">
+    <p class="eyebrow">Reviewed UI concept — Japanese sentence-mining input app</p>
+    <h1>Capture, choose, send</h1>
+    <p class="lede">33 representative states, rendered from HTML/CSS at a 412×915 reference viewport. These are design references, not a complete interactive application or proof of Android accessibility. <code>SPEC.md</code> governs behavior; the HTML/CSS generates the PNGs. Keyboard, long-content, and native accessibility checks remain required.</p>
+    <p class="lede">Built over six rounds of iteration in chat: three initial layout directions narrowed to Card &amp; Sheets, then refined around photo/OCR capture, pitch display, audio sourcing, translation, tags, a neutral interface color with pitch as the only chromatic element, and finally a pass making the review card the persistent ground truth for the whole session — sending, success, duplicate blocking, and error recovery are states of that one card, never separate screens.</p>
+  </header>
+
+  <div class="toc">
+    <a href="#stance">Design stance</a><a href="#principles">Principles</a><a href="#capture">Capture</a><a href="#target">Target &amp; dictionary</a>
+    <a href="#errors">Error recovery</a><a href="#review">Review card</a><a href="#sheets">Sheets</a><a href="#pitch">Pitch component</a><a href="#furigana">Furigana</a>
+    <a href="#settings">Settings</a><a href="#setup">Setup &amp; system states</a><a href="#other">Directions set aside</a>
+  </div>
+
+  <div class="warncall">
+    <div class="head"><span class="mark">spec</span><p style="font-weight:600; margin:0;">Reflected in <code>SPEC.md</code></p></div>
+    <p>The interaction direction is specified; dependency and device verification remain open: on-device OCR, image sharing, and photo/image linking (§3.1, §4.2, §4.8), the review-card-as-ground-truth interaction model and Edit word sheet (§4.1–§4.5, §4.10), furigana's three visual states (§5.4), pick-not-drawn pitch selection and the per-mora block diagram (§5.5), the NHK-first audio chain with recording fully removed (§3.2, §6), automatic Azure-first/local-fallback translation (§7.2), tags-remember-last-note (§7.4), and the settings-vs-build-time reasoning for the Azure key (§4.9). The cumulative rationale for each is in §17's Decision precedence list.</p>
+    <ul>
+      <li>New bundled dependencies this introduces — on-device OCR and a local ja→en fallback model — are release-gated in §15 (gates 11–12), the same tier as MeCab/UniDic.</li>
+      <li>Acceptance tests A08, A13, A15–A20, A24–A25, A32, A37, A41–A58 cover this concept's specific behaviors.</li>
+    </ul>
+    <p class="open">Final-review decisions: readings are automatic and optional everywhere; dictionary misses preserve the sentence for editing or reselection; unexpected errors preserve the saved draft. These supersede the earlier reading-confirmation and discard-on-error policies. See <a href="REVIEW.md">the review record</a> for validation and remaining release gates.</p>
+  </div>
+
+  <section id="stance">
+    <h2>Design stance</h2>
+    <div class="stance">
+      <div class="stance-col">
+        <h3 class="sub">For the person mining, not the demo</h3>
+        <p>This gets used mid-episode, mid-conversation, mid-trip — one-handed, dozens of times a session, sometimes standing in front of the actual sign, menu, or platform placard. Negative space around the one or two things worth looking at, neutral tone for anything that's a <i>control</i>, color spent in exactly one place: pitch.</p>
+        <p>The corollary holds: <b>keep the user’s work when recognition or lookup fails</b>. Let them correct text or reselect the target; retaking or starting over remains an explicit choice.</p>
+      </div>
+      <div class="stance-col">
+        <h3 class="sub">Offline by default, online when it's clearly better</h3>
+        <p>The creation path must work without a network once installed. Bundled linguistic data, OCR, and translation are separate from installed offline TTS voices. Missing optional audio or translation never blocks sending; online services are quality upgrades.</p>
+        <div class="chain-block">
+          <div class="chain-label">Word audio</div>
+          <div class="chain">
+            <div class="box">NHK-2016 recording <span class="tag cloud">download / cached</span></div><span class="arrow">→</span>
+            <div class="box">Azure TTS <span class="tag cloud">cloud, preferred</span></div><span class="arrow">→</span>
+            <div class="box">On-device voice <span class="tag local">local</span></div>
+          </div>
+          <div class="chain-label">Sentence audio</div>
+          <div class="chain">
+            <div class="box">Azure TTS <span class="tag cloud">cloud, preferred</span></div><span class="arrow">→</span>
+            <div class="box">On-device voice <span class="tag local">local</span></div>
+          </div>
+          <div class="chain-label">Sentence translation</div>
+          <div class="chain">
+            <div class="box">Azure Translator <span class="tag cloud">cloud, preferred</span></div><span class="arrow">→</span>
+            <div class="box">Local ja→en model <span class="tag local">local</span></div>
+          </div>
+          <div class="chain-label">Text from a photo</div>
+          <div class="chain"><div class="box">On-device OCR <span class="tag local">local, always</span></div></div>
+        </div>
+        <p class="stance-note">Recorded word audio is preferred where available and licensed, with no guarantee of a selected pitch match unless source metadata verifies it. Translation prefers Azure and falls back to an independent bundled model. Its neutral mark identifies an offline translation; vocabulary marks explain pitch ambiguity, missing pitch, or unverified recording pitch.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="principles">
+    <h2>Five principles</h2>
+    <div class="principles">
+      <div class="principle"><div class="num">01</div><h3>Photo is the input</h3><p>One photo is both the OCR source and the card image. Splitting them is one tap away on the review screen — never a separate step up front.</p></div>
+      <div class="principle"><div class="num">02</div><h3>Pitch, picked not drawn</h3><p>The app selects the matching pattern automatically. "Edit word" reselects the target from the sentence; a pitch pick-list only appears there when the spelling has more than one listed pattern.</p></div>
+      <div class="principle"><div class="num">03</div><h3>A mark, not a paragraph</h3><p>Uncertain pitch or a locally-translated sentence gets one small neutral icon, not a caption. Tap it to see why; nothing is explained unasked.</p></div>
+      <div class="principle"><div class="num">04</div><h3>No needless interruptions</h3><p>Automatic choice sheets are reserved for OCR or dictionary ambiguity. Editing sheets open on request; error and draft-replacement prompts have their own explicit roles.</p></div>
+      <div class="principle"><div class="num">05</div><h3>Audio chooses its source</h3><p>Play sits beside each field. Relevant edits refresh generated audio automatically; failed or interrupted items offer Retry. Voice and credentials stay in Settings, not on each note.</p></div>
+    </div>
+  </section>
+
+  <section id="capture">
+    <h2>Capture</h2>
+    <p class="section-lede">Two modes, remembered between sessions, with Settings reachable from either before a first sentence exists. Photo is the default; the same photo doubles as the card image unless split apart later. Corresponds to <code>SPEC.md</code> §4.2.</p>
+    <div class="filmstrip">
+      <div class="frame"><img class="shot" src="screens/06-capture-photo.png"><p class="frame-caption">06 — capture-photo<br>Photo mode, viewfinder, Settings beside the mode pills</p></div>
+      <div class="frame"><img class="shot" src="screens/07-capture-type.png"><p class="frame-caption">07 — capture-type<br>Type mode, optional image</p></div>
+      <div class="frame"><img class="shot" src="screens/08-ocr-ambiguity-sheet.png"><p class="frame-caption">08 — ocr-ambiguity-sheet<br>Backdrop is the live viewfinder — only if the photo has &gt;1 text region</p></div>
+    </div>
+  </section>
+
+  <section id="target">
+    <h2>Target &amp; dictionary resolution</h2>
+    <p class="section-lede">One screen for text and target together — no separate OCR-confirm step. A sheet interrupts only when the dictionary itself is ambiguous. Corresponds to §4.3.</p>
+    <div class="filmstrip">
+      <div class="frame"><img class="shot" src="screens/09-target-text.png"><p class="frame-caption">09 — target-text<br>Editable sentence + token chips</p></div>
+      <div class="frame"><img class="shot" src="screens/10-dictionary-ambiguity-sheet.png"><p class="frame-caption">10 — dictionary-ambiguity-sheet<br>Complete Target screen remains beneath the sheet; only if &gt;1 JMdict entry matches</p></div>
+    </div>
+  </section>
+
+  <section id="errors">
+    <h2>Error recovery</h2>
+    <p class="section-lede">Errors preserve saved work. A dictionary miss returns to text/target editing; an unexpected error returns to the draft without blindly retrying a submission. Corresponds to §4.10.</p>
+    <div class="filmstrip">
+      <div class="frame"><img class="shot" src="screens/11-dictionary-lookup-failed.png"><p class="frame-caption">11 — dictionary-lookup-failed<br>No match for the selected span — edit or reselect without discarding</p></div>
+      <div class="frame"><img class="shot" src="screens/12-generic-error-sheet.png"><p class="frame-caption">12 — generic-error-sheet<br>Saved draft retained; return without destructive restart. Specific submission/permission failures retain their own handling</p></div>
+    </div>
+  </section>
+
+  <section id="review">
+    <h2>Review card — the hub</h2>
+    <p class="section-lede">Once a target resolves, this card is the ground truth for the rest of the session — not one screen among several, <i>the</i> screen. Generating fields, flagged fields, sending, success, a blocked duplicate, and an uncertain outcome are all this same card with only its bottom action area (or a small popover) changing; nothing here ever swaps in an unrelated full-screen layout. Deck and note type are configured only in Settings, never selected or redisplayed here. Corresponds to §4.1, §4.5–§4.6, §9.4–§9.5.</p>
+    <div class="filmstrip">
+      <div class="frame"><img class="shot" src="screens/13-review-card.png"><p class="frame-caption">13 — review-card<br>Default, nothing flagged, nothing pending</p></div>
+      <div class="frame"><img class="shot" src="screens/14-review-card-generating.png"><p class="frame-caption">14 — review-card-generating<br>Spinners on the online-sourced fields only — furigana/definition/pitch are local and already resolved</p></div>
+      <div class="frame"><img class="shot" src="screens/15-review-card-flags.png"><p class="frame-caption">15 — review-card-flags<br>Ambiguous pitch + local-fallback translation, together — flag and edit are always two separate icons</p></div>
+      <div class="frame"><img class="shot" src="screens/16-flag-explainer.png"><p class="frame-caption">16 — flag-explainer<br>Tapping the flag (not the pencil) explains the pitch ambiguity; Send remains available and the pencil opens Edit word</p></div>
+      <div class="frame"><img class="shot" src="screens/17-sending.png"><p class="frame-caption">17 — sending<br>Full card unchanged; only the button becomes a spinner</p></div>
+      <div class="frame"><img class="shot" src="screens/18-success.png"><p class="frame-caption">18 — success<br>Filled checkmark and Notes remain on the same card; a blank capture screen follows immediately after</p></div>
+      <div class="frame"><img class="shot" src="screens/19-duplicate-blocked.png"><p class="frame-caption">19 — duplicate-blocked<br>§9.3 duplicate rule — card stays as submitted; Open in AnkiDroid opens the existing duplicate there, not an internal review</p></div>
+      <div class="frame"><img class="shot" src="screens/20-send-uncertain.png"><p class="frame-caption">20 — send-uncertain<br>§9.5 unresolved outcome after reconciliation — inspect AnkiDroid before a checked retry</p></div>
+    </div>
+    <div class="rulecall"><b>The rule, stated plainly:</b> every button, chip, and sheet title in this app is sumi — one neutral tone, light or dark. The four pitch hues (heiban, atamadaka, nakadaka, odaka — lifted from the <code>Sentence (JA)</code> template's own palette) are the only saturated color anywhere. Even "OK" vs. "needs a look" (screens 18 vs. 19) is shape — filled circle vs. outline circle — never a green/red pair. See color, think pitch.</div>
+    <div class="decisionbar" style="margin-top:24px;">
+      <div class="dcol always"><h4>Always asked</h4><ul><li>Which word is the target</li><li>Send, when you're ready</li></ul></div>
+      <div class="dcol rare"><h4>Asked only if ambiguous</h4><ul><li>Photo has more than one text region</li><li>Target matches more than one dictionary entry</li></ul></div>
+      <div class="dcol auto"><h4>Filled in, editable after</h4><ul><li>Sentence text (OCR)</li><li>Vocabulary (reselect entry), definition</li><li>Automatic furigana (not editable)</li><li>Pitch pattern + diagram</li><li>Sentence translation</li><li>Notes and tags</li><li>Word &amp; sentence audio — regenerates on save</li></ul></div>
+    </div>
+  </section>
+
+  <section id="sheets">
+    <h2>Sheets opened from the review card</h2>
+    <p class="section-lede">Image, vocabulary, definition, and tags use bounded sheets over the complete card. Notes and translation edit inline; sentence editing returns to Target. No manual lemma/reading field is provided. Dictionary misses preserve the draft for text editing or reselection (§4.10). Corresponds to §4.5.</p>
+    <div class="filmstrip">
+      <div class="frame"><img class="shot" src="screens/21-change-image-sheet.png"><p class="frame-caption">21 — change-image-sheet<br>Swap or remove the linked photo</p></div>
+      <div class="frame"><img class="shot" src="screens/22-edit-word-sheet-single.png"><p class="frame-caption">22 — edit-word-sheet-single<br>Retarget chips + one pitch match</p></div>
+      <div class="frame"><img class="shot" src="screens/23-edit-word-sheet-multi.png"><p class="frame-caption">23 — edit-word-sheet-multi<br>Same sheet, two listed patterns</p></div>
+      <div class="frame"><img class="shot" src="screens/24-edit-definition-sheet.png"><p class="frame-caption">24 — edit-definition-sheet<br>Senses + editable combined text</p></div>
+      <div class="frame"><img class="shot" src="screens/25-add-notes-inline.png"><p class="frame-caption">25 — add-notes-inline<br>Not a sheet — expands in place</p></div>
+      <div class="frame"><img class="shot" src="screens/26-add-tag-sheet.png"><p class="frame-caption">26 — add-tag-sheet<br>Collection tags, add/remove, or create</p></div>
+    </div>
+  </section>
+
+  <section id="pitch">
+    <h2>Pitch diagram — dev reference</h2>
+    <p class="section-lede">Not an app screen. Documents the two scales and four pattern hues used throughout §5.5 — reused verbatim wherever pitch appears.</p>
+    <div class="filmstrip">
+      <div class="frame"><img class="shot" src="screens/00-pitch-component.png"><p class="frame-caption">00 — pitch-component<br>Compact + full scale, all four hues, missing state</p></div>
+    </div>
+    <p class="mechanism">Compact scale (card row, screens 13/15): small bordered block per mora, no kana underneath — the vocabulary's ruby shows its lemma reading, which may differ from the inflected sentence target. Full scale (Edit word sheet, screens 22–23): same blocks, larger, kana printed beneath each dot, since nothing else on that sheet shows the reading. Both: one color for the whole diagram per pattern type; a filled dot is a high mora, an outline dot is low. Visible numeric/name labels are omitted, but TalkBack announces the reading and drop. A neutral check and outline indicate selection; a trailing contour cue distinguishes a final-mora drop from no drop without relying on color. Long diagrams scroll rather than losing morae.</p>
+  </section>
+
+  <section id="furigana">
+    <h2>Furigana</h2>
+    <p class="section-lede">Automatic readings have three treatments: kana-only text stays plain, resolved kanji receive ruby, and unresolved kanji receive a dotted underline without invented ruby. All unresolved readings—including the target and vocabulary—are optional for export. Screen 13 demonstrates resolved ruby; the examples below include the missing state.</p>
+    <div class="furi-legend">
+      <div class="furi-item"><div class="sample">こんにちは</div><p><b>Kana only</b> — nothing to annotate, shown plain.</p></div>
+      <div class="furi-item"><div class="sample"><span class="furi-gap">出会</span>う</div><p><b>Unresolved, best-effort</b> — a dotted underline on any unresolved kanji span. Never blocks Send.</p></div>
+      <div class="furi-item"><div class="sample"><ruby class="doc">出会<rt>であ</rt></ruby>う</div><p><b>Resolved</b> — ruby, same as the sentence row in the review card.</p></div>
+    </div>
+    <p class="mechanism">There are no manual reading or “leave unannotated” controls. Editing the text, target, or dictionary entry reruns automatic analysis. Missing readings export as original text; dictionary resolution and a definition are still required.</p>
+  </section>
+
+  <section id="sentence-image">
+    <h2>Sentence and image</h2>
+    <p class="section-lede">The mode switch from screen 06 carries most of the decision: Photo mode links the scan to the card image by default, with one tap out (screen 21); Type mode skips the camera and offers the image as a plain optional add (screen 07). Image sharing from another app (screen 04) is a third on-ramp, folding into the same Photo-mode pipeline. Corresponds to §3.1, §4.2, §4.8.</p>
+    <ul class="scenario-list">
+      <li><b>Same photo for both</b> — Photo mode, default, nothing to decide.</li>
+      <li><b>Scan for text, different image</b> — Photo mode, tap "change" on the review screen (21).</li>
+      <li><b>Type it, still want an image</b> — Type mode (07), the image row is right there, optional.</li>
+      <li><b>Text only</b> — Type mode, leave the image row empty.</li>
+      <li><b>Shared from another app</b> — a single shared image (04) is treated exactly as a fresh Photo-mode capture.</li>
+    </ul>
+  </section>
+
+  <section id="tags">
+    <h2>Tags</h2>
+    <p class="section-lede">A tag row that remembers, rather than a settings field you set once and forget. Whatever set of tags a card is sent with becomes the next card's starting chips — no separate "default tags" to maintain by hand. Settings keeps one seed value only for the very first card on a fresh install (screen 27).</p>
+  </section>
+
+  <section id="settings">
+    <h2>Settings</h2>
+    <p class="section-lede">What's configured once and rarely revisited — note type, deck, cloud/on-device audio and translation config, cache, and Sources &amp; licenses at the very bottom of this screen rather than a separate top-level button. Corresponds to §4.9.</p>
+    <div class="filmstrip">
+      <div class="frame"><img class="shot" src="screens/27-settings-main.png"><p class="frame-caption">27 — settings-main</p></div>
+      <div class="frame"><img class="shot" src="screens/28-settings-note-type-picker.png"><p class="frame-caption">28 — settings-note-type-picker</p></div>
+      <div class="frame"><img class="shot" src="screens/29-settings-deck-picker.png"><p class="frame-caption">29 — settings-deck-picker</p></div>
+      <div class="frame"><img class="shot" src="screens/30-settings-azure.png"><p class="frame-caption">30 — settings-azure<br>TTS + Translator, validated multi-service resource</p></div>
+      <div class="frame"><img class="shot" src="screens/31-settings-ondevice.png"><p class="frame-caption">31 — settings-ondevice<br>Offline audio only; translation has an independent model</p></div>
+      <div class="frame"><img class="shot" src="screens/32-settings-licenses.png"><p class="frame-caption">32 — settings-licenses<br>Existing copy + 2 new candidate dependencies</p></div>
+    </div>
+    <p class="mechanism">Screen 30 is also where the runtime-vs-build-time question for the Azure key was settled: entered here and Keystore-encrypted at rest, not compiled into the APK. A build-time secret would sit in APK resources — already prohibited for credentials (§11) — and can't be a fixed, publicly reproducible Nix input (§12) without either leaking it or breaking byte-identical rebuilds. Runtime entry also survives key rotation without a rebuild.</p>
+  </section>
+
+  <section id="setup">
+    <h2>Setup &amp; system states</h2>
+    <p class="section-lede">Before export is possible (§4.8), plus the incoming-share and interrupted-draft cases (§4.2, §4.8, §10.1).</p>
+    <div class="filmstrip">
+      <div class="frame"><img class="shot" src="screens/01-setup-not-installed.png"><p class="frame-caption">01 — setup-not-installed</p></div>
+      <div class="frame"><img class="shot" src="screens/02-setup-permission.png"><p class="frame-caption">02 — setup-permission</p></div>
+      <div class="frame"><img class="shot" src="screens/03-shared-text-received.png"><p class="frame-caption">03 — shared-text-received<br>Android text share, no target guessed</p></div>
+      <div class="frame"><img class="shot" src="screens/04-shared-image-received.png"><p class="frame-caption">04 — shared-image-received<br>Android image share, folds into the Photo pipeline</p></div>
+      <div class="frame"><img class="shot" src="screens/05-draft-restore-prompt.png"><p class="frame-caption">05 — draft-restore-prompt</p></div>
+    </div>
+  </section>
+
+  <div class="other-directions" id="other">
+    <h3>For reference — directions considered and set aside</h3>
+    <div class="row">
+      <div class="item"><b>A · Guided Steps</b> — a linear six-screen wizard. Adds taps for cards that need no decisions at all.</div>
+      <div class="item"><b>B · Progressive Scroll</b> — collapsible sections in today's single Composable. Smallest engineering change, still shows every section header up front.</div>
+      <div class="item"><b>Two independent slots</b> — sentence and image as separate empty inputs from the start. Most explicit, but asks something of everyone before they've done anything.</div>
+      <div class="item"><b>List-style pitch pick-list</b> — sparkline left, reading text to the right, no per-mora blocks. Stays compact regardless of mora count, but reads less like a real pitch dictionary than the block layout that won.</div>
+    </div>
+  </div>
+
+</div>
+</body></html>
