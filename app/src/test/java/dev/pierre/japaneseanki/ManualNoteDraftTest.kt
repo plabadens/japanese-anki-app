@@ -26,8 +26,14 @@ class ManualNoteDraftTest {
 
     @Test fun kanjiTargetAndVocabularyRequireReadingsOrExplicitOmission() {
         assertEquals(2, draft().validationErrors().size)
-        assertTrue(draft(leaveSentenceTargetUnannotated = true).validationErrors().isEmpty())
-        assertTrue(draft(leaveVocabularyUnannotated = true).validationErrors().isEmpty())
+        assertTrue(
+            draft(sentenceReading = "ねこ", leaveVocabularyUnannotated = true)
+                .validationErrors().isEmpty(),
+        )
+        assertTrue(
+            draft(vocabularyReading = "ねこ", leaveSentenceTargetUnannotated = true)
+                .validationErrors().isEmpty(),
+        )
         assertTrue(
             draft(
                 sentenceReading = "ねこ",
@@ -53,8 +59,10 @@ class ManualNoteDraftTest {
         assertNotNull(kana.fieldsByName())
     }
 
-    @Test fun missingDefinitionAndInvalidTargetBlockSerialization() {
+    @Test fun missingDefinitionInvalidTargetAndStaleValuesBlockSerialization() {
         assertNull(draft().copy(definition = "").fieldsByName())
         assertFalse(draft().copy(target = TargetSpan(10, 12)).validationErrors().isEmpty())
+        assertNull(draft(sentenceReading = "ねこ", vocabularyReading = "ねこ")
+            .copy(dependentFieldsStale = true).fieldsByName())
     }
 }

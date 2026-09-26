@@ -78,26 +78,21 @@ class MainActivity : ComponentActivity() {
             var sentenceReading by remember { mutableStateOf(preferences.getString("sentence_reading", "").orEmpty()) }
             var leaveSentenceTargetUnannotated by remember { mutableStateOf(preferences.getBoolean("leave_sentence_target_unannotated", false)) }
             var leaveVocabularyUnannotated by remember { mutableStateOf(preferences.getBoolean("leave_vocabulary_unannotated", false)) }
+            var dependentFieldsStale by remember { mutableStateOf(preferences.getBoolean("dependent_fields_stale", false)) }
             var translation by remember { mutableStateOf(preferences.getString("translation", "").orEmpty()) }
             var notes by remember { mutableStateOf(preferences.getString("notes", "").orEmpty()) }
             var tags by remember { mutableStateOf(preferences.getString("tags", "").orEmpty()) }
             var showReplace by remember { mutableStateOf(false) }
             val incoming = sharedText.value
+            val hasTargetData = vocabulary.isNotBlank() || vocabularyReading.isNotBlank() ||
+                pitchAccentText.isNotBlank() || definition.isNotBlank() || sentenceReading.isNotBlank()
 
             androidx.compose.runtime.LaunchedEffect(incoming) {
                 if (incoming != null) {
                     if (editor.text.isBlank()) {
                         editor = TextFieldValue(incoming, selection = TextRange(incoming.length))
+                        if (hasTargetData) dependentFieldsStale = true
                         target = null
-                        vocabulary = ""
-                        vocabularyReading = ""
-                        pitchAccentText = ""
-                        definition = ""
-                        sentenceReading = ""
-                        leaveSentenceTargetUnannotated = false
-                        leaveVocabularyUnannotated = false
-                        translation = ""
-                        notes = ""
                         sharedText.value = null
                     } else {
                         showReplace = true
@@ -112,16 +107,8 @@ class MainActivity : ComponentActivity() {
                     confirmButton = {
                         TextButton(onClick = {
                             editor = TextFieldValue(incoming, selection = TextRange(incoming.length))
+                            if (hasTargetData) dependentFieldsStale = true
                             target = null
-                            vocabulary = ""
-                            vocabularyReading = ""
-                            pitchAccentText = ""
-                            definition = ""
-                            sentenceReading = ""
-                            leaveSentenceTargetUnannotated = false
-                            leaveVocabularyUnannotated = false
-                            translation = ""
-                            notes = ""
                             showReplace = false
                             sharedText.value = null
                         }) { Text("Replace") }
@@ -144,6 +131,7 @@ class MainActivity : ComponentActivity() {
                 leaveVocabularyUnannotated = leaveVocabularyUnannotated,
                 definition = definition,
                 pitch = pitch,
+                dependentFieldsStale = dependentFieldsStale,
                 translation = translation,
                 notes = notes,
             )
@@ -152,7 +140,7 @@ class MainActivity : ComponentActivity() {
             androidx.compose.runtime.LaunchedEffect(
                 editor.text, editor.selection, target, vocabulary, vocabularyReading, pitchAccentText, definition,
                 sentenceReading, leaveSentenceTargetUnannotated, leaveVocabularyUnannotated,
-                translation, notes, tags,
+                dependentFieldsStale, translation, notes, tags,
             ) {
                 preferences.edit()
                     .putString("sentence", editor.text)
@@ -167,6 +155,7 @@ class MainActivity : ComponentActivity() {
                     .putString("sentence_reading", sentenceReading)
                     .putBoolean("leave_sentence_target_unannotated", leaveSentenceTargetUnannotated)
                     .putBoolean("leave_vocabulary_unannotated", leaveVocabularyUnannotated)
+                    .putBoolean("dependent_fields_stale", dependentFieldsStale)
                     .putString("translation", translation)
                     .putString("notes", notes)
                     .putString("tags", tags)
@@ -189,14 +178,8 @@ class MainActivity : ComponentActivity() {
                             value = editor,
                             onValueChange = { updated ->
                                 if (updated.text != editor.text) {
+                                    if (target != null || hasTargetData) dependentFieldsStale = true
                                     target = null
-                                    vocabulary = ""
-                                    vocabularyReading = ""
-                                    pitchAccentText = ""
-                                    definition = ""
-                                    sentenceReading = ""
-                                    leaveSentenceTargetUnannotated = false
-                                    leaveVocabularyUnannotated = false
                                 }
                                 editor = updated
                             },
@@ -206,18 +189,14 @@ class MainActivity : ComponentActivity() {
                         )
                         OutlinedButton(
                             onClick = {
-                                target = TargetSpan.fromSelection(
+                                val newTarget = TargetSpan.fromSelection(
                                     editor.text,
                                     editor.selection.start,
                                     editor.selection.end,
                                 )
-                                vocabulary = target?.textIn(editor.text).orEmpty()
-                                vocabularyReading = ""
-                                pitchAccentText = ""
-                                definition = ""
-                                sentenceReading = ""
-                                leaveSentenceTargetUnannotated = false
-                                leaveVocabularyUnannotated = false
+                                if (newTarget != target && hasTargetData) dependentFieldsStale = true
+                                target = newTarget
+                                if (vocabulary.isBlank()) vocabulary = newTarget?.textIn(editor.text).orEmpty()
                             },
                             enabled = editor.selection.start != editor.selection.end,
                         ) { Text("Use selected text as target") }
@@ -230,7 +209,10 @@ class MainActivity : ComponentActivity() {
                             Text("Vocabulary", style = MaterialTheme.typography.titleMedium)
                             OutlinedTextField(
                                 value = vocabulary,
-                                onValueChange = { vocabulary = it },
+                                onValueChange = {
+                                    if (it != vocabulary && hasTargetData) dependentFieldsStale = true
+                                    vocabulary = it
+                                },
                                 modifier = Modifier.fillMaxWidth(),
                                 label = { Text("Lemma or manual vocabulary") },
                                 singleLine = true,
@@ -238,7 +220,9 @@ class MainActivity : ComponentActivity() {
                             OutlinedTextField(
                                 value = vocabularyReading,
                                 onValueChange = {
-                                    if (it != vocabularyReading) pitchAccentText = ""
+                                    if (it != vocabularyReading && (pitchAccentText.isNotBlank() || definition.isNotBlank())) {
+                                        dependentFieldsStale = true
+                                    }
                                     vocabularyReading = it
                                     leaveVocabularyUnannotated = false
                                 },
@@ -268,10 +252,8 @@ class MainActivity : ComponentActivity() {
                                     checked = leaveVocabularyUnannotated,
                                     onCheckedChange = {
                                         leaveVocabularyUnannotated = it
-                                        if (it) {
-                                            vocabularyReading = ""
-                                            pitchAccentText = ""
-                                        }
+                                        if (it && vocabularyReading.isNotBlank()) dependentFieldsStale = true
+                                        if (it) vocabularyReading = ""
                                     },
                                 )
                                 Text("Leave vocabulary without furigana")
@@ -288,6 +270,7 @@ class MainActivity : ComponentActivity() {
                                     checked = leaveSentenceTargetUnannotated,
                                     onCheckedChange = {
                                         leaveSentenceTargetUnannotated = it
+                                        if (it && sentenceReading.isNotBlank()) dependentFieldsStale = true
                                         if (it) sentenceReading = ""
                                     },
                                 )
@@ -323,6 +306,15 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         if (target != null) {
+                            if (dependentFieldsStale) {
+                                Text(
+                                    "Sentence or target changed. Existing manual values were kept; review them before using this note.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                                OutlinedButton(onClick = { dependentFieldsStale = false }) {
+                                    Text("I've reviewed these fields")
+                                }
+                            }
                             if (validationErrors.isEmpty()) {
                                 Text("Required note text is complete.", style = MaterialTheme.typography.bodyMedium)
                             } else {

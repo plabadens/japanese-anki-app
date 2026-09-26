@@ -10,6 +10,7 @@ data class ManualNoteDraft(
     val leaveVocabularyUnannotated: Boolean,
     val definition: String,
     val pitch: PitchAccent? = null,
+    val dependentFieldsStale: Boolean = false,
     val translation: String = "",
     val sentenceAudioFilename: String? = null,
     val vocabularyAudioFilename: String? = null,
@@ -22,6 +23,7 @@ data class ManualNoteDraft(
         if (targetText == null) add("Select a valid target in the sentence.")
         if (vocabulary.isBlank()) add("Enter vocabulary or a dictionary lemma.")
         if (definition.isBlank()) add("Enter a definition.")
+        if (dependentFieldsStale) add("Review vocabulary, readings, and pitch after changing the sentence or target.")
 
         if (targetText != null && containsKanji(targetText) &&
             sentenceReading.isBlank() && !leaveSentenceTargetUnannotated
