@@ -1,0 +1,22 @@
+{
+    "modelName": "Sentence (JA)",
+    "inOrderFields": [
+        "SentKanji",
+        "SentFurigana",
+        "SentEng",
+        "SentAudio",
+        "VocabKanji",
+        "VocabFurigana",
+        "VocabDef",
+        "VocabPitch",
+        "VocabAudio",
+        "Image",
+        "Notes",
+        "fm_focus_words",
+        "fm_new_words",
+        "fm_seen_words"
+    ],
+    "cardTemplates": [
+        "Recognition"
+    ]
+}

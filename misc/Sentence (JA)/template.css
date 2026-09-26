@@ -1,0 +1,586 @@
+/* ============================================================
+   Sentence (JA) — Recognition
+   Layout: a dark "stage" (screenshot + subtitle) that is identical on
+   both sides of the card, and a paper "plaque" that the back adds
+   underneath it. Flipping never moves the stage.
+   ============================================================ */
+
+/* ---------- Variable font faces ----------
+   Bare filenames: Anki serves collection.media at the document root, so a
+   leading /media/ would look for a media file literally named
+   "media/_NotoSerif…". preview/server.py resolves _*.woff2 out of media/
+   the same way. */
+@font-face {
+    font-display: block;
+    font-family: "Noto Serif";
+    font-style: normal;
+    font-weight: 100 900;
+    src: url("_NotoSerif-VF_wdth,wght.woff2") format("woff2-variations");
+}
+
+@font-face {
+    font-display: block;
+    font-family: "Noto Serif";
+    font-style: italic;
+    font-weight: 100 900;
+    src: url("_NotoSerif-Italic-VF_wdth,wght.woff2") format("woff2-variations");
+}
+
+@font-face {
+    font-display: block;
+    font-family: "Noto Serif JP";
+    font-style: normal;
+    font-weight: 100 900;
+    src: url("_NotoSerifJP-VF_wght.woff2") format("woff2-variations");
+}
+
+/* ---------- Tokens ---------- */
+:root {
+    /* Surfaces */
+    --paper: #FBFAF6;
+    --ink: #18160F;
+    --ink-soft: #625D51;
+    --rule: #E3DFD3;
+    --link: #33417A;
+
+    /* Pitch accent */
+    --pitch-heiban: #3A5CC4;
+    --pitch-atamadaka: #A6392E;
+    --pitch-nakadaka: #7C6414;
+    --pitch-odaka: #266F45;
+    --pitch-unknown: var(--ink-soft);
+    --mora-devoiced: var(--pitch-heiban);
+    --mora-nasal: var(--pitch-atamadaka);
+
+    /* Typography */
+    --fs-xs: 0.8rem;
+    --fs-sm: 0.9rem;
+    --fs-md: 1rem;
+    --fs-lg: 1.25rem;
+    --fs-xl: 1.75rem;
+    --font-en: "Noto Serif", serif;
+    --font-ja: "Noto Serif JP", serif;
+
+    /* Elevation */
+    --shadow: 0 4px 20px rgb(0 0 0 / 0.16);
+
+    /* Spacing */
+    --pad: 1.15rem;   /* one horizontal inset for the whole card */
+    --flow: 0.85rem;  /* one vertical step inside the plaque */
+    --pitch-line-width: 1.5px;
+}
+
+/* The dark palette. Anki's night mode takes it for the whole card; a stage
+   with a screenshot takes it too, so the subtitle band stays dark in both
+   themes. Without a screenshot the stage is just the top of the card and
+   inherits whichever palette is in force. */
+.nightMode,
+#stage:has(#image) {
+    --paper: #0C0C0E;
+    --ink: #EDEAE2;
+    --ink-soft: #A8A297;
+    --rule: #2B2B30;
+    --link: #98A8E8;
+
+    --pitch-heiban: #7FA0FF;
+    --pitch-atamadaka: #FF8A82;
+    --pitch-nakadaka: #FFB454;
+    --pitch-odaka: #AAD94C;
+}
+
+/* The shadow tracks the app theme only, never whether the stage holds a
+   screenshot, so it stays out of the shared block above. */
+.nightMode {
+    --shadow: 0 4px 22px rgb(0 0 0 / 0.5);
+}
+
+/* ---------- Base ---------- */
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+}
+
+/* No background here: Anki paints the reviewer's own backdrop, and the card
+   is a shape floating on it rather than a full-bleed surface. */
+body {
+    color: var(--ink);
+    font-family: var(--font-en);
+    font-optical-sizing: auto;
+    font-size: var(--fs-md);
+    line-height: 1.6;
+    text-align: left;
+    hyphens: auto;
+}
+
+/* A full-height column that holds the card in the middle, so a large window
+   suspends it rather than pinning it to the top. `safe` keeps the top edge
+   reachable when the content is taller than the window. The column itself
+   paints nothing — only #stage and #plaque do — or the centring turns into
+   a full-height slab of card colour over Anki's backdrop.
+   colour is set here as well as on body because Anki hangs .nightMode off
+   <body> while preview/index.html hangs it off a wrapper inside <body>. */
+#qa {
+    display: flex;
+    flex-direction: column;
+    justify-content: safe center;
+    min-height: 100vh;
+    max-width: 35em;
+    margin: 0 auto;
+    color: var(--ink);
+    container-type: inline-size;   /* the image sizes against the card, not the window */
+
+    /* drop-shadow, not box-shadow: it traces what is actually painted, so it
+       follows the stage and plaque as one silhouette instead of outlining
+       this full-height column — and on the front, where the plaque is
+       hidden, it traces the stage alone. No suppression rule is needed for
+       a card that fills the viewport: there is then no backdrop beside it
+       for the shadow to fall on. */
+    filter: drop-shadow(var(--shadow));
+}
+
+#qa :lang(ja) {
+    font-family: var(--font-ja);
+    line-break: strict;
+    word-break: normal;
+}
+
+#qa :lang(en) {
+    font-family: var(--font-en);
+    font-variant-ligatures: common-ligatures discretionary-ligatures contextual;
+}
+
+a {
+    color: var(--link);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+}
+
+a:hover {
+    text-decoration-color: currentColor;
+}
+
+/* ruby-align:start keeps a jukugo compound's kanji tight when the reading
+   is wider than the base (Chrome otherwise spreads 仲裁 into 仲 裁). */
+ruby {
+    ruby-align: start;
+}
+
+rt {
+    font-size: 0.5em;
+    font-weight: 600;
+    user-select: none;
+}
+
+/* Back-only content, hidden but still laid out. That reservation is what
+   lets the card be vertically centred without the flip moving anything: the
+   column is the same height on both sides, so the stage lands in the same
+   place and the answer fills in underneath it. */
+.back {
+    visibility: hidden;
+}
+
+#qa:has(#back-visible) .back {
+    visibility: visible;
+}
+
+/* ============================================================
+   Stage — screenshot + subtitle, identical on both sides
+   ============================================================ */
+#stage {
+    display: grid;
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+}
+
+#image,
+#sentence {
+    grid-area: 1 / 1;   /* one cell: the subtitle sits over the image */
+}
+
+#image {
+    align-self: start;
+}
+
+/* aspect-ratio's `auto` keyword means "the real ratio once it is known,
+   this one until then" — so the stage reserves a 16/9 box on first paint
+   instead of snapping open when the screenshot arrives.
+   The cap is read off the card width, not the window, so a portrait
+   screenshot is letterboxed onto the stage rather than filling the card;
+   the vh term keeps it sane in a short window. */
+#image img {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: auto 16 / 9;
+    max-height: min(55vh, 62cqw);
+    object-fit: contain;
+}
+
+#sentence {
+    align-self: end;
+    padding: 1.6rem var(--pad);
+    font-size: var(--fs-lg);
+    line-height: 1.85;   /* same for both readings states — nothing shifts */
+    text-align: center;
+}
+
+/* The scrim is solid everywhere the text is and feathers only across the
+   top padding, so it holds up for a caption of any number of lines. */
+#stage:has(#image) #sentence {
+    --scrim-feather: 2.4rem;
+    padding: var(--scrim-feather) var(--pad) 0.7rem;
+    background: linear-gradient(to top,
+        rgb(0 0 0 / 0.92) 0,
+        rgb(0 0 0 / 0.92) calc(100% - var(--scrim-feather)),
+        rgb(0 0 0 / 0) 100%);
+    text-shadow: 0 1px 2px rgb(0 0 0 / 0.9);
+}
+
+/* Readings: the plain sentence on the front, furigana on the back. The
+   隠す/読み button sets data-readings on #qa to swap back to the plain one. */
+.sentence-ruby {
+    display: none;
+}
+
+#qa:has(#back-visible) .sentence-plain {
+    display: none;
+}
+
+#qa:has(#back-visible) .sentence-ruby {
+    display: inline;
+}
+
+/* :has(#back-visible) carries an id's specificity, so the toggle rules
+   have to match it as well as the attribute to win. */
+#qa[data-readings="off"]:has(#back-visible) .sentence-plain {
+    display: inline;
+}
+
+#qa[data-readings="off"]:has(#back-visible) .sentence-ruby {
+    display: none;
+}
+
+/* ============================================================
+   Plaque — everything the back adds
+   ============================================================ */
+#plaque {
+    background: var(--paper);
+    border-top: 1px solid var(--rule);   /* on the plaque, so the front has no dangling rule */
+}
+
+#answer {
+    padding: 1.2rem var(--pad) 0;
+}
+
+#answer > * {
+    margin: 0;
+}
+
+#answer > * + * {
+    margin-top: var(--flow);
+}
+
+/* ---------- Headword row ---------- */
+#head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.8rem;
+}
+
+.vocab {
+    font-size: var(--fs-xl);
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.vocab b {
+    font-weight: inherit;   /* VocabKanji often ships its own <b> */
+}
+
+#controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+/* Narrow cards: give the controls their own row unconditionally. Left to
+   wrap on their own they would wrap on the back (three pills) but not on
+   the front (one), and the two sides have to reserve the same height. */
+@container (max-width: 300px) {
+    #controls {
+        flex-basis: 100%;
+    }
+}
+
+/* One pill, worn by our own button and by Anki's replay anchor alike. The
+   script moves the 単語 / 文 label inside the anchor, so the whole pill is
+   the control rather than a label sitting next to one.
+ *
+ * Both selectors are scoped under #controls to outrank Anki's own
+ * webview.css, which styles every bare <button> and every .replay-button:
+ *
+ *   button        { padding:8px 10px; margin:0 4px; background:…;
+ *                   border:1px solid …; font-weight:500 }
+ *   button:hover  { background:linear-gradient(…); border:1px solid … }
+ *   button:active { box-shadow:inset … }
+ *   .replay-button{ margin:3px }
+ *   *             { box-sizing:content-box }
+ *
+ * `button:hover` is (0,1,1) and beats a bare `.pill` (0,1,0), so without
+ * the #controls prefix the furigana button picks up Anki's grey gradient
+ * on hover while the two anchors only change colour — and the differing
+ * margins make the row twitch. Every property Anki sets is therefore
+ * pinned here, in both states, so hover changes nothing but the colour.
+ * None of this shows up in the preview tool, which has no such sheet. */
+#controls .pill,
+#controls a.replay-button {
+    appearance: none;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45em;
+    margin: 0;
+    padding: 0.3em 0.7em;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    box-shadow: none;
+    font: inherit;
+    font-family: var(--font-ja);
+    font-size: var(--fs-xs);
+    font-weight: inherit;
+    line-height: 1;
+    color: var(--ink-soft);
+    background: none;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+#controls .pill:hover,
+#controls a.replay-button:hover,
+#controls .pill:active,
+#controls a.replay-button:active {
+    color: var(--ink);
+    border-color: currentColor;
+    background: none;
+    box-shadow: none;
+}
+
+/* Anki ships the play glyph as an svg.playImage inside the anchor: a
+   triangle inside a ring. Only the triangle is wanted, scaled up about its
+   own centre to reclaim the space the ring occupied — hence fill-box, since
+   an SVG transform-origin is otherwise the user-space origin, not the
+   shape. overflow stays visible so the enlarged triangle is not clipped by
+   the viewBox. */
+#controls a.replay-button svg.playImage {
+    width: 0.95em;
+    height: 0.95em;
+    overflow: visible;
+}
+
+#controls a.replay-button svg.playImage circle {
+    display: none;
+}
+
+#controls a.replay-button svg.playImage path {
+    fill: currentColor;
+    transform-box: fill-box;
+    transform-origin: center;
+    transform: scale(1.4);
+}
+
+/* the preview tool plays through a hidden <audio>; Anki uses pycmd */
+#controls audio {
+    display: none;
+}
+
+/* ---------- Reading + pitch diagram ---------- */
+#answer > .pitch {
+    margin-top: 0.3rem;   /* hugs the headword, tighter than the flow step */
+}
+
+.pitch {
+    display: inline-block;   /* plain kana, when VocabPitch is empty */
+    font-size: var(--fs-md);
+}
+
+/* built by the script: step line, one dot per mora, kana underneath */
+.pitch[data-diagram] {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+}
+
+.pitch__svg {
+    display: block;
+    overflow: visible;
+}
+
+.pitch__svg path {
+    stroke: currentColor;
+}
+
+.pitch__svg circle {
+    fill: currentColor;
+}
+
+/* devoiced morae read as hollow dots, nasal ones take the nasal colour */
+.pitch__svg circle.devoiced {
+    fill: var(--paper);
+    stroke: currentColor;
+    stroke-width: 1.5;
+}
+
+.pitch__svg circle.nasal {
+    fill: var(--mora-nasal);
+}
+
+.pitch__labels {
+    display: flex;
+    font-size: 0.85em;
+    line-height: 1.2;
+}
+
+.pitch__labels span {
+    flex: none;
+    text-align: center;
+}
+
+.pitch__labels .devoiced {
+    color: var(--mora-devoiced);
+}
+
+.pitch__labels .nasal {
+    color: var(--mora-nasal);
+}
+
+.pitch_number {
+    display: none;
+}
+
+/* One colour per pattern, shared by the target word in the sentence and
+   the reading under the headword. */
+[pitch-pattern] {
+    color: var(--pitch-unknown);
+}
+
+[pitch-pattern="heiban"] {
+    color: var(--pitch-heiban);
+}
+
+[pitch-pattern="atamadaka"] {
+    color: var(--pitch-atamadaka);
+}
+
+[pitch-pattern="nakadaka"] {
+    color: var(--pitch-nakadaka);
+}
+
+[pitch-pattern="odaka"] {
+    color: var(--pitch-odaka);
+}
+
+.pitch-word {
+    font-weight: 600;
+}
+
+/* ---------- Meaning, translation, notes ---------- */
+#meaning ol,
+#meaning ul {
+    display: inline;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+#meaning li {
+    display: inline;
+}
+
+#meaning li:not(:last-child)::after {
+    content: "; ";
+}
+
+/* The hint link and the text it reveals share size and style, so the
+   reveal reads as a swap in place rather than a resize. */
+#translation,
+#translation a.hint {
+    font-size: var(--fs-sm);
+    font-style: italic;
+    line-height: 1.6;
+}
+
+#notes {
+    font-size: var(--fs-xs);
+    color: var(--ink-soft);
+}
+
+/* ---------- Footer ---------- */
+footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.4rem 1.2rem;
+    margin-top: 1.4rem;
+    padding: 0.7rem var(--pad) 1.3rem;
+    border-top: 1px solid var(--rule);
+    font-size: var(--fs-xs);
+    color: var(--ink-soft);
+}
+
+/* One dot-separated row, worn by the links, the tags and the parsed
+   Source: line. The dot is inline-block so the link underline — which does
+   not propagate into atomic inlines — stops at the word. */
+.dotlist {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 0.9ch;
+}
+
+.dotlist > :not(:last-child)::after {
+    content: "\00b7";
+    display: inline-block;
+    padding-left: 0.9ch;
+    color: var(--ink-soft);
+    text-decoration: none;
+}
+
+/* ---------- Utility ---------- */
+.hidden {
+    display: none;
+}
+
+/* ---------- Mobile ---------- */
+.mobile #image img {
+    max-height: min(38vh, 62cqw);
+}
+
+/* Phones start the card at the top of the screen rather than centring it.
+   Nothing then needs reserving — content added below cannot move what is
+   above it — so the plaque is removed from the front outright, which also
+   spares the question side a scrollable empty region. */
+.mobile #qa {
+    justify-content: flex-start;
+}
+
+.mobile #plaque {
+    display: none;
+}
+
+.mobile #qa:has(#back-visible) #plaque {
+    display: block;
+}
+
+.mobile .links {
+    display: none;
+}

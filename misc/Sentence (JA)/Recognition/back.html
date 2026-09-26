@@ -1,0 +1,9 @@
+{{FrontSide}}
+
+<!-- Audio lives here, not in front.html: Anki collects sound tags from the
+     rendered side, so a copy on the front would autoplay the answer.
+     The script in front.html moves these into #controls on the back. -->
+<div class="hidden" id="back-visible">
+	{{#VocabAudio}}<span class="audio-btn" data-label="単語" lang="ja">{{VocabAudio}}</span>{{/VocabAudio}}
+	{{#SentAudio}}<span class="audio-btn" data-label="文" lang="ja">{{SentAudio}}</span>{{/SentAudio}}
+</div>

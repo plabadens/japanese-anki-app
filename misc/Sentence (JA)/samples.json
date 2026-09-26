@@ -1,0 +1,82 @@
+[
+  {
+    "name": "Basic sentence",
+    "fields": {
+      "SentKanji": "日本語を<b>勉強</b>するのは楽しいです。",
+      "SentFurigana": "日本語[にほんご] を <b>勉強[べんきょう]</b>するのは 楽[たの]しいです。",
+      "SentEng": "Studying Japanese is fun.",
+      "SentAudio": "[sound:sent_001.mp3]",
+      "VocabKanji": "<b>勉強</b>",
+      "VocabFurigana": "勉強[べんきょう]",
+      "VocabDef": "study, diligence",
+      "VocabPitch": "<span class=\"pitch\"><span class=\"low_rise\">べ</span><span class=\"high_drop\">ん</span><span class=\"low\">きょ</span><span class=\"low\">う</span></span> <span class=\"pitch_number\">0</span>",
+      "VocabAudio": "[sound:vocab_001.mp3]",
+      "Image": "",
+      "Notes": "",
+      "fm_focus_words": "",
+      "fm_new_words": "",
+      "fm_seen_words": "",
+      "Tags": "JLPT::N4 textbook core"
+    }
+  },
+  {
+    "name": "Anime sentence mining",
+    "fields": {
+      "SentKanji": "仲裁は<b>僧侶</b>の仕事なんだよ。",
+      "SentFurigana": "仲裁[ちゅうさい]は<b> 僧侶[そうりょ]</b>の 仕事[しごと]なんだよ。",
+      "SentEng": "Because mediating is a priest's job.",
+      "SentAudio": "[sound:sousounofrieren17_06m43s760ms_06m47s290ms.ogg]",
+      "VocabKanji": "僧侶",
+      "VocabFurigana": "僧侶[そうりょ]",
+      "VocabDef": "priest; monk; bonze",
+      "VocabPitch": "<span class=\"high_drop\">ソ</span><span class=\"low\">ーリョ</span> <span class=\"pitch_number\">1</span>",
+      "VocabAudio": "[sound:souryo.ogg]",
+      "Image": "<img alt=\"snapshot\" src=\"sousounofrieren17_06m46s573ms.avif\">",
+      "Notes": "Source: Sousou_no_Frieren EP17 (06m46s573ms)",
+      "fm_focus_words": "仲裁, 僧侶, なんだ",
+      "fm_new_words": "仲裁, 僧侶, なんだ",
+      "fm_seen_words": "は, の, 仕事, よ",
+      "Tags": "Anime::Sosou_no_Frieren Rikaitan subs2srs"
+    }
+  },
+  {
+    "name": "All fields populated",
+    "fields": {
+      "SentKanji": "図書館で<b>本</b>を読みました。",
+      "SentFurigana": "図書館[としょかん]で<b>本[ほん]</b>を 読[よ]みました。",
+      "SentEng": "I read a book at the library.",
+      "SentAudio": "[sound:sent_003.mp3]",
+      "VocabKanji": "<b>本</b>",
+      "VocabFurigana": "本[ほん]",
+      "VocabDef": "<ol><li>book</li><li>volume</li></ol>",
+      "VocabPitch": "<span class=\"pitch\"><span class=\"high_drop\">ほ</span><span class=\"low\">ん</span></span> <span class=\"pitch_number\">1</span>",
+      "VocabAudio": "[sound:vocab_003.mp3]",
+      "Image": "<img src=\"book.jpg\">",
+      "Notes": "Also used as a counter for long, thin objects (e.g. 一本[いっぽん]).",
+      "fm_focus_words": "",
+      "fm_new_words": "",
+      "fm_seen_words": "",
+      "Tags": "JLPT::N5 core reading"
+    }
+  },
+  {
+    "name": "Multiple pitch patterns",
+    "fields": {
+      "SentKanji": "子供の頃から、体が<b>丈夫</b>です。",
+      "SentFurigana": "子供[こども]の 頃[ころ]から、 体[からだ]が<b> 丈夫[じょうぶ]</b>です。",
+      "SentEng": "I've been sturdy since I was a child.",
+      "SentAudio": "",
+      "VocabKanji": "丈夫",
+      "VocabFurigana": "丈夫[じょうぶ]",
+      "VocabDef": "sturdy, strong (can be used for people as well)",
+      "VocabPitch": "<span class=\"high_drop\">ジョ</span><span class=\"low\">ーフ</span> <span class=\"pitch_number\">1</span>, <span class=\"low_rise\">ジョ</span><span class=\"high\">ーブ</span> <span class=\"pitch_number\">0</span>, <span class=\"low_rise\">マ</span><span class=\"high\">スラオ</span> <span class=\"pitch_number\">0</span>",
+      "VocabAudio": "",
+      "Image": "",
+      "Notes": "",
+      "fm_focus_words": "",
+      "fm_new_words": "",
+      "fm_seen_words": "",
+      "Tags": "Ankidrone JLPT::N3"
+    }
+  }
+]
