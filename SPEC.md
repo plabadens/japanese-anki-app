@@ -4,7 +4,7 @@
 
 **Distribution:** Personal, sideloaded Android application.
 
-**Implementation status:** An initial Compose editor, local draft persistence, target-span validation, and Android text-entry intents are implemented. Linguistic processing, AnkiDroid setup/export, enrichment/media workflows, full acceptance testing, and reproducible APK builds remain unimplemented and unverified.
+**Implementation status:** An initial Compose editor, local draft persistence, target-span validation, Android text-entry intents, manual vocabulary/definition/reading entry, controlled field serialization/mapping, duplicate-key comparison, and manual pitch editing are implemented. Bundled linguistic processing, AnkiDroid setup/export, generated furigana/audio, media workflows, full acceptance testing, and reproducible APK builds remain unimplemented and unverified.
 
 ## 1. Purpose
 

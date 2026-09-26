@@ -23,4 +23,4 @@ No Android emulator MCP server is connected or discoverable in this session, and
 
 ## Current implementation
 
-The editor now supports durable manual sentence/target/vocabulary/reading/definition/translation/notes/tags entry, required-field readiness feedback, Android `SEND` / `PROCESS_TEXT` text entry, safe field serialization, and name-based required-field mapping. Automated dictionary/furigana/pitch enrichment, note-type/deck discovery, AnkiDroid export, audio, image handling, settings, and the remaining specification are not implemented yet.
+The editor now supports durable manual sentence/target/vocabulary/reading/definition/translation/notes/tags entry, required-field readiness feedback, a structured manual pitch accent editor/contour, Android `SEND` / `PROCESS_TEXT` entry, safe field serialization, required-field name mapping, and duplicate-key comparison. Automatic linguistic lookup/furigana/pitch, note-type/deck discovery, AnkiDroid permission/export, audio, image handling, settings, and the remaining specification are not implemented yet.
