@@ -13,6 +13,18 @@ object AnkiFieldSerializer {
         }
     }
 
+    fun highlightedFuriganaSentence(
+        sentence: String,
+        target: TargetSpan,
+        reading: String,
+    ): String? {
+        val marked = furiganaUnit(target.textIn(sentence) ?: return null, reading) ?: return null
+        return escapeHtml(sentence.substring(0, target.start)) + "<b>$marked</b>" +
+            escapeHtml(sentence.substring(target.end))
+    }
+
+    fun furiganaWord(word: String, reading: String): String? = furiganaUnit(word, reading)
+
     fun plainText(text: String): String = escapeHtml(text)
         .replace("\r\n", "\n")
         .replace('\r', '\n')
@@ -22,9 +34,9 @@ object AnkiFieldSerializer {
         val usable = senses.filter(String::isNotBlank)
         return when (usable.size) {
             0 -> ""
-            1 -> escapeHtml(usable.single())
+            1 -> plainText(usable.single())
             else -> usable.joinToString(separator = "", prefix = "<ol>", postfix = "</ol>") {
-                "<li>${escapeHtml(it)}</li>"
+                "<li>${plainText(it)}</li>"
             }
         }
     }
@@ -34,6 +46,12 @@ object AnkiFieldSerializer {
 
     fun imageReference(filename: String): String? =
         safeMediaName(filename)?.let { "<img src=\"${escapeHtml(it)}\">" }
+
+    private fun furiganaUnit(surface: String, reading: String): String? {
+        if (surface.isEmpty() || reading.any { it == '[' || it == ']' }) return null
+        return if (reading.isBlank()) escapeHtml(surface)
+        else "${escapeHtml(surface)}[${escapeHtml(reading)}]"
+    }
 
     private fun safeMediaName(name: String): String? {
         if (name.isBlank() || name == "." || name == "..") return null
