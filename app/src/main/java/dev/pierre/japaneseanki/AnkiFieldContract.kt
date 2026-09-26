@@ -55,7 +55,7 @@ class DuplicateKey private constructor(val sentence: String, val lemma: String) 
         fun fromFields(serializedSentence: String, vocabularyLemma: String): DuplicateKey =
             DuplicateKey(
                 sentence = decodeGeneratedEntities(
-                    serializedSentence.replace("<b>", "").replace("</b>", ""),
+                    serializedSentence.replace(Regex("(?i)</?(?:b|strong)\\b[^>]*>"), ""),
                 ).trim(),
                 lemma = vocabularyLemma.trim(),
             )

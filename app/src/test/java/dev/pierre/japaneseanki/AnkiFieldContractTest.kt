@@ -34,6 +34,16 @@ class AnkiFieldContractTest {
         val exported = DuplicateKey.fromFields("  <b>猫</b>と犬 &amp;鳥  ", " 犬 ")
         val plain = DuplicateKey.fromFields("猫と犬 &amp;鳥", "犬")
         assertTrue(exported.matches(plain))
+        assertTrue(
+            exported.matches(
+                DuplicateKey.fromFields("<STRONG>猫</STRONG>と犬 &amp;鳥", "犬"),
+            ),
+        )
+        assertTrue(
+            exported.matches(
+                DuplicateKey.fromFields("<B class=\"target\">猫</B>と犬 &amp;鳥", "犬"),
+            ),
+        )
         assertFalse(exported.matches(DuplicateKey.fromFields("猫 と犬 &amp;鳥", "犬")))
         assertFalse(exported.matches(DuplicateKey.fromFields("猫と犬 &amp;鳥", "猫")))
     }
