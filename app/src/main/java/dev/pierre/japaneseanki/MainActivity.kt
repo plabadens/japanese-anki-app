@@ -4,7 +4,9 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -44,15 +46,22 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 
+private const val ANKIDROID_READ_WRITE_PERMISSION =
+    "com.ichi2.anki.permission.READ_WRITE_DATABASE"
+
 class MainActivity : ComponentActivity() {
     private val sharedText = mutableStateOf<String?>(null)
     private var ankiDroidInstalled by mutableStateOf(false)
+    private var apiPermissionGranted by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         sharedText.value = textFromIntent(intent)
         val preferences = getSharedPreferences("draft", MODE_PRIVATE)
         setContent {
+            val apiPermissionLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.RequestPermission(),
+            ) { granted -> apiPermissionGranted = granted }
             var editor by remember {
                 mutableStateOf(
                     TextFieldValue(
@@ -334,11 +343,22 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
-                        Text(
-                            if (ankiDroidInstalled) "AnkiDroid detected. API permission, model, and deck setup are not connected yet."
-                            else "AnkiDroid not detected. Install it before setting up export.",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
+                        when {
+                            !ankiDroidInstalled -> Text(
+                                "AnkiDroid not detected. Install it before setting up export.",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            apiPermissionGranted -> Text(
+                                "AnkiDroid API permission granted. Note type and deck setup are not connected yet.",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("AnkiDroid detected. Grant API permission to continue setup.")
+                                Button(onClick = {
+                                    apiPermissionLauncher.launch(ANKIDROID_READ_WRITE_PERMISSION)
+                                }) { Text("Grant AnkiDroid API permission") }
+                            }
+                        }
                         Text(
                             "Draft autosaves on this device. Dictionary lookup is not connected yet.",
                             style = MaterialTheme.typography.bodyMedium,
@@ -355,6 +375,8 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         ankiDroidInstalled = isAnkiDroidInstalled()
+        apiPermissionGranted = ankiDroidInstalled &&
+            checkSelfPermission(ANKIDROID_READ_WRITE_PERMISSION) == PackageManager.PERMISSION_GRANTED
     }
 
     override fun onNewIntent(intent: Intent) {
