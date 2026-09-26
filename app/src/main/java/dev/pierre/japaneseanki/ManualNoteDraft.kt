@@ -9,6 +9,7 @@ data class ManualNoteDraft(
     val vocabularyReading: String,
     val leaveVocabularyUnannotated: Boolean,
     val definition: String,
+    val pitch: PitchAccent? = null,
     val translation: String = "",
     val sentenceAudioFilename: String? = null,
     val vocabularyAudioFilename: String? = null,
@@ -30,6 +31,9 @@ data class ManualNoteDraft(
         ) add("Add the vocabulary reading or explicitly leave it unannotated.")
         if (sentenceReading.any { it == '[' || it == ']' }) add("Target reading contains reserved furigana syntax.")
         if (vocabularyReading.any { it == '[' || it == ']' }) add("Vocabulary reading contains reserved furigana syntax.")
+        if (pitch != null && pitch.reading != vocabularyReading.trim()) {
+            add("Pitch pattern is stale for the current vocabulary reading.")
+        }
         if (sentenceAudioFilename != null && AnkiFieldSerializer.audioReference(sentenceAudioFilename) == null) {
             add("Sentence audio filename is not a safe media reference.")
         }
@@ -60,7 +64,7 @@ data class ManualNoteDraft(
             "VocabKanji" to AnkiFieldSerializer.plainText(vocabulary),
             "VocabFurigana" to vocabFurigana,
             "VocabDef" to AnkiFieldSerializer.definition(listOf(definition)),
-            "VocabPitch" to "",
+            "VocabPitch" to pitch?.fieldMarkup.orEmpty(),
             "VocabAudio" to vocabularyAudioFilename?.let { AnkiFieldSerializer.audioReference(it) }.orEmpty(),
             "Image" to imageFilename?.let { AnkiFieldSerializer.imageReference(it) }.orEmpty(),
             "Notes" to AnkiFieldSerializer.plainText(notes),
