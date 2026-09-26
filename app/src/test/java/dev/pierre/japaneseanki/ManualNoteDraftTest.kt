@@ -24,22 +24,15 @@ class ManualNoteDraftTest {
         definition = "cat",
     )
 
-    @Test fun kanjiTargetAndVocabularyRequireReadingsOrExplicitOmission() {
-        assertEquals(2, draft().validationErrors().size)
-        assertTrue(
-            draft(sentenceReading = "ねこ", leaveVocabularyUnannotated = true)
-                .validationErrors().isEmpty(),
-        )
-        assertTrue(
-            draft(vocabularyReading = "ねこ", leaveSentenceTargetUnannotated = true)
-                .validationErrors().isEmpty(),
-        )
-        assertTrue(
-            draft(
-                sentenceReading = "ねこ",
-                vocabularyReading = "ねこ",
-            ).validationErrors().isEmpty(),
-        )
+    @Test fun unresolvedKanjiTargetAndVocabularyAreSendableAsOriginalText() {
+        val unresolved = draft()
+        assertTrue(unresolved.validationErrors().isEmpty())
+
+        val fields = unresolved.fieldsByName()
+        assertNotNull(fields)
+        assertEquals("<b>猫</b>が走る", fields!!["SentKanji"])
+        assertEquals("<b>猫</b>が走る", fields["SentFurigana"])
+        assertEquals("猫", fields["VocabFurigana"])
     }
 
     @Test fun serializesManualFieldsWithControlledTargetMarkup() {
@@ -87,10 +80,27 @@ class ManualNoteDraftTest {
         assertNotNull(kana.fieldsByName())
     }
 
-    @Test fun missingDefinitionInvalidTargetAndStaleValuesBlockSerialization() {
+    @Test fun unknownPitchIsEmptyAndStalePitchDoesNotBlockOrSerialize() {
+        val unknown = draft().fieldsByName()
+        assertNotNull(unknown)
+        assertEquals("", unknown!!["VocabPitch"])
+
+        val stalePitch = PitchAccent.create("ねこ", 0)!!
+        val stale = draft(vocabularyReading = "ねこ")
+            .copy(vocabularyReading = "いぬ", pitch = stalePitch)
+        assertTrue(stale.validationErrors().isEmpty())
+        assertEquals("", stale.fieldsByName()!!["VocabPitch"])
+    }
+
+    @Test fun validPitchSerializesAndRequiredNoteFieldsStillValidate() {
+        val pitch = PitchAccent.create("ねこ", 0)!!
+        val fields = draft(vocabularyReading = "ねこ").copy(pitch = pitch).fieldsByName()
+        assertNotNull(fields)
+        assertEquals(pitch.fieldMarkup, fields!!["VocabPitch"])
+
         assertNull(draft().copy(definition = "").fieldsByName())
+        assertFalse(draft().copy(sentence = "").validationErrors().isEmpty())
         assertFalse(draft().copy(target = TargetSpan(10, 12)).validationErrors().isEmpty())
-        assertNull(draft(sentenceReading = "ねこ", vocabularyReading = "ねこ")
-            .copy(dependentFieldsStale = true).fieldsByName())
+        assertFalse(draft().copy(vocabulary = "").validationErrors().isEmpty())
     }
 }

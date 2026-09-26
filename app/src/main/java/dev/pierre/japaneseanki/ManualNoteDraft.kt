@@ -24,14 +24,6 @@ data class ManualNoteDraft(
         if (targetText == null) add("Select a valid target in the sentence.")
         if (vocabulary.isBlank()) add("Enter vocabulary or a dictionary lemma.")
         if (definition.isBlank()) add("Enter a definition.")
-        if (dependentFieldsStale) add("Review vocabulary, readings, and pitch after changing the sentence or target.")
-
-        if (targetText != null && containsKanji(targetText) &&
-            sentenceReading.isBlank() && !leaveSentenceTargetUnannotated
-        ) add("Add the target reading or explicitly leave it unannotated.")
-        if (containsKanji(vocabulary) && vocabularyReading.isBlank() &&
-            !leaveVocabularyUnannotated
-        ) add("Add the vocabulary reading or explicitly leave it unannotated.")
         if (sentenceReading.any { it == '[' || it == ']' }) add("Target reading contains reserved furigana syntax.")
         if (vocabularyReading.any { it == '[' || it == ']' }) add("Vocabulary reading contains reserved furigana syntax.")
         if (sentenceFurigana.any { it.reading.any { character -> character == '[' || character == ']' } }) {
@@ -45,9 +37,6 @@ data class ManualNoteDraft(
         if (sentenceFurigana.filter { it.reading.isNotBlank() }.sortedBy { it.span.start }
                 .zipWithNext().any { (first, second) -> first.span.end > second.span.start }
         ) add("Sentence furigana spans overlap.")
-        if (pitch != null && pitch.reading != vocabularyReading.trim()) {
-            add("Pitch pattern is stale for the current vocabulary reading.")
-        }
         if (sentenceAudioFilename != null && AnkiFieldSerializer.audioReference(sentenceAudioFilename) == null) {
             add("Sentence audio filename is not a safe media reference.")
         }
@@ -79,7 +68,7 @@ data class ManualNoteDraft(
             "VocabKanji" to AnkiFieldSerializer.plainText(vocabulary),
             "VocabFurigana" to vocabFurigana,
             "VocabDef" to AnkiFieldSerializer.definition(definition.split(Regex("\\r\\n|\\n|\\r"))),
-            "VocabPitch" to pitch?.fieldMarkup.orEmpty(),
+            "VocabPitch" to pitch?.takeIf { it.reading == vocabularyReading.trim() }?.fieldMarkup.orEmpty(),
             "VocabAudio" to vocabularyAudioFilename?.let { AnkiFieldSerializer.audioReference(it) }.orEmpty(),
             "Image" to imageFilename?.let { AnkiFieldSerializer.imageReference(it) }.orEmpty(),
             "Notes" to AnkiFieldSerializer.plainText(notes),
