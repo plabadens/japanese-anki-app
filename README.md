@@ -6,10 +6,11 @@ Native Android app for creating Japanese sentence-mining notes in AnkiDroid. See
 
 ```sh
 nix develop
+./scripts/test-core.sh
 gradle testDebugUnitTest assembleDebug
 ```
 
-The Nix shell pins JDK, Gradle, Android SDK platforms, build tools, and NDK through `flake.lock`. Gradle resolves the pinned Android/Compose dependencies on the first build, which requires Maven/Google repository access. This is a development shell, not yet the fully sandboxed, network-independent reproducible APK derivation required for release. The app targets API 37 and supports API 35+. The root `gradle` command comes from the Nix shell, so no independently downloaded Gradle wrapper is used.
+The Nix shell pins JDK, Gradle, Android SDK platforms, build tools, and NDK through `flake.lock`. `./scripts/test-core.sh` runs the platform-independent Kotlin/JUnit tests without fetching Android Gradle Plugin artifacts. A full APK build resolves the pinned Android/Compose dependencies on the first run and requires Maven/Google repository access. This is a development shell, not yet the fully sandboxed, network-independent reproducible APK derivation required for release. The app targets API 37 and supports API 35+. The root `gradle` command comes from the Nix shell, so no independently downloaded Gradle wrapper is used.
 
 Install a debug build on a connected device:
 
