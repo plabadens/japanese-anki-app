@@ -1,6 +1,6 @@
 package dev.pierre.japaneseanki
 
-data class PitchAccent private constructor(
+class PitchAccent private constructor(
     val reading: String,
     val accentPosition: Int,
     val morae: List<String>,

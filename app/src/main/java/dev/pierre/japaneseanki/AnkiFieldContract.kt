@@ -46,7 +46,7 @@ data class FieldMapping(val values: List<String>, val errors: List<String>) {
     val isValid: Boolean get() = errors.isEmpty()
 }
 
-data class DuplicateKey private constructor(val sentence: String, val lemma: String) {
+class DuplicateKey private constructor(val sentence: String, val lemma: String) {
     fun matches(other: DuplicateKey): Boolean =
         sentence == other.sentence && lemma == other.lemma
 
