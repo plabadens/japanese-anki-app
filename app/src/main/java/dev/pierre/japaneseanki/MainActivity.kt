@@ -46,12 +46,12 @@ import androidx.compose.ui.text.input.TextFieldValue
 
 class MainActivity : ComponentActivity() {
     private val sharedText = mutableStateOf<String?>(null)
+    private var ankiDroidInstalled by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         sharedText.value = textFromIntent(intent)
         val preferences = getSharedPreferences("draft", MODE_PRIVATE)
-        val ankiDroidInstalled = isAnkiDroidInstalled()
         setContent {
             var editor by remember {
                 mutableStateOf(
@@ -350,6 +350,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        ankiDroidInstalled = isAnkiDroidInstalled()
     }
 
     override fun onNewIntent(intent: Intent) {
