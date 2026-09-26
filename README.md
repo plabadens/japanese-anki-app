@@ -11,10 +11,10 @@ python3 scripts/test-build-dictionary.py
 python3 scripts/test-package-unidic.py
 python3 scripts/build_dictionary.py
 python3 scripts/test-dictionary-asset.py
-gradle testDebugUnitTest assembleDebug
+gradle -Pandroid.aapt2FromMavenOverride="$ANDROID_HOME/build-tools/36.0.0/aapt2" testDebugUnitTest assembleDebug
 ```
 
-The Nix shell pins JDK, Gradle, Android SDK platforms, CMake, and NDK through `flake.lock`. It fetches pinned UniDic (526 MiB) and MeCab sources and creates a deterministic 426 MiB runtime dictionary asset for the APK. First use expands UniDic to about 725 MB in app-private storage, so plan for that in addition to the installed app. `./scripts/test-core.sh` runs the platform-independent Kotlin/JUnit tests without resolving Android Gradle Plugin artifacts. A full APK build requires Maven/Google repository access; the current environment cannot resolve AGP 8.13.2. This is a development shell, not yet the fully sandboxed, network-independent reproducible APK derivation required for release. The app targets API 37 and supports API 35+. The root `gradle` command comes from the Nix shell, so no independently downloaded Gradle wrapper is used.
+The Nix shell pins JDK, Gradle, Android SDK platforms, build tools, CMake, and NDK through `flake.lock`. The Gradle command above selects Nix's `aapt2` because Maven's generic Linux binary cannot run directly on NixOS. It fetches pinned UniDic (526 MiB) and MeCab sources and creates a deterministic 426 MiB runtime dictionary asset for the APK. First use expands UniDic to about 725 MB in app-private storage, so plan for that in addition to the installed app. `./scripts/test-core.sh` runs the platform-independent Kotlin/JUnit tests without resolving Android Gradle Plugin artifacts. A full APK build requires Maven/Google repository access; the current environment cannot resolve AGP 8.13.2. This is a development shell, not yet the fully sandboxed, network-independent reproducible APK derivation required for release. The app targets API 37 and supports API 35+. The root `gradle` command comes from the Nix shell, so no independently downloaded Gradle wrapper is used.
 
 Install a debug build on a connected device:
 

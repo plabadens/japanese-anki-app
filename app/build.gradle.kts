@@ -19,6 +19,8 @@ val packageUniDic = tasks.register<Copy>("packageUniDicRuntime") {
 android {
     namespace = "dev.pierre.japaneseanki"
     compileSdk = 37
+    buildToolsVersion = "36.0.0"
+    ndkVersion = "27.2.12479018"
 
     defaultConfig {
         applicationId = "dev.pierre.japaneseanki"
