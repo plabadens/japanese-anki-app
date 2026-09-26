@@ -1,6 +1,10 @@
 # Bundled linguistic data inputs
 
-These are source inputs for the offline dictionary database. Do not replace them with proprietary Rikaitan downloads.
+These are pinned linguistic data sources for offline processing. Do not replace them with proprietary Rikaitan downloads.
+
+## UniDic
+
+See [`unidic/README.md`](unidic/README.md) for the pinned official UniDic CWJ 3.1.1 source archive, license, attribution, and deterministic runtime-asset packaging.
 
 ## JMdict
 

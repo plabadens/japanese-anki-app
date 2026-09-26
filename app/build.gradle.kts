@@ -1,7 +1,17 @@
+import org.gradle.api.tasks.Copy
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+}
+
+val unidicRuntimeArchive = providers.environmentVariable("UNIDIC_RUNTIME_ARCHIVE").orNull
+    ?: error("Build inside the Nix development shell to provide pinned UniDic data")
+val packageUniDic = tasks.register<Copy>("packageUniDicRuntime") {
+    from(unidicRuntimeArchive)
+    into(layout.buildDirectory.dir("generated/unidicAssets"))
+    rename { "unidic-cwj-3.1.1.zip" }
 }
 
 android {
@@ -19,8 +29,10 @@ android {
     }
 
     androidResources {
-        noCompress += "gz"
+        noCompress += listOf("gz", "zip")
     }
+
+    sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/unidicAssets"))
 
     buildTypes {
         release {
@@ -36,6 +48,8 @@ android {
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
 }
+
+tasks.named("preBuild").configure { dependsOn(packageUniDic) }
 
 dependencies {
     implementation(platform(libs.androidx.compose.bom))

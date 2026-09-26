@@ -8,6 +8,15 @@
       system = "x86_64-linux";
       pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
       jdk = pkgs.jdk17;
+      unidicArchive = pkgs.fetchurl {
+        url = "https://clrd.ninjal.ac.jp/unidic_archive/cwj/3.1.1/unidic-cwj-3.1.1.zip";
+        hash = "sha256-b1R6PnFWOaPgF4oi35QiOhR9lazrESpZDy1oTGRK0xA=";
+      };
+      unidicRuntime = pkgs.runCommand "unidic-cwj-3.1.1-runtime.zip" {
+        nativeBuildInputs = [ pkgs.python3 ];
+      } ''
+        python3 ${./scripts/package_unidic.py} --archive ${unidicArchive} --output "$out"
+      '';
       androidEnv = pkgs.callPackage "${nixpkgs}/pkgs/development/mobile/androidenv" {
         inherit pkgs;
         licenseAccepted = true;
@@ -28,6 +37,7 @@
         ANDROID_SDK_ROOT = "${android.androidsdk}/libexec/android-sdk";
         # Gradle's Java fallback avoids native-service failures in restricted build containers.
         GRADLE_OPTS = "-Dorg.gradle.native=false";
+        UNIDIC_RUNTIME_ARCHIVE = "${unidicRuntime}";
         LANG = "C.UTF-8";
         LC_ALL = "C.UTF-8";
         shellHook = ''
