@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -13,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -58,6 +60,15 @@ class MainActivity : ComponentActivity() {
                     ).takeIf { it.textIn(editor.text) != null },
                 )
             }
+            var vocabulary by remember { mutableStateOf(preferences.getString("vocabulary", "").orEmpty()) }
+            var vocabularyReading by remember { mutableStateOf(preferences.getString("vocabulary_reading", "").orEmpty()) }
+            var definition by remember { mutableStateOf(preferences.getString("definition", "").orEmpty()) }
+            var sentenceReading by remember { mutableStateOf(preferences.getString("sentence_reading", "").orEmpty()) }
+            var leaveSentenceTargetUnannotated by remember { mutableStateOf(preferences.getBoolean("leave_sentence_target_unannotated", false)) }
+            var leaveVocabularyUnannotated by remember { mutableStateOf(preferences.getBoolean("leave_vocabulary_unannotated", false)) }
+            var translation by remember { mutableStateOf(preferences.getString("translation", "").orEmpty()) }
+            var notes by remember { mutableStateOf(preferences.getString("notes", "").orEmpty()) }
+            var tags by remember { mutableStateOf(preferences.getString("tags", "").orEmpty()) }
             var showReplace by remember { mutableStateOf(false) }
             val incoming = sharedText.value
 
@@ -66,6 +77,14 @@ class MainActivity : ComponentActivity() {
                     if (editor.text.isBlank()) {
                         editor = TextFieldValue(incoming, selection = TextRange(incoming.length))
                         target = null
+                        vocabulary = ""
+                        vocabularyReading = ""
+                        definition = ""
+                        sentenceReading = ""
+                        leaveSentenceTargetUnannotated = false
+                        leaveVocabularyUnannotated = false
+                        translation = ""
+                        notes = ""
                         sharedText.value = null
                     } else {
                         showReplace = true
@@ -81,6 +100,14 @@ class MainActivity : ComponentActivity() {
                         TextButton(onClick = {
                             editor = TextFieldValue(incoming, selection = TextRange(incoming.length))
                             target = null
+                            vocabulary = ""
+                            vocabularyReading = ""
+                            definition = ""
+                            sentenceReading = ""
+                            leaveSentenceTargetUnannotated = false
+                            leaveVocabularyUnannotated = false
+                            translation = ""
+                            notes = ""
                             showReplace = false
                             sharedText.value = null
                         }) { Text("Replace") }
@@ -93,13 +120,26 @@ class MainActivity : ComponentActivity() {
                 )
             }
 
-            androidx.compose.runtime.LaunchedEffect(editor.text, editor.selection, target) {
+            androidx.compose.runtime.LaunchedEffect(
+                editor.text, editor.selection, target, vocabulary, vocabularyReading, definition,
+                sentenceReading, leaveSentenceTargetUnannotated, leaveVocabularyUnannotated,
+                translation, notes, tags,
+            ) {
                 preferences.edit()
                     .putString("sentence", editor.text)
                     .putInt("selection_start", editor.selection.min)
                     .putInt("selection_end", editor.selection.max)
                     .putInt("target_start", target?.start ?: -1)
                     .putInt("target_end", target?.end ?: -1)
+                    .putString("vocabulary", vocabulary)
+                    .putString("vocabulary_reading", vocabularyReading)
+                    .putString("definition", definition)
+                    .putString("sentence_reading", sentenceReading)
+                    .putBoolean("leave_sentence_target_unannotated", leaveSentenceTargetUnannotated)
+                    .putBoolean("leave_vocabulary_unannotated", leaveVocabularyUnannotated)
+                    .putString("translation", translation)
+                    .putString("notes", notes)
+                    .putString("tags", tags)
                     .apply()
             }
 
@@ -118,7 +158,15 @@ class MainActivity : ComponentActivity() {
                         OutlinedTextField(
                             value = editor,
                             onValueChange = { updated ->
-                                if (updated.text != editor.text) target = null
+                                if (updated.text != editor.text) {
+                                    target = null
+                                    vocabulary = ""
+                                    vocabularyReading = ""
+                                    definition = ""
+                                    sentenceReading = ""
+                                    leaveSentenceTargetUnannotated = false
+                                    leaveVocabularyUnannotated = false
+                                }
                                 editor = updated
                             },
                             modifier = Modifier.fillMaxWidth(),
@@ -132,6 +180,12 @@ class MainActivity : ComponentActivity() {
                                     editor.selection.start,
                                     editor.selection.end,
                                 )
+                                vocabulary = target?.textIn(editor.text).orEmpty()
+                                vocabularyReading = ""
+                                definition = ""
+                                sentenceReading = ""
+                                leaveSentenceTargetUnannotated = false
+                                leaveVocabularyUnannotated = false
                             },
                             enabled = editor.selection.start != editor.selection.end,
                         ) { Text("Use selected text as target") }
@@ -140,8 +194,80 @@ class MainActivity : ComponentActivity() {
                                 ?: "Select text in the sentence to choose a target.",
                             style = MaterialTheme.typography.bodyLarge,
                         )
+                        if (target?.textIn(editor.text) != null) {
+                            Text("Vocabulary", style = MaterialTheme.typography.titleMedium)
+                            OutlinedTextField(
+                                value = vocabulary,
+                                onValueChange = { vocabulary = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("Lemma or manual vocabulary") },
+                                singleLine = true,
+                            )
+                            OutlinedTextField(
+                                value = vocabularyReading,
+                                onValueChange = { vocabularyReading = it; leaveVocabularyUnannotated = false },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("Vocabulary reading") },
+                                singleLine = true,
+                            )
+                            Row {
+                                Checkbox(
+                                    checked = leaveVocabularyUnannotated,
+                                    onCheckedChange = {
+                                        leaveVocabularyUnannotated = it
+                                        if (it) vocabularyReading = ""
+                                    },
+                                )
+                                Text("Leave vocabulary without furigana")
+                            }
+                            OutlinedTextField(
+                                value = sentenceReading,
+                                onValueChange = { sentenceReading = it; leaveSentenceTargetUnannotated = false },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("Selected sentence span reading") },
+                                singleLine = true,
+                            )
+                            Row {
+                                Checkbox(
+                                    checked = leaveSentenceTargetUnannotated,
+                                    onCheckedChange = {
+                                        leaveSentenceTargetUnannotated = it
+                                        if (it) sentenceReading = ""
+                                    },
+                                )
+                                Text("Leave selected sentence span unannotated")
+                            }
+                            OutlinedTextField(
+                                value = definition,
+                                onValueChange = { definition = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("English definition (required)") },
+                                minLines = 2,
+                            )
+                            OutlinedTextField(
+                                value = translation,
+                                onValueChange = { translation = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("Sentence translation (optional)") },
+                                minLines = 2,
+                            )
+                            OutlinedTextField(
+                                value = notes,
+                                onValueChange = { notes = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("Notes (optional)") },
+                                minLines = 2,
+                            )
+                            OutlinedTextField(
+                                value = tags,
+                                onValueChange = { tags = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("Tags (optional)") },
+                                singleLine = true,
+                            )
+                        }
                         Text(
-                            "Draft autosaves on this device. Dictionary enrichment and AnkiDroid setup are next.",
+                            "Draft autosaves on this device. Dictionary lookup and AnkiDroid setup are not connected yet.",
                             style = MaterialTheme.typography.bodyMedium,
                         )
                         Button(onClick = {}, enabled = false) {
