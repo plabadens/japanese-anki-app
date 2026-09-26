@@ -26,6 +26,8 @@
         JAVA_HOME = jdk.home;
         ANDROID_HOME = "${android.androidsdk}/libexec/android-sdk";
         ANDROID_SDK_ROOT = "${android.androidsdk}/libexec/android-sdk";
+        # Gradle's Java fallback avoids native-service failures in restricted build containers.
+        GRADLE_OPTS = "-Dorg.gradle.native=false";
         LANG = "C.UTF-8";
         LC_ALL = "C.UTF-8";
         shellHook = ''
