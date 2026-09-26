@@ -1,0 +1,106 @@
+package dev.pierre.japaneseanki
+
+/** Required names are mapped by name; model order and extra fields are user-owned. */
+object AnkiFieldContract {
+    val requiredFields = listOf(
+        "SentKanji",
+        "SentFurigana",
+        "SentEng",
+        "SentAudio",
+        "VocabKanji",
+        "VocabFurigana",
+        "VocabDef",
+        "VocabPitch",
+        "VocabAudio",
+        "Image",
+        "Notes",
+        "fm_focus_words",
+        "fm_new_words",
+        "fm_seen_words",
+    )
+
+    fun mapToModelOrder(
+        modelFields: List<String>,
+        valuesByName: Map<String, String>,
+    ): FieldMapping {
+        val duplicates = modelFields.groupingBy { it }.eachCount()
+            .filterValues { it > 1 }
+            .keys
+        val missing = requiredFields.filterNot(modelFields::contains)
+        val errors = buildList {
+            if (missing.isNotEmpty()) add("Missing required fields: ${missing.joinToString()}")
+            if (duplicates.isNotEmpty()) add("Ambiguous duplicate fields: ${duplicates.joinToString()}")
+        }
+        if (errors.isNotEmpty()) return FieldMapping(emptyList(), errors)
+
+        return FieldMapping(
+            modelFields.map { field ->
+                if (field in requiredFields) valuesByName[field].orEmpty() else ""
+            },
+            emptyList(),
+        )
+    }
+}
+
+data class FieldMapping(val values: List<String>, val errors: List<String>) {
+    val isValid: Boolean get() = errors.isEmpty()
+}
+
+data class DuplicateKey private constructor(val sentence: String, val lemma: String) {
+    fun matches(other: DuplicateKey): Boolean =
+        sentence == other.sentence && lemma == other.lemma
+
+    companion object {
+        /** Remove only app-generated highlight markup and HTML escaping. */
+        fun fromFields(serializedSentence: String, vocabularyLemma: String): DuplicateKey =
+            DuplicateKey(
+                sentence = decodeGeneratedEntities(
+                    serializedSentence.replace("<b>", "").replace("</b>", ""),
+                ).trim(),
+                lemma = vocabularyLemma.trim(),
+            )
+
+        private fun decodeGeneratedEntities(text: String): String {
+            val out = StringBuilder(text.length)
+            var i = 0
+            while (i < text.length) {
+                if (text[i] != '&') {
+                    out.append(text[i++])
+                    continue
+                }
+                val semicolon = text.indexOf(';', i + 1)
+                if (semicolon < 0 || semicolon - i > 12) {
+                    out.append(text[i++])
+                    continue
+                }
+                val entity = text.substring(i + 1, semicolon)
+                val decoded = when (entity) {
+                    "amp" -> "&"
+                    "lt" -> "<"
+                    "gt" -> ">"
+                    "quot" -> "\""
+                    "#39", "apos" -> "'"
+                    else -> decodeNumericEntity(entity)
+                }
+                if (decoded == null) {
+                    out.append(text[i++])
+                } else {
+                    out.append(decoded)
+                    i = semicolon + 1
+                }
+            }
+            return out.toString()
+        }
+
+        private fun decodeNumericEntity(entity: String): String? {
+            if (!entity.startsWith('#')) return null
+            val value = if (entity.startsWith("#x", ignoreCase = true)) {
+                entity.substring(2).toIntOrNull(16)
+            } else {
+                entity.substring(1).toIntOrNull()
+            } ?: return null
+            if (!Character.isValidCodePoint(value) || value in 0xD800..0xDFFF) return null
+            return String(Character.toChars(value))
+        }
+    }
+}
