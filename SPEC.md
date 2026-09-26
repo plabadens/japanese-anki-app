@@ -4,7 +4,7 @@
 
 **Distribution:** Personal, sideloaded Android application.
 
-**Implementation status:** An initial Compose editor, local draft persistence, target-span validation, Android text-entry intents, AnkiDroid package detection, manual vocabulary/definition/reading entry, controlled field serialization/mapping, duplicate-key comparison, manual pitch editing, and stale-value blocking after sentence/target edits are implemented. API permission/model/deck setup, bundled linguistic processing, automatic enrichment/audio, media workflows, full acceptance testing, and reproducible APK builds remain unimplemented and unverified.
+**Implementation status:** An initial Compose editor, local draft persistence, target-span validation, Android text-entry intents, AnkiDroid package detection, manual vocabulary/definition/reading entry, controlled field serialization/mapping, duplicate-key comparison, manual pitch editing, and stale-value blocking after sentence/target edits are implemented. AnkiDroid API permission requesting is implemented but untested on-device; model/deck discovery and Anki export, bundled linguistic processing, automatic enrichment/audio, media workflows, full acceptance testing, and reproducible APK builds remain unimplemented and unverified.
 
 ## 1. Purpose
 
