@@ -1,6 +1,7 @@
 package dev.pierre.japaneseanki
 
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -50,6 +51,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         sharedText.value = textFromIntent(intent)
         val preferences = getSharedPreferences("draft", MODE_PRIVATE)
+        val ankiDroidInstalled = isAnkiDroidInstalled()
         setContent {
             var editor by remember {
                 mutableStateOf(
@@ -327,7 +329,12 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         Text(
-                            "Draft autosaves on this device. Dictionary lookup and AnkiDroid setup are not connected yet.",
+                            if (ankiDroidInstalled) "AnkiDroid detected. API permission, model, and deck setup are not connected yet."
+                            else "AnkiDroid not detected. Install it before setting up export.",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            "Draft autosaves on this device. Dictionary lookup is not connected yet.",
                             style = MaterialTheme.typography.bodyMedium,
                         )
                         Button(onClick = {}, enabled = false) {
@@ -343,6 +350,13 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         sharedText.value = textFromIntent(intent)
+    }
+
+    private fun isAnkiDroidInstalled(): Boolean = try {
+        packageManager.getPackageInfo("com.ichi2.anki", PackageManager.PackageInfoFlags.of(0))
+        true
+    } catch (_: PackageManager.NameNotFoundException) {
+        false
     }
 
     private fun textFromIntent(intent: Intent?): String? {
