@@ -5,5 +5,7 @@ local.properties
 .idea/
 *.iml
 *.apk
+__pycache__/
+*.py[cod]
 *.aab
 .DS_Store

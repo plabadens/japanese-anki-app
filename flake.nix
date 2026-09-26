@@ -22,7 +22,7 @@
       };
     in {
       devShells.${system}.default = pkgs.mkShell {
-        packages = [ jdk pkgs.gradle android.androidsdk android.platform-tools pkgs.git ];
+        packages = [ jdk pkgs.gradle android.androidsdk android.platform-tools pkgs.git pkgs.python3 ];
         JAVA_HOME = jdk.home;
         ANDROID_HOME = "${android.androidsdk}/libexec/android-sdk";
         ANDROID_SDK_ROOT = "${android.androidsdk}/libexec/android-sdk";

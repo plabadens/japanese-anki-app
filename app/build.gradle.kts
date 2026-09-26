@@ -18,6 +18,10 @@ android {
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }
 
+    androidResources {
+        noCompress += "gz"
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false

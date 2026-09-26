@@ -18,4 +18,4 @@ These are source inputs for the offline dictionary database. Do not replace them
 - Required attribution: “The pitch accent notation, verb particle data, phonetics, homonyms and other additions or modifications to EDICT, KANJIDIC or KRADFILE were provided by Uros O. through his free database.”
 - Source data is a tab-separated spelling, reading, accent-position list. A comma-separated list represents alternatives; `0` is a valid heiban pattern.
 
-The source inputs are copied without modification. Any generated/combined dictionary database must retain the applicable CC BY-SA attribution and license notices. The app's code is not relicensed by the data license.
+The source inputs are copied without modification. Rebuild the deterministic SQLite asset with `python3 scripts/build_dictionary.py --jmdict-source 'EDRDG JMdict_e.gz, YYYY-MM-DD snapshot'`; the script records both input hashes in the database metadata. Re-run it after updating either input. Any generated/combined dictionary database must retain the applicable CC BY-SA attribution and license notices. The app's code is not relicensed by the data license.
