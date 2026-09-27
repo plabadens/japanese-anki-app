@@ -13,12 +13,14 @@ class AudioGenerationTest {
     // Device gate: cancellation and serialization require an instrumented test with a real TTS engine.
     @Test fun cacheKeyIncludesProviderTextVoiceAndRateWithoutExposingTextInFilename() {
         val base = AudioCacheKey("azure", "猫", "ja-JP-NanamiNeural", 1f)
-        assertNotEquals(base, base.copy(source = "android:engine"))
-        assertNotEquals(base, base.copy(text = "犬"))
-        assertNotEquals(base, base.copy(voice = "other"))
-        assertNotEquals(base, base.copy(rate = 1.1f))
+        assertNotEquals(base.filename(), base.copy(source = "android:engine").filename())
+        assertNotEquals(base.filename(), base.copy(text = "犬").filename())
+        assertNotEquals(base.filename(), base.copy(voice = "other").filename())
+        assertNotEquals(base.filename(), base.copy(rate = 1.1f).filename())
         assertFalse(base.filename().contains("猫"))
         assertEquals(base.filename(), base.copy().filename())
+        assertNotEquals(base.filename(), base.copy(entryIdentity = "entry-a").filename())
+        assertNotEquals(base.copy(entryIdentity = "entry-a").filename(), base.copy(entryIdentity = "entry-b").filename())
     }
 
     @Test fun cacheEvictsLeastRecentlyUsedReusableFilesAndKeepsDraftCopyAfterClear() {
@@ -26,23 +28,23 @@ class AudioGenerationTest {
         try {
             val cacheDir = File(root, "cache")
             val draftDir = File(root, "draft")
-            val cache = ReusableAudioCache(cacheDir, maxBytes = 6)
+            val cache = ReusableAudioCache(cacheDir, maxBytes = 92)
             val first = AudioCacheKey("android:e", "一", "voice", 1f)
             val second = AudioCacheKey("android:e", "二", "voice", 1f)
             val third = AudioCacheKey("android:e", "三", "voice", 1f)
-            assertTrue(cache.put(first, source(root, "first", "111")) != null)
+            assertTrue(cache.put(first, writeValidWav(File(root, "first"))) != null)
             Thread.sleep(5)
-            assertTrue(cache.put(second, source(root, "second", "222")) != null)
+            assertTrue(cache.put(second, writeValidWav(File(root, "second"))) != null)
             Thread.sleep(5)
             assertTrue(cache.get(first) != null) // first is now more recent
-            assertTrue(cache.put(third, source(root, "third", "333")) != null)
-            assertNull(cache.get(second))
-            assertTrue(cache.sizeBytes() <= 6)
             val activeDraft = cache.copyToActiveDraft(first, draftDir, "sentence.wav")
+            assertTrue(cache.put(third, writeValidWav(File(root, "third"))) != null)
+            assertNull(cache.get(second))
+            assertTrue(cache.sizeBytes() <= 92)
             cache.clear()
             assertEquals(0L, cache.sizeBytes())
             assertTrue(activeDraft.isFile)
-            assertEquals("111", activeDraft.readText())
+            assertTrue(AudioFileValidator.requireWav(activeDraft).isFile)
         } finally {
             root.deleteRecursively()
         }
@@ -52,7 +54,7 @@ class AudioGenerationTest {
         val root = Files.createTempDirectory(java.nio.file.Path.of("build"), "audio-cache-limit").toFile()
         try {
             val cache = ReusableAudioCache(File(root, "cache"), maxBytes = 2)
-            assertNull(cache.put(AudioCacheKey("source", "text", "voice", 1f), source(root, "large", "123")))
+            assertNull(cache.put(AudioCacheKey("source", "text", "voice", 1f), writeValidWav(File(root, "large"))))
             assertEquals(0L, cache.sizeBytes())
         } finally {
             root.deleteRecursively()
@@ -65,10 +67,11 @@ class AudioGenerationTest {
         val currentRequest = AudioRequestIdentity(AudioItem.SENTENCE, 1, "犬です")
         result.begin(oldRequest)
         result.begin(currentRequest)
+        assertFalse(result.beginIfNeeded(oldRequest)) // a delayed automatic request cannot regress the revision
         assertFalse(result.complete(oldRequest, File("old.wav")))
         assertTrue(result.fail(currentRequest, retryable = true))
         assertTrue(result.state is AudioGenerationState.Failed)
-        result.begin(currentRequest) // explicit retry of the failed item
+        assertTrue(result.retry(currentRequest))
         assertTrue(result.complete(currentRequest, File("new.wav")))
         assertEquals("new.wav", (result.state as AudioGenerationState.Ready).file.name)
     }
@@ -144,6 +147,49 @@ class AudioGenerationTest {
             assertTrue(result.beginIfNeeded(failedRequest))
             assertTrue(result.fail(failedRequest, true))
             assertTrue(result.retry(failedRequest))
+            val interrupted = AudioRequestIdentity(AudioItem.SENTENCE, 3, "billable")
+            assertFalse(result.beginIfNeeded(interrupted, afterProcessRestart = true))
+            assertTrue(result.state is AudioGenerationState.Failed)
+            assertFalse(result.beginIfNeeded(interrupted))
+            assertTrue(result.retry(interrupted))
+            val notRetryable = AudioRequestIdentity(AudioItem.SENTENCE, 4, "terminal")
+            assertTrue(result.beginIfNeeded(notRetryable))
+            assertTrue(result.fail(notRetryable, retryable = false))
+            assertFalse(result.retry(notRetryable))
+        } finally { root.deleteRecursively() }
+    }
+
+
+    @Test fun cachedRecordingIsUsedBeforeAvailabilityAndEntryIdentitySeparatesRecordings() {
+        val root = Files.createTempDirectory(java.nio.file.Path.of("build"), "audio-cache-hit").toFile()
+        try {
+            val cache = ReusableAudioCache(File(root, "cache"))
+            val identity = AudioSourceIdentity(AudioSource.RECORDED_PRONUNCIATION, "nhk", voice = "recorded", rate = 1f)
+            val key = AudioCacheKey("RECORDED_PRONUNCIATION:nhk", "猫", "recorded", 1f, entryIdentity = "entry-1")
+            cache.put(key, writeValidWav(File(root, "seed.wav")))
+            var called = false
+            val chain = AudioSourceChain(AudioSourceConfiguration(recordedPronunciationEnabled = true),
+                AudioProviderBinding(identity, AudioProvider { _, _ -> called = true; error("must use cache") }, available = { false }), null, null, cache)
+            val result = chain.generate(AudioSynthesisRequest(AudioItem.VOCABULARY, "猫", 0, "entry-1"), File(root, "draft"))
+            assertTrue(result is AudioChainResult.Ready)
+            assertFalse(called)
+            assertTrue(chain.generate(AudioSynthesisRequest(AudioItem.VOCABULARY, "猫", 1, "entry-2"), File(root, "draft2")) is AudioChainResult.Failed)
+        } finally { root.deleteRecursively() }
+    }
+
+    @Test fun invalidWavFormatIsRejectedAndDraftCopyCannotTargetCacheRoot() {
+        val root = Files.createTempDirectory(java.nio.file.Path.of("build"), "audio-wav-validation").toFile()
+        try {
+            val invalid = writeValidWav(File(root, "invalid.wav"))
+            val bytes = invalid.readBytes()
+            // Corrupt the block alignment field in the fmt descriptor.
+            bytes[32] = 4
+            bytes[33] = 0
+            invalid.writeBytes(bytes)
+            assertTrue(runCatching { AudioFileValidator.requireWav(invalid) }.isFailure)
+            val cache = ReusableAudioCache(File(root, "cache"))
+            assertTrue(runCatching { cache.put(AudioCacheKey("s", "t", "v", 1f), invalid) }.isFailure)
+            assertTrue(runCatching { cache.copyToActiveDraft(AudioCacheKey("s", "t", "v", 1f), File(root, "cache"), "draft.wav") }.isFailure)
         } finally { root.deleteRecursively() }
     }
 

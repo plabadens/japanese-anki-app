@@ -57,7 +57,7 @@ object AudioFileValidator {
                 if (riff != "RIFF" || wave != "WAVE" || riffLength != file.length() - 8L) {
                     throw IOException("Audio provider returned invalid WAV data")
                 }
-                var hasFormat = false
+                var validFormat = false
                 var hasData = false
                 while (input.filePointer < file.length()) {
                     if (file.length() - input.filePointer < 8) throw IOException("Audio provider returned invalid WAV data")
@@ -66,11 +66,25 @@ object AudioFileValidator {
                     val start = input.filePointer
                     val end = start + size + (size and 1L)
                     if (end < start || end > file.length()) throw IOException("Audio provider returned invalid WAV data")
-                    if (id == "fmt " && size >= 16) hasFormat = true
+                    if (id == "fmt ") {
+                        if (size < 16) throw IOException("Audio provider returned invalid WAV data")
+                        val format = ByteArray(16).also(input::readFully)
+                        val fields = java.nio.ByteBuffer.wrap(format).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                        val encoding = fields.short.toInt() and 0xffff
+                        val channels = fields.short.toInt() and 0xffff
+                        val sampleRate = fields.int.toLong() and 0xffffffffL
+                        val byteRate = fields.int.toLong() and 0xffffffffL
+                        val blockAlign = fields.short.toInt() and 0xffff
+                        val bitsPerSample = fields.short.toInt() and 0xffff
+                        val expectedAlign = channels * bitsPerSample / 8
+                        validFormat = encoding == 1 && channels in 1..8 && sampleRate in 1..384000 &&
+                            bitsPerSample in setOf(8, 16, 24, 32) && blockAlign == expectedAlign &&
+                            byteRate == sampleRate * blockAlign
+                    }
                     if (id == "data" && size > 0) hasData = true
                     input.seek(end)
                 }
-                if (!hasFormat || !hasData) throw IOException("Audio provider returned invalid WAV data")
+                if (!validFormat || !hasData) throw IOException("Audio provider returned invalid WAV data")
             }
         } catch (error: IOException) {
             throw error
@@ -99,11 +113,11 @@ class AudioSourceChain(
             return AudioChainResult.Failed(request, "Audio output is unavailable")
         }
         for (binding in candidates) {
-            if (!runCatching(binding.available).getOrDefault(false)) continue
             val identity = binding.identity
             val key = AudioCacheKey(
                 source = "${identity.source}:${identity.providerIdentity}", text = request.text,
                 voice = identity.voice, rate = identity.rate, engine = identity.engine.orEmpty(),
+                entryIdentity = if (request.item == AudioItem.VOCABULARY) request.entryIdentity.orEmpty() else "",
             )
             reusableCache?.get(key)?.let { cached ->
                 if (runCatching { AudioFileValidator.requireWav(cached) }.isSuccess) {
@@ -114,6 +128,7 @@ class AudioSourceChain(
                     } catch (_: Exception) { copy.delete() }
                 }
             }
+            if (!runCatching(binding.available).getOrDefault(false)) continue
             val output = File(outputDirectory, "${request.item.name.lowercase()}-${request.revision}-${identity.source.name.lowercase()}.wav")
             try {
                 val produced = AudioFileValidator.requireWav(binding.provider.synthesize(request, output))
