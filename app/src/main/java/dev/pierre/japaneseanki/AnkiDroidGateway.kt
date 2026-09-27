@@ -92,8 +92,13 @@ class AnkiDroidGateway(
         return cursor.use {
             val ordColumn = it.getColumnIndexOrThrow(CARD_ORD)
             val deckColumn = it.getColumnIndexOrThrow(CARD_DECK_ID)
+            requireCardProjection(ordColumn, deckColumn)
             buildList {
-                while (it.moveToNext()) add(AnkiCardLocation(it.getInt(ordColumn), it.getLong(deckColumn)))
+                while (it.moveToNext()) {
+                    val ord = it.getInt(ordColumn)
+                    val deckId = it.getLong(deckColumn)
+                    add(validateCardLocation(ord, deckId))
+                }
             }
         }
     }
@@ -114,7 +119,7 @@ class AnkiDroidGateway(
             } catch (error: RuntimeException) {
                 throw AnkiProviderUncertainException("AnkiDroid card move outcome is uncertain.", error)
             }
-            check(updated == 1) { "AnkiDroid did not move the inserted note's card." }
+            requireCardMoveCount(updated)
         }
         val verified = noteCards(noteId)
         check(verified.isNotEmpty() && verified.all { it.deckId == deckId }) {
@@ -193,8 +198,16 @@ class AnkiDroidGateway(
             resolver.insert(NOTES_URI, values)
         } catch (error: RuntimeException) {
             throw AnkiProviderUncertainException("AnkiDroid note insertion outcome is uncertain.", error)
-        } ?: error("AnkiDroid did not return the inserted note URI.")
-        return parseInsertedNoteId(returnedUri.toString())
+        }
+        val returnedUriString = requireReturnedNoteUri(returnedUri?.toString())
+        return try {
+            parseInsertedNoteId(returnedUriString)
+        } catch (error: IllegalArgumentException) {
+            throw AnkiProviderDefiniteInsertException(
+                "AnkiDroid returned no valid inserted note ID.",
+                error,
+            )
+        }
     }
 
     fun decks(): List<AnkiDeck> = resolver.query(
@@ -259,9 +272,30 @@ data class AnkiDeck(val id: Long, val name: String)
 data class AnkiCardLocation(val ord: Int, val deckId: Long)
 
 internal class AnkiProviderUncertainException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
+internal class AnkiProviderDefiniteInsertException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
+
+internal fun requireReturnedNoteUri(uri: String?): String = uri ?: throw AnkiProviderDefiniteInsertException(
+    "AnkiDroid returned no note URI; no inserted note ID was produced."
+)
 
 internal fun parseInsertedNoteId(uri: String): Long {
-    val noteId = uri.substringBefore('?').substringAfterLast('/').toLongOrNull()
+    val match = Regex("^content://com\\.ichi2\\.anki\\.flashcards/notes/([1-9][0-9]*)(?:\\?[^#]*)?$")
+        .matchEntire(uri)
+    val noteId = match?.groupValues?.getOrNull(1)?.toLongOrNull()
     require(noteId != null && noteId > 0) { "AnkiDroid returned an invalid inserted note URI." }
     return noteId
+}
+
+internal fun requireCardProjection(ordColumn: Int, deckColumn: Int) {
+    require(ordColumn >= 0 && deckColumn >= 0) { "AnkiDroid returned a malformed card projection." }
+}
+
+internal fun validateCardLocation(ord: Int, deckId: Long): AnkiCardLocation {
+    require(ord >= 0) { "AnkiDroid returned a malformed card ordinal." }
+    require(deckId > 0) { "AnkiDroid returned a malformed card deck ID." }
+    return AnkiCardLocation(ord, deckId)
+}
+
+internal fun requireCardMoveCount(updated: Int) {
+    require(updated == 1) { "AnkiDroid did not move the inserted note's card." }
 }
