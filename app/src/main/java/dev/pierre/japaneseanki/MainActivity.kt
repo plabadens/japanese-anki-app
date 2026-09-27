@@ -84,6 +84,8 @@ private const val ANKIDROID_READ_WRITE_PERMISSION =
     "com.ichi2.anki.permission.READ_WRITE_DATABASE"
 private const val IMAGE_RECEIPT_PATH = "image_import_receipt_path"
 private const val IMAGE_RECEIPT_FILENAME = "image_import_receipt_filename"
+private const val IMAGE_RECEIPT_SIZE = "image_import_receipt_size"
+private const val IMAGE_RECEIPT_MODIFIED = "image_import_receipt_modified"
 
 enum class AppRoute { Capture, Target, Review }
 
@@ -249,6 +251,7 @@ class MainActivity : ComponentActivity() {
             var noteTypes by remember { mutableStateOf<List<AnkiNoteType>>(emptyList()) }
             var decks by remember { mutableStateOf<List<AnkiDeck>>(emptyList()) }
             var setupLoading by remember { mutableStateOf(false) }
+            var setupLoadedSuccessfully by remember { mutableStateOf(false) }
             var setupError by remember { mutableStateOf<String?>(null) }
             var setupReload by remember { mutableStateOf(0) }
             var selectedModelId by remember {
@@ -311,6 +314,7 @@ class MainActivity : ComponentActivity() {
                 )
             }
             var recoveryDuplicate by remember { mutableStateOf(false) }
+            var frozenSnapshotAppliedRevision by remember { mutableStateOf(-1L) }
             var omitImageForSend by remember { mutableStateOf(false) }
             val selectedModel = noteTypes.firstOrNull { it.id == selectedModelId }
             val selectedDeck = decks.firstOrNull { it.id == selectedDeckId }
@@ -324,12 +328,13 @@ class MainActivity : ComponentActivity() {
                 photoSourcePath = null
                 noteImagePath = null
                 processedImagePath = null
-                preferences.edit()
-                    .remove(IMAGE_RECEIPT_PATH)
-                    .remove(IMAGE_RECEIPT_FILENAME)
-                    .commit()
-                clearFrozenSubmission(preferences)
+                clearPersistedDraft(preferences, File(filesDir, "draft"))
+                frozenRetryReady = false
+                recoveryRequired = false
+                recoveryPhase = null
+                recoveryDuplicate = false
                 omitImageForSend = false
+                imageProcessingRevision++
                 imageProcessing = false
                 imageError = null
                 ocrLoading = false
@@ -401,6 +406,8 @@ class MainActivity : ComponentActivity() {
                     preferences.edit()
                         .remove(IMAGE_RECEIPT_PATH)
                         .remove(IMAGE_RECEIPT_FILENAME)
+                        .remove(IMAGE_RECEIPT_SIZE)
+                        .remove(IMAGE_RECEIPT_MODIFIED)
                         .putString("photo_source_path", photoSourcePath)
                         .putString("note_image_path", noteImagePath)
                         .remove("processed_image_path")
@@ -414,7 +421,7 @@ class MainActivity : ComponentActivity() {
                 coroutineScope.launch {
                     try {
                         val processed = ImageMediaProcessor.process(file, destination)
-                        if (noteImagePath == file.absolutePath && imageProcessingRevision == processingRevision) {
+                        if (!submissionLocked && noteImagePath == file.absolutePath && imageProcessingRevision == processingRevision) {
                             processedImagePath = processed.file.absolutePath
                             previousFiles.forEach { File(it).delete() }
                         } else {
@@ -423,7 +430,7 @@ class MainActivity : ComponentActivity() {
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
-                        if (noteImagePath == file.absolutePath && imageProcessingRevision == processingRevision) {
+                        if (!submissionLocked && noteImagePath == file.absolutePath && imageProcessingRevision == processingRevision) {
                             imageError = "This photo could not be prepared for Anki. Retry or remove it."
                         }
                     } finally {
@@ -436,6 +443,7 @@ class MainActivity : ComponentActivity() {
                     coroutineScope.launch {
                         try {
                             val result = japaneseOcr.recognize(file)
+                            if (submissionLocked || imageProcessingRevision != processingRevision || noteImagePath != file.absolutePath) return@launch
                             val blocks = result.blocks.filter { it.text.isNotBlank() }
                             when {
                                 blocks.size > 1 -> {
@@ -452,13 +460,37 @@ class MainActivity : ComponentActivity() {
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (_: Exception) {
-                            ocrError = "Could not read this photo. Type or edit the sentence to continue."
-                            route = AppRoute.Target
+                            if (!submissionLocked && imageProcessingRevision == processingRevision && noteImagePath == file.absolutePath) {
+                                ocrError = "Could not read this photo. Type or edit the sentence to continue."
+                                route = AppRoute.Target
+                            }
                         } finally {
                             ocrLoading = false
                         }
                     }
                 }
+            }
+            val removeDraftImage = {
+                listOfNotNull(photoSourcePath, noteImagePath, processedImagePath).distinct().forEach { path ->
+                    File(path).delete()
+                }
+                if (photoSourcePath == noteImagePath) photoSourcePath = null
+                noteImagePath = null
+                processedImagePath = null
+                imageProcessingRevision++
+                imageProcessing = false
+                imageError = null
+                omitImageForSend = false
+                preferences.edit()
+                    .remove("photo_source_path")
+                    .remove("note_image_path")
+                    .remove("processed_image_path")
+                    .remove(IMAGE_RECEIPT_PATH)
+                    .remove(IMAGE_RECEIPT_FILENAME)
+                    .remove(IMAGE_RECEIPT_SIZE)
+                    .remove(IMAGE_RECEIPT_MODIFIED)
+                    .commit()
+                Unit
             }
             val stagePhotoReplacement: (File) -> Unit = stagePhotoReplacement@{ file ->
                 if (submissionLocked) return@stagePhotoReplacement
@@ -485,8 +517,14 @@ class MainActivity : ComponentActivity() {
             ) { uri ->
                 if (uri != null) coroutineScope.launch {
                     if (submissionLocked) return@launch
+                    val callbackRevision = imageProcessingRevision
                     try {
-                        requestPhoto(copyImageToDraft(uri))
+                        val copied = copyImageToDraft(uri)
+                        if (submissionLocked || callbackRevision != imageProcessingRevision) {
+                            copied.delete()
+                            return@launch
+                        }
+                        requestPhoto(copied)
                     } catch (_: Exception) {
                         ocrError = "Could not open that photo. Choose another image or type the sentence."
                     }
@@ -497,8 +535,14 @@ class MainActivity : ComponentActivity() {
             ) { uri ->
                 if (uri != null) coroutineScope.launch {
                     if (submissionLocked) return@launch
+                    val callbackRevision = imageProcessingRevision
                     try {
-                        attachImage(copyImageToDraft(uri))
+                        val copied = copyImageToDraft(uri)
+                        if (submissionLocked || callbackRevision != imageProcessingRevision) {
+                            copied.delete()
+                            return@launch
+                        }
+                        attachImage(copied)
                     } catch (_: Exception) {
                         imageError = "Could not open that photo. Choose another image."
                     }
@@ -506,6 +550,7 @@ class MainActivity : ComponentActivity() {
             }
 
             androidx.compose.runtime.LaunchedEffect(Unit) {
+                if (submissionLocked) return@LaunchedEffect
                 val source = noteImagePath?.let(::File)?.takeIf(File::isFile)
                 if (source != null && processedImagePath?.let(::File)?.isFile != true) {
                     processImage(source, photoSourcePath == source.absolutePath && editor.text.isBlank())
@@ -515,10 +560,13 @@ class MainActivity : ComponentActivity() {
             }
 
             androidx.compose.runtime.LaunchedEffect(dictionaryRetry) {
+                if (submissionLocked) return@LaunchedEffect
                 dictionaryLoading = true
                 dictionaryError = null
                 try {
-                    dictionaryInfo = withContext(Dispatchers.IO) { offlineDictionary.prepare() }
+                    val preparedDictionary = withContext(Dispatchers.IO) { offlineDictionary.prepare() }
+                    if (submissionLocked) return@LaunchedEffect
+                    dictionaryInfo = preparedDictionary
                     dictionaryReady = true
                 } catch (cancelled: CancellationException) {
                     throw cancelled
@@ -531,11 +579,13 @@ class MainActivity : ComponentActivity() {
             }
 
             androidx.compose.runtime.LaunchedEffect(dictionaryRetry) {
+                if (submissionLocked) return@LaunchedEffect
                 analyzerLoading = true
                 analyzerError = null
                 analyzerProgress = 0f
                 try {
                     withContext(Dispatchers.IO) { offlineAnalyzer.prepare { analyzerProgress = it } }
+                    if (submissionLocked) return@LaunchedEffect
                     analyzerReady = true
                 } catch (cancelled: CancellationException) {
                     throw cancelled
@@ -551,6 +601,7 @@ class MainActivity : ComponentActivity() {
             }
 
             androidx.compose.runtime.LaunchedEffect(analyzerReady, editor.text, analysisRetry) {
+                if (submissionLocked) return@LaunchedEffect
                 if (!analyzerReady || editor.text.isBlank()) {
                     japaneseTokens = emptyList()
                     tokenizationLoading = false
@@ -560,7 +611,9 @@ class MainActivity : ComponentActivity() {
                 tokenizationError = null
                 try {
                     kotlinx.coroutines.delay(150)
-                    japaneseTokens = withContext(Dispatchers.IO) { offlineAnalyzer.analyze(editor.text) }
+                    val analyzed = withContext(Dispatchers.IO) { offlineAnalyzer.analyze(editor.text) }
+                    if (submissionLocked) return@LaunchedEffect
+                    japaneseTokens = analyzed
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
@@ -575,6 +628,7 @@ class MainActivity : ComponentActivity() {
                 target, editor.text, japaneseTokens, vocabulary, vocabularyReading,
                 dependentFieldsStale,
             ) {
+                if (submissionLocked) return@LaunchedEffect
                 val targetSpan = target ?: return@LaunchedEffect
                 val targetText = targetSpan.textIn(editor.text) ?: return@LaunchedEffect
                 val resolved = resolveAnalyzedLemma(japaneseTokens, targetSpan) ?: return@LaunchedEffect
@@ -589,6 +643,7 @@ class MainActivity : ComponentActivity() {
             androidx.compose.runtime.LaunchedEffect(
                 target, editor.text, japaneseTokens, sentenceReading,
             ) {
+                if (submissionLocked) return@LaunchedEffect
                 val targetSpan = target ?: return@LaunchedEffect
                 val targetText = targetSpan.textIn(editor.text) ?: return@LaunchedEffect
                 if (sentenceReading.isNotBlank() || !containsKanji(targetText)) {
@@ -601,8 +656,9 @@ class MainActivity : ComponentActivity() {
 
             androidx.compose.runtime.LaunchedEffect(
                 route, autoOpenReview, target, editor.text, selectedDictionaryEntry, selectedDictionaryEntryId,
-                vocabulary, vocabularyReading, dictionarySearchLoading,
+                vocabulary, vocabularyReading, dictionarySearchLoading, submissionLocked,
             ) {
+                if (submissionLocked) return@LaunchedEffect
                 val entry = selectedDictionaryEntry
                 if (route == AppRoute.Target && autoOpenReview && target?.textIn(editor.text) != null &&
                     entry != null && entry.id == selectedDictionaryEntryId && entry.expression == vocabulary &&
@@ -614,6 +670,7 @@ class MainActivity : ComponentActivity() {
             }
 
             androidx.compose.runtime.LaunchedEffect(dictionaryReady, target, editor.text, dictionaryRetry, japaneseTokens) {
+                if (submissionLocked) return@LaunchedEffect
                 val targetText = target?.textIn(editor.text)
                 if (!dictionaryReady || targetText == null) {
                     dictionaryEntries = emptyList()
@@ -625,6 +682,7 @@ class MainActivity : ComponentActivity() {
                         val entries = withContext(Dispatchers.IO) {
                             offlineDictionary.search(targetText, analyzedTarget?.expression)
                         }
+                        if (submissionLocked) return@LaunchedEffect
                         dictionaryEntries = entries
                         dictionaryError = null
                         dictionaryHasMore = entries.size == 50
@@ -679,8 +737,9 @@ class MainActivity : ComponentActivity() {
 
             androidx.compose.runtime.LaunchedEffect(
                 dictionaryReady, selectedDictionaryEntryId, selectedDictionaryEntry, vocabulary, vocabularyReading,
-                target, editor.text, dictionaryRetry,
+                target, editor.text, dictionaryRetry, submissionLocked,
             ) {
+                if (submissionLocked) return@LaunchedEffect
                 val entry = selectedDictionaryEntry?.takeIf {
                     it.id == selectedDictionaryEntryId && it.expression == vocabulary && it.reading == vocabularyReading
                 }
@@ -697,6 +756,7 @@ class MainActivity : ComponentActivity() {
                     val candidates = withContext(Dispatchers.IO) {
                         offlineDictionary.pitch(entry.expression, entry.reading)
                     }.filter { PitchAccent.create(entry.reading, it.accent) != null }
+                    if (submissionLocked) return@LaunchedEffect
                     pitchCandidates = candidates
                     if (candidates.isNotEmpty()) {
                         pitchAccentText = candidates.first().accent.toString()
@@ -735,8 +795,13 @@ class MainActivity : ComponentActivity() {
                 }
                 val uri = sharedImage.value ?: return@LaunchedEffect
                 captureMode = "Photo"
+                val callbackRevision = imageProcessingRevision
                 try {
                     val source = withContext(Dispatchers.IO) { copyImageToDraft(uri) }
+                    if (submissionLocked || callbackRevision != imageProcessingRevision || sharedImage.value != uri) {
+                        source.delete()
+                        return@LaunchedEffect
+                    }
                     if (sharedImage.value != uri) {
                         source.delete()
                         return@LaunchedEffect
@@ -1018,9 +1083,15 @@ class MainActivity : ComponentActivity() {
                                     pendingSharedImageUri = null
                                     clearDraft()
                                     captureMode = "Photo"
+                                    val callbackRevision = imageProcessingRevision
                                     coroutineScope.launch {
                                         try {
-                                            requestPhoto(copyImageToDraft(uri))
+                                            val copied = copyImageToDraft(uri)
+                                            if (submissionLocked || callbackRevision != imageProcessingRevision) {
+                                                copied.delete()
+                                                return@launch
+                                            }
+                                            requestPhoto(copied)
                                         } catch (_: Exception) {
                                             ocrError = "Could not open that photo. Choose another image or type the sentence."
                                         }
@@ -1053,6 +1124,7 @@ class MainActivity : ComponentActivity() {
                         Text("Choose the text region", style = MaterialTheme.typography.titleLarge)
                         ocrChoices.forEachIndexed { index, block ->
                             OutlinedButton(
+                                enabled = !submissionLocked,
                                 onClick = {
                                     showOcrSheet = false
                                     ocrChoices = emptyList()
@@ -1065,12 +1137,14 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            val processedImageCanonicalPath = processedImagePath?.let { path ->
-                runCatching { File(path).canonicalPath }.getOrNull()
+            val processedImageIdentity = processedImagePath?.let { path ->
+                runCatching { File(path).takeIf(File::isFile)?.let(MediaIdentity::fromFile) }.getOrNull()
             }
             val imageReceiptFilename = if (
-                processedImageCanonicalPath != null &&
-                preferences.getString(IMAGE_RECEIPT_PATH, null) == processedImageCanonicalPath
+                processedImageIdentity != null &&
+                preferences.getString(IMAGE_RECEIPT_PATH, null) == processedImageIdentity.path &&
+                preferences.getLong(IMAGE_RECEIPT_SIZE, -1L) == processedImageIdentity.size &&
+                preferences.getLong(IMAGE_RECEIPT_MODIFIED, -1L) == processedImageIdentity.modified
             ) {
                 preferences.getString(IMAGE_RECEIPT_FILENAME, null)
                     ?.let(AnkiMediaImporter::sanitizeFilename)
@@ -1102,7 +1176,8 @@ class MainActivity : ComponentActivity() {
             val modelMapping = selectedModel?.let {
                 AnkiFieldContract.mapToModelOrder(it.fields, fieldsByName.orEmpty())
             }
-            val restoredFrozenForUi = if (frozenRetryReady) readFrozenSubmission(preferences) else null
+            val frozenForDisplay = if (submissionLocked) readFrozenSubmission(preferences) else null
+            val restoredFrozenForUi = if (frozenRetryReady) frozenForDisplay else null
             val frozenDestinationReady = !frozenRetryReady || (
                 restoredFrozenForUi != null && selectedModel?.id == restoredFrozenForUi.modelId &&
                     selectedDeck?.id == restoredFrozenForUi.deckId && selectedModel.fields == restoredFrozenForUi.modelFields
@@ -1111,15 +1186,56 @@ class MainActivity : ComponentActivity() {
             val effectiveMapping = selectedModel?.let {
                 AnkiFieldContract.mapToModelOrder(it.fields, effectiveFrozenFields ?: fieldsByName.orEmpty())
             }
+            val frozenReceiptReady = restoredFrozenForUi?.let { snapshot ->
+                snapshot.importedFilename == null || (
+                    snapshot.media != null &&
+                        preferences.getString(IMAGE_RECEIPT_PATH, null) == snapshot.media.path &&
+                        preferences.getLong(IMAGE_RECEIPT_SIZE, -1L) == snapshot.media.size &&
+                        preferences.getLong(IMAGE_RECEIPT_MODIFIED, -1L) == snapshot.media.modified &&
+                        preferences.getString(IMAGE_RECEIPT_FILENAME, null) == snapshot.importedFilename &&
+                        (!File(snapshot.media.path).exists() ||
+                            runCatching { MediaIdentity.fromFile(File(snapshot.media.path)) == snapshot.media }.getOrDefault(false))
+                )
+            } ?: true
+            val sendImageReady = if (frozenRetryReady) frozenReceiptReady else imageReady
             val canSend = apiPermissionGranted && selectedModel != null && selectedDeck != null &&
                 (if (frozenRetryReady) effectiveFrozenFields != null else fieldsByName != null && validationErrors.isEmpty()) &&
-                effectiveMapping?.isValid == true && imageReady && frozenDestinationReady &&
+                effectiveMapping?.isValid == true && sendImageReady && frozenDestinationReady &&
+                (frozenRetryReady || (!dictionaryLoading && !dictionarySearchLoading)) &&
                 !setupLoading && setupError == null && !recoveryRequired && !isSubmitting
+
+            androidx.compose.runtime.LaunchedEffect(submissionLocked) {
+                if (!submissionLocked) return@LaunchedEffect
+                val snapshot = readFrozenSubmission(preferences) ?: return@LaunchedEffect
+                if (frozenSnapshotAppliedRevision == snapshot.revision) return@LaunchedEffect
+                editor = TextFieldValue(snapshot.sentence, selection = TextRange(snapshot.sentence.length))
+                target = TargetSpan(snapshot.targetStart, snapshot.targetEnd)
+                    .takeIf { it.textIn(snapshot.sentence) != null }
+                vocabulary = snapshot.lemma
+                vocabularyReading = snapshot.vocabularyReading
+                sentenceReading = snapshot.sentenceReading
+                definition = snapshot.definition
+                translation = snapshot.translation
+                notes = snapshot.notes
+                tags = snapshot.tags.joinToString(" ")
+                pitchAccentText = snapshot.pitchAccentText
+                if (snapshot.media != null && File(snapshot.media.path).isFile) {
+                    noteImagePath = snapshot.media.path
+                    processedImagePath = snapshot.media.path
+                }
+                selectedModelId = snapshot.modelId
+                selectedDeckId = snapshot.deckId
+                selectedDictionaryEntry = null
+                selectedDictionaryEntryId = null
+                route = AppRoute.Review
+                frozenSnapshotAppliedRevision = snapshot.revision
+            }
 
             androidx.compose.runtime.LaunchedEffect(
                 recoveryRequired, apiPermissionGranted, noteTypes, decks, setupReload,
+                selectedModelId, selectedDeckId, setupLoading, setupLoadedSuccessfully, setupError,
             ) {
-                if (!recoveryRequired || !apiPermissionGranted) return@LaunchedEffect
+                if (!recoveryRequired || !apiPermissionGranted || setupLoading || !setupLoadedSuccessfully || setupError != null) return@LaunchedEffect
                 val phase = recoveryPhase ?: SubmissionPhase.fromPersisted(
                     preferences.getString(SubmissionRecoveryKeys.STATUS, null),
                 ) ?: return@LaunchedEffect
@@ -1129,10 +1245,17 @@ class MainActivity : ComponentActivity() {
                     recoveryMessage = "The frozen Send record is incomplete. Keep this draft and resolve the outcome manually before retrying."
                     return@LaunchedEffect
                 }
+                if (selectedModelId != snapshot.modelId) {
+                    selectedModelId = snapshot.modelId
+                    return@LaunchedEffect
+                }
+                if (selectedDeckId != snapshot.deckId) {
+                    selectedDeckId = snapshot.deckId
+                    return@LaunchedEffect
+                }
                 val model = noteTypes.firstOrNull { it.id == snapshot.modelId }
-                val deck = decks.firstOrNull { it.id == snapshot.deckId }
-                if (model == null || deck == null) {
-                    recoveryMessage = "The frozen note type or destination deck is unavailable. Confirm the previous outcome before choosing a new destination."
+                if (model == null) {
+                    recoveryMessage = "The frozen note type is unavailable. Confirm the previous outcome before choosing a new destination."
                     return@LaunchedEffect
                 }
                 if (model.fields != snapshot.modelFields) {
@@ -1148,6 +1271,9 @@ class MainActivity : ComponentActivity() {
                     if (duplicate) {
                         recoveryDuplicate = true
                         recoveryMessage = "A matching note exists for the frozen revision. Treat it as complete only after checking AnkiDroid."
+                    } else if (decks.none { it.id == snapshot.deckId }) {
+                        recoveryDuplicate = false
+                        recoveryMessage = "No matching note was found, but the frozen destination deck is unavailable. Confirm the outcome before choosing a new destination."
                     } else {
                         recoveryRequired = false
                         frozenRetryReady = true
@@ -1166,9 +1292,11 @@ class MainActivity : ComponentActivity() {
                     noteTypes = emptyList()
                     decks = emptyList()
                     setupError = null
+                    setupLoadedSuccessfully = false
                     setupLoading = false
                 } else {
                     setupLoading = true
+                    setupLoadedSuccessfully = false
                     setupError = null
                     try {
                         val data = withContext(Dispatchers.IO) {
@@ -1177,9 +1305,11 @@ class MainActivity : ComponentActivity() {
                         }
                         noteTypes = data.first
                         decks = data.second
+                        setupLoadedSuccessfully = true
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
+                        setupLoadedSuccessfully = false
                         setupError = "Could not read note types and decks. Check AnkiDroid API access and retry."
                     } finally {
                         setupLoading = false
@@ -1260,7 +1390,15 @@ class MainActivity : ComponentActivity() {
                     .apply()
             }
 
-            androidx.activity.compose.BackHandler(enabled = submissionLocked) { }
+            androidx.activity.compose.BackHandler(enabled = submissionLocked) {
+                when {
+                    showSettings -> showSettings = false
+                    showSources -> showSources = false
+                    showDictionarySheet -> showDictionarySheet = false
+                    showOcrSheet -> showOcrSheet = false
+                    else -> Unit
+                }
+            }
             MaterialTheme(
                 colorScheme = if (isSystemInDarkTheme()) {
                     darkColorScheme(
@@ -1299,7 +1437,7 @@ class MainActivity : ComponentActivity() {
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         Text("Japanese Anki", style = MaterialTheme.typography.headlineMedium)
-                        if (imagePending && !omitImageForSend) {
+                        if (!frozenRetryReady && imagePending && !omitImageForSend) {
                             Text("Image is still processing; Send will omit it if you continue.", style = MaterialTheme.typography.bodyMedium)
                         }
                         if (imageAttached && !imageProcessing && imageError == null && !imageReady) {
@@ -1312,19 +1450,7 @@ class MainActivity : ComponentActivity() {
                                 if (source?.isFile == true) attachImage(source)
                                 else noteImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                             }) { Text("Retry image") }
-                            TextButton(enabled = !submissionLocked, onClick = {
-                                listOfNotNull(noteImagePath, processedImagePath)
-                                    .distinct().forEach { File(it).delete() }
-                                if (photoSourcePath == noteImagePath) photoSourcePath = null
-                                noteImagePath = null
-                                processedImagePath = null
-                                preferences.edit()
-                                    .remove(IMAGE_RECEIPT_PATH)
-                                    .remove(IMAGE_RECEIPT_FILENAME)
-                                    .commit()
-                                imageProcessing = false
-                                imageError = null
-                            }) { Text("Remove image") }
+                            TextButton(enabled = !submissionLocked, onClick = removeDraftImage) { Text("Remove image") }
                         }
                         if (route == AppRoute.Capture) {
                             Row(
@@ -1377,7 +1503,7 @@ class MainActivity : ComponentActivity() {
                         }
                         if (dictionaryError != null) {
                             Text(dictionaryError!!, style = MaterialTheme.typography.bodyMedium)
-                            TextButton(onClick = { dictionaryRetry++ }) { Text("Retry offline data setup") }
+                            TextButton(enabled = !submissionLocked, onClick = { dictionaryRetry++ }) { Text("Retry offline data setup") }
                         }
                         if (analyzerLoading) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1387,7 +1513,7 @@ class MainActivity : ComponentActivity() {
                         }
                         if (analyzerError != null) {
                             Text(analyzerError!!, style = MaterialTheme.typography.bodyMedium)
-                            TextButton(onClick = { dictionaryRetry++ }) { Text("Retry analyzer setup") }
+                            TextButton(enabled = !submissionLocked, onClick = { dictionaryRetry++ }) { Text("Retry analyzer setup") }
                         }
                         OutlinedTextField(
                             value = editor,
@@ -1602,7 +1728,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
-                        if (route != AppRoute.Review) when {
+                        if (route != AppRoute.Review || submissionLocked) when {
                             !ankiDroidInstalled -> Text(
                                 "AnkiDroid not detected. Install it before setting up export.",
                                 style = MaterialTheme.typography.bodyMedium,
@@ -1663,14 +1789,17 @@ class MainActivity : ComponentActivity() {
                             }
                             else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text("AnkiDroid detected. Grant API permission to continue setup.")
-                                Button(enabled = !submissionLocked, onClick = {
+                                Button(enabled = !isSubmitting, onClick = {
                                     apiPermissionLauncher.launch(ANKIDROID_READ_WRITE_PERMISSION)
                                 }) { Text("Grant AnkiDroid API permission") }
                             }
                         }
                         submitMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                         recoveryMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
-                        if (recoveryRequired && recoveryDuplicate) {
+                        if (recoveryRequired && recoveryPhase == SubmissionPhase.NOTE_INSERTING &&
+                            (!apiPermissionGranted || setupLoading || setupError != null || !setupLoadedSuccessfully)) {
+                            Text("Recovery is held until AnkiDroid setup succeeds; the frozen draft has not been cleared.", style = MaterialTheme.typography.bodyMedium)
+                        } else if (recoveryRequired && recoveryDuplicate) {
                             TextButton(onClick = {
                                 clearPendingSubmission(preferences)
                                 clearDraft()
@@ -1688,7 +1817,7 @@ class MainActivity : ComponentActivity() {
                             }) { Text("Retry image import (may duplicate media)") }
                             TextButton(onClick = {
                                 clearPendingSubmission(preferences)
-                                clearDraft()
+                                removeDraftImage()
                                 recoveryRequired = false
                                 recoveryPhase = null
                                 recoveryMessage = "The interrupted image was discarded; the rest of the draft was kept."
@@ -1701,6 +1830,7 @@ class MainActivity : ComponentActivity() {
                             }) { Text("Resume frozen Send") }
                             TextButton(onClick = {
                                 clearPendingSubmission(preferences)
+                                removeDraftImage()
                                 recoveryRequired = false
                                 recoveryPhase = null
                                 recoveryMessage = "Pending Send cleared after review; configure the destination before retrying."
@@ -1747,7 +1877,7 @@ class MainActivity : ComponentActivity() {
                                 }
                                 val fields = restoredFrozen?.modelFields?.zip(restoredFrozen.orderedFields)?.toMap()
                                     ?: fieldsByName ?: return@Button
-                                val tagSet = AnkiFieldContract.parseTags(tags)
+                                val tagSet = restoredFrozen?.tags ?: AnkiFieldContract.parseTags(tags)
                                 isSubmitting = true
                                 submitMessage = null
                                 coroutineScope.launch {
@@ -1760,8 +1890,13 @@ class MainActivity : ComponentActivity() {
                                             } else {
                                                 val frozen = if (restoredFrozen != null) {
                                                     check(restoredFrozen.importedFilename == null ||
-                                                        (preferences.getString(IMAGE_RECEIPT_PATH, null) == restoredFrozen.media?.path &&
-                                                            preferences.getString(IMAGE_RECEIPT_FILENAME, null) == restoredFrozen.importedFilename)
+                                                        (restoredFrozen.media != null &&
+                                                            preferences.getString(IMAGE_RECEIPT_PATH, null) == restoredFrozen.media.path &&
+                                                            preferences.getLong(IMAGE_RECEIPT_SIZE, -1L) == restoredFrozen.media.size &&
+                                                            preferences.getLong(IMAGE_RECEIPT_MODIFIED, -1L) == restoredFrozen.media.modified &&
+                                                            preferences.getString(IMAGE_RECEIPT_FILENAME, null) == restoredFrozen.importedFilename &&
+                                                            (!File(restoredFrozen.media.path).exists() ||
+                                                                MediaIdentity.fromFile(File(restoredFrozen.media.path)) == restoredFrozen.media))
                                                     ) { "The frozen media receipt is unavailable; resolve the pending Send manually." }
                                                     restoredFrozen
                                                 } else {
@@ -1777,7 +1912,10 @@ class MainActivity : ComponentActivity() {
                                                     }
                                                     val media = processed?.let(MediaIdentity::fromFile)
                                                     val imported = if (includeImage && media != null &&
-                                                        receiptPath == media.path && receiptFilename != null
+                                                        receiptPath == media.path &&
+                                                        preferences.getLong(IMAGE_RECEIPT_SIZE, -1L) == media.size &&
+                                                        preferences.getLong(IMAGE_RECEIPT_MODIFIED, -1L) == media.modified &&
+                                                        receiptFilename != null
                                                     ) receiptFilename else null
                                                     val baseDraft = noteDraft.copy(imageFilename = imported)
                                                     val baseFields = baseDraft.fieldsByName()
@@ -1790,8 +1928,17 @@ class MainActivity : ComponentActivity() {
                                                         deckId = deck.id,
                                                         modelFields = model.fields,
                                                         orderedFields = baseMapping.values,
-                                                        sentence = baseFields.getValue("SentKanji"),
-                                                        lemma = baseFields.getValue("VocabKanji"),
+                                                        sentence = editor.text,
+                                                        lemma = vocabulary,
+                                                        vocabularyReading = vocabularyReading,
+                                                        sentenceReading = sentenceReading,
+                                                        definition = definition,
+                                                        translation = translation,
+                                                        notes = notes,
+                                                        tags = tagSet,
+                                                        pitchAccentText = pitchAccentText,
+                                                        targetStart = target?.start ?: -1,
+                                                        targetEnd = target?.end ?: -1,
                                                         media = media,
                                                         importedFilename = imported,
                                                     )
@@ -1799,6 +1946,8 @@ class MainActivity : ComponentActivity() {
                                                         check(preferences.edit().putFrozenSubmission(snapshot, SubmissionPhase.MEDIA_IMPORTING)
                                                             .remove(IMAGE_RECEIPT_PATH)
                                                             .remove(IMAGE_RECEIPT_FILENAME)
+                                                            .remove(IMAGE_RECEIPT_SIZE)
+                                                            .remove(IMAGE_RECEIPT_MODIFIED)
                                                             .commit()) { "Could not save media import recovery state." }
                                                         val actualFilename = gateway.importProcessedImage(
                                                             processed ?: error("The selected image is not ready for import."),
@@ -1817,6 +1966,8 @@ class MainActivity : ComponentActivity() {
                                                         check(preferences.edit().putFrozenSubmission(snapshot, SubmissionPhase.MEDIA_IMPORTED)
                                                             .putString(IMAGE_RECEIPT_PATH, media.path)
                                                             .putString(IMAGE_RECEIPT_FILENAME, actualFilename)
+                                                            .putLong(IMAGE_RECEIPT_SIZE, media.size)
+                                                            .putLong(IMAGE_RECEIPT_MODIFIED, media.modified)
                                                             .commit()) { "Could not save the imported media receipt." }
                                                     } else {
                                                         check(preferences.edit().putFrozenSubmission(
@@ -1826,6 +1977,8 @@ class MainActivity : ComponentActivity() {
                                                             if (imported != null && media != null) {
                                                                 putString(IMAGE_RECEIPT_PATH, media.path)
                                                                     .putString(IMAGE_RECEIPT_FILENAME, imported)
+                                                                    .putLong(IMAGE_RECEIPT_SIZE, media.size)
+                                                                    .putLong(IMAGE_RECEIPT_MODIFIED, media.modified)
                                                             }
                                                         }.commit()) { "Could not save submission recovery data." }
                                                     }
@@ -1864,6 +2017,10 @@ class MainActivity : ComponentActivity() {
                                             }
                                             "created" -> {
                                                 clearDraft()
+                                                frozenRetryReady = false
+                                                recoveryRequired = false
+                                                recoveryPhase = null
+                                                recoveryDuplicate = false
                                                 submitMessage = "Note added to ${deck.name}."
                                             }
                                             "uncertain" -> {
@@ -1908,7 +2065,7 @@ class MainActivity : ComponentActivity() {
                             Text(
                                 when {
                                     isSubmitting -> "Sending…"
-                                    imagePending && !omitImageForSend -> "Send without image"
+                                    !frozenRetryReady && imagePending && !omitImageForSend -> "Send without image"
                                     else -> "Send to AnkiDroid"
                                 },
                             )
@@ -2045,6 +2202,7 @@ private fun clearPersistedDraft(preferences: SharedPreferences, draftDirectory: 
         preferences.getString("photo_source_path", null),
         preferences.getString("note_image_path", null),
         preferences.getString("processed_image_path", null),
+        preferences.getString("pending_replacement_image_path", null),
     )
     ownedPaths.distinct().forEach { path ->
         val file = File(path)
@@ -2057,11 +2215,15 @@ private fun clearPersistedDraft(preferences: SharedPreferences, draftDirectory: 
         "definition_manual", "definition_manual_stale", "translation", "notes", "tags", "submission_status", "pending_model_id", "pending_deck_id",
         "pending_sentence", "pending_lemma", "dictionary_entry_id", "dictionary_sense_indices",
         "sentence_furigana_corrections", "photo_source_path", "note_image_path", "processed_image_path",
-        IMAGE_RECEIPT_PATH, IMAGE_RECEIPT_FILENAME,
+        IMAGE_RECEIPT_PATH, IMAGE_RECEIPT_FILENAME, IMAGE_RECEIPT_SIZE, IMAGE_RECEIPT_MODIFIED,
+        "pending_replacement_image_path",
         SubmissionRecoveryKeys.REVISION, SubmissionRecoveryKeys.MODEL_FIELDS,
-        SubmissionRecoveryKeys.ORDERED_FIELDS, SubmissionRecoveryKeys.MEDIA_PATH,
-        SubmissionRecoveryKeys.MEDIA_SIZE, SubmissionRecoveryKeys.MEDIA_MODIFIED,
-        SubmissionRecoveryKeys.IMPORTED_FILENAME,
+        SubmissionRecoveryKeys.ORDERED_FIELDS, SubmissionRecoveryKeys.VOCABULARY_READING,
+        SubmissionRecoveryKeys.SENTENCE_READING, SubmissionRecoveryKeys.DEFINITION,
+        SubmissionRecoveryKeys.TRANSLATION, SubmissionRecoveryKeys.NOTES, SubmissionRecoveryKeys.TAGS,
+        SubmissionRecoveryKeys.PITCH, SubmissionRecoveryKeys.TARGET_START, SubmissionRecoveryKeys.TARGET_END,
+        SubmissionRecoveryKeys.MEDIA_PATH, SubmissionRecoveryKeys.MEDIA_SIZE,
+        SubmissionRecoveryKeys.MEDIA_MODIFIED, SubmissionRecoveryKeys.IMPORTED_FILENAME,
     )
     preferences.edit().also { editor -> draftKeys.forEach(editor::remove) }.commit()
 }

@@ -36,6 +36,15 @@ internal data class FrozenSubmission(
     val orderedFields: List<String>,
     val sentence: String,
     val lemma: String,
+    val vocabularyReading: String,
+    val sentenceReading: String,
+    val definition: String,
+    val translation: String,
+    val notes: String,
+    val tags: Set<String>,
+    val pitchAccentText: String,
+    val targetStart: Int,
+    val targetEnd: Int,
     val media: MediaIdentity?,
     val importedFilename: String?,
 )
@@ -49,6 +58,15 @@ internal object SubmissionRecoveryKeys {
     const val ORDERED_FIELDS = "pending_ordered_fields"
     const val SENTENCE = "pending_sentence"
     const val LEMMA = "pending_lemma"
+    const val VOCABULARY_READING = "pending_vocabulary_reading"
+    const val SENTENCE_READING = "pending_sentence_reading"
+    const val DEFINITION = "pending_definition"
+    const val TRANSLATION = "pending_translation"
+    const val NOTES = "pending_notes"
+    const val TAGS = "pending_tags"
+    const val PITCH = "pending_pitch"
+    const val TARGET_START = "pending_target_start"
+    const val TARGET_END = "pending_target_end"
     const val MEDIA_PATH = "pending_media_path"
     const val MEDIA_SIZE = "pending_media_size"
     const val MEDIA_MODIFIED = "pending_media_modified"
@@ -96,6 +114,15 @@ internal fun readFrozenSubmission(preferences: SharedPreferences): FrozenSubmiss
         orderedFields = orderedFields,
         sentence = sentence,
         lemma = lemma,
+        vocabularyReading = preferences.getString(SubmissionRecoveryKeys.VOCABULARY_READING, "").orEmpty(),
+        sentenceReading = preferences.getString(SubmissionRecoveryKeys.SENTENCE_READING, "").orEmpty(),
+        definition = preferences.getString(SubmissionRecoveryKeys.DEFINITION, "").orEmpty(),
+        translation = preferences.getString(SubmissionRecoveryKeys.TRANSLATION, "").orEmpty(),
+        notes = preferences.getString(SubmissionRecoveryKeys.NOTES, "").orEmpty(),
+        tags = decodeSubmissionValues(preferences.getString(SubmissionRecoveryKeys.TAGS, null)).orEmpty().toSet(),
+        pitchAccentText = preferences.getString(SubmissionRecoveryKeys.PITCH, "").orEmpty(),
+        targetStart = preferences.getInt(SubmissionRecoveryKeys.TARGET_START, -1),
+        targetEnd = preferences.getInt(SubmissionRecoveryKeys.TARGET_END, -1),
         media = media,
         importedFilename = preferences.getString(SubmissionRecoveryKeys.IMPORTED_FILENAME, null),
     )
@@ -113,6 +140,15 @@ internal fun SharedPreferences.Editor.putFrozenSubmission(
         .putString(SubmissionRecoveryKeys.ORDERED_FIELDS, encodeSubmissionValues(snapshot.orderedFields))
         .putString(SubmissionRecoveryKeys.SENTENCE, snapshot.sentence)
         .putString(SubmissionRecoveryKeys.LEMMA, snapshot.lemma)
+        .putString(SubmissionRecoveryKeys.VOCABULARY_READING, snapshot.vocabularyReading)
+        .putString(SubmissionRecoveryKeys.SENTENCE_READING, snapshot.sentenceReading)
+        .putString(SubmissionRecoveryKeys.DEFINITION, snapshot.definition)
+        .putString(SubmissionRecoveryKeys.TRANSLATION, snapshot.translation)
+        .putString(SubmissionRecoveryKeys.NOTES, snapshot.notes)
+        .putString(SubmissionRecoveryKeys.TAGS, encodeSubmissionValues(snapshot.tags.toList().sorted()))
+        .putString(SubmissionRecoveryKeys.PITCH, snapshot.pitchAccentText)
+        .putInt(SubmissionRecoveryKeys.TARGET_START, snapshot.targetStart)
+        .putInt(SubmissionRecoveryKeys.TARGET_END, snapshot.targetEnd)
     if (snapshot.media == null) {
         remove(SubmissionRecoveryKeys.MEDIA_PATH)
             .remove(SubmissionRecoveryKeys.MEDIA_SIZE)
@@ -137,6 +173,15 @@ internal fun clearFrozenSubmission(preferences: SharedPreferences) {
         .remove(SubmissionRecoveryKeys.ORDERED_FIELDS)
         .remove(SubmissionRecoveryKeys.SENTENCE)
         .remove(SubmissionRecoveryKeys.LEMMA)
+        .remove(SubmissionRecoveryKeys.VOCABULARY_READING)
+        .remove(SubmissionRecoveryKeys.SENTENCE_READING)
+        .remove(SubmissionRecoveryKeys.DEFINITION)
+        .remove(SubmissionRecoveryKeys.TRANSLATION)
+        .remove(SubmissionRecoveryKeys.NOTES)
+        .remove(SubmissionRecoveryKeys.TAGS)
+        .remove(SubmissionRecoveryKeys.PITCH)
+        .remove(SubmissionRecoveryKeys.TARGET_START)
+        .remove(SubmissionRecoveryKeys.TARGET_END)
         .remove(SubmissionRecoveryKeys.MEDIA_PATH)
         .remove(SubmissionRecoveryKeys.MEDIA_SIZE)
         .remove(SubmissionRecoveryKeys.MEDIA_MODIFIED)

@@ -17,6 +17,14 @@ class SubmissionRecoveryTest {
     }
 
     @Test
+    fun tagsAndMediaIdentityRemainStableForFrozenRetries() {
+        val tags = setOf("JLPT::N4", "mine")
+        assertEquals(tags, decodeSubmissionValues(encodeSubmissionValues(tags.toList().sorted()))?.toSet())
+        val identity = MediaIdentity("/tmp/draft/image.avif", 42L, 7L)
+        assertEquals(identity, identity.copy())
+    }
+
+    @Test
     fun phasesMakeMediaImportUncertaintyDistinctFromNoteInsertion() {
         assertEquals("media_importing", SubmissionPhase.MEDIA_IMPORTING.persisted)
         assertEquals("media_imported", SubmissionPhase.MEDIA_IMPORTED.persisted)
