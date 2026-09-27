@@ -1,0 +1,100 @@
+# UI plan and outstanding visual work
+
+Recorded after reviewing the built UI against `mockup/screens/*` and `mockup/shared.css`.
+
+## Decision (user, this session)
+
+A closer-to-Material-3 look is acceptable. Pixel fidelity to the mockups is **not**
+required, but the **fundamental concepts from `SPEC.md` §4 and the mockups must
+remain the same**. The mockups stay the reference for structure, screen inventory
+and the neutral-ink/pitch-colour rule; Material 3 may supply the visual language
+(type scale, component styling, motion).
+
+## Fundamental concepts that must hold (checklist for review)
+
+1. **Capture screen** is the entry surface: Photo/Type mode switch (Photo default,
+   last used mode remembered) with **Settings only here**, in the same row to the
+   right of the mode control. Photo mode is viewfinder-first (CameraX); Type mode
+   is a plain field with an independent optional image.
+2. **Target screen**: editable sentence and its tokens on one screen; tapping a
+   token (or a contiguous span) selects the target; editing text re-tokenizes.
+   Dictionary ambiguity appears as a sheet **over** this screen with sentence,
+   image, tokens and selection retained beneath it.
+3. **Review card is the ground truth** once a target resolves: one row per field —
+   image, sentence (target highlighted, inline ruby, unresolved kanji dotted and
+   unannotated), vocabulary (ruby + compact pitch diagram), definition,
+   translation, **always-present Notes row**, tags chips with a trailing "+".
+4. **Per-row affordances**: at most a small neutral play icon, a small neutral
+   edit icon, and one neutral **flag** mark that is never the edit control and
+   explains itself on tap in a non-modal, dismissible, row-associated way without
+   obscuring Send or the edit controls.
+5. **One bottom action area** on the card whose state changes in place: Send →
+   disabled spinner "Sending…" → success (then blank capture) / duplicate-blocked
+   (with Open in AnkiDroid) / uncertain-outcome recovery. The submitted card stays
+   frozen and legible throughout, **including an empty Notes row**.
+6. **Editing sheets**: change/remove image, Edit word (token reselection plus pitch
+   alternatives in the full-scale diagram with kana), definition (sense checkboxes
+   plus editable text), add tag (AnkiDroid tag list plus create-new). Notes edit
+   inline. Discrete choices autosave; text editors offer Done; Back preserves.
+7. **One neutral ink tone for every interactive control**; the only saturated
+   colours anywhere are the four-way pitch coding. Missing/loading/pending values
+   show a neutral spinner in place of the icon — never a blank or stale gap.
+8. **Settings** is its own screen (note type, deck, Azure key/region/voice/rate,
+   on-device TTS voice, audio cache, sources & licences), reachable only from
+   capture; changing note type/deck invalidates export validation, not the draft.
+9. **Accessibility**: ≥48 dp non-overlapping targets, row-specific TalkBack labels
+   with selected/disabled state, 200% font, portrait and landscape without losing
+   the draft, system-bar/IME insets reserved, 4.5:1 normal-text contrast.
+
+## Mockup design tokens (available if closer fidelity is wanted later)
+
+`mockup/shared.css` carries a complete light/dark token set we are not currently
+adopting wholesale: paper `#F6F3EC`/`#16181B`, ink `#201F1D`/`#ECE8DF`, muted
+`#6B6558`/`#B8B2A6`, rule `#DAD4C6`/`#6C7176`, screen `#FFFFFF`/`#1D2024`, field
+`#FBFAF6`/`#22262B`, accent (墨) `#2A231C`/`#E4DAC5`, plus the four pitch hues;
+radii 16/18/26 px and pill controls; 48 px icon targets; 14–22 px spacing; a mono
+eyebrow style for small uppercase labels. The mockup screen inventory runs
+01–32 (setup, share intake, capture, target, sheets, review states, settings).
+
+## Current gaps (as of `main` @ 6233f56, phone build installed)
+
+- Capture screen exists but is Material-styled; Photo mode still opens the system
+  picker, not a CameraX viewfinder; Settings is an `AlertDialog`, not a screen.
+- Review card exists (rows, ruby, target highlight, compact pitch, Notes, tags)
+  but **has never been seen on a device**; row edit affordances all route back to
+  the target screen instead of dedicated sheets; tags come from a text field, not
+  AnkiDroid's tag list; play icons are placeholders (`"not available yet"`).
+- Audio and translation seams are implemented and reviewed but **not wired** into
+  the card; no local-fallback translation flag yet; A57 Speech-vs-Translator check
+  not called from Settings.
+- Submission states live in the form around the card rather than in the card's own
+  bottom action area.
+- No accessibility/responsive pass yet (48 dp audit, TalkBack, 200% font,
+  landscape, insets).
+- Mockup screens 08, 11, 12, 16, 21–26 (sheets and error states) are not built;
+  27–32 (settings) are not built.
+
+## Plan for the next UI wave
+
+One writer owns `MainActivity.kt` + `ui/*` at a time; stages commit separately.
+
+1. **Theme + tokens**: single neutral ink scheme for light/dark, typography scale,
+   shapes; audit for stray chroma (pitch-only rule). Verify both themes on the
+   emulator with measured contrast.
+2. **Review card structure**: rows, flags, dividers/density, the bottom action
+   area state machine, frozen-card behaviour including empty Notes.
+3. **Edit sheets**: image, Edit word (+ pitch picker), definition, tags; Notes
+   inline.
+4. **Wire enrichment**: audio play/pending/failed states from `AudioSourceChain`,
+   translation with the local-fallback flag and manual-edit preservation, A57
+   settings validation.
+5. **Capture/target/settings surfaces**: mode chips, CameraX viewfinder, OCR
+   ambiguity overlay, draft-replace prompt, Settings screen.
+6. **Accessibility pass** plus device verification: drive the emulator through
+   share → target → card → send states, capture dark/light screenshots, and compare
+   structure against `mockup/screens/*` (structure, not pixels).
+
+Verification for every stage: unit tests for extractable logic, emulator
+single-session run (`nix run .#emulator-wrapper -- session <apk> <out-prefix>`),
+screenshots kept with the handoff. Phone checks remain for camera, real TTS
+voices and TalkBack behaviour.
