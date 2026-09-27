@@ -10,6 +10,15 @@ val unidicRuntimeArchive = providers.environmentVariable("UNIDIC_RUNTIME_ARCHIVE
     ?: error("Build inside the Nix development shell to provide pinned UniDic data")
 val mecabSourceDir = providers.environmentVariable("MECAB_SOURCE_DIR").orNull
     ?: error("Build inside the Nix development shell to provide pinned MeCab source")
+val tessdataJpn = providers.environmentVariable("TESSDATA_JPN").orNull
+    ?: error("Build inside the Nix development shell to provide pinned Japanese OCR data")
+val tessdataJpnVert = providers.environmentVariable("TESSDATA_JPN_VERT").orNull
+    ?: error("Build inside the Nix development shell to provide pinned vertical Japanese OCR data")
+val packageTessdata = tasks.register<Copy>("packageTessdata") {
+    from(tessdataJpn) { rename { "jpn.traineddata" } }
+    from(tessdataJpnVert) { rename { "jpn_vert.traineddata" } }
+    into(layout.buildDirectory.dir("generated/tessdataAssets/tessdata"))
+}
 val packageUniDic = tasks.register<Copy>("packageUniDicRuntime") {
     from(unidicRuntimeArchive)
     into(layout.buildDirectory.dir("generated/unidicAssets"))
@@ -40,6 +49,7 @@ android {
     }
 
     sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/unidicAssets"))
+    sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/tessdataAssets"))
 
     buildTypes {
         release {
@@ -63,9 +73,10 @@ android {
     }
 }
 
-tasks.named("preBuild").configure { dependsOn(packageUniDic) }
+tasks.named("preBuild").configure { dependsOn(packageUniDic, packageTessdata) }
 
 dependencies {
+    implementation(libs.tesseract4android)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.ui)
