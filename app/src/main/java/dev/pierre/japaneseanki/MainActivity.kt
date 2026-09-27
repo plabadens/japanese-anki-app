@@ -60,6 +60,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import dev.pierre.japaneseanki.ui.ReviewCard
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -353,6 +354,8 @@ class MainActivity : ComponentActivity() {
             var recoveryDuplicate by remember { mutableStateOf(false) }
             var knownNoteId by remember { mutableStateOf<Long?>(null) }
             var publishedFrozenSnapshot by remember { mutableStateOf<FrozenSubmission?>(null) }
+            var completedSubmission by remember { mutableStateOf<FrozenSubmission?>(null) }
+            var pitchInfoExpanded by remember { mutableStateOf(false) }
             var clearDraftAfterUnlock by remember { mutableStateOf(false) }
             var frozenSnapshotAppliedRevision by remember { mutableStateOf(-1L) }
             var draftGeneration by remember { mutableStateOf(0L) }
@@ -1199,14 +1202,6 @@ class MainActivity : ComponentActivity() {
                     },
                 )
             }
-            if (isSubmitting) {
-                AlertDialog(
-                    onDismissRequest = {},
-                    title = { Text("Sending to AnkiDroid") },
-                    text = { Text("The note snapshot is frozen until AnkiDroid confirms the result.") },
-                    confirmButton = {},
-                )
-            }
             if (!submissionLocked && showReplace && (incoming != null || pendingPhotoFile != null || pendingSharedImageUri != null)) {
                 val replacingSentence = incoming != null
                 AlertDialog(
@@ -1345,7 +1340,7 @@ class MainActivity : ComponentActivity() {
             val modelMapping = selectedModel?.let {
                 AnkiFieldContract.mapToModelOrder(it.fields, fieldsByName.orEmpty())
             }
-            val frozenForDisplay = if (submissionLocked) {
+            val frozenForDisplay = completedSubmission ?: if (submissionLocked) {
                 publishedFrozenSnapshot ?: readFrozenSubmission(preferences)
             } else null
             val restoredFrozenForUi = if (frozenRetryReady) frozenForDisplay else null
@@ -1592,8 +1587,9 @@ class MainActivity : ComponentActivity() {
             androidx.compose.runtime.LaunchedEffect(
                 editor.text, editor.selection, target, vocabulary, vocabularyReading, pitchAccentText, definition,
                 sentenceReading, definitionManuallyEdited, dependentFieldsStale, translation, notes, tags, selectedModelId, selectedDeckId,
-                selectedDictionaryEntryId, selectedSenseIndices,
+                selectedDictionaryEntryId, selectedSenseIndices, completedSubmission,
             ) {
+                if (completedSubmission != null) return@LaunchedEffect
                 preferences.edit()
                     .putString("sentence", editor.text)
                     .putInt("selection_start", editor.selection.min)
@@ -1626,7 +1622,7 @@ class MainActivity : ComponentActivity() {
                 if (browserIntent.resolveActivity(packageManager) != null) {
                     startActivity(browserIntent)
                 } else {
-                    submitMessage = "AnkiDroid browser is unavailable. Note $noteId in ${selectedDeck?.name ?: "the selected deck"} matches '${displayVocabulary}' in the submitted sentence '${displaySentence}'. Keep this draft for manual resolution."
+                    submitMessage = "AnkiDroid browser is unavailable. Note $noteId matches '${displayVocabulary}' in the submitted sentence '${displaySentence}'. Keep this draft for manual resolution."
                 }
             }
 
@@ -1679,6 +1675,34 @@ class MainActivity : ComponentActivity() {
                             .padding(20.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
+                        val reviewTarget = displayTarget?.takeIf { it.textIn(displaySentence) != null }
+                        if (visibleRoute == AppRoute.Review && reviewTarget != null) {
+                            ReviewCard(
+                                sentence = displaySentence,
+                                target = reviewTarget,
+                                sentenceReading = frozenForDisplay?.sentenceReading ?: sentenceReading,
+                                furigana = if (frozenForDisplay == null) sentenceFurigana else emptyList(),
+                                vocabulary = displayVocabulary,
+                                vocabularyReading = displayVocabularyReading,
+                                pitch = displayPitch,
+                                definition = displayDefinition,
+                                translation = displayTranslation,
+                                notes = displayNotes,
+                                tags = displayTags.split(Regex("\\s+")).filter(String::isNotBlank),
+                                imagePath = frozenForDisplay?.media?.path ?: noteImagePath,
+                                imageStatus = when {
+                                    imageProcessing -> "Preparing image…"
+                                    imageError != null -> imageError
+                                    imageAttached -> "Image is not available"
+                                    else -> null
+                                },
+                                pitchHasAlternatives = pitchCandidates.size > 1,
+                                pitchInfoExpanded = pitchInfoExpanded,
+                                onTogglePitchInfo = { pitchInfoExpanded = !pitchInfoExpanded },
+                                onEdit = { autoOpenReview = false; route = AppRoute.Target },
+                                onAddTag = { autoOpenReview = false; route = AppRoute.Target },
+                            )
+                        } else {
                         Text("Japanese Anki", style = MaterialTheme.typography.headlineMedium)
                         if (!frozenRetryReady && imagePending && !omitImageForSend) {
                             Text("Image is still processing; Send will omit it if you continue.", style = MaterialTheme.typography.bodyMedium)
@@ -1733,7 +1757,12 @@ class MainActivity : ComponentActivity() {
                                 ) { Text("Settings") }
                             }
                         } else if (visibleRoute == AppRoute.Target) {
-                            TextButton(enabled = !submissionLocked, onClick = { route = AppRoute.Capture }) { Text("Back to capture") }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                TextButton(enabled = !submissionLocked, onClick = { route = AppRoute.Capture }) { Text("Back to capture") }
+                                if (displayTarget?.textIn(displaySentence) != null) {
+                                    TextButton(enabled = !submissionLocked, onClick = { route = AppRoute.Review }) { Text("Back to review") }
+                                }
+                            }
                         }
                         if (visibleRoute == AppRoute.Review) {
                             Text("Review card", style = MaterialTheme.typography.titleLarge)
@@ -1984,7 +2013,8 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
-                        if (visibleRoute != AppRoute.Review || submissionLocked) when {
+                        }
+                        if (visibleRoute != AppRoute.Review) when {
                             !ankiDroidInstalled -> Text(
                                 "AnkiDroid not detected. Install it before setting up export.",
                                 style = MaterialTheme.typography.bodyMedium,
@@ -2130,12 +2160,12 @@ class MainActivity : ComponentActivity() {
                                 recoveryMessage = "Pending Send held for manual resolution; configure the destination before retrying."
                             }) { Text("I checked; configure destination") }
                         }
-                        if (route != AppRoute.Review) Text(
-                            "Draft autosaves on this device. Dictionary lookup is not connected yet.",
+                        if (visibleRoute != AppRoute.Review) Text(
+                            "Draft saved on this device.",
                             style = MaterialTheme.typography.bodyMedium,
                         )
                         Button(
-                            enabled = canSend,
+                            enabled = completedSubmission == null && submitMessage?.startsWith("Blocked:") != true && canSend,
                             onClick = {
                                 val model = selectedModel ?: return@Button
                                 val deck = selectedDeck ?: return@Button
@@ -2341,16 +2371,17 @@ class MainActivity : ComponentActivity() {
                                                 recoveryPhase = null
                                                 knownNoteId = outcome.noteId
                                                 if (restoredFrozen != null) clearPendingSubmission(preferences)
-                                                submitMessage = "Blocked: a note with this sentence and vocabulary lemma already exists in the selected note type and deck."
+                                                submitMessage = "Blocked: a note with this sentence and vocabulary lemma already exists."
                                             }
                                             "created" -> {
-                                                clearDraftAfterUnlock = true
+                                                completedSubmission = publishedFrozenSnapshot ?: readFrozenSubmission(preferences)
+                                                clearDraftAfterUnlock = false
                                                 frozenRetryReady = false
                                                 recoveryRequired = false
                                                 recoveryPhase = null
                                                 recoveryDuplicate = false
                                                 knownNoteId = null
-                                                submitMessage = "Note added to ${deck.name}."
+                                                submitMessage = "Note sent to AnkiDroid."
                                             }
                                             else -> {
                                                 frozenRetryReady = false
@@ -2394,13 +2425,23 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                         ) {
-                            Text(
-                                when {
-                                    isSubmitting -> "Sending…"
-                                    !frozenRetryReady && imagePending && !omitImageForSend -> "Send without image"
-                                    else -> "Send to AnkiDroid"
-                                },
-                            )
+                            if (isSubmitting) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                    Text("Sending…")
+                                }
+                            } else {
+                                Text(
+                                    when {
+                                        completedSubmission != null -> "Sent to AnkiDroid"
+                                        submitMessage?.startsWith("Blocked:") == true -> "Already in AnkiDroid"
+                                        recoveryRequired -> "Pending Send needs review"
+                                        submitMessage != null -> "Retry Send"
+                                        !frozenRetryReady && imagePending && !omitImageForSend -> "Send without image"
+                                        else -> "Send to AnkiDroid"
+                                    },
+                                )
+                            }
                         }
                     }
                 }
