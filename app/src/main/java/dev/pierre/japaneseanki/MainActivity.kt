@@ -195,7 +195,9 @@ class MainActivity : ComponentActivity() {
             var notes by remember { mutableStateOf(preferences.getString("notes", "").orEmpty()) }
             var defaultTags by remember { mutableStateOf(settings.getString("default_tags", "").orEmpty()) }
             var tags by remember { mutableStateOf(preferences.getString("tags", defaultTags).orEmpty()) }
-            var showReplace by remember { mutableStateOf(false) }
+            val restoredPendingPhoto = preferences.getString("pending_replacement_image_path", null)
+                ?.let(::File)?.takeIf(File::isFile)
+            var showReplace by remember { mutableStateOf(restoredPendingPhoto != null) }
             var showSources by remember { mutableStateOf(false) }
             var showSettings by remember { mutableStateOf(false) }
             var settingsDefaultTags by remember { mutableStateOf("") }
@@ -278,7 +280,7 @@ class MainActivity : ComponentActivity() {
             var ocrError by remember { mutableStateOf<String?>(null) }
             var ocrChoices by remember { mutableStateOf<List<OcrBlock>>(emptyList()) }
             var showOcrSheet by remember { mutableStateOf(false) }
-            var pendingPhotoFile by remember { mutableStateOf<File?>(null) }
+            var pendingPhotoFile by remember { mutableStateOf(restoredPendingPhoto) }
             var pendingSharedImageUri by remember { mutableStateOf<Uri?>(null) }
             var cameraPermissionGranted by remember {
                 mutableStateOf(checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
@@ -434,11 +436,17 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+            val stagePhotoReplacement: (File) -> Unit = { file ->
+                check(
+                    preferences.edit().putString("pending_replacement_image_path", file.absolutePath).commit(),
+                ) { "Could not save the pending photo replacement." }
+                pendingPhotoFile = file
+                pendingSharedImageUri = null
+                showReplace = true
+            }
             val requestPhoto: (File) -> Unit = { file ->
                 if (editor.text.isNotBlank()) {
-                    pendingPhotoFile = file
-                    pendingSharedImageUri = null
-                    showReplace = true
+                    stagePhotoReplacement(file)
                 } else {
                     processImage(file, true)
                 }
@@ -698,15 +706,10 @@ class MainActivity : ComponentActivity() {
                         source.delete()
                         return@LaunchedEffect
                     }
+                    if (editor.text.isNotBlank()) stagePhotoReplacement(source)
                     clearConsumedImageIntent(uri)
                     sharedImage.value = null
-                    if (editor.text.isNotBlank()) {
-                        pendingPhotoFile = source
-                        pendingSharedImageUri = null
-                        showReplace = true
-                    } else {
-                        requestPhoto(source)
-                    }
+                    if (editor.text.isBlank()) requestPhoto(source)
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
@@ -949,6 +952,7 @@ class MainActivity : ComponentActivity() {
                         sharedText.value = null
                         pendingPhotoFile?.delete()
                         pendingPhotoFile = null
+                        preferences.edit().remove("pending_replacement_image_path").commit()
                         pendingSharedImageUri = null
                     },
                     title = { Text("Replace current draft?") },
@@ -969,6 +973,7 @@ class MainActivity : ComponentActivity() {
                                 pendingPhotoFile != null -> {
                                     val file = pendingPhotoFile!!
                                     pendingPhotoFile = null
+                                    preferences.edit().remove("pending_replacement_image_path").commit()
                                     clearDraft()
                                     captureMode = "Photo"
                                     processImage(file, true)
@@ -996,6 +1001,7 @@ class MainActivity : ComponentActivity() {
                             sharedText.value = null
                             pendingPhotoFile?.delete()
                             pendingPhotoFile = null
+                            preferences.edit().remove("pending_replacement_image_path").commit()
                             pendingSharedImageUri = null
                         }) { Text("Keep draft") }
                     },
