@@ -102,6 +102,12 @@ internal fun ankiBrowserUri(noteId: Long): Uri = Uri.parse(ankiBrowserUriText(no
 internal fun ankiBrowserIntent(noteId: Long): Intent =
     Intent(Intent.ACTION_VIEW, ankiBrowserUri(noteId)).setPackage("com.ichi2.anki")
 
+internal fun draftCallbackIsCurrent(
+    callbackGeneration: Long,
+    currentGeneration: Long,
+    submissionLocked: Boolean,
+): Boolean = !submissionLocked && callbackGeneration == currentGeneration
+
 internal fun intentPayloadMatches(
     currentText: String?,
     currentImage: String?,
@@ -337,6 +343,8 @@ class MainActivity : ComponentActivity() {
             }
             var recoveryDuplicate by remember { mutableStateOf(false) }
             var knownNoteId by remember { mutableStateOf<Long?>(null) }
+            var publishedFrozenSnapshot by remember { mutableStateOf<FrozenSubmission?>(null) }
+            var clearDraftAfterUnlock by remember { mutableStateOf(false) }
             var frozenSnapshotAppliedRevision by remember { mutableStateOf(-1L) }
             var draftGeneration by remember { mutableStateOf(0L) }
             var omitImageForSend by remember { mutableStateOf(false) }
@@ -347,8 +355,11 @@ class MainActivity : ComponentActivity() {
             val currentSubmissionLocked = rememberUpdatedState(submissionLocked)
             val currentDraftGeneration = rememberUpdatedState(draftGeneration)
             val currentSetupReload = rememberUpdatedState(setupReload)
-            fun asyncDraftIsCurrent(generation: Long): Boolean =
-                !currentSubmissionLocked.value && currentDraftGeneration.value == generation
+            fun asyncDraftIsCurrent(generation: Long): Boolean = draftCallbackIsCurrent(
+                generation,
+                currentDraftGeneration.value,
+                currentSubmissionLocked.value,
+            )
             val hasManualDefinition = definitionManuallyEdited && definition.isNotBlank()
             val clearDraft = {
                 listOfNotNull(photoSourcePath, noteImagePath, processedImagePath).distinct().forEach { File(it).delete() }
@@ -358,6 +369,7 @@ class MainActivity : ComponentActivity() {
                 noteImagePath = null
                 processedImagePath = null
                 clearPersistedDraft(preferences, File(filesDir, "draft"))
+                publishedFrozenSnapshot = null
                 frozenSnapshotAppliedRevision = -1L
                 draftGeneration++
                 frozenRetryReady = false
@@ -373,8 +385,12 @@ class MainActivity : ComponentActivity() {
                 ocrError = null
                 ocrChoices = emptyList()
                 showOcrSheet = false
-                japaneseTokens = emptyList()
+                dictionaryLoading = false
+                dictionarySearchLoading = false
+                analyzerLoading = false
                 tokenizationLoading = false
+                pitchLookupLoading = false
+                japaneseTokens = emptyList()
                 tokenizationError = null
                 target = null
                 vocabulary = ""
@@ -392,6 +408,29 @@ class MainActivity : ComponentActivity() {
                 selectedDictionaryEntryId = null
                 selectedSenseIndices = emptySet()
             }
+            val discardSharePayload = {
+                val rawText = textFromIntent(intent)
+                val rawImage = imageFromIntent(intent)
+                val expectedText = rawText ?: sharedText.value
+                val expectedImage = rawImage ?: sharedImage.value ?: pendingSharedImageUri
+                if (clearConsumedShareIntent(expectedText, expectedImage) || (rawText == null && rawImage == null)) {
+                    sharedText.value = null
+                    sharedImage.value = null
+                    pendingSharedImageUri = null
+                    draftGeneration++
+                    imageProcessingRevision++
+                }
+            }
+
+            androidx.compose.runtime.LaunchedEffect(
+                isSubmitting, recoveryRequired, frozenRetryReady, clearDraftAfterUnlock,
+            ) {
+                if (clearDraftAfterUnlock && !isSubmitting && !recoveryRequired && !frozenRetryReady) {
+                    clearDraftAfterUnlock = false
+                    clearDraft()
+                }
+            }
+
             val selectTarget: (TargetSpan?) -> Unit = selectTarget@{ selected ->
                 if (currentSubmissionLocked.value) return@selectTarget
                 val previousTarget = target
@@ -593,7 +632,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            androidx.compose.runtime.LaunchedEffect(Unit) {
+            androidx.compose.runtime.LaunchedEffect(Unit, submissionLocked) {
                 if (submissionLocked) return@LaunchedEffect
                 val source = noteImagePath?.let(::File)?.takeIf(File::isFile)
                 if (source != null && processedImagePath?.let(::File)?.isFile != true) {
@@ -603,7 +642,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            androidx.compose.runtime.LaunchedEffect(dictionaryRetry) {
+            androidx.compose.runtime.LaunchedEffect(dictionaryRetry, submissionLocked) {
                 if (currentSubmissionLocked.value) return@LaunchedEffect
                 val callbackGeneration = draftGeneration
                 dictionaryLoading = true
@@ -625,7 +664,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            androidx.compose.runtime.LaunchedEffect(dictionaryRetry) {
+            androidx.compose.runtime.LaunchedEffect(dictionaryRetry, submissionLocked) {
                 if (currentSubmissionLocked.value) return@LaunchedEffect
                 val callbackGeneration = draftGeneration
                 analyzerLoading = true
@@ -724,7 +763,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            androidx.compose.runtime.LaunchedEffect(dictionaryReady, target, editor.text, dictionaryRetry, japaneseTokens) {
+            androidx.compose.runtime.LaunchedEffect(dictionaryReady, target, editor.text, dictionaryRetry, japaneseTokens, submissionLocked) {
                 if (currentSubmissionLocked.value) return@LaunchedEffect
                 val callbackGeneration = draftGeneration
                 val targetText = target?.textIn(editor.text)
@@ -1128,7 +1167,7 @@ class MainActivity : ComponentActivity() {
                 val replacingSentence = incoming != null
                 AlertDialog(
                     onDismissRequest = {
-                        clearConsumedShareIntent(expectedText = incoming, expectedImage = pendingSharedImageUri)
+                        discardSharePayload()
                         showReplace = false
                         sharedText.value = null
                         pendingPhotoFile?.delete()
@@ -1188,7 +1227,7 @@ class MainActivity : ComponentActivity() {
                     },
                     dismissButton = {
                         TextButton(onClick = {
-                            clearConsumedShareIntent(expectedText = incoming, expectedImage = pendingSharedImageUri)
+                            discardSharePayload()
                             showReplace = false
                             sharedText.value = null
                             pendingPhotoFile?.delete()
@@ -1262,7 +1301,9 @@ class MainActivity : ComponentActivity() {
             val modelMapping = selectedModel?.let {
                 AnkiFieldContract.mapToModelOrder(it.fields, fieldsByName.orEmpty())
             }
-            val frozenForDisplay = if (submissionLocked) readFrozenSubmission(preferences) else null
+            val frozenForDisplay = if (submissionLocked) {
+                publishedFrozenSnapshot ?: readFrozenSubmission(preferences)
+            } else null
             val restoredFrozenForUi = if (frozenRetryReady) frozenForDisplay else null
             val displaySentence = frozenForDisplay?.sentence ?: editor.text
             val displayTarget = frozenForDisplay?.let { snapshot ->
@@ -1304,9 +1345,9 @@ class MainActivity : ComponentActivity() {
                 (frozenRetryReady || (!dictionaryLoading && !dictionarySearchLoading)) &&
                 setupLoadedSuccessfully && !setupLoading && setupError == null && !recoveryRequired && !isSubmitting
 
-            androidx.compose.runtime.LaunchedEffect(submissionLocked) {
+            androidx.compose.runtime.LaunchedEffect(submissionLocked, publishedFrozenSnapshot) {
                 if (!submissionLocked) return@LaunchedEffect
-                val snapshot = readFrozenSubmission(preferences) ?: return@LaunchedEffect
+                val snapshot = publishedFrozenSnapshot ?: readFrozenSubmission(preferences) ?: return@LaunchedEffect
                 if (frozenSnapshotAppliedRevision == snapshot.revision) return@LaunchedEffect
                 editor = TextFieldValue(snapshot.sentence, selection = TextRange(snapshot.sentence.length))
                 target = TargetSpan(snapshot.targetStart, snapshot.targetEnd)
@@ -1386,7 +1427,10 @@ class MainActivity : ComponentActivity() {
                         } else {
                             check(preferences.edit().putString(SubmissionRecoveryKeys.STATUS, SubmissionPhase.DESTINATION_VERIFIED.persisted).commit())
                             check(preferences.edit().putString(SubmissionRecoveryKeys.STATUS, "done").commit())
-                            clearDraft()
+                            recoveryRequired = false
+                            recoveryPhase = null
+                            frozenRetryReady = false
+                            clearDraftAfterUnlock = true
                             knownNoteId = null
                             submitMessage = "Note ${noteId} recovered in the selected deck."
                         }
@@ -1674,6 +1718,7 @@ class MainActivity : ComponentActivity() {
                             readOnly = submissionLocked,
                             onValueChange = { updated ->
                                 if (updated.text != editor.text) {
+                                    draftGeneration++
                                     if (hasManualDefinition) dependentFieldsStale = true
                                     selectTarget(null)
                                     japaneseTokens = emptyList()
@@ -1971,7 +2016,7 @@ class MainActivity : ComponentActivity() {
                         } else if (recoveryRequired && recoveryDuplicate) {
                             TextButton(onClick = {
                                 clearPendingSubmission(preferences)
-                                clearDraft()
+                                clearDraftAfterUnlock = true
                                 recoveryRequired = false
                                 recoveryPhase = null
                                 recoveryDuplicate = false
@@ -2057,11 +2102,49 @@ class MainActivity : ComponentActivity() {
                                 val fields = restoredFrozen?.modelFields?.zip(restoredFrozen.orderedFields)?.toMap()
                                     ?: fieldsByName ?: return@Button
                                 val tagSet = restoredFrozen?.tags ?: AnkiFieldContract.parseTags(tags)
+                                publishedFrozenSnapshot = restoredFrozen ?: modelMapping?.takeIf { it.isValid }?.let { mapping ->
+                                    FrozenSubmission(
+                                        revision = nextSubmissionRevision(
+                                            preferences.getLong(SubmissionRecoveryKeys.REVISION_SEQUENCE, 0L),
+                                            preferences.getLong(SubmissionRecoveryKeys.REVISION, 0L),
+                                        ),
+                                        modelId = model.id,
+                                        deckId = deck.id,
+                                        modelFields = model.fields,
+                                        orderedFields = mapping.values,
+                                        sentence = editor.text,
+                                        lemma = vocabulary,
+                                        vocabularyReading = vocabularyReading,
+                                        sentenceReading = sentenceReading,
+                                        definition = definition,
+                                        translation = translation,
+                                        notes = notes,
+                                        tags = tagSet,
+                                        pitchAccentText = pitchAccentText,
+                                        targetStart = target?.start ?: -1,
+                                        targetEnd = target?.end ?: -1,
+                                        media = processedImageIdentity,
+                                        importedFilename = imageReceiptFilename,
+                                        noteId = null,
+                                    )
+                                }
                                 draftGeneration++
+                                dictionaryLoading = false
+                                dictionarySearchLoading = false
+                                analyzerLoading = false
+                                tokenizationLoading = false
+                                pitchLookupLoading = false
+                                ocrLoading = false
+                                analyzerProgress = 0f
                                 isSubmitting = true
                                 knownNoteId = null
                                 submitMessage = null
                                 coroutineScope.launch {
+                                    suspend fun publishFrozen(snapshot: FrozenSubmission) {
+                                        withContext(Dispatchers.Main.immediate) {
+                                            publishedFrozenSnapshot = snapshot
+                                        }
+                                    }
                                     try {
                                         val outcome = withContext(Dispatchers.IO) {
                                             val gateway = AnkiDroidGateway(contentResolver, applicationContext)
@@ -2139,6 +2222,7 @@ class MainActivity : ComponentActivity() {
                                                             .remove(IMAGE_RECEIPT_SIZE)
                                                             .remove(IMAGE_RECEIPT_MODIFIED)
                                                             .commit()) { "Could not save media import recovery state." }
+                                                        publishFrozen(snapshot)
                                                         val actualFilename = gateway.importProcessedImage(
                                                             processed ?: error("The selected image is not ready for import."),
                                                         )
@@ -2159,6 +2243,7 @@ class MainActivity : ComponentActivity() {
                                                             .putLong(IMAGE_RECEIPT_SIZE, media.size)
                                                             .putLong(IMAGE_RECEIPT_MODIFIED, media.modified)
                                                             .commit()) { "Could not save the imported media receipt." }
+                                                        publishFrozen(snapshot)
                                                     } else {
                                                         check(preferences.edit().putFrozenSubmission(
                                                             snapshot,
@@ -2171,6 +2256,7 @@ class MainActivity : ComponentActivity() {
                                                                     .putLong(IMAGE_RECEIPT_MODIFIED, media.modified)
                                                             }
                                                         }.commit()) { "Could not save submission recovery data." }
+                                                        publishFrozen(snapshot)
                                                     }
                                                     snapshot
                                                 }
@@ -2180,6 +2266,7 @@ class MainActivity : ComponentActivity() {
                                                 check(preferences.edit().putFrozenSubmission(frozen, SubmissionPhase.NOTE_INSERTING).commit()) {
                                                     "Could not save frozen submission data."
                                                 }
+                                                publishFrozen(frozen)
                                                 // A process death between provider insert and this commit leaves NOTE_INSERTING without an ID;
                                                 // recovery must reconcile explicitly rather than blindly inserting again.
                                                 val insertedNoteId = gateway.insertNote(model, frozenMapping.values, tagSet)
@@ -2188,6 +2275,7 @@ class MainActivity : ComponentActivity() {
                                                     insertedSnapshot,
                                                     SubmissionPhase.NOTE_INSERTED,
                                                 ).commit()) { "Could not persist the inserted note ID before deck assignment." }
+                                                publishFrozen(insertedSnapshot)
                                                 check(gateway.ensureNoteInDeck(insertedNoteId, deck.id)) {
                                                     "The inserted note no longer has cards; resolve the saved note ID before retrying."
                                                 }
@@ -2209,7 +2297,7 @@ class MainActivity : ComponentActivity() {
                                                 submitMessage = "Blocked: a note with this sentence and vocabulary lemma already exists in the selected note type and deck."
                                             }
                                             "created" -> {
-                                                clearDraft()
+                                                clearDraftAfterUnlock = true
                                                 frozenRetryReady = false
                                                 recoveryRequired = false
                                                 recoveryPhase = null

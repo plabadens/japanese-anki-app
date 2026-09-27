@@ -25,6 +25,13 @@ class SubmissionRecoveryTest {
     }
 
     @Test
+    fun lateDraftCallbacksAreRejectedAfterSentenceEditOrSendLock() {
+        assertEquals(true, draftCallbackIsCurrent(4L, 4L, false))
+        assertEquals(false, draftCallbackIsCurrent(4L, 5L, false))
+        assertEquals(false, draftCallbackIsCurrent(4L, 4L, true))
+    }
+
+    @Test
     fun consumedIntentPayloadMustStillMatchBeforeClearingRawIntent() {
         assertEquals(true, intentPayloadMatches("text", "content://old", "text", "content://old"))
         assertEquals(false, intentPayloadMatches("new text", "content://new", "text", "content://old"))
