@@ -50,9 +50,9 @@ class AnkiDroidGateway(private val resolver: ContentResolver) {
         destinationDeckId: Long?,
         fieldsByName: Map<String, String>,
     ): Boolean {
-        val sentenceIndex = model.fields.indexOf("SentKanji")
-        val lemmaIndex = model.fields.indexOf("VocabKanji")
-        require(sentenceIndex >= 0 && lemmaIndex >= 0) { "Selected note type is missing required fields." }
+        require("SentKanji" in model.fields && "VocabKanji" in model.fields) {
+            "Selected note type is missing required fields."
+        }
         val sentence = fieldsByName["SentKanji"] ?: error("Missing SentKanji value.")
         val lemma = fieldsByName["VocabKanji"] ?: error("Missing VocabKanji value.")
         val duplicateKey = DuplicateKey.fromFields(sentence, lemma)
@@ -74,14 +74,11 @@ class AnkiDroidGateway(private val resolver: ContentResolver) {
             val idColumn = cursor.getColumnIndexOrThrow(NOTE_ID)
             val fieldsColumn = cursor.getColumnIndexOrThrow(NOTE_FIELDS)
             while (cursor.moveToNext()) {
-                val values = cursor.getString(fieldsColumn).orEmpty()
-                    .split(FIELD_SEPARATOR, ignoreCase = false, limit = Int.MAX_VALUE)
-                if (sentenceIndex >= values.size || lemmaIndex >= values.size) {
-                    error("AnkiDroid returned a note with an invalid field list.")
-                }
-                if (!duplicateKey.matches(DuplicateKey.fromFields(values[sentenceIndex], values[lemmaIndex]))) {
-                    continue
-                }
+                val candidateKey = DuplicateKey.fromModelFields(
+                    model.fields,
+                    cursor.getString(fieldsColumn).orEmpty(),
+                )
+                if (!duplicateKey.matches(candidateKey)) continue
                 val noteId = cursor.getLong(idColumn)
                 val cardsUri = Uri.withAppendedPath(
                     Uri.withAppendedPath(NOTES_URI, noteId.toString()),

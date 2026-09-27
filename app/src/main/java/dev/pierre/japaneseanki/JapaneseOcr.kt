@@ -87,7 +87,7 @@ class JapaneseOcr(context: Context) {
                 "Could not initialize Japanese OCR ($language)"
             }
             api.setPageSegMode(TessBaseAPI.PageSegMode.PSM_AUTO)
-            api.setImage(decoded)
+            api.setImage(bitmap)
             val fullText = api.getUTF8Text().orEmpty()
             val iterator = api.resultIterator ?: return OcrCandidate(fullText, emptyList(), 0f)
             val blocks = mutableListOf<OcrBlock>()
@@ -100,11 +100,12 @@ class JapaneseOcr(context: Context) {
                         blocks += OcrBlock(
                             blockText,
                             iterator.confidence(TessBaseAPI.PageIteratorLevel.RIL_BLOCK),
-                            OcrBounds(
-                                (bounds.left * sourceWidth.toFloat() / bitmap.width).toInt(),
-                                (bounds.top * sourceHeight.toFloat() / bitmap.height).toInt(),
-                                (bounds.right * sourceWidth.toFloat() / bitmap.width).toInt(),
-                                (bounds.bottom * sourceHeight.toFloat() / bitmap.height).toInt(),
+                            scaleOcrBounds(
+                                OcrBounds(bounds.left, bounds.top, bounds.right, bounds.bottom),
+                                bitmap.width,
+                                bitmap.height,
+                                sourceWidth,
+                                sourceHeight,
                             ),
                         )
                     }

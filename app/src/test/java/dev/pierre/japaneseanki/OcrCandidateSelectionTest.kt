@@ -17,4 +17,11 @@ class OcrCandidateSelectionTest {
         assertEquals(recognized, chooseOcrCandidate(recognized, OcrCandidate(" ", emptyList(), 100f)))
         assertEquals(OcrBounds(10, 20, 110, 60), recognized.blocks.single().bounds)
     }
+
+    @Test fun scalesBoundsIntoSourcePixelSpaceWithoutChangingBlockIdentity() {
+        assertEquals(
+            OcrBounds(20, 10, 220, 60),
+            scaleOcrBounds(OcrBounds(10, 5, 110, 30), 200, 100, 400, 200),
+        )
+    }
 }

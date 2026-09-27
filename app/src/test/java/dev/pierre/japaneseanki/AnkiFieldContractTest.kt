@@ -2,6 +2,7 @@ package dev.pierre.japaneseanki
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -32,6 +33,25 @@ class AnkiFieldContractTest {
                 emptyMap(),
             ).isValid,
         )
+    }
+
+    @Test fun duplicateKeyUsesReorderedModelFieldsAndPreservesTrailingEmptyFields() {
+        val modelFields = listOf("Extra", "VocabKanji", "SentKanji", "SentEng", "fm_seen_words")
+        val serializedFields = "unused\u001f犬\u001f<b>猫</b>と鳥\u001ftranslation\u001f"
+        val key = DuplicateKey.fromModelFields(modelFields, serializedFields)
+
+        assertTrue(key.matches(DuplicateKey.fromFields("猫と鳥", "犬")))
+        assertFalse(key.matches(DuplicateKey.fromFields("猫と鳥", "猫")))
+        assertEquals("", serializedFields.split('\u001f', limit = Int.MAX_VALUE).last())
+    }
+
+    @Test fun duplicateKeyFailsClosedForMissingFieldsOrTruncatedSerializedFields() {
+        assertThrows(IllegalArgumentException::class.java) {
+            DuplicateKey.fromModelFields(listOf("SentKanji"), "sentence")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            DuplicateKey.fromModelFields(listOf("SentKanji", "VocabKanji"), "sentence")
+        }
     }
 
     @Test fun duplicateKeyIgnoresOnlyGeneratedMarkupAndOuterWhitespace() {

@@ -695,6 +695,9 @@ class MainActivity : ComponentActivity() {
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
                             Text("New-note defaults", style = MaterialTheme.typography.titleMedium)
+                            TextButton(onClick = { showSettings = false; showSources = true }) {
+                                Text("Sources & licenses")
+                            }
                             OutlinedTextField(
                                 value = settingsDefaultTags,
                                 onValueChange = { settingsDefaultTags = it },
@@ -1159,13 +1162,44 @@ class MainActivity : ComponentActivity() {
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         Text("Japanese Anki", style = MaterialTheme.typography.headlineMedium)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            TextButton(onClick = {
-                                settingsLoading = true
-                                showSettings = true
-                                if (!textToSpeechReady.value && textToSpeech == null) initializeTextToSpeech()
-                            }) { Text("Settings") }
-                            TextButton(onClick = { showSources = true }) { Text("Sources & licenses") }
+                        if (route == AppRoute.Capture) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                if (captureMode == "Photo") {
+                                    Button(onClick = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
+                                        Text("Photo")
+                                    }
+                                    OutlinedButton(onClick = {
+                                        captureMode = "Type"
+                                        preferences.edit().putString("capture_mode", captureMode).apply()
+                                    }) { Text("Type") }
+                                } else {
+                                    OutlinedButton(onClick = {
+                                        captureMode = "Photo"
+                                        preferences.edit().putString("capture_mode", captureMode).apply()
+                                    }) { Text("Photo") }
+                                    Button(onClick = {
+                                        captureMode = "Type"
+                                        preferences.edit().putString("capture_mode", captureMode).apply()
+                                    }) { Text("Type") }
+                                }
+                                TextButton(
+                                    modifier = Modifier.weight(1f),
+                                    onClick = {
+                                        settingsLoading = true
+                                        showSettings = true
+                                        if (!textToSpeechReady.value && textToSpeech == null) initializeTextToSpeech()
+                                    },
+                                ) { Text("Settings") }
+                            }
+                        } else if (route == AppRoute.Target) {
+                            TextButton(onClick = { route = AppRoute.Capture }) { Text("Back to capture") }
+                        }
+                        if (route == AppRoute.Review) {
+                            Text("Review card", style = MaterialTheme.typography.titleLarge)
                         }
                         if (dictionaryLoading) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1382,7 +1416,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
-                        when {
+                        if (route != AppRoute.Review) when {
                             !ankiDroidInstalled -> Text(
                                 "AnkiDroid not detected. Install it before setting up export.",
                                 style = MaterialTheme.typography.bodyMedium,
@@ -1466,7 +1500,7 @@ class MainActivity : ComponentActivity() {
                         } else if (recoveryRequired && recoveryMessage?.startsWith("Could not verify") == true) {
                             TextButton(onClick = { setupReload++ }) { Text("Retry pending-send check") }
                         }
-                        Text(
+                        if (route != AppRoute.Review) Text(
                             "Draft autosaves on this device. Dictionary lookup is not connected yet.",
                             style = MaterialTheme.typography.bodyMedium,
                         )

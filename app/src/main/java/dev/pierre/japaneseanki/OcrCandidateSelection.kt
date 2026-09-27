@@ -21,3 +21,20 @@ internal fun chooseOcrCandidate(horizontal: OcrCandidate, vertical: OcrCandidate
 internal fun meanBlockConfidence(blocks: List<OcrBlock>): Float =
     if (blocks.isEmpty()) 0f else blocks.sumOf { it.confidence.toDouble() }.toFloat() / blocks.size
 
+/** Converts recognizer bounds to the orientation-corrected source image's pixel space. */
+internal fun scaleOcrBounds(
+    bounds: OcrBounds,
+    decodedWidth: Int,
+    decodedHeight: Int,
+    sourceWidth: Int,
+    sourceHeight: Int,
+): OcrBounds {
+    require(decodedWidth > 0 && decodedHeight > 0 && sourceWidth > 0 && sourceHeight > 0)
+    return OcrBounds(
+        (bounds.left * sourceWidth.toDouble() / decodedWidth).toInt(),
+        (bounds.top * sourceHeight.toDouble() / decodedHeight).toInt(),
+        (bounds.right * sourceWidth.toDouble() / decodedWidth).toInt(),
+        (bounds.bottom * sourceHeight.toDouble() / decodedHeight).toInt(),
+    )
+}
+

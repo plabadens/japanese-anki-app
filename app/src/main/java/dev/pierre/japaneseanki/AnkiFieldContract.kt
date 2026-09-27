@@ -54,6 +54,20 @@ class DuplicateKey private constructor(val sentence: String, val lemma: String) 
         sentence == other.sentence && lemma == other.lemma
 
     companion object {
+        /** Select the duplicate fields using the selected model's actual field order. */
+        fun fromModelFields(modelFields: List<String>, serializedNoteFields: String): DuplicateKey {
+            val sentenceIndex = modelFields.indexOf("SentKanji")
+            val lemmaIndex = modelFields.indexOf("VocabKanji")
+            require(sentenceIndex >= 0 && lemmaIndex >= 0) {
+                "Selected note type is missing required duplicate fields."
+            }
+            val values = serializedNoteFields.split('\u001f', ignoreCase = false, limit = Int.MAX_VALUE)
+            require(sentenceIndex < values.size && lemmaIndex < values.size) {
+                "AnkiDroid returned a note with an invalid field list."
+            }
+            return fromFields(values[sentenceIndex], values[lemmaIndex])
+        }
+
         /** Remove only app-generated highlight markup and HTML escaping. */
         fun fromFields(serializedSentence: String, vocabularyLemma: String): DuplicateKey =
             DuplicateKey(

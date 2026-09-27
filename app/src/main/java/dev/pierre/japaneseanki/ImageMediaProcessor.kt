@@ -26,8 +26,10 @@ object ImageMediaProcessor {
     suspend fun process(source: File, destination: File, crop: ImageCrop? = null): ProcessedImage =
         withContext(Dispatchers.IO) {
             require(source.isFile) { "Image file does not exist" }
-            destination.parentFile?.mkdirs()
-            val temporary = File(destination.parentFile, "${destination.nameWithoutExtension}.tmp.avif")
+            require(source.canonicalFile != destination.canonicalFile) { "Source and destination must differ" }
+            val parent = destination.absoluteFile.parentFile ?: error("Image destination has no parent directory")
+            check(parent.isDirectory || parent.mkdirs()) { "Could not create image destination directory" }
+            val temporary = File.createTempFile("image-", ".tmp.avif", parent).apply { delete() }
             var bitmap: Bitmap? = null
             try {
                 val decoded = ImageDecoder.decodeBitmap(ImageDecoder.createSource(source)) { decoder, info, _ ->
