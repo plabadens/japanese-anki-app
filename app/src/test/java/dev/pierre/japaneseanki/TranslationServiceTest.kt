@@ -90,6 +90,7 @@ class TranslationServiceTest {
         val message = (result as TranslationResult.Failed).message
         val logs = stdout.toString(Charsets.UTF_8) + stderr.toString(Charsets.UTF_8)
         assertFalse(message.contains("very-secret-key"))
+        assertFalse(message.contains("private"))
         assertFalse(logs.contains("very-secret-key"))
         assertFalse(logs.contains("private sentence"))
     }
