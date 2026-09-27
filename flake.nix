@@ -47,7 +47,36 @@
         includeEmulator = false;
         includeSystemImages = false;
       };
+      emulatorSdk = androidEnv.composeAndroidPackages {
+        platformVersions = [ "35" ];
+        systemImageTypes = [ "google_apis" ];
+        abiVersions = [ "x86_64" ];
+        includeEmulator = true;
+        includeSystemImages = true;
+        includeNDK = false;
+      };
       sdkRoot = "${android.androidsdk}/libexec/android-sdk";
+      emulatorSdkRoot = "${emulatorSdk.androidsdk}/libexec/android-sdk";
+      emulatorPackage = androidEnv.emulateApp {
+        name = "japanese-anki-emulator";
+        platformVersion = "35";
+        abiVersion = "x86_64";
+        systemImageType = "google_apis";
+        sdkExtraArgs = {
+          includeEmulator = true;
+          includeSystemImages = true;
+          includeNDK = false;
+        };
+      };
+      emulatorWrapper = pkgs.writeShellApplication {
+        name = "japanese-anki-emulator";
+        runtimeInputs = [ pkgs.coreutils pkgs.gnugrep pkgs.gnused ];
+        text = builtins.readFile ./scripts/emulator.sh;
+        runtimeEnv = {
+          ANDROID_SDK_ROOT = emulatorSdkRoot;
+          ADB_SERVER_SOCKET = "localfilesystem:/home/pierre/Development/japanese-anki-app/.tmp-nix/adb.sock";
+        };
+      };
 
       mkAndroidApk = { apkPath, outputName, task }:
         pkgs.stdenv.mkDerivation (finalAttrs: {
@@ -123,6 +152,8 @@
         default = releaseApk;
         apk = releaseApk;
         debugApk = debugApk;
+        emulator = emulatorPackage;
+        emulator-wrapper = emulatorWrapper;
       };
 
       checks.${system}.core = coreTests;

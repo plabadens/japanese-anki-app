@@ -27,9 +27,30 @@ adb install -r result/japanese-anki-debug.apk
 
 The direct Gradle output is also available at `app/build/outputs/apk/debug/app-debug.apk` after `assembleDebug`.
 
-## Emulator
+## Android emulator (Nix, API 35 x86_64)
 
-No Android emulator MCP server is connected or discoverable in this session, and `adb devices -l` reports no attached devices. Emulator provisioning is not yet part of this environment; use a local Android Studio/SDK emulator or a connected phone for device tests.
+The Nix flake provides `.#emulator` using nixpkgs `androidenv.emulateApp` and a separately composed SDK with the API 35 `google_apis` x86_64 image. `.#emulator-wrapper` is the thin project-state/ADB control. First build the image and wrapper (large download on first use), then boot headlessly:
+
+```sh
+nix build .#emulator .#emulator-wrapper
+nix run .#emulator-wrapper -- start
+nix run .#emulator-wrapper -- status
+nix run .#emulator-wrapper -- screenshot .tmp-nix/screenshots/boot.png
+```
+
+The wrapper keeps the AVD, Android user configuration, temporary files, emulator log, and PID under this checkout's `.tmp-nix/`; it uses a separate adb server socket at `/home/pierre/Development/japanese-anki-app/.tmp-nix/adb.sock` so it does not attach to the user's ordinary adb server. `start` waits at most 180 seconds for ADB, then up to 240 seconds for `sys.boot_completed=1` (with a clear timeout error). Stop it with `nix run .#emulator-wrapper -- stop`. Other commands:
+
+```sh
+nix run .#emulator-wrapper -- install app/build/outputs/apk/debug/app-debug.apk
+nix run .#emulator-wrapper -- launch
+nix run .#emulator-wrapper -- share-text 'Japanese sentence to import'
+nix run .#emulator-wrapper -- share-image /path/to/image.png
+nix run .#emulator-wrapper -- logcat -d
+```
+
+Install AnkiDroid only in this emulator by downloading its APK from the official AnkiDroid release/Play distribution and running `nix run .#emulator-wrapper -- install /path/to/AnkiDroid.apk`. The wrapper's ADB endpoint is intentionally isolated; these instructions do not operate on or erase any physical device.
+
+Use this emulator for repeatable UI-state, light/dark theme, Android share-intent, AnkiDroid provider-flow, and screenshot-based checks. Keep camera behavior, real installed TTS voice quality, Audible/audio-quality, and Azure audition checks on the physical phone. This AVD is x86_64; it exercises the x86_64 native ABI, not the physical phone's arm64-v8a ABI. The emulator image is API 35 (Android 15); this pinned nixpkgs lane requests no API 36/37 x86_64 images. Emulator tooling is development/test infrastructure only: it does not change the APK derivation or its reproducibility boundary (`.#apk` / `.#debugApk`).
 
 ## Current implementation
 
