@@ -375,6 +375,13 @@ class MainActivity : ComponentActivity() {
                 if (runOcr) photoSourcePath = file.absolutePath
                 noteImagePath = file.absolutePath
                 processedImagePath = null
+                check(
+                    preferences.edit()
+                        .putString("photo_source_path", photoSourcePath)
+                        .putString("note_image_path", noteImagePath)
+                        .remove("processed_image_path")
+                        .commit(),
+                ) { "Could not save the draft image source." }
                 imageError = null
                 imageProcessing = true
                 val destination = File(filesDir, "draft/${java.util.UUID.randomUUID()}.avif")
@@ -460,6 +467,15 @@ class MainActivity : ComponentActivity() {
                     } catch (_: Exception) {
                         imageError = "Could not open that photo. Choose another image."
                     }
+                }
+            }
+
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                val source = noteImagePath?.let(::File)?.takeIf(File::isFile)
+                if (source != null && processedImagePath?.let(::File)?.isFile != true) {
+                    processImage(source, runOcr = photoSourcePath == source.absolutePath && editor.text.isBlank())
+                } else if (photoSourcePath?.let(::File)?.isFile == true && editor.text.isBlank()) {
+                    processImage(File(photoSourcePath!!), runOcr = true)
                 }
             }
 
@@ -1237,6 +1253,9 @@ class MainActivity : ComponentActivity() {
                                         captureMode = "Type"
                                         preferences.edit().putString("capture_mode", captureMode).apply()
                                     }) { Text("Type") }
+                                    OutlinedButton(onClick = {
+                                        noteImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                    }) { Text(if (noteImagePath == null) "Add image" else "Change image") }
                                 }
                                 TextButton(
                                     modifier = Modifier.weight(1f),
@@ -1289,6 +1308,18 @@ class MainActivity : ComponentActivity() {
                             label = { Text("Japanese sentence") },
                             minLines = 3,
                         )
+                        ocrError?.let { message ->
+                            Text(message, style = MaterialTheme.typography.bodyMedium)
+                            TextButton(onClick = {
+                                val source = photoSourcePath?.let(::File)?.takeIf(File::isFile)
+                                if (source != null) processImage(source, runOcr = true)
+                                else photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            }) { Text("Retry photo text reading") }
+                            TextButton(onClick = {
+                                ocrError = null
+                                route = AppRoute.Target
+                            }) { Text("Edit sentence") }
+                        }
                         if (analyzerReady) {
                             Text("Analyzed tokens — tap one to select it as the target")
                             Row(
