@@ -5,6 +5,8 @@ compose-bom = "2025.09.00"
 activity-compose = "1.11.0"
 junit = "4.13.2"
 tesseract4android = "4.9.0"
+camerax = "1.5.0"
+heifwriter = "1.1.0"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity-compose" }
@@ -15,6 +17,10 @@ androidx-compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling
 androidx-compose-material3 = { module = "androidx.compose.material3:material3" }
 junit = { module = "junit:junit", version.ref = "junit" }
 tesseract4android = { module = "cz.adaptech.tesseract4android:tesseract4android", version.ref = "tesseract4android" }
+androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
+androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
+androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
+androidx-heifwriter = { module = "androidx.heifwriter:heifwriter", version.ref = "heifwriter" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

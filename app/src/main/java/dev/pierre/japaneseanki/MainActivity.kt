@@ -1,5 +1,6 @@
 package dev.pierre.japaneseanki
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -15,7 +16,15 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import androidx.camera.view.LifecycleCameraController
+import androidx.camera.view.PreviewView
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -40,6 +49,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.darkColorScheme
@@ -50,6 +60,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,7 +69,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import java.io.File
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.TextFieldValue
@@ -69,10 +85,12 @@ private const val ANKIDROID_READ_WRITE_PERMISSION =
 
 class MainActivity : ComponentActivity() {
     private val sharedText = mutableStateOf<String?>(null)
+    private val sharedImage = mutableStateOf<Uri?>(null)
     private var ankiDroidInstalled by mutableStateOf(false)
     private var apiPermissionGranted by mutableStateOf(false)
     private lateinit var offlineDictionary: OfflineDictionary
     private lateinit var offlineAnalyzer: OfflineJapaneseAnalyzer
+    private lateinit var japaneseOcr: JapaneseOcr
     private var textToSpeech: TextToSpeech? = null
     private val offlineJapaneseVoices = mutableStateOf<List<Voice>>(emptyList())
     private val textToSpeechEngine = mutableStateOf<String?>(null)
@@ -124,8 +142,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         sharedText.value = textFromIntent(intent)
+        sharedImage.value = imageFromIntent(intent)
         offlineDictionary = sharedDictionary(this)
         offlineAnalyzer = OfflineJapaneseAnalyzer.shared(this)
+        japaneseOcr = JapaneseOcr(this)
         val preferences = getSharedPreferences("draft", MODE_PRIVATE)
         val settings = getSharedPreferences("settings", MODE_PRIVATE)
         if (preferences.getString("submission_status", null) == "done") {
@@ -231,6 +251,38 @@ class MainActivity : ComponentActivity() {
             var selectedDeckId by remember {
                 mutableStateOf(preferences.getLong("deck_id", -1).takeIf { it > 0 })
             }
+            var captureMode by remember { mutableStateOf(preferences.getString("capture_mode", "Photo") ?: "Photo") }
+            var route by remember {
+                mutableStateOf(
+                    AppRoute.entries.firstOrNull { it.name == preferences.getString("route", null) }
+                        ?: when {
+                            editor.text.isBlank() -> AppRoute.Capture
+                            target != null && preferences.getLong("dictionary_entry_id", -1) > 0 -> AppRoute.Review
+                            else -> AppRoute.Target
+                        },
+                )
+            }
+            var autoOpenReview by remember { mutableStateOf(false) }
+            var photoSourcePath by remember {
+                mutableStateOf(preferences.getString("photo_source_path", null)?.takeIf { File(it).isFile })
+            }
+            var noteImagePath by remember {
+                mutableStateOf(preferences.getString("note_image_path", null)?.takeIf { File(it).isFile })
+            }
+            var processedImagePath by remember {
+                mutableStateOf(preferences.getString("processed_image_path", null)?.takeIf { File(it).isFile })
+            }
+            var imageProcessing by remember { mutableStateOf(false) }
+            var imageError by remember { mutableStateOf<String?>(null) }
+            var ocrLoading by remember { mutableStateOf(false) }
+            var ocrError by remember { mutableStateOf<String?>(null) }
+            var ocrChoices by remember { mutableStateOf<List<OcrBlock>>(emptyList()) }
+            var showOcrSheet by remember { mutableStateOf(false) }
+            var pendingPhotoFile by remember { mutableStateOf<File?>(null) }
+            var pendingSharedImageUri by remember { mutableStateOf<Uri?>(null) }
+            var cameraPermissionGranted by remember {
+                mutableStateOf(checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
+            }
             var showModelMenu by remember { mutableStateOf(false) }
             var showDeckMenu by remember { mutableStateOf(false) }
             var isSubmitting by remember { mutableStateOf(false) }
@@ -251,7 +303,18 @@ class MainActivity : ComponentActivity() {
             val incoming = sharedText.value
             val hasManualDefinition = definitionManuallyEdited && definition.isNotBlank()
             val clearDraft = {
+                listOfNotNull(photoSourcePath, noteImagePath, processedImagePath).distinct().forEach { File(it).delete() }
                 editor = TextFieldValue("")
+                route = AppRoute.Capture
+                photoSourcePath = null
+                noteImagePath = null
+                processedImagePath = null
+                imageProcessing = false
+                imageError = null
+                ocrLoading = false
+                ocrError = null
+                ocrChoices = emptyList()
+                showOcrSheet = false
                 japaneseTokens = emptyList()
                 tokenizationLoading = false
                 tokenizationError = null
@@ -266,13 +329,14 @@ class MainActivity : ComponentActivity() {
                 dependentFieldsStale = false
                 translation = ""
                 notes = ""
-                tags = defaultTags
+                tags = settings.getString("last_note_tags", defaultTags).orEmpty()
                 selectedDictionaryEntry = null
                 selectedDictionaryEntryId = null
                 selectedSenseIndices = emptySet()
             }
             val selectTarget: (TargetSpan?) -> Unit = { selected ->
                 val previousTarget = target
+                autoOpenReview = selected != null
                 if (selected != previousTarget) {
                     if (hasManualDefinition) dependentFieldsStale = true
                     selectedDictionaryEntry = null
@@ -292,6 +356,104 @@ class MainActivity : ComponentActivity() {
                     vocabulary = lemma?.expression ?: surface
                     if (lemma != null && vocabularyReading.isBlank() && containsKanji(lemma.expression)) {
                         vocabularyReading = lemma.reading
+                    }
+                }
+            }
+            val applyOcrText: (String) -> Unit = { text ->
+                selectTarget(null)
+                editor = TextFieldValue(text.trim(), selection = TextRange(text.trim().length))
+                japaneseTokens = emptyList()
+                tokenizationError = null
+                tokenizationLoading = analyzerReady
+                ocrError = null
+                route = AppRoute.Target
+            }
+            val processImage: (File, Boolean) -> Unit = { file, runOcr ->
+                val previousFiles = listOfNotNull(photoSourcePath, noteImagePath, processedImagePath)
+                    .distinct().filter { it != file.absolutePath }
+                previousFiles.forEach { File(it).delete() }
+                if (runOcr) photoSourcePath = file.absolutePath
+                noteImagePath = file.absolutePath
+                processedImagePath = null
+                imageError = null
+                imageProcessing = true
+                val destination = File(filesDir, "draft/${file.nameWithoutExtension}.avif")
+                coroutineScope.launch {
+                    try {
+                        val processed = ImageMediaProcessor.process(file, destination)
+                        if (noteImagePath == file.absolutePath) processedImagePath = processed.file.absolutePath
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        if (noteImagePath == file.absolutePath) {
+                            imageError = "This photo could not be prepared for Anki. Retry or remove it."
+                        }
+                    } finally {
+                        if (noteImagePath == file.absolutePath) imageProcessing = false
+                    }
+                }
+                if (runOcr) {
+                    ocrLoading = true
+                    ocrError = null
+                    coroutineScope.launch {
+                        try {
+                            val result = japaneseOcr.recognize(file)
+                            val blocks = result.blocks.filter { it.text.isNotBlank() }
+                            when {
+                                blocks.size > 1 -> {
+                                    ocrChoices = blocks
+                                    showOcrSheet = true
+                                }
+                                blocks.size == 1 -> applyOcrText(blocks.single().text)
+                                result.text.isNotBlank() -> applyOcrText(result.text)
+                                else -> {
+                                    ocrError = "No text was found. Type or edit the sentence to continue."
+                                    route = AppRoute.Target
+                                }
+                            }
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) {
+                            ocrError = "Could not read this photo. Type or edit the sentence to continue."
+                            route = AppRoute.Target
+                        } finally {
+                            ocrLoading = false
+                        }
+                    }
+                }
+            }
+            val requestPhoto: (File) -> Unit = { file ->
+                if (editor.text.isNotBlank()) {
+                    pendingPhotoFile = file
+                    pendingSharedImageUri = null
+                    showReplace = true
+                } else {
+                    processImage(file, true)
+                }
+            }
+            val attachImage: (File) -> Unit = { file -> processImage(file, false) }
+            val cameraPermissionLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.RequestPermission(),
+            ) { granted -> cameraPermissionGranted = granted }
+            val photoPicker = rememberLauncherForActivityResult(
+                ActivityResultContracts.PickVisualMedia(),
+            ) { uri ->
+                if (uri != null) coroutineScope.launch {
+                    try {
+                        requestPhoto(copyImageToDraft(uri))
+                    } catch (_: Exception) {
+                        ocrError = "Could not open that photo. Choose another image or type the sentence."
+                    }
+                }
+            }
+            val noteImagePicker = rememberLauncherForActivityResult(
+                ActivityResultContracts.PickVisualMedia(),
+            ) { uri ->
+                if (uri != null) coroutineScope.launch {
+                    try {
+                        attachImage(copyImageToDraft(uri))
+                    } catch (_: Exception) {
+                        imageError = "Could not open that photo. Choose another image."
                     }
                 }
             }
@@ -379,6 +541,20 @@ class MainActivity : ComponentActivity() {
                 sentenceReading = resolveSurfaceReading(
                     editor.text, japaneseTokens, targetSpan,
                 )?.takeIf(String::isNotBlank) ?: return@LaunchedEffect
+            }
+
+            androidx.compose.runtime.LaunchedEffect(
+                route, autoOpenReview, target, editor.text, selectedDictionaryEntry, selectedDictionaryEntryId,
+                vocabulary, vocabularyReading, dictionarySearchLoading,
+            ) {
+                val entry = selectedDictionaryEntry
+                if (route == AppRoute.Target && autoOpenReview && target?.textIn(editor.text) != null &&
+                    entry != null && entry.id == selectedDictionaryEntryId && entry.expression == vocabulary &&
+                    entry.reading == vocabularyReading && !dictionarySearchLoading
+                ) {
+                    route = AppRoute.Review
+                    autoOpenReview = false
+                }
             }
 
             androidx.compose.runtime.LaunchedEffect(dictionaryReady, target, editor.text, dictionaryRetry, japaneseTokens) {
@@ -481,12 +657,30 @@ class MainActivity : ComponentActivity() {
             androidx.compose.runtime.LaunchedEffect(incoming) {
                 if (incoming != null) {
                     if (editor.text.isBlank()) {
+                        captureMode = "Type"
+                        route = AppRoute.Capture
                         editor = TextFieldValue(incoming, selection = TextRange(incoming.length))
-                        if (hasManualDefinition) dependentFieldsStale = true
-                        target = null
+                        selectTarget(null)
+                        japaneseTokens = emptyList()
                         sharedText.value = null
                     } else {
                         showReplace = true
+                    }
+                }
+            }
+            androidx.compose.runtime.LaunchedEffect(sharedImage.value) {
+                val uri = sharedImage.value ?: return@LaunchedEffect
+                sharedImage.value = null
+                captureMode = "Photo"
+                if (editor.text.isNotBlank()) {
+                    pendingSharedImageUri = uri
+                    pendingPhotoFile = null
+                    showReplace = true
+                } else {
+                    try {
+                        requestPhoto(copyImageToDraft(uri))
+                    } catch (_: Exception) {
+                        ocrError = "Could not open that photo. Choose another image or type the sentence."
                     }
                 }
             }
@@ -714,27 +908,63 @@ class MainActivity : ComponentActivity() {
                     confirmButton = {},
                 )
             }
-            if (showReplace && incoming != null) {
+            if (showReplace && (incoming != null || pendingPhotoFile != null || pendingSharedImageUri != null)) {
+                val replacingSentence = incoming != null
                 AlertDialog(
-                    onDismissRequest = { showReplace = false; sharedText.value = null },
-                    title = { Text("Replace current sentence?") },
-                    text = { Text("The current draft will be replaced by the shared text.") },
+                    onDismissRequest = {
+                        showReplace = false
+                        sharedText.value = null
+                        pendingPhotoFile?.delete()
+                        pendingPhotoFile = null
+                        pendingSharedImageUri = null
+                    },
+                    title = { Text("Replace current draft?") },
+                    text = {
+                        Text(if (replacingSentence) "The current draft will be replaced by the shared text."
+                            else "The current draft will be replaced by text from this photo.")
+                    },
                     confirmButton = {
                         TextButton(onClick = {
-                            editor = TextFieldValue(incoming, selection = TextRange(incoming.length))
-                            if (hasManualDefinition) dependentFieldsStale = true
-                            target = null
-                            japaneseTokens = emptyList()
-                            tokenizationError = null
-                            tokenizationLoading = analyzerReady
+                            when {
+                                incoming != null -> {
+                                    clearDraft()
+                                    captureMode = "Type"
+                                    editor = TextFieldValue(incoming, selection = TextRange(incoming.length))
+                                    route = AppRoute.Capture
+                                    sharedText.value = null
+                                }
+                                pendingPhotoFile != null -> {
+                                    val file = pendingPhotoFile!!
+                                    pendingPhotoFile = null
+                                    clearDraft()
+                                    captureMode = "Photo"
+                                    processImage(file, true)
+                                }
+                                pendingSharedImageUri != null -> {
+                                    val uri = pendingSharedImageUri!!
+                                    pendingSharedImageUri = null
+                                    clearDraft()
+                                    captureMode = "Photo"
+                                    coroutineScope.launch {
+                                        try {
+                                            requestPhoto(copyImageToDraft(uri))
+                                        } catch (_: Exception) {
+                                            ocrError = "Could not open that photo. Choose another image or type the sentence."
+                                        }
+                                    }
+                                }
+                            }
                             showReplace = false
-                            sharedText.value = null
                         }) { Text("Replace") }
                     },
                     dismissButton = {
-                        TextButton(onClick = { showReplace = false; sharedText.value = null }) {
-                            Text("Keep draft")
-                        }
+                        TextButton(onClick = {
+                            showReplace = false
+                            sharedText.value = null
+                            pendingPhotoFile?.delete()
+                            pendingPhotoFile = null
+                            pendingSharedImageUri = null
+                        }) { Text("Keep draft") }
                     },
                 )
             }

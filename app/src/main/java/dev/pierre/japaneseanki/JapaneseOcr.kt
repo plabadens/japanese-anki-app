@@ -2,7 +2,7 @@ package dev.pierre.japaneseanki
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
 import com.googlecode.tesseract.android.TessBaseAPI
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -28,10 +28,22 @@ class JapaneseOcr(context: Context) {
         require(image.isFile) { "Image file does not exist" }
         synchronized(lock) {
             val dataDirectory = installModels()
-            val horizontal = recognizeCandidate(dataDirectory, image, "jpn")
-            val vertical = recognizeCandidate(dataDirectory, image, "jpn_vert")
-            val chosen = chooseOcrCandidate(horizontal, vertical)
-            JapaneseOcrResult(chosen.text, chosen.blocks)
+            var sourceWidth = 0
+            var sourceHeight = 0
+            val bitmap = ImageDecoder.decodeBitmap(ImageDecoder.createSource(image)) { decoder, info, _ ->
+                sourceWidth = info.size.width
+                sourceHeight = info.size.height
+                decoder.setTargetSampleSize(sampleSize(sourceWidth, sourceHeight))
+                decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+            }
+            try {
+                val horizontal = recognizeCandidate(dataDirectory, bitmap, sourceWidth, sourceHeight, "jpn")
+                val vertical = recognizeCandidate(dataDirectory, bitmap, sourceWidth, sourceHeight, "jpn_vert")
+                val chosen = chooseOcrCandidate(horizontal, vertical)
+                JapaneseOcrResult(chosen.text, chosen.blocks)
+            } finally {
+                bitmap.recycle()
+            }
         }
     }
 
@@ -62,12 +74,15 @@ class JapaneseOcr(context: Context) {
         }
     }
 
-    private fun recognizeCandidate(dataDirectory: File, image: File, language: String): OcrCandidate {
+    private fun recognizeCandidate(
+        dataDirectory: File,
+        bitmap: Bitmap,
+        sourceWidth: Int,
+        sourceHeight: Int,
+        language: String,
+    ): OcrCandidate {
         val api = TessBaseAPI()
-        var bitmap: Bitmap? = null
         try {
-            val decoded = BitmapFactory.decodeFile(image.absolutePath) ?: error("Cannot decode image file")
-            bitmap = decoded
             check(api.init(dataDirectory.absolutePath, language, TessBaseAPI.OEM_LSTM_ONLY)) {
                 "Could not initialize Japanese OCR ($language)"
             }
@@ -85,7 +100,12 @@ class JapaneseOcr(context: Context) {
                         blocks += OcrBlock(
                             blockText,
                             iterator.confidence(TessBaseAPI.PageIteratorLevel.RIL_BLOCK),
-                            OcrBounds(bounds.left, bounds.top, bounds.right, bounds.bottom),
+                            OcrBounds(
+                                (bounds.left * sourceWidth.toFloat() / bitmap.width).toInt(),
+                                (bounds.top * sourceHeight.toFloat() / bitmap.height).toInt(),
+                                (bounds.right * sourceWidth.toFloat() / bitmap.width).toInt(),
+                                (bounds.bottom * sourceHeight.toFloat() / bitmap.height).toInt(),
+                            ),
                         )
                     }
                 } while (iterator.next(TessBaseAPI.PageIteratorLevel.RIL_BLOCK))
@@ -94,12 +114,15 @@ class JapaneseOcr(context: Context) {
             }
             return OcrCandidate(fullText, blocks, meanBlockConfidence(blocks))
         } finally {
-            try {
-                api.recycle()
-            } finally {
-                bitmap?.recycle()
-            }
+            api.recycle()
         }
+    }
+
+    private fun sampleSize(width: Int, height: Int): Int {
+        val longest = width.coerceAtLeast(height)
+        var sample = 1
+        while (longest / sample > 2048) sample *= 2
+        return sample
     }
 
     private data class Model(val filename: String, val sha256: String)
