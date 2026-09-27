@@ -1,3 +1,4 @@
+import org.gradle.api.artifacts.ProjectDependency
 import org.gradle.api.tasks.Copy
 
 plugins {
@@ -75,6 +76,20 @@ android {
 
 tasks.named("preBuild").configure { dependsOn(packageUniDic, packageTessdata) }
 
+if (System.getenv("IN_GRADLE_UPDATE_DEPS") == "1") {
+    afterEvaluate {
+        configurations.filter { it.isCanBeResolved }.forEach { configuration ->
+            // The dependency recorder resolves configurations directly, bypassing AGP's
+            // artifact selection for the test target's self-project dependency.
+            configuration.dependencies.removeAll {
+                it is ProjectDependency && it.path == project.path
+            }
+            // No instrumented tests currently need this configuration.
+            if ("AndroidTest" in configuration.name) configuration.isCanBeResolved = false
+        }
+    }
+}
+
 dependencies {
     implementation(libs.tesseract4android)
     implementation(platform(libs.androidx.compose.bom))
@@ -82,6 +97,7 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    debugImplementation(platform(libs.androidx.compose.bom))
     debugImplementation(libs.androidx.compose.ui.tooling)
     testImplementation(libs.junit)
 }
