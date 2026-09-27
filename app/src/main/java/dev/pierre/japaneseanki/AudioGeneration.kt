@@ -10,6 +10,7 @@ data class AudioCacheKey(
     val text: String,
     val voice: String,
     val rate: Float,
+    val engine: String = "",
 ) {
     init {
         require(source.isNotBlank())
@@ -19,7 +20,7 @@ data class AudioCacheKey(
     }
 
     internal fun filename(): String {
-        val identity = listOf(source, text, voice, java.lang.Float.toString(rate)).joinToString("\u0000")
+        val identity = listOf(source, text, engine, voice, java.lang.Float.toString(rate)).joinToString("\u0000")
         val digest = MessageDigest.getInstance("SHA-256").digest(identity.toByteArray(Charsets.UTF_8))
         return digest.joinToString("") { "%02x".format(it) }
     }
@@ -87,7 +88,7 @@ class ReusableAudioCache(
     @Synchronized
     fun sizeBytes(): Long = directory.listFiles()?.filter { it.isFile }?.sumOf(File::length) ?: 0L
 
-    private fun cacheFile(key: AudioCacheKey) = File(directory, "${key.filename()}.audio")
+    private fun cacheFile(key: AudioCacheKey) = File(directory, "${key.filename()}.wav")
 
     private fun evictExcept(protected: File) {
         val files = directory.listFiles()?.filter { it.isFile && it != protected } ?: return
@@ -132,6 +133,35 @@ class RevisionedAudioResult {
         synchronized(transitionLock) {
             state = AudioGenerationState.Generating(request)
         }
+    }
+
+    /** Starts automatic work only for a new revision; failed work is restarted only by explicit retry. */
+    fun beginIfNeeded(request: AudioRequestIdentity): Boolean = synchronized(transitionLock) {
+        when (val current = state) {
+            is AudioGenerationState.Generating -> if (current.request == request) false else {
+                state = AudioGenerationState.Generating(request)
+                true
+            }
+            is AudioGenerationState.Ready -> if (current.request == request && current.file.isFile) false else {
+                state = AudioGenerationState.Generating(request)
+                true
+            }
+            is AudioGenerationState.Failed -> if (current.request == request) false else {
+                state = AudioGenerationState.Generating(request)
+                true
+            }
+            AudioGenerationState.Idle -> {
+                state = AudioGenerationState.Generating(request)
+                true
+            }
+        }
+    }
+
+    /** Retry is explicit and permitted only for the currently failed request. */
+    fun retry(request: AudioRequestIdentity): Boolean = synchronized(transitionLock) {
+        if ((state as? AudioGenerationState.Failed)?.request != request) return false
+        state = AudioGenerationState.Generating(request)
+        true
     }
 
     fun complete(request: AudioRequestIdentity, file: File): Boolean = synchronized(transitionLock) {

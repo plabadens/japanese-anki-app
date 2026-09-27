@@ -42,7 +42,8 @@ class AndroidOfflineAudioSynthesizer(private val engine: TextToSpeech) {
         }
         val parent = output.absoluteFile.parentFile ?: throw IOException("Invalid audio output path")
         if (!parent.exists() && !parent.mkdirs()) throw IOException("Could not create audio output directory")
-        val temporary = File(parent, ".${output.name}.${UUID.randomUUID()}.tmp")
+        if (!output.name.endsWith(".wav", ignoreCase = true)) throw IOException("Android TTS output must be WAV")
+        val temporary = File(parent, ".${UUID.randomUUID()}.wav")
         val id = UUID.randomUUID().toString()
         val completion = CountDownLatch(1)
         val error = AtomicReference<Throwable?>(null)
@@ -72,7 +73,7 @@ class AndroidOfflineAudioSynthesizer(private val engine: TextToSpeech) {
             if (status != TextToSpeech.SUCCESS) throw IOException("Android TTS rejected the synthesis request")
             if (!completion.await(timeoutSeconds, TimeUnit.SECONDS)) throw IOException("Android TTS synthesis timed out")
             error.get()?.let { throw it }
-            if (!temporary.isFile || temporary.length() == 0L) throw IOException("Android TTS produced no audio")
+            AudioFileValidator.requireWav(temporary)
             if (!temporary.renameTo(output)) throw IOException("Could not commit synthesized audio")
             return output
         } catch (failure: Throwable) {
