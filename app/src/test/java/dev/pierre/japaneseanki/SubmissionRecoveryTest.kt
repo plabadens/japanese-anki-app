@@ -25,6 +25,19 @@ class SubmissionRecoveryTest {
     }
 
     @Test
+    fun consumedIntentPayloadMustStillMatchBeforeClearingRawIntent() {
+        assertEquals(true, intentPayloadMatches("text", "content://old", "text", "content://old"))
+        assertEquals(false, intentPayloadMatches("new text", "content://new", "text", "content://old"))
+    }
+
+    @Test
+    fun newSubmissionRevisionRemainsMonotonicAfterPendingStateIsCleared() {
+        assertEquals(1L, nextSubmissionRevision(0L, 0L))
+        assertEquals(5L, nextSubmissionRevision(4L, 1L))
+        assertEquals(8L, nextSubmissionRevision(2L, 7L))
+    }
+
+    @Test
     fun phasesMakeMediaImportUncertaintyDistinctFromNoteInsertion() {
         assertEquals("media_importing", SubmissionPhase.MEDIA_IMPORTING.persisted)
         assertEquals("media_imported", SubmissionPhase.MEDIA_IMPORTED.persisted)

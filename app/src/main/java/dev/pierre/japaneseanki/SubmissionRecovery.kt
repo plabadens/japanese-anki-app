@@ -52,6 +52,7 @@ internal data class FrozenSubmission(
 internal object SubmissionRecoveryKeys {
     const val STATUS = "submission_status"
     const val REVISION = "pending_revision"
+    const val REVISION_SEQUENCE = "submission_revision_sequence"
     const val MODEL_ID = "pending_model_id"
     const val DECK_ID = "pending_deck_id"
     const val MODEL_FIELDS = "pending_model_fields"
@@ -72,6 +73,12 @@ internal object SubmissionRecoveryKeys {
     const val MEDIA_MODIFIED = "pending_media_modified"
     const val IMPORTED_FILENAME = "pending_imported_filename"
 }
+
+internal fun nextSubmissionRevision(currentSequence: Long, currentPendingRevision: Long): Long =
+    maxOf(currentSequence, currentPendingRevision, 0L).let { current ->
+        check(current < Long.MAX_VALUE) { "Submission revision limit reached" }
+        current + 1L
+    }
 
 internal fun encodeSubmissionValues(values: List<String>): String = values.joinToString(".") {
     Base64.getUrlEncoder().withoutPadding().encodeToString(it.toByteArray(Charsets.UTF_8))

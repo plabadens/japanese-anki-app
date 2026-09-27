@@ -65,6 +65,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
@@ -88,6 +89,13 @@ private const val IMAGE_RECEIPT_SIZE = "image_import_receipt_size"
 private const val IMAGE_RECEIPT_MODIFIED = "image_import_receipt_modified"
 
 enum class AppRoute { Capture, Target, Review }
+
+internal fun intentPayloadMatches(
+    currentText: String?,
+    currentImage: String?,
+    expectedText: String?,
+    expectedImage: String?,
+): Boolean = currentText == expectedText && currentImage == expectedImage
 
 class MainActivity : ComponentActivity() {
     private val sharedText = mutableStateOf<String?>(null)
@@ -315,11 +323,17 @@ class MainActivity : ComponentActivity() {
             }
             var recoveryDuplicate by remember { mutableStateOf(false) }
             var frozenSnapshotAppliedRevision by remember { mutableStateOf(-1L) }
+            var draftGeneration by remember { mutableStateOf(0L) }
             var omitImageForSend by remember { mutableStateOf(false) }
             val selectedModel = noteTypes.firstOrNull { it.id == selectedModelId }
             val selectedDeck = decks.firstOrNull { it.id == selectedDeckId }
             val incoming = sharedText.value
             val submissionLocked = isSubmitting || recoveryRequired || frozenRetryReady
+            val currentSubmissionLocked = rememberUpdatedState(submissionLocked)
+            val currentDraftGeneration = rememberUpdatedState(draftGeneration)
+            val currentSetupReload = rememberUpdatedState(setupReload)
+            fun asyncDraftIsCurrent(generation: Long): Boolean =
+                !currentSubmissionLocked.value && currentDraftGeneration.value == generation
             val hasManualDefinition = definitionManuallyEdited && definition.isNotBlank()
             val clearDraft = {
                 listOfNotNull(photoSourcePath, noteImagePath, processedImagePath).distinct().forEach { File(it).delete() }
@@ -329,6 +343,8 @@ class MainActivity : ComponentActivity() {
                 noteImagePath = null
                 processedImagePath = null
                 clearPersistedDraft(preferences, File(filesDir, "draft"))
+                frozenSnapshotAppliedRevision = -1L
+                draftGeneration++
                 frozenRetryReady = false
                 recoveryRequired = false
                 recoveryPhase = null
@@ -360,7 +376,8 @@ class MainActivity : ComponentActivity() {
                 selectedDictionaryEntryId = null
                 selectedSenseIndices = emptySet()
             }
-            val selectTarget: (TargetSpan?) -> Unit = { selected ->
+            val selectTarget: (TargetSpan?) -> Unit = selectTarget@{ selected ->
+                if (currentSubmissionLocked.value) return@selectTarget
                 val previousTarget = target
                 autoOpenReview = selected != null
                 if (selected != previousTarget) {
@@ -385,7 +402,8 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            val applyOcrText: (String) -> Unit = { text ->
+            val applyOcrText: (String) -> Unit = applyOcrText@{ text ->
+                if (currentSubmissionLocked.value) return@applyOcrText
                 selectTarget(null)
                 editor = TextFieldValue(text.trim(), selection = TextRange(text.trim().length))
                 japaneseTokens = emptyList()
@@ -395,7 +413,8 @@ class MainActivity : ComponentActivity() {
                 route = AppRoute.Target
             }
             val processImage: (File, Boolean) -> Unit = processImage@{ file, runOcr ->
-                if (submissionLocked) return@processImage
+                if (currentSubmissionLocked.value) return@processImage
+                val callbackGeneration = draftGeneration
                 val previousFiles = listOfNotNull(noteImagePath, processedImagePath)
                     .distinct().filter { it != file.absolutePath }
                 if (!runOcr && photoSourcePath == noteImagePath) photoSourcePath = null
@@ -421,7 +440,7 @@ class MainActivity : ComponentActivity() {
                 coroutineScope.launch {
                     try {
                         val processed = ImageMediaProcessor.process(file, destination)
-                        if (!submissionLocked && noteImagePath == file.absolutePath && imageProcessingRevision == processingRevision) {
+                        if (asyncDraftIsCurrent(callbackGeneration) && noteImagePath == file.absolutePath && imageProcessingRevision == processingRevision) {
                             processedImagePath = processed.file.absolutePath
                             previousFiles.forEach { File(it).delete() }
                         } else {
@@ -430,11 +449,13 @@ class MainActivity : ComponentActivity() {
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
-                        if (!submissionLocked && noteImagePath == file.absolutePath && imageProcessingRevision == processingRevision) {
+                        if (asyncDraftIsCurrent(callbackGeneration) && noteImagePath == file.absolutePath && imageProcessingRevision == processingRevision) {
                             imageError = "This photo could not be prepared for Anki. Retry or remove it."
                         }
                     } finally {
-                        if (noteImagePath == file.absolutePath && imageProcessingRevision == processingRevision) imageProcessing = false
+                        if (asyncDraftIsCurrent(callbackGeneration) && noteImagePath == file.absolutePath && imageProcessingRevision == processingRevision) {
+                            imageProcessing = false
+                        }
                     }
                 }
                 if (runOcr) {
@@ -443,7 +464,7 @@ class MainActivity : ComponentActivity() {
                     coroutineScope.launch {
                         try {
                             val result = japaneseOcr.recognize(file)
-                            if (submissionLocked || imageProcessingRevision != processingRevision || noteImagePath != file.absolutePath) return@launch
+                            if (!asyncDraftIsCurrent(callbackGeneration) || imageProcessingRevision != processingRevision || noteImagePath != file.absolutePath) return@launch
                             val blocks = result.blocks.filter { it.text.isNotBlank() }
                             when {
                                 blocks.size > 1 -> {
@@ -460,12 +481,12 @@ class MainActivity : ComponentActivity() {
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (_: Exception) {
-                            if (!submissionLocked && imageProcessingRevision == processingRevision && noteImagePath == file.absolutePath) {
+                            if (asyncDraftIsCurrent(callbackGeneration) && imageProcessingRevision == processingRevision && noteImagePath == file.absolutePath) {
                                 ocrError = "Could not read this photo. Type or edit the sentence to continue."
                                 route = AppRoute.Target
                             }
                         } finally {
-                            ocrLoading = false
+                            if (asyncDraftIsCurrent(callbackGeneration)) ocrLoading = false
                         }
                     }
                 }
@@ -478,6 +499,7 @@ class MainActivity : ComponentActivity() {
                 noteImagePath = null
                 processedImagePath = null
                 imageProcessingRevision++
+                draftGeneration++
                 imageProcessing = false
                 imageError = null
                 omitImageForSend = false
@@ -516,17 +538,20 @@ class MainActivity : ComponentActivity() {
                 ActivityResultContracts.PickVisualMedia(),
             ) { uri ->
                 if (uri != null) coroutineScope.launch {
-                    if (submissionLocked) return@launch
+                    if (currentSubmissionLocked.value) return@launch
+                    val callbackGeneration = draftGeneration
                     val callbackRevision = imageProcessingRevision
                     try {
                         val copied = copyImageToDraft(uri)
-                        if (submissionLocked || callbackRevision != imageProcessingRevision) {
+                        if (!asyncDraftIsCurrent(callbackGeneration) || callbackRevision != imageProcessingRevision) {
                             copied.delete()
                             return@launch
                         }
                         requestPhoto(copied)
                     } catch (_: Exception) {
-                        ocrError = "Could not open that photo. Choose another image or type the sentence."
+                        if (asyncDraftIsCurrent(callbackGeneration)) {
+                            ocrError = "Could not open that photo. Choose another image or type the sentence."
+                        }
                     }
                 }
             }
@@ -534,17 +559,20 @@ class MainActivity : ComponentActivity() {
                 ActivityResultContracts.PickVisualMedia(),
             ) { uri ->
                 if (uri != null) coroutineScope.launch {
-                    if (submissionLocked) return@launch
+                    if (currentSubmissionLocked.value) return@launch
+                    val callbackGeneration = draftGeneration
                     val callbackRevision = imageProcessingRevision
                     try {
                         val copied = copyImageToDraft(uri)
-                        if (submissionLocked || callbackRevision != imageProcessingRevision) {
+                        if (!asyncDraftIsCurrent(callbackGeneration) || callbackRevision != imageProcessingRevision) {
                             copied.delete()
                             return@launch
                         }
                         attachImage(copied)
                     } catch (_: Exception) {
-                        imageError = "Could not open that photo. Choose another image."
+                        if (asyncDraftIsCurrent(callbackGeneration)) {
+                            imageError = "Could not open that photo. Choose another image."
+                        }
                     }
                 }
             }
@@ -560,48 +588,57 @@ class MainActivity : ComponentActivity() {
             }
 
             androidx.compose.runtime.LaunchedEffect(dictionaryRetry) {
-                if (submissionLocked) return@LaunchedEffect
+                if (currentSubmissionLocked.value) return@LaunchedEffect
+                val callbackGeneration = draftGeneration
                 dictionaryLoading = true
                 dictionaryError = null
                 try {
                     val preparedDictionary = withContext(Dispatchers.IO) { offlineDictionary.prepare() }
-                    if (submissionLocked) return@LaunchedEffect
+                    if (!asyncDraftIsCurrent(callbackGeneration)) return@LaunchedEffect
                     dictionaryInfo = preparedDictionary
                     dictionaryReady = true
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (error: Exception) {
                     Log.e("OfflineDictionary", "Could not prepare the bundled dictionary", error)
-                    dictionaryError = "Offline dictionary could not be prepared. A dictionary entry is required before Send."
+                    if (asyncDraftIsCurrent(callbackGeneration)) {
+                        dictionaryError = "Offline dictionary could not be prepared. A dictionary entry is required before Send."
+                    }
                 } finally {
-                    dictionaryLoading = false
+                    if (asyncDraftIsCurrent(callbackGeneration)) dictionaryLoading = false
                 }
             }
 
             androidx.compose.runtime.LaunchedEffect(dictionaryRetry) {
-                if (submissionLocked) return@LaunchedEffect
+                if (currentSubmissionLocked.value) return@LaunchedEffect
+                val callbackGeneration = draftGeneration
                 analyzerLoading = true
                 analyzerError = null
                 analyzerProgress = 0f
                 try {
-                    withContext(Dispatchers.IO) { offlineAnalyzer.prepare { analyzerProgress = it } }
-                    if (submissionLocked) return@LaunchedEffect
+                    withContext(Dispatchers.IO) {
+                        offlineAnalyzer.prepare { progress ->
+                            if (asyncDraftIsCurrent(callbackGeneration)) analyzerProgress = progress
+                        }
+                    }
+                    if (!asyncDraftIsCurrent(callbackGeneration)) return@LaunchedEffect
                     analyzerReady = true
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (error: LinkageError) {
                     Log.e("OfflineAnalyzer", "Could not load MeCab native analysis", error)
-                    analyzerError = "MeCab native analysis could not load. You can still select a sentence span and search the dictionary."
+                    if (asyncDraftIsCurrent(callbackGeneration)) analyzerError = "MeCab native analysis could not load. You can still select a sentence span and search the dictionary."
                 } catch (error: Exception) {
                     Log.e("OfflineAnalyzer", "Could not prepare UniDic analysis", error)
-                    analyzerError = "UniDic could not be installed. Check available storage and retry."
+                    if (asyncDraftIsCurrent(callbackGeneration)) analyzerError = "UniDic could not be installed. Check available storage and retry."
                 } finally {
-                    analyzerLoading = false
+                    if (asyncDraftIsCurrent(callbackGeneration)) analyzerLoading = false
                 }
             }
 
             androidx.compose.runtime.LaunchedEffect(analyzerReady, editor.text, analysisRetry) {
-                if (submissionLocked) return@LaunchedEffect
+                if (currentSubmissionLocked.value) return@LaunchedEffect
+                val callbackGeneration = draftGeneration
                 if (!analyzerReady || editor.text.isBlank()) {
                     japaneseTokens = emptyList()
                     tokenizationLoading = false
@@ -612,15 +649,17 @@ class MainActivity : ComponentActivity() {
                 try {
                     kotlinx.coroutines.delay(150)
                     val analyzed = withContext(Dispatchers.IO) { offlineAnalyzer.analyze(editor.text) }
-                    if (submissionLocked) return@LaunchedEffect
+                    if (!asyncDraftIsCurrent(callbackGeneration)) return@LaunchedEffect
                     japaneseTokens = analyzed
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
-                    japaneseTokens = emptyList()
-                    tokenizationError = "Could not analyze this sentence. Select a target span to search the dictionary."
+                    if (asyncDraftIsCurrent(callbackGeneration)) {
+                        japaneseTokens = emptyList()
+                        tokenizationError = "Could not analyze this sentence. Select a target span to search the dictionary."
+                    }
                 } finally {
-                    tokenizationLoading = false
+                    if (asyncDraftIsCurrent(callbackGeneration)) tokenizationLoading = false
                 }
             }
 
@@ -670,7 +709,8 @@ class MainActivity : ComponentActivity() {
             }
 
             androidx.compose.runtime.LaunchedEffect(dictionaryReady, target, editor.text, dictionaryRetry, japaneseTokens) {
-                if (submissionLocked) return@LaunchedEffect
+                if (currentSubmissionLocked.value) return@LaunchedEffect
+                val callbackGeneration = draftGeneration
                 val targetText = target?.textIn(editor.text)
                 if (!dictionaryReady || targetText == null) {
                     dictionaryEntries = emptyList()
@@ -682,7 +722,7 @@ class MainActivity : ComponentActivity() {
                         val entries = withContext(Dispatchers.IO) {
                             offlineDictionary.search(targetText, analyzedTarget?.expression)
                         }
-                        if (submissionLocked) return@LaunchedEffect
+                        if (!asyncDraftIsCurrent(callbackGeneration)) return@LaunchedEffect
                         dictionaryEntries = entries
                         dictionaryError = null
                         dictionaryHasMore = entries.size == 50
@@ -728,9 +768,11 @@ class MainActivity : ComponentActivity() {
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
-                        dictionaryError = "Dictionary lookup failed. Retry before selecting a dictionary entry."
+                        if (asyncDraftIsCurrent(callbackGeneration)) {
+                            dictionaryError = "Dictionary lookup failed. Retry before selecting a dictionary entry."
+                        }
                     } finally {
-                        dictionarySearchLoading = false
+                        if (asyncDraftIsCurrent(callbackGeneration)) dictionarySearchLoading = false
                     }
                 }
             }
@@ -739,7 +781,8 @@ class MainActivity : ComponentActivity() {
                 dictionaryReady, selectedDictionaryEntryId, selectedDictionaryEntry, vocabulary, vocabularyReading,
                 target, editor.text, dictionaryRetry, submissionLocked,
             ) {
-                if (submissionLocked) return@LaunchedEffect
+                if (currentSubmissionLocked.value) return@LaunchedEffect
+                val callbackGeneration = draftGeneration
                 val entry = selectedDictionaryEntry?.takeIf {
                     it.id == selectedDictionaryEntryId && it.expression == vocabulary && it.reading == vocabularyReading
                 }
@@ -756,7 +799,7 @@ class MainActivity : ComponentActivity() {
                     val candidates = withContext(Dispatchers.IO) {
                         offlineDictionary.pitch(entry.expression, entry.reading)
                     }.filter { PitchAccent.create(entry.reading, it.accent) != null }
-                    if (submissionLocked) return@LaunchedEffect
+                    if (!asyncDraftIsCurrent(callbackGeneration)) return@LaunchedEffect
                     pitchCandidates = candidates
                     if (candidates.isNotEmpty()) {
                         pitchAccentText = candidates.first().accent.toString()
@@ -764,15 +807,21 @@ class MainActivity : ComponentActivity() {
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
-                    pitchCandidates = emptyList()
+                    if (asyncDraftIsCurrent(callbackGeneration)) pitchCandidates = emptyList()
                 } finally {
-                    pitchLookupLoading = false
+                    if (asyncDraftIsCurrent(callbackGeneration)) pitchLookupLoading = false
                 }
             }
 
             androidx.compose.runtime.LaunchedEffect(incoming, submissionLocked) {
                 if (submissionLocked) {
-                    sharedText.value = null
+                    incoming?.let {
+                        val rawImage = imageFromIntent(intent)
+                        if (clearConsumedShareIntent(expectedText = it, expectedImage = rawImage)) {
+                            sharedText.value = null
+                            if (sharedImage.value == rawImage) sharedImage.value = null
+                        }
+                    }
                     return@LaunchedEffect
                 }
                 if (incoming != null) {
@@ -782,6 +831,7 @@ class MainActivity : ComponentActivity() {
                         editor = TextFieldValue(incoming, selection = TextRange(incoming.length))
                         selectTarget(null)
                         japaneseTokens = emptyList()
+                        clearConsumedShareIntent(expectedText = incoming, expectedImage = imageFromIntent(intent))
                         sharedText.value = null
                     } else {
                         showReplace = true
@@ -790,15 +840,24 @@ class MainActivity : ComponentActivity() {
             }
             androidx.compose.runtime.LaunchedEffect(sharedImage.value, submissionLocked) {
                 if (submissionLocked) {
-                    sharedImage.value = null
+                    sharedImage.value?.let {
+                        val rawText = textFromIntent(intent)
+                        val rawImage = imageFromIntent(intent)
+                        if (clearConsumedShareIntent(expectedText = rawText, expectedImage = it) ||
+                            (rawText == null && rawImage == null)
+                        ) {
+                            sharedImage.value = null
+                        }
+                    }
                     return@LaunchedEffect
                 }
                 val uri = sharedImage.value ?: return@LaunchedEffect
+                val callbackGeneration = draftGeneration
                 captureMode = "Photo"
                 val callbackRevision = imageProcessingRevision
                 try {
                     val source = withContext(Dispatchers.IO) { copyImageToDraft(uri) }
-                    if (submissionLocked || callbackRevision != imageProcessingRevision || sharedImage.value != uri) {
+                    if (!asyncDraftIsCurrent(callbackGeneration) || callbackRevision != imageProcessingRevision || sharedImage.value != uri) {
                         source.delete()
                         return@LaunchedEffect
                     }
@@ -807,14 +866,19 @@ class MainActivity : ComponentActivity() {
                         return@LaunchedEffect
                     }
                     if (editor.text.isNotBlank()) stagePhotoReplacement(source)
-                    clearConsumedImageIntent(uri)
+                    clearConsumedShareIntent(expectedText = textFromIntent(intent), expectedImage = uri)
                     sharedImage.value = null
                     if (editor.text.isBlank()) requestPhoto(source)
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
-                    if (sharedImage.value == uri) sharedImage.value = null
-                    ocrError = "Could not open that photo. Choose another image or type the sentence."
+                    if (sharedImage.value == uri) {
+                        clearConsumedShareIntent(expectedText = textFromIntent(intent), expectedImage = uri)
+                        sharedImage.value = null
+                        if (asyncDraftIsCurrent(callbackGeneration)) {
+                            ocrError = "Could not open that photo. Choose another image or type the sentence."
+                        }
+                    }
                 }
             }
             if (showSettings) {
@@ -1048,6 +1112,7 @@ class MainActivity : ComponentActivity() {
                 val replacingSentence = incoming != null
                 AlertDialog(
                     onDismissRequest = {
+                        clearConsumedShareIntent(expectedText = incoming, expectedImage = pendingSharedImageUri)
                         showReplace = false
                         sharedText.value = null
                         pendingPhotoFile?.delete()
@@ -1064,6 +1129,7 @@ class MainActivity : ComponentActivity() {
                         TextButton(onClick = {
                             when {
                                 incoming != null -> {
+                                    clearConsumedShareIntent(expectedText = incoming, expectedImage = imageFromIntent(intent))
                                     clearDraft()
                                     captureMode = "Type"
                                     editor = TextFieldValue(incoming, selection = TextRange(incoming.length))
@@ -1083,17 +1149,20 @@ class MainActivity : ComponentActivity() {
                                     pendingSharedImageUri = null
                                     clearDraft()
                                     captureMode = "Photo"
+                                    val callbackGeneration = draftGeneration
                                     val callbackRevision = imageProcessingRevision
                                     coroutineScope.launch {
                                         try {
                                             val copied = copyImageToDraft(uri)
-                                            if (submissionLocked || callbackRevision != imageProcessingRevision) {
+                                            if (!asyncDraftIsCurrent(callbackGeneration) || callbackRevision != imageProcessingRevision) {
                                                 copied.delete()
                                                 return@launch
                                             }
                                             requestPhoto(copied)
                                         } catch (_: Exception) {
-                                            ocrError = "Could not open that photo. Choose another image or type the sentence."
+                                            if (asyncDraftIsCurrent(callbackGeneration)) {
+                                                ocrError = "Could not open that photo. Choose another image or type the sentence."
+                                            }
                                         }
                                     }
                                 }
@@ -1103,6 +1172,7 @@ class MainActivity : ComponentActivity() {
                     },
                     dismissButton = {
                         TextButton(onClick = {
+                            clearConsumedShareIntent(expectedText = incoming, expectedImage = pendingSharedImageUri)
                             showReplace = false
                             sharedText.value = null
                             pendingPhotoFile?.delete()
@@ -1178,6 +1248,20 @@ class MainActivity : ComponentActivity() {
             }
             val frozenForDisplay = if (submissionLocked) readFrozenSubmission(preferences) else null
             val restoredFrozenForUi = if (frozenRetryReady) frozenForDisplay else null
+            val displaySentence = frozenForDisplay?.sentence ?: editor.text
+            val displayTarget = frozenForDisplay?.let { snapshot ->
+                TargetSpan(snapshot.targetStart, snapshot.targetEnd)
+                    .takeIf { it.textIn(snapshot.sentence) != null }
+            } ?: target
+            val displayVocabulary = frozenForDisplay?.lemma ?: vocabulary
+            val displayVocabularyReading = frozenForDisplay?.vocabularyReading ?: vocabularyReading
+            val displayDefinition = frozenForDisplay?.definition ?: definition
+            val displayTranslation = frozenForDisplay?.translation ?: translation
+            val displayNotes = frozenForDisplay?.notes ?: notes
+            val displayTags = frozenForDisplay?.tags?.joinToString(" ") ?: tags
+            val displayPitch = frozenForDisplay?.pitchAccentText?.toIntOrNull()
+                ?.let { PitchAccent.create(displayVocabularyReading, it) } ?: pitch
+            val visibleRoute = if (frozenForDisplay != null) AppRoute.Review else route
             val frozenDestinationReady = !frozenRetryReady || (
                 restoredFrozenForUi != null && selectedModel?.id == restoredFrozenForUi.modelId &&
                     selectedDeck?.id == restoredFrozenForUi.deckId && selectedModel.fields == restoredFrozenForUi.modelFields
@@ -1202,7 +1286,7 @@ class MainActivity : ComponentActivity() {
                 (if (frozenRetryReady) effectiveFrozenFields != null else fieldsByName != null && validationErrors.isEmpty()) &&
                 effectiveMapping?.isValid == true && sendImageReady && frozenDestinationReady &&
                 (frozenRetryReady || (!dictionaryLoading && !dictionarySearchLoading)) &&
-                !setupLoading && setupError == null && !recoveryRequired && !isSubmitting
+                setupLoadedSuccessfully && !setupLoading && setupError == null && !recoveryRequired && !isSubmitting
 
             androidx.compose.runtime.LaunchedEffect(submissionLocked) {
                 if (!submissionLocked) return@LaunchedEffect
@@ -1295,6 +1379,9 @@ class MainActivity : ComponentActivity() {
                     setupLoadedSuccessfully = false
                     setupLoading = false
                 } else {
+                    val loadRevision = setupReload
+                    noteTypes = emptyList()
+                    decks = emptyList()
                     setupLoading = true
                     setupLoadedSuccessfully = false
                     setupError = null
@@ -1303,16 +1390,19 @@ class MainActivity : ComponentActivity() {
                             val gateway = AnkiDroidGateway(contentResolver)
                             gateway.noteTypes() to gateway.decks()
                         }
+                        if (currentSetupReload.value != loadRevision) return@LaunchedEffect
                         noteTypes = data.first
                         decks = data.second
                         setupLoadedSuccessfully = true
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
-                        setupLoadedSuccessfully = false
-                        setupError = "Could not read note types and decks. Check AnkiDroid API access and retry."
+                        if (currentSetupReload.value == loadRevision) {
+                            setupLoadedSuccessfully = false
+                            setupError = "Could not read note types and decks. Check AnkiDroid API access and retry."
+                        }
                     } finally {
-                        setupLoading = false
+                        if (currentSetupReload.value == loadRevision) setupLoading = false
                     }
                 }
             }
@@ -1452,7 +1542,7 @@ class MainActivity : ComponentActivity() {
                             }) { Text("Retry image") }
                             TextButton(enabled = !submissionLocked, onClick = removeDraftImage) { Text("Remove image") }
                         }
-                        if (route == AppRoute.Capture) {
+                        if (visibleRoute == AppRoute.Capture) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1489,10 +1579,10 @@ class MainActivity : ComponentActivity() {
                                     },
                                 ) { Text("Settings") }
                             }
-                        } else if (route == AppRoute.Target) {
+                        } else if (visibleRoute == AppRoute.Target) {
                             TextButton(enabled = !submissionLocked, onClick = { route = AppRoute.Capture }) { Text("Back to capture") }
                         }
-                        if (route == AppRoute.Review) {
+                        if (visibleRoute == AppRoute.Review) {
                             Text("Review card", style = MaterialTheme.typography.titleLarge)
                         }
                         if (dictionaryLoading) {
@@ -1516,7 +1606,9 @@ class MainActivity : ComponentActivity() {
                             TextButton(enabled = !submissionLocked, onClick = { dictionaryRetry++ }) { Text("Retry analyzer setup") }
                         }
                         OutlinedTextField(
-                            value = editor,
+                            value = if (frozenForDisplay != null) {
+                                TextFieldValue(displaySentence, selection = TextRange(displaySentence.length))
+                            } else editor,
                             readOnly = submissionLocked,
                             onValueChange = { updated ->
                                 if (updated.text != editor.text) {
@@ -1581,8 +1673,8 @@ class MainActivity : ComponentActivity() {
                                 )
                             },
                         ) { Text("Use selected text as target") }
-                        val targetText = target?.textIn(editor.text)
-                        val lemmaLabel = analyzedTarget?.expression?.let { " → $it" }.orEmpty()
+                        val targetText = displayTarget?.textIn(displaySentence)
+                        val lemmaLabel = displayVocabulary.takeIf(String::isNotBlank)?.let { " → $it" }.orEmpty()
                         Text(
                             targetText?.let { "Target: $it$lemmaLabel" }
                                 ?: "Select text in the sentence to choose a target.",
@@ -1594,28 +1686,35 @@ class MainActivity : ComponentActivity() {
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                         }
-                        if (target?.textIn(editor.text) != null) {
+                        if (displayTarget?.textIn(displaySentence) != null) {
                             Text("Offline dictionary match", style = MaterialTheme.typography.titleMedium)
-                            if (dictionaryEntries.size > 1 && selectedDictionaryEntry == null) {
+                            if (frozenForDisplay != null) {
+                                Text("$displayVocabulary · $displayVocabularyReading", style = MaterialTheme.typography.titleSmall)
+                            }
+                            if (frozenForDisplay == null && dictionaryEntries.size > 1 && selectedDictionaryEntry == null) {
                                 OutlinedButton(enabled = !submissionLocked, onClick = { showDictionarySheet = true }) {
                                     Text("Choose dictionary entry")
                                 }
                             }
-                            analyzedTarget?.let { Text("Also searching analyzed lemma: ${it.expression}") }
-                            when {
-                                !dictionaryReady && dictionaryLoading -> Text("Dictionary is being prepared…")
-                                !dictionaryReady -> Text("Dictionary unavailable; an entry is required before Send.")
-                                dictionarySearchLoading -> Text("Searching JMdict…")
-                                dictionaryEntries.isEmpty() -> Text("No dictionary match for this selection. Edit the sentence or reselect a target.")
+                            if (frozenForDisplay == null) {
+                                analyzedTarget?.let { Text("Also searching analyzed lemma: ${it.expression}") }
+                                when {
+                                    !dictionaryReady && dictionaryLoading -> Text("Dictionary is being prepared…")
+                                    !dictionaryReady -> Text("Dictionary unavailable; an entry is required before Send.")
+                                    dictionarySearchLoading -> Text("Searching JMdict…")
+                                    dictionaryEntries.isEmpty() -> Text("No dictionary match for this selection. Edit the sentence or reselect a target.")
+                                }
+                                selectedDictionaryEntry?.takeIf { dictionaryEntries.size == 1 }?.let { entry ->
+                                    Text("${entry.expression} · ${entry.reading}", style = MaterialTheme.typography.titleSmall)
+                                    Text(entry.senses.firstOrNull()?.glosses?.joinToString("; ").orEmpty())
+                                }
                             }
-                            selectedDictionaryEntry?.takeIf { dictionaryEntries.size == 1 }?.let { entry ->
-                                Text("${entry.expression} · ${entry.reading}", style = MaterialTheme.typography.titleSmall)
-                                Text(entry.senses.firstOrNull()?.glosses?.joinToString("; ").orEmpty())
-                            }
-                            if (dictionaryHasMore && !dictionarySearchLoading) {
+                            if (frozenForDisplay == null && dictionaryHasMore && !dictionarySearchLoading) {
                                 TextButton(enabled = !submissionLocked, onClick = {
                                     val query = target?.textIn(editor.text) ?: return@TextButton
+                                    val callbackGeneration = draftGeneration
                                     coroutineScope.launch {
+                                        if (!asyncDraftIsCurrent(callbackGeneration)) return@launch
                                         dictionarySearchLoading = true
                                         try {
                                             val more = withContext(Dispatchers.IO) {
@@ -1625,14 +1724,17 @@ class MainActivity : ComponentActivity() {
                                                     offset = dictionaryEntries.size,
                                                 )
                                             }
+                                            if (!asyncDraftIsCurrent(callbackGeneration)) return@launch
                                             dictionaryEntries = dictionaryEntries + more
                                             dictionaryHasMore = more.size == 50
                                         } catch (cancelled: CancellationException) {
                                             throw cancelled
                                         } catch (_: Exception) {
-                                            dictionaryError = "Could not load more dictionary matches."
+                                            if (asyncDraftIsCurrent(callbackGeneration)) {
+                                                dictionaryError = "Could not load more dictionary matches."
+                                            }
                                         } finally {
-                                            dictionarySearchLoading = false
+                                            if (asyncDraftIsCurrent(callbackGeneration)) dictionarySearchLoading = false
                                         }
                                     }
                                 }) { Text("Load more matches") }
@@ -1667,9 +1769,9 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
-                            if (pitch != null) PitchPatternDiagram(pitch, PitchDiagramScale.Compact)
+                            if (displayPitch != null) PitchPatternDiagram(displayPitch, PitchDiagramScale.Compact)
                             OutlinedTextField(
-                                value = definition,
+                                value = displayDefinition,
                                 readOnly = submissionLocked,
                                 onValueChange = {
                                     definition = it
@@ -1683,7 +1785,7 @@ class MainActivity : ComponentActivity() {
                                 minLines = 2,
                             )
                             OutlinedTextField(
-                                value = translation,
+                                value = displayTranslation,
                                 readOnly = submissionLocked,
                                 onValueChange = { translation = it },
                                 modifier = Modifier.fillMaxWidth(),
@@ -1691,7 +1793,7 @@ class MainActivity : ComponentActivity() {
                                 minLines = 2,
                             )
                             OutlinedTextField(
-                                value = notes,
+                                value = displayNotes,
                                 readOnly = submissionLocked,
                                 onValueChange = { notes = it },
                                 modifier = Modifier.fillMaxWidth(),
@@ -1699,7 +1801,7 @@ class MainActivity : ComponentActivity() {
                                 minLines = 2,
                             )
                             OutlinedTextField(
-                                value = tags,
+                                value = displayTags,
                                 readOnly = submissionLocked,
                                 onValueChange = { tags = it },
                                 modifier = Modifier.fillMaxWidth(),
@@ -1728,7 +1830,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
-                        if (route != AppRoute.Review || submissionLocked) when {
+                        if (visibleRoute != AppRoute.Review || submissionLocked) when {
                             !ankiDroidInstalled -> Text(
                                 "AnkiDroid not detected. Install it before setting up export.",
                                 style = MaterialTheme.typography.bodyMedium,
@@ -1878,6 +1980,7 @@ class MainActivity : ComponentActivity() {
                                 val fields = restoredFrozen?.modelFields?.zip(restoredFrozen.orderedFields)?.toMap()
                                     ?: fieldsByName ?: return@Button
                                 val tagSet = restoredFrozen?.tags ?: AnkiFieldContract.parseTags(tags)
+                                draftGeneration++
                                 isSubmitting = true
                                 submitMessage = null
                                 coroutineScope.launch {
@@ -1923,7 +2026,10 @@ class MainActivity : ComponentActivity() {
                                                     val baseMapping = AnkiFieldContract.mapToModelOrder(model.fields, baseFields)
                                                     check(baseMapping.isValid) { baseMapping.errors.joinToString() }
                                                     var snapshot = FrozenSubmission(
-                                                        revision = preferences.getLong(SubmissionRecoveryKeys.REVISION, 0L) + 1L,
+                                                        revision = nextSubmissionRevision(
+                                                            preferences.getLong(SubmissionRecoveryKeys.REVISION_SEQUENCE, 0L),
+                                                            preferences.getLong(SubmissionRecoveryKeys.REVISION, 0L),
+                                                        ),
                                                         modelId = model.id,
                                                         deckId = deck.id,
                                                         modelFields = model.fields,
@@ -1942,6 +2048,10 @@ class MainActivity : ComponentActivity() {
                                                         media = media,
                                                         importedFilename = imported,
                                                     )
+                                                    check(preferences.edit().putLong(
+                                                        SubmissionRecoveryKeys.REVISION_SEQUENCE,
+                                                        snapshot.revision,
+                                                    ).commit()) { "Could not save submission revision." }
                                                     if (includeImage && media != null && imported == null) {
                                                         check(preferences.edit().putFrozenSubmission(snapshot, SubmissionPhase.MEDIA_IMPORTING)
                                                             .remove(IMAGE_RECEIPT_PATH)
@@ -2160,15 +2270,20 @@ class MainActivity : ComponentActivity() {
         else -> null
     }
 
-    private fun clearConsumedImageIntent(uri: Uri) {
-        if (imageFromIntent(intent) == uri) {
-            setIntent(Intent(intent).apply {
-                action = null
-                type = null
-                data = null
-                removeExtra(Intent.EXTRA_STREAM)
-            })
-        }
+    private fun clearConsumedShareIntent(expectedText: String?, expectedImage: Uri?): Boolean {
+        val currentIntent = intent ?: return false
+        if (!intentPayloadMatches(
+                textFromIntent(currentIntent), imageFromIntent(currentIntent)?.toString(),
+                expectedText, expectedImage?.toString(),
+            )
+        ) return false
+        setIntent(Intent(currentIntent).apply {
+            action = null
+            type = null
+            data = null
+            replaceExtras(Bundle())
+        })
+        return true
     }
 
     private fun copyImageToDraft(uri: Uri): File {
