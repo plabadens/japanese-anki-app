@@ -1,10 +1,20 @@
 package dev.pierre.japaneseanki
 
+internal enum class PitchPatternKind { Heiban, Atamadaka, Nakadaka, Odaka }
+
 class PitchAccent private constructor(
     val reading: String,
     val accentPosition: Int,
     val morae: List<String>,
 ) {
+    internal val patternKind: PitchPatternKind
+        get() = when {
+            accentPosition == 0 -> PitchPatternKind.Heiban
+            accentPosition == 1 -> PitchPatternKind.Atamadaka
+            accentPosition == morae.size -> PitchPatternKind.Odaka
+            else -> PitchPatternKind.Nakadaka
+        }
+
     val fieldMarkup: String by lazy {
         val levels = pitchClasses(accentPosition, morae.size)
         morae.indices.joinToString(separator = "") { index ->

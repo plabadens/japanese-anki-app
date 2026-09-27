@@ -38,6 +38,13 @@ class PitchAccentTest {
         )
     }
 
+    @Test fun identifiesTheFourPitchPatternColors() {
+        assertEquals(PitchPatternKind.Heiban, PitchAccent.create("がっこう", 0)!!.patternKind)
+        assertEquals(PitchPatternKind.Atamadaka, PitchAccent.create("がっこう", 1)!!.patternKind)
+        assertEquals(PitchPatternKind.Nakadaka, PitchAccent.create("がっこう", 2)!!.patternKind)
+        assertEquals(PitchPatternKind.Odaka, PitchAccent.create("がっこう", 4)!!.patternKind)
+    }
+
     @Test fun rejectsInvalidReadingsAndOutOfRangeAccents() {
         assertNull(PitchAccent.create("かなabc", 0))
         assertNull(PitchAccent.create("かな", 3))

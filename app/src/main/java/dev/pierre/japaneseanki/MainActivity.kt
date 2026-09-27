@@ -20,7 +20,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,7 +27,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -52,7 +50,6 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,11 +57,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -1102,7 +1095,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
-                            if (pitch != null) PitchDiagram(pitch)
+                            if (pitch != null) PitchPatternDiagram(pitch, PitchDiagramScale.Compact)
                             OutlinedTextField(
                                 value = definition,
                                 onValueChange = {
@@ -1437,36 +1430,3 @@ private fun clearPendingSubmission(preferences: SharedPreferences) {
 
 private fun TextRange.coerceIn(min: Int, max: Int): TextRange =
     TextRange(start.coerceIn(min, max), end.coerceIn(min, max))
-
-@Composable
-private fun PitchDiagram(pitch: PitchAccent) {
-    val color = MaterialTheme.colorScheme.primary
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Canvas(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(44.dp)
-                .semantics { contentDescription = "Pitch contour: ${pitch.contourDescription}" },
-        ) {
-            val margin = 12.dp.toPx()
-            val highY = 8.dp.toPx()
-            val lowY = size.height - 8.dp.toPx()
-            val step = if (pitch.morae.size < 2) 0f
-            else (size.width - margin * 2) / (pitch.morae.size - 1)
-            val points = pitch.highLevels.mapIndexed { index, high ->
-                Offset(margin + step * index, if (high) highY else lowY)
-            }
-            points.zipWithNext().forEach { (start, end) ->
-                drawLine(color, start, end, strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
-            }
-            points.forEach { point -> drawCircle(color, radius = 3.dp.toPx(), center = point) }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-        ) {
-            pitch.morae.forEach { mora -> Text(mora, color = color) }
-        }
-        Text("Accent ${pitch.accentPosition}", style = MaterialTheme.typography.bodySmall)
-    }
-}
