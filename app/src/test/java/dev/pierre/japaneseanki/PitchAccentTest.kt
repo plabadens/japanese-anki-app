@@ -45,22 +45,24 @@ class PitchAccentTest {
         assertFalse(PitchAccent.create("かな", 1)!!.fieldMarkup.contains("<script"))
     }
 
-    @Test fun draftWillNotExportPitchForAStaleReading() {
+    @Test fun stalePitchDoesNotBlockExportAndIsOmitted() {
         val pitch = PitchAccent.create("ねこ", 0)!!
         val draft = ManualNoteDraft(
             sentence = "猫",
             target = TargetSpan(0, 1),
             sentenceReading = "ねこ",
-            leaveSentenceTargetUnannotated = false,
             vocabulary = "猫",
             vocabularyReading = "ねこ",
-            leaveVocabularyUnannotated = false,
             definition = "cat",
+            dictionaryEntryResolved = true,
             pitch = pitch,
         )
         assertTrue(draft.validationErrors().isEmpty())
         assertEquals(pitch.fieldMarkup, draft.fieldsByName()?.get("VocabPitch"))
-        assertFalse(draft.copy(vocabularyReading = "びょう").validationErrors().isEmpty())
+
+        val mismatchedPitch = draft.copy(vocabularyReading = "びょう")
+        assertTrue(mismatchedPitch.validationErrors().isEmpty())
+        assertEquals("", mismatchedPitch.fieldsByName()?.get("VocabPitch"))
     }
 
     private fun classes(reading: String, accent: Int): List<String> =

@@ -5,8 +5,6 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
 import android.content.pm.PackageManager
-import org.json.JSONArray
-import org.json.JSONObject
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -43,7 +41,9 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.OutlinedButton
@@ -61,13 +61,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.TextRange
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
@@ -128,6 +127,7 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
+    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         sharedText.value = textFromIntent(intent)
@@ -166,14 +166,18 @@ class MainActivity : ComponentActivity() {
                 )
             }
             var vocabulary by remember { mutableStateOf(preferences.getString("vocabulary", "").orEmpty()) }
-            var vocabularyReading by remember { mutableStateOf(preferences.getString("vocabulary_reading", "").orEmpty()) }
-            var pitchAccentText by remember { mutableStateOf(preferences.getString("pitch_accent", "").orEmpty()) }
+            var vocabularyReading by remember { mutableStateOf("") }
+            var pitchAccentText by remember { mutableStateOf("") }
             val pitch = pitchAccentText.toIntOrNull()?.let { PitchAccent.create(vocabularyReading, it) }
             var definition by remember { mutableStateOf(preferences.getString("definition", "").orEmpty()) }
-            var sentenceReading by remember { mutableStateOf(preferences.getString("sentence_reading", "").orEmpty()) }
-            var leaveSentenceTargetUnannotated by remember { mutableStateOf(preferences.getBoolean("leave_sentence_target_unannotated", false)) }
-            var leaveVocabularyUnannotated by remember { mutableStateOf(preferences.getBoolean("leave_vocabulary_unannotated", false)) }
-            var dependentFieldsStale by remember { mutableStateOf(preferences.getBoolean("dependent_fields_stale", false)) }
+            var definitionManuallyEdited by remember { mutableStateOf(preferences.getBoolean("definition_manual", false)) }
+            var definitionProvenanceKnown by remember { mutableStateOf(preferences.contains("definition_manual")) }
+            var sentenceReading by remember { mutableStateOf("") }
+            var dependentFieldsStale by remember {
+                mutableStateOf(preferences.getBoolean("definition_manual_stale", false) &&
+                    preferences.getBoolean("definition_manual", false))
+            }
+            var showDictionarySheet by remember { mutableStateOf(false) }
             var translation by remember { mutableStateOf(preferences.getString("translation", "").orEmpty()) }
             var notes by remember { mutableStateOf(preferences.getString("notes", "").orEmpty()) }
             var defaultTags by remember { mutableStateOf(settings.getString("default_tags", "").orEmpty()) }
@@ -193,7 +197,6 @@ class MainActivity : ComponentActivity() {
             var settingsSaving by remember { mutableStateOf(false) }
             var settingsError by remember { mutableStateOf<String?>(null) }
             var showAndroidVoiceMenu by remember { mutableStateOf(false) }
-            var showSentenceFurigana by remember { mutableStateOf(false) }
             var dictionaryRetry by remember { mutableStateOf(0) }
             var dictionaryReady by remember { mutableStateOf(false) }
             var dictionaryLoading by remember { mutableStateOf(false) }
@@ -207,10 +210,7 @@ class MainActivity : ComponentActivity() {
             var tokenizationError by remember { mutableStateOf<String?>(null) }
             var analysisRetry by remember { mutableStateOf(0) }
             var japaneseTokens by remember { mutableStateOf<List<JapaneseToken>>(emptyList()) }
-            var furiganaCorrections by remember {
-                mutableStateOf(decodeFuriganaCorrections(preferences.getString("sentence_furigana_corrections", null)))
-            }
-            val sentenceFurigana = sentenceFuriganaSpans(editor.text, japaneseTokens, target, furiganaCorrections)
+            val sentenceFurigana = sentenceFuriganaSpans(editor.text, japaneseTokens, target)
             val analyzedTarget = target?.let { resolveAnalyzedLemma(japaneseTokens, it) }
             var dictionaryEntries by remember { mutableStateOf<List<DictionaryEntry>>(emptyList()) }
             var dictionarySearchLoading by remember { mutableStateOf(false) }
@@ -256,23 +256,20 @@ class MainActivity : ComponentActivity() {
             val selectedModel = noteTypes.firstOrNull { it.id == selectedModelId }
             val selectedDeck = decks.firstOrNull { it.id == selectedDeckId }
             val incoming = sharedText.value
-            val hasTargetData = vocabulary.isNotBlank() || vocabularyReading.isNotBlank() ||
-                pitchAccentText.isNotBlank() || definition.isNotBlank() || sentenceReading.isNotBlank()
+            val hasManualDefinition = definitionManuallyEdited && definition.isNotBlank()
             val clearDraft = {
                 editor = TextFieldValue("")
                 japaneseTokens = emptyList()
-                furiganaCorrections = emptyList()
                 tokenizationLoading = false
                 tokenizationError = null
-                showSentenceFurigana = false
                 target = null
                 vocabulary = ""
                 vocabularyReading = ""
                 pitchAccentText = ""
                 definition = ""
                 sentenceReading = ""
-                leaveSentenceTargetUnannotated = false
-                leaveVocabularyUnannotated = false
+                definitionManuallyEdited = false
+                definitionProvenanceKnown = true
                 dependentFieldsStale = false
                 translation = ""
                 notes = ""
@@ -284,23 +281,23 @@ class MainActivity : ComponentActivity() {
             val selectTarget: (TargetSpan?) -> Unit = { selected ->
                 val previousTarget = target
                 if (selected != previousTarget) {
-                    if (hasTargetData) dependentFieldsStale = true
-                    leaveSentenceTargetUnannotated = false
-                    leaveVocabularyUnannotated = false
+                    if (hasManualDefinition) dependentFieldsStale = true
+                    selectedDictionaryEntry = null
+                    selectedDictionaryEntryId = null
+                    dictionaryEntries = emptyList()
+                    pitchAccentText = ""
                 }
                 target = selected
-                if (selected != null && sentenceReading.isBlank() && !leaveSentenceTargetUnannotated) {
+                if (selected != null && sentenceReading.isBlank()) {
                     sentenceReading = resolveSurfaceReading(
-                        editor.text, japaneseTokens, selected, furiganaCorrections,
+                        editor.text, japaneseTokens, selected,
                     ).orEmpty()
                 }
                 if (selected != null && vocabulary.isBlank()) {
                     val surface = selected.textIn(editor.text).orEmpty()
                     val lemma = resolveAnalyzedLemma(japaneseTokens, selected)
                     vocabulary = lemma?.expression ?: surface
-                    if (lemma != null && vocabularyReading.isBlank() && !leaveVocabularyUnannotated &&
-                        containsKanji(lemma.expression)
-                    ) {
+                    if (lemma != null && vocabularyReading.isBlank() && containsKanji(lemma.expression)) {
                         vocabularyReading = lemma.reading
                     }
                 }
@@ -316,7 +313,7 @@ class MainActivity : ComponentActivity() {
                     throw cancelled
                 } catch (error: Exception) {
                     Log.e("OfflineDictionary", "Could not prepare the bundled dictionary", error)
-                    dictionaryError = "Offline dictionary could not be prepared. Manual note entry remains available."
+                    dictionaryError = "Offline dictionary could not be prepared. A dictionary entry is required before Send."
                 } finally {
                     dictionaryLoading = false
                 }
@@ -333,7 +330,7 @@ class MainActivity : ComponentActivity() {
                     throw cancelled
                 } catch (error: LinkageError) {
                     Log.e("OfflineAnalyzer", "Could not load MeCab native analysis", error)
-                    analyzerError = "MeCab native analysis could not load. Manual entry remains available."
+                    analyzerError = "MeCab native analysis could not load. You can still select a sentence span and search the dictionary."
                 } catch (error: Exception) {
                     Log.e("OfflineAnalyzer", "Could not prepare UniDic analysis", error)
                     analyzerError = "UniDic could not be installed. Check available storage and retry."
@@ -357,7 +354,7 @@ class MainActivity : ComponentActivity() {
                     throw cancelled
                 } catch (_: Exception) {
                     japaneseTokens = emptyList()
-                    tokenizationError = "Could not analyze this sentence. Select a target or enter values manually."
+                    tokenizationError = "Could not analyze this sentence. Select a target span to search the dictionary."
                 } finally {
                     tokenizationLoading = false
                 }
@@ -365,7 +362,7 @@ class MainActivity : ComponentActivity() {
 
             androidx.compose.runtime.LaunchedEffect(
                 target, editor.text, japaneseTokens, vocabulary, vocabularyReading,
-                leaveVocabularyUnannotated, dependentFieldsStale,
+                dependentFieldsStale,
             ) {
                 val targetSpan = target ?: return@LaunchedEffect
                 val targetText = targetSpan.textIn(editor.text) ?: return@LaunchedEffect
@@ -374,21 +371,20 @@ class MainActivity : ComponentActivity() {
                     (!dependentFieldsStale && vocabulary == targetText)
                 if (shouldResolveSurface) vocabulary = resolved.expression
                 if ((shouldResolveSurface || vocabulary == resolved.expression) && vocabularyReading.isBlank() &&
-                    !leaveVocabularyUnannotated && containsKanji(resolved.expression)
+                    containsKanji(resolved.expression)
                 ) vocabularyReading = resolved.reading
             }
 
             androidx.compose.runtime.LaunchedEffect(
                 target, editor.text, japaneseTokens, sentenceReading,
-                leaveSentenceTargetUnannotated, furiganaCorrections,
             ) {
                 val targetSpan = target ?: return@LaunchedEffect
                 val targetText = targetSpan.textIn(editor.text) ?: return@LaunchedEffect
-                if (sentenceReading.isNotBlank() || leaveSentenceTargetUnannotated || !containsKanji(targetText)) {
+                if (sentenceReading.isNotBlank() || !containsKanji(targetText)) {
                     return@LaunchedEffect
                 }
                 sentenceReading = resolveSurfaceReading(
-                    editor.text, japaneseTokens, targetSpan, furiganaCorrections,
+                    editor.text, japaneseTokens, targetSpan,
                 )?.takeIf(String::isNotBlank) ?: return@LaunchedEffect
             }
 
@@ -411,34 +407,73 @@ class MainActivity : ComponentActivity() {
                             it.id == selectedDictionaryEntryId &&
                                 it.expression == vocabulary && it.reading == vocabularyReading
                         }
-                        selectedDictionaryEntry = restoredEntry
-                        selectedSenseIndices = if (restoredEntry != null) {
-                            preferences.getStringSet("dictionary_sense_indices", null)
-                                ?.mapNotNull(String::toIntOrNull)?.filter { it in restoredEntry.senses.indices }
-                                ?.toSet() ?: setOf(0)
+                        val entry = entries.singleOrNull() ?: restoredEntry
+                        selectedDictionaryEntry = entry
+                        selectedSenseIndices = if (entry != null) {
+                            if (restoredEntry != null) {
+                                preferences.getStringSet("dictionary_sense_indices", null)
+                                    ?.mapNotNull(String::toIntOrNull)?.filter { it in entry.senses.indices }
+                                    ?.toSet()?.takeIf { it.isNotEmpty() } ?: setOf(0)
+                            } else if (entry.senses.isEmpty()) emptySet() else setOf(0)
                         } else emptySet()
+                        if (entry != null) {
+                            val entryChanged = selectedDictionaryEntryId != entry.id || vocabulary != entry.expression ||
+                                vocabularyReading != entry.reading
+                            val savedSenses = selectedSenseIndices.sorted().mapNotNull { entry.senses.getOrNull(it) }
+                                .joinToString("\n") { it.glosses.joinToString("; ") }
+                            if (!definitionProvenanceKnown) {
+                                definitionManuallyEdited = definition.isNotBlank() && definition != savedSenses
+                                definitionProvenanceKnown = true
+                            }
+                            if (entryChanged) {
+                                if (definitionManuallyEdited && definition.isNotBlank()) dependentFieldsStale = true
+                                if (selectedDictionaryEntryId != entry.id) pitchAccentText = ""
+                                vocabulary = entry.expression
+                                vocabularyReading = entry.reading
+                                selectedDictionaryEntryId = entry.id
+                            }
+                            if (!definitionManuallyEdited) {
+                                val resolvedSenses = if (entryChanged || selectedSenseIndices.isEmpty()) setOf(0)
+                                    else selectedSenseIndices
+                                selectedSenseIndices = resolvedSenses
+                                definition = resolvedSenses.sorted().mapNotNull { index ->
+                                    entry.senses.getOrNull(index)?.glosses?.joinToString("; ")
+                                }.joinToString("\n")
+                            }
+                        }
+                        if (entries.size > 1 && entry == null) showDictionarySheet = true
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
-                        dictionaryError = "Dictionary lookup failed; enter the vocabulary manually."
+                        dictionaryError = "Dictionary lookup failed. Retry before selecting a dictionary entry."
                     } finally {
                         dictionarySearchLoading = false
                     }
                 }
             }
 
-            androidx.compose.runtime.LaunchedEffect(dictionaryReady, vocabulary, vocabularyReading, dictionaryRetry) {
-                if (!dictionaryReady || vocabulary.isBlank() || vocabularyReading.isBlank()) {
+            androidx.compose.runtime.LaunchedEffect(
+                dictionaryReady, selectedDictionaryEntryId, selectedDictionaryEntry, vocabulary, vocabularyReading,
+                target, editor.text, dictionaryRetry,
+            ) {
+                val entry = selectedDictionaryEntry?.takeIf {
+                    it.id == selectedDictionaryEntryId && it.expression == vocabulary && it.reading == vocabularyReading
+                }
+                if (!dictionaryReady || entry == null || vocabulary.isBlank() || vocabularyReading.isBlank()) {
                     pitchCandidates = emptyList()
+                    pitchAccentText = ""
+                    pitchLookupLoading = false
                     return@LaunchedEffect
                 }
+                pitchAccentText = ""
+                pitchCandidates = emptyList()
                 pitchLookupLoading = true
                 try {
                     val candidates = withContext(Dispatchers.IO) {
-                        offlineDictionary.pitch(vocabulary, vocabularyReading)
-                    }.filter { PitchAccent.create(vocabularyReading, it.accent) != null }
+                        offlineDictionary.pitch(entry.expression, entry.reading)
+                    }.filter { PitchAccent.create(entry.reading, it.accent) != null }
                     pitchCandidates = candidates
-                    if (pitchAccentText.isBlank() && candidates.isNotEmpty()) {
+                    if (candidates.isNotEmpty()) {
                         pitchAccentText = candidates.first().accent.toString()
                     }
                 } catch (cancelled: CancellationException) {
@@ -454,7 +489,7 @@ class MainActivity : ComponentActivity() {
                 if (incoming != null) {
                     if (editor.text.isBlank()) {
                         editor = TextFieldValue(incoming, selection = TextRange(incoming.length))
-                        if (hasTargetData) dependentFieldsStale = true
+                        if (hasManualDefinition) dependentFieldsStale = true
                         target = null
                         sharedText.value = null
                     } else {
@@ -694,11 +729,10 @@ class MainActivity : ComponentActivity() {
                     confirmButton = {
                         TextButton(onClick = {
                             editor = TextFieldValue(incoming, selection = TextRange(incoming.length))
-                            if (hasTargetData) dependentFieldsStale = true
+                            if (hasManualDefinition) dependentFieldsStale = true
                             target = null
                             japaneseTokens = emptyList()
                             tokenizationError = null
-                            showSentenceFurigana = false
                             tokenizationLoading = analyzerReady
                             showReplace = false
                             sharedText.value = null
@@ -716,11 +750,12 @@ class MainActivity : ComponentActivity() {
                 sentence = editor.text,
                 target = target,
                 sentenceReading = sentenceReading,
-                leaveSentenceTargetUnannotated = leaveSentenceTargetUnannotated,
                 vocabulary = vocabulary,
                 vocabularyReading = vocabularyReading,
-                leaveVocabularyUnannotated = leaveVocabularyUnannotated,
                 definition = definition,
+                dictionaryEntryResolved = selectedDictionaryEntry?.let {
+                    it.id == selectedDictionaryEntryId && it.expression == vocabulary && it.reading == vocabularyReading
+                } == true,
                 pitch = pitch,
                 dependentFieldsStale = dependentFieldsStale,
                 translation = translation,
@@ -833,9 +868,8 @@ class MainActivity : ComponentActivity() {
 
             androidx.compose.runtime.LaunchedEffect(
                 editor.text, editor.selection, target, vocabulary, vocabularyReading, pitchAccentText, definition,
-                sentenceReading, leaveSentenceTargetUnannotated, leaveVocabularyUnannotated,
-                dependentFieldsStale, translation, notes, tags, selectedModelId, selectedDeckId,
-                selectedDictionaryEntryId, selectedSenseIndices, furiganaCorrections,
+                sentenceReading, definitionManuallyEdited, dependentFieldsStale, translation, notes, tags, selectedModelId, selectedDeckId,
+                selectedDictionaryEntryId, selectedSenseIndices,
             ) {
                 preferences.edit()
                     .putString("sentence", editor.text)
@@ -844,13 +878,15 @@ class MainActivity : ComponentActivity() {
                     .putInt("target_start", target?.start ?: -1)
                     .putInt("target_end", target?.end ?: -1)
                     .putString("vocabulary", vocabulary)
-                    .putString("vocabulary_reading", vocabularyReading)
-                    .putString("pitch_accent", pitchAccentText)
+                    .remove("vocabulary_reading")
+                    .remove("pitch_accent")
                     .putString("definition", definition)
-                    .putString("sentence_reading", sentenceReading)
-                    .putBoolean("leave_sentence_target_unannotated", leaveSentenceTargetUnannotated)
-                    .putBoolean("leave_vocabulary_unannotated", leaveVocabularyUnannotated)
-                    .putBoolean("dependent_fields_stale", dependentFieldsStale)
+                    .putBoolean("definition_manual", definitionManuallyEdited)
+                    .putBoolean("definition_manual_stale", dependentFieldsStale && definitionManuallyEdited)
+                    .remove("dependent_fields_stale")
+                    .remove("sentence_reading")
+                    .remove("leave_sentence_target_unannotated")
+                    .remove("leave_vocabulary_unannotated")
                     .putString("translation", translation)
                     .putString("notes", notes)
                     .putString("tags", tags)
@@ -858,12 +894,38 @@ class MainActivity : ComponentActivity() {
                     .putLong("deck_id", selectedDeckId ?: -1)
                     .putLong("dictionary_entry_id", selectedDictionaryEntryId ?: -1)
                     .putStringSet("dictionary_sense_indices", selectedSenseIndices.mapTo(mutableSetOf()) { it.toString() })
-                    .putString("sentence_furigana_corrections", encodeFuriganaCorrections(furiganaCorrections))
+                    .remove("sentence_furigana_corrections")
                     .apply()
             }
 
             MaterialTheme(
-                colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme(),
+                colorScheme = if (isSystemInDarkTheme()) {
+                    darkColorScheme(
+                        primary = Color(0xFFD0C9B8), onPrimary = Color(0xFF25231F),
+                        secondary = Color(0xFFB8B1A3), onSecondary = Color(0xFF25231F),
+                        tertiary = Color(0xFFB8B1A3), onTertiary = Color(0xFF25231F),
+                        primaryContainer = Color(0xFF49463F), onPrimaryContainer = Color(0xFFF4F1E8),
+                        secondaryContainer = Color(0xFF393731), onSecondaryContainer = Color(0xFFE9E5DC),
+                        tertiaryContainer = Color(0xFF393731), onTertiaryContainer = Color(0xFFE9E5DC),
+                        background = Color(0xFF1D1C19), onBackground = Color(0xFFE9E5DC),
+                        surface = Color(0xFF25231F), onSurface = Color(0xFFE9E5DC),
+                        surfaceVariant = Color(0xFF393731), onSurfaceVariant = Color(0xFFD0CABE),
+                        outline = Color(0xFF888276),
+                    )
+                } else {
+                    lightColorScheme(
+                        primary = Color(0xFF49463F), onPrimary = Color(0xFFFFFFFF),
+                        secondary = Color(0xFF625E55), onSecondary = Color(0xFFFFFFFF),
+                        tertiary = Color(0xFF625E55), onTertiary = Color(0xFFFFFFFF),
+                        primaryContainer = Color(0xFFE1DDD2), onPrimaryContainer = Color(0xFF25231F),
+                        secondaryContainer = Color(0xFFE9E5DC), onSecondaryContainer = Color(0xFF25231F),
+                        tertiaryContainer = Color(0xFFE9E5DC), onTertiaryContainer = Color(0xFF25231F),
+                        background = Color(0xFFF4F1E8), onBackground = Color(0xFF25231F),
+                        surface = Color(0xFFFAF8F2), onSurface = Color(0xFF25231F),
+                        surfaceVariant = Color(0xFFE9E5DC), onSurfaceVariant = Color(0xFF49463F),
+                        outline = Color(0xFF777166),
+                    )
+                },
             ) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     Column(
@@ -906,11 +968,10 @@ class MainActivity : ComponentActivity() {
                             value = editor,
                             onValueChange = { updated ->
                                 if (updated.text != editor.text) {
-                                    if (target != null || hasTargetData) dependentFieldsStale = true
+                                    if (hasManualDefinition) dependentFieldsStale = true
                                     selectTarget(null)
                                     japaneseTokens = emptyList()
                                     tokenizationError = null
-                                    showSentenceFurigana = false
                                     tokenizationLoading = analyzerReady
                                 }
                                 editor = updated
@@ -936,37 +997,6 @@ class MainActivity : ComponentActivity() {
                                     } else {
                                         OutlinedButton(onClick = onSelect) { Text(token.surface) }
                                     }
-                                }
-                            }
-                            if (sentenceFurigana.isNotEmpty()) {
-                                TextButton(onClick = { showSentenceFurigana = !showSentenceFurigana }) {
-                                    Text(if (showSentenceFurigana) "Hide sentence furigana edits" else
-                                        "Review sentence furigana (${sentenceFurigana.size} spans)")
-                                }
-                            }
-                            if (showSentenceFurigana) {
-                                Text("Offline suggestions; edit or clear non-target readings")
-                                sentenceFurigana.forEach { annotation ->
-                                    OutlinedTextField(
-                                        value = annotation.reading,
-                                        onValueChange = { reading ->
-                                            val correction = FuriganaCorrection(
-                                                editor.text, annotation.span, annotation.surface, reading,
-                                            )
-                                            furiganaCorrections = (furiganaCorrections.filterNot {
-                                                it.sentence == correction.sentence && it.span == correction.span &&
-                                                    it.surface == correction.surface
-                                            } + correction).takeLast(500)
-                                        },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        label = { Text("${annotation.surface} reading") },
-                                        supportingText = {
-                                            Text(if (annotation.reading.isBlank()) {
-                                                "Unresolved; optional outside the selected target."
-                                            } else "UniDic suggestion — verify or correct it.")
-                                        },
-                                        singleLine = true,
-                                    )
                                 }
                             }
                             if (tokenizationLoading) Text("Analyzing sentence…")
@@ -1001,61 +1031,22 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         if (target?.textIn(editor.text) != null) {
-                            Text("Offline dictionary matches", style = MaterialTheme.typography.titleMedium)
+                            Text("Offline dictionary match", style = MaterialTheme.typography.titleMedium)
+                            if (dictionaryEntries.size > 1 && selectedDictionaryEntry == null) {
+                                OutlinedButton(onClick = { showDictionarySheet = true }) {
+                                    Text("Choose dictionary entry")
+                                }
+                            }
                             analyzedTarget?.let { Text("Also searching analyzed lemma: ${it.expression}") }
                             when {
                                 !dictionaryReady && dictionaryLoading -> Text("Dictionary is being prepared…")
-                                !dictionaryReady -> Text("Dictionary unavailable; complete the vocabulary manually.")
+                                !dictionaryReady -> Text("Dictionary unavailable; an entry is required before Send.")
                                 dictionarySearchLoading -> Text("Searching JMdict…")
-                                dictionaryEntries.isEmpty() -> Text("No spelling, reading, or analyzer-lemma match. Manual entry remains available.")
+                                dictionaryEntries.isEmpty() -> Text("No dictionary match for this selection. Edit the sentence or reselect a target.")
                             }
-                            dictionaryEntries.forEach { entry ->
-                                OutlinedButton(
-                                    onClick = {
-                                        val changedEntry = vocabulary != entry.expression || vocabularyReading != entry.reading
-                                        if (changedEntry && (pitchAccentText.isNotBlank() || definition.isNotBlank())) {
-                                            dependentFieldsStale = true
-                                        }
-                                        vocabulary = entry.expression
-                                        vocabularyReading = entry.reading
-                                        val targetSpan = target
-                                        val targetText = targetSpan?.textIn(editor.text).orEmpty()
-                                        val surfaceReading = targetSpan?.let {
-                                            resolveSurfaceReading(editor.text, japaneseTokens, it, furiganaCorrections)
-                                        }
-                                        if (sentenceReading.isBlank() && !leaveSentenceTargetUnannotated &&
-                                            containsKanji(targetText) && surfaceReading != null
-                                        ) {
-                                            sentenceReading = surfaceReading
-                                        }
-                                        leaveVocabularyUnannotated = false
-                                        val isSameEntry = selectedDictionaryEntry?.id == entry.id
-                                        val hasManualDefinition = definition.isNotBlank() && !isSameEntry
-                                        selectedDictionaryEntry = entry
-                                        selectedDictionaryEntryId = entry.id
-                                        selectedSenseIndices = when {
-                                            isSameEntry -> selectedSenseIndices
-                                            hasManualDefinition || entry.senses.isEmpty() -> emptySet()
-                                            else -> setOf(0)
-                                        }
-                                        if (!hasManualDefinition && !isSameEntry) {
-                                            definition = entry.senses.firstOrNull()?.glosses?.joinToString("; ").orEmpty()
-                                        }
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                ) {
-                                    Column(horizontalAlignment = Alignment.Start) {
-                                        Text("${entry.expression} · ${entry.reading}")
-                                        Text(
-                                            entry.senses.firstOrNull()?.glosses?.joinToString("; ").orEmpty(),
-                                            style = MaterialTheme.typography.bodySmall,
-                                        )
-                                        Text(
-                                            entry.senses.firstOrNull()?.partsOfSpeech?.joinToString(", ").orEmpty(),
-                                            style = MaterialTheme.typography.bodySmall,
-                                        )
-                                    }
-                                }
+                            selectedDictionaryEntry?.takeIf { dictionaryEntries.size == 1 }?.let { entry ->
+                                Text("${entry.expression} · ${entry.reading}", style = MaterialTheme.typography.titleSmall)
+                                Text(entry.senses.firstOrNull()?.glosses?.joinToString("; ").orEmpty())
                             }
                             if (dictionaryHasMore && !dictionarySearchLoading) {
                                 TextButton(onClick = {
@@ -1098,6 +1089,8 @@ class MainActivity : ComponentActivity() {
                                                 definition = newSelection.sorted().mapNotNull { selected ->
                                                     entry.senses.getOrNull(selected)?.glosses?.joinToString("; ")
                                                 }.joinToString("\n")
+                                                definitionManuallyEdited = false
+                                                definitionProvenanceKnown = true
                                             },
                                         )
                                         Column {
@@ -1109,99 +1102,16 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
-                            Text("Vocabulary", style = MaterialTheme.typography.titleMedium)
-                            OutlinedTextField(
-                                value = vocabulary,
-                                onValueChange = {
-                                    if (it != vocabulary && hasTargetData) dependentFieldsStale = true
-                                    vocabulary = it
-                                    selectedDictionaryEntry = null
-                                    selectedDictionaryEntryId = null
-                                    selectedSenseIndices = emptySet()
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Lemma or manual vocabulary") },
-                                singleLine = true,
-                            )
-                            OutlinedTextField(
-                                value = vocabularyReading,
-                                onValueChange = {
-                                    if (it != vocabularyReading && (pitchAccentText.isNotBlank() || definition.isNotBlank())) {
-                                        dependentFieldsStale = true
-                                    }
-                                    vocabularyReading = it
-                                    selectedDictionaryEntry = null
-                                    selectedDictionaryEntryId = null
-                                    selectedSenseIndices = emptySet()
-                                    leaveVocabularyUnannotated = false
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Vocabulary reading (UniDic suggestion, editable)") },
-                                singleLine = true,
-                            )
-                            OutlinedTextField(
-                                value = pitchAccentText,
-                                onValueChange = { value ->
-                                    if (value.all(Char::isDigit)) pitchAccentText = value
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Pitch accent position (optional, 0 = heiban)") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                singleLine = true,
-                            )
-                            when {
-                                pitchLookupLoading -> Text("Checking the offline Kanjium pitch data…")
-                                dictionaryReady && pitchCandidates.isEmpty() && vocabulary.isNotBlank() && vocabularyReading.isNotBlank() ->
-                                    Text("No matching Kanjium pitch record; unknown pitch remains empty.")
-                            }
-                            if (pitchCandidates.isNotEmpty()) {
-                                Text("Kanjium patterns (first source-listed pattern selected by default):")
-                                pitchCandidates.forEach { candidate ->
-                                    val label = candidate.partOfSpeech.ifBlank { "Pitch" }
-                                    TextButton(onClick = { pitchAccentText = candidate.accent.toString() }) {
-                                        Text("$label: ${candidate.accent}")
-                                    }
-                                }
-                            }
-                            when {
-                                pitch != null -> PitchDiagram(pitch)
-                                pitchAccentText.isNotBlank() -> Text(
-                                    "Enter a kana reading and an accent position from 0 to its mora count.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-                            Row {
-                                Checkbox(
-                                    checked = leaveVocabularyUnannotated,
-                                    onCheckedChange = {
-                                        leaveVocabularyUnannotated = it
-                                        if (it && vocabularyReading.isNotBlank()) dependentFieldsStale = true
-                                        if (it) vocabularyReading = ""
-                                    },
-                                )
-                                Text("Leave vocabulary without furigana")
-                            }
-                            OutlinedTextField(
-                                value = sentenceReading,
-                                onValueChange = { sentenceReading = it; leaveSentenceTargetUnannotated = false },
-                                modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Selected sentence span reading (UniDic suggestion, editable)") },
-                                singleLine = true,
-                            )
-                            Row {
-                                Checkbox(
-                                    checked = leaveSentenceTargetUnannotated,
-                                    onCheckedChange = {
-                                        leaveSentenceTargetUnannotated = it
-                                        if (it && sentenceReading.isNotBlank()) dependentFieldsStale = true
-                                        if (it) sentenceReading = ""
-                                    },
-                                )
-                                Text("Leave selected sentence span unannotated")
-                            }
+                            if (pitch != null) PitchDiagram(pitch)
                             OutlinedTextField(
                                 value = definition,
-                                onValueChange = { definition = it; selectedSenseIndices = emptySet() },
+                                onValueChange = {
+                                    definition = it
+                                    definitionManuallyEdited = true
+                                    definitionProvenanceKnown = true
+                                    dependentFieldsStale = false
+                                    selectedSenseIndices = emptySet()
+                                },
                                 modifier = Modifier.fillMaxWidth(),
                                 label = { Text("English definition (required)") },
                                 minLines = 2,
@@ -1231,7 +1141,7 @@ class MainActivity : ComponentActivity() {
                         if (target != null) {
                             if (dependentFieldsStale) {
                                 Text(
-                                    "Sentence or target changed. Existing manual values were kept; review them before using this note.",
+                                    "Sentence, target, or entry changed. Your manual definition was kept; review it before using this note.",
                                     style = MaterialTheme.typography.bodyMedium,
                                 )
                                 OutlinedButton(onClick = { dependentFieldsStale = false }) {
@@ -1413,6 +1323,52 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+                if (showDictionarySheet && target?.textIn(editor.text) != null && dictionaryEntries.size > 1 &&
+                    selectedDictionaryEntry == null
+                ) {
+                    ModalBottomSheet(onDismissRequest = { showDictionarySheet = false }) {
+                        Column(
+                            Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState())
+                                .padding(horizontal = 20.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text("Choose dictionary entry", style = MaterialTheme.typography.titleLarge)
+                            dictionaryEntries.forEach { entry ->
+                                OutlinedButton(
+                                    onClick = {
+                                        if (!definitionProvenanceKnown) {
+                                            val savedSenseIndices = preferences.getStringSet("dictionary_sense_indices", null)
+                                                ?.mapNotNull(String::toIntOrNull)?.filter { it in entry.senses.indices }
+                                                ?.takeIf { it.isNotEmpty() } ?: listOf(0)
+                                            val savedGlosses = savedSenseIndices.sorted().mapNotNull { index ->
+                                                entry.senses.getOrNull(index)?.glosses?.joinToString("; ")
+                                            }.joinToString("\n")
+                                            definitionManuallyEdited = definition.isNotBlank() && definition != savedGlosses
+                                            definitionProvenanceKnown = true
+                                        }
+                                        pitchAccentText = ""
+                                        if (definitionManuallyEdited && definition.isNotBlank()) dependentFieldsStale = true
+                                        vocabulary = entry.expression
+                                        vocabularyReading = entry.reading
+                                        selectedDictionaryEntry = entry
+                                        selectedDictionaryEntryId = entry.id
+                                        selectedSenseIndices = if (entry.senses.isEmpty()) emptySet() else setOf(0)
+                                        if (!definitionManuallyEdited) {
+                                            definition = entry.senses.firstOrNull()?.glosses?.joinToString("; ").orEmpty()
+                                        }
+                                        showDictionarySheet = false
+                                    },
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                                ) {
+                                    Column(horizontalAlignment = Alignment.Start) {
+                                        Text("${entry.expression} · ${entry.reading}")
+                                        Text(entry.senses.firstOrNull()?.glosses?.joinToString("; ").orEmpty())
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -1457,44 +1413,12 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private fun decodeFuriganaCorrections(raw: String?): List<FuriganaCorrection> {
-    if (raw.isNullOrBlank()) return emptyList()
-    return runCatching {
-        val array = JSONArray(raw)
-        buildList {
-            for (index in 0 until array.length()) {
-                val item = array.optJSONObject(index) ?: continue
-                val sentence = item.optString("sentence")
-                val surface = item.optString("surface")
-                val span = TargetSpan(item.optInt("start", -1), item.optInt("end", -1))
-                if (surface.isNotEmpty() && span.textIn(sentence) == surface) {
-                    add(FuriganaCorrection(sentence, span, surface, item.optString("reading")))
-                }
-            }
-        }
-    }.getOrDefault(emptyList())
-}
-
-private fun encodeFuriganaCorrections(corrections: List<FuriganaCorrection>): String =
-    JSONArray().apply {
-        corrections.takeLast(500).forEach { correction ->
-            put(
-                JSONObject()
-                    .put("sentence", correction.sentence)
-                    .put("start", correction.span.start)
-                    .put("end", correction.span.end)
-                    .put("surface", correction.surface)
-                    .put("reading", correction.reading),
-            )
-        }
-    }.toString()
-
 private fun clearPersistedDraft(preferences: SharedPreferences) {
     val draftKeys = listOf(
         "sentence", "selection_start", "selection_end", "target_start", "target_end",
-        "vocabulary", "vocabulary_reading", "pitch_accent", "definition", "sentence_reading",
+        "vocabulary", "vocabulary_reading", "pitch_accent", "definition", "definition_manual_stale", "sentence_reading",
         "leave_sentence_target_unannotated", "leave_vocabulary_unannotated", "dependent_fields_stale",
-        "translation", "notes", "tags", "submission_status", "pending_model_id", "pending_deck_id",
+        "definition_manual", "definition_manual_stale", "translation", "notes", "tags", "submission_status", "pending_model_id", "pending_deck_id",
         "pending_sentence", "pending_lemma", "dictionary_entry_id", "dictionary_sense_indices",
         "sentence_furigana_corrections",
     )

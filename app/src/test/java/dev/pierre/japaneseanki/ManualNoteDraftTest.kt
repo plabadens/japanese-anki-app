@@ -10,17 +10,14 @@ import org.junit.Test
 class ManualNoteDraftTest {
     private fun draft(
         sentenceReading: String = "",
-        leaveSentenceTargetUnannotated: Boolean = false,
         vocabularyReading: String = "",
-        leaveVocabularyUnannotated: Boolean = false,
     ) = ManualNoteDraft(
         sentence = "猫が走る",
         target = TargetSpan(0, 1),
         sentenceReading = sentenceReading,
-        leaveSentenceTargetUnannotated = leaveSentenceTargetUnannotated,
         vocabulary = "猫",
+        dictionaryEntryResolved = true,
         vocabularyReading = vocabularyReading,
-        leaveVocabularyUnannotated = leaveVocabularyUnannotated,
         definition = "cat",
     )
 
@@ -92,6 +89,28 @@ class ManualNoteDraftTest {
         assertEquals("", stale.fieldsByName()!!["VocabPitch"])
     }
 
+    @Test fun typedVocabularyWithoutDictionaryEntryCannotSendOrExportPitch() {
+        val pitch = PitchAccent.create("ねこ", 0)!!
+        val unresolved = draft(vocabularyReading = "ねこ").copy(
+            dictionaryEntryResolved = false,
+            pitch = pitch,
+        )
+        assertTrue(unresolved.validationErrors().any { it.contains("dictionary entry") })
+        assertNull(unresolved.fieldsByName())
+    }
+
+    @Test fun optionalReadingsAndUnknownPitchDoNotRequireReview() {
+        val optional = draft().copy(
+            sentenceReading = "",
+            vocabularyReading = "",
+            pitch = null,
+            dependentFieldsStale = false,
+        )
+        assertTrue(optional.validationErrors().isEmpty())
+        assertEquals("猫", optional.fieldsByName()!!["VocabFurigana"])
+        assertEquals("", optional.fieldsByName()!!["VocabPitch"])
+    }
+
     @Test fun validPitchSerializesAndRequiredNoteFieldsStillValidate() {
         val pitch = PitchAccent.create("ねこ", 0)!!
         val fields = draft(vocabularyReading = "ねこ").copy(pitch = pitch).fieldsByName()
@@ -99,6 +118,9 @@ class ManualNoteDraftTest {
         assertEquals(pitch.fieldMarkup, fields!!["VocabPitch"])
 
         assertNull(draft().copy(definition = "").fieldsByName())
+        val staleRequiredFields = draft().copy(definition = "manually corrected", dependentFieldsStale = true)
+        assertTrue(staleRequiredFields.validationErrors().any { it.contains("Review your definition") })
+        assertNull(staleRequiredFields.fieldsByName())
         assertFalse(draft().copy(sentence = "").validationErrors().isEmpty())
         assertFalse(draft().copy(target = TargetSpan(10, 12)).validationErrors().isEmpty())
         assertFalse(draft().copy(vocabulary = "").validationErrors().isEmpty())

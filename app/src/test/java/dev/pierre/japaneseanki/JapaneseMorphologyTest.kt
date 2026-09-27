@@ -18,22 +18,18 @@ class JapaneseMorphologyTest {
         assertEquals(AnalyzedLemma("食べる", "たべる"), resolveAnalyzedLemma(tokens, TargetSpan(0, 3)))
     }
 
-    @Test fun sentenceFuriganaSuggestionsExcludeTargetAndHonorSentenceScopedCorrections() {
+    @Test fun sentenceFuriganaSuggestionsExcludeTargetAndUseAnalyzerReadings() {
         val sentence = "昨日は学校"
         val tokens = listOf(
             token(0, 2, "昨日", "昨日", "名詞-普通名詞", "きのう"),
             token(2, 3, "は", "は", "助詞-係助詞", "は"),
             token(3, 5, "学校", "学校", "名詞-普通名詞", "がっこう"),
         )
-        val corrections = listOf(
-            FuriganaCorrection(sentence, TargetSpan(0, 2), "昨日", "さくじつ"),
-            FuriganaCorrection("別の文", TargetSpan(3, 5), "学校", "がっこう"),
-        )
         assertEquals(
-            listOf(FuriganaSpan(TargetSpan(0, 2), "昨日", "さくじつ")),
-            sentenceFuriganaSpans(sentence, tokens, TargetSpan(3, 5), corrections),
+            listOf(FuriganaSpan(TargetSpan(0, 2), "昨日", "きのう")),
+            sentenceFuriganaSpans(sentence, tokens, TargetSpan(3, 5)),
         )
-        assertEquals("さくじつは", resolveSurfaceReading(sentence, tokens, TargetSpan(0, 3), corrections))
+        assertEquals("きのうは", resolveSurfaceReading(sentence, tokens, TargetSpan(0, 3)))
     }
 
     @Test fun selectedSurfaceReadingJoinsInflectedTokensAndPreservesKana() {

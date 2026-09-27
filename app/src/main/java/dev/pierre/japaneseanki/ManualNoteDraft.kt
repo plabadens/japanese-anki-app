@@ -4,11 +4,10 @@ data class ManualNoteDraft(
     val sentence: String,
     val target: TargetSpan?,
     val sentenceReading: String,
-    val leaveSentenceTargetUnannotated: Boolean,
     val vocabulary: String,
     val vocabularyReading: String,
-    val leaveVocabularyUnannotated: Boolean,
     val definition: String,
+    val dictionaryEntryResolved: Boolean = false,
     val pitch: PitchAccent? = null,
     val dependentFieldsStale: Boolean = false,
     val translation: String = "",
@@ -22,8 +21,10 @@ data class ManualNoteDraft(
         val targetText = target?.textIn(sentence)
         if (sentence.isBlank()) add("Enter a sentence.")
         if (targetText == null) add("Select a valid target in the sentence.")
+        if (!dictionaryEntryResolved) add("Select a dictionary entry.")
         if (vocabulary.isBlank()) add("Enter vocabulary or a dictionary lemma.")
         if (definition.isBlank()) add("Enter a definition.")
+        if (dependentFieldsStale) add("Review your definition after changing the sentence, target, or entry.")
         if (sentenceReading.any { it == '[' || it == ']' }) add("Target reading contains reserved furigana syntax.")
         if (vocabularyReading.any { it == '[' || it == ']' }) add("Vocabulary reading contains reserved furigana syntax.")
         if (sentenceFurigana.any { it.reading.any { character -> character == '[' || character == ']' } }) {

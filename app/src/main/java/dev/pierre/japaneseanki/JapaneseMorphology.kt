@@ -11,35 +11,21 @@ internal data class JapaneseToken(
 
 internal data class AnalyzedLemma(val expression: String, val reading: String)
 data class FuriganaSpan(val span: TargetSpan, val surface: String, val reading: String)
-internal data class FuriganaCorrection(
-    val sentence: String,
-    val span: TargetSpan,
-    val surface: String,
-    val reading: String,
-)
-
 internal fun sentenceFuriganaSpans(
     sentence: String,
     tokens: List<JapaneseToken>,
     target: TargetSpan?,
-    corrections: List<FuriganaCorrection>,
-): List<FuriganaSpan> {
-    val correctionsByToken = corrections.associateBy { Triple(it.sentence, it.span, it.surface) }
-    return tokens.mapNotNull { token ->
+): List<FuriganaSpan> = tokens.mapNotNull { token ->
         if (!containsKanji(token.surface) || token.span.textIn(sentence) != token.surface ||
             target?.let { token.span.start < it.end && token.span.end > it.start } == true
         ) return@mapNotNull null
-        val reading = correctionsByToken[Triple(sentence, token.span, token.surface)]?.reading
-            ?: token.surfaceReading
-        FuriganaSpan(token.span, token.surface, reading)
+        FuriganaSpan(token.span, token.surface, token.surfaceReading)
     }
-}
 
 internal fun resolveSurfaceReading(
     sentence: String,
     tokens: List<JapaneseToken>,
     target: TargetSpan,
-    corrections: List<FuriganaCorrection> = emptyList(),
 ): String? {
     val selected = tokens.filter { it.span.start >= target.start && it.span.end <= target.end }
     if (selected.isEmpty() || selected.first().span.start != target.start ||
@@ -48,10 +34,7 @@ internal fun resolveSurfaceReading(
         selected.joinToString("") { it.surface } != target.textIn(sentence) ||
         selected.any { it.partOfSpeech.startsWith("補助記号") }
     ) return null
-    val correctionsByToken = corrections.associateBy { Triple(it.sentence, it.span, it.surface) }
-    val readings = selected.map { token ->
-        correctionsByToken[Triple(sentence, token.span, token.surface)]?.reading ?: token.surfaceReading
-    }
+    val readings = selected.map(JapaneseToken::surfaceReading)
     if (selected.indices.any { containsKanji(selected[it].surface) && readings[it].isBlank() }) return null
     return selected.indices.joinToString("") { index ->
         if (containsKanji(selected[index].surface)) readings[index] else selected[index].surface
