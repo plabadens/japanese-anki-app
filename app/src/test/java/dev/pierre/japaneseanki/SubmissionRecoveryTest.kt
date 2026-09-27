@@ -38,10 +38,38 @@ class SubmissionRecoveryTest {
     }
 
     @Test
+    fun insertedNoteIdAndBrowserSearchAreEncodedFromProviderValues() {
+        assertEquals(123L, parseInsertedNoteId("content://com.ichi2.anki.flashcards/notes/123"))
+        assertEquals("anki://x-callback-url/browser?search=nid%3A123", ankiBrowserUriText(123L))
+    }
+
+    @Test
+    fun noteInsertedRecoveryChoosesMoveCompleteResolveOrFail() {
+        assertEquals(
+            NoteInsertedRecoveryDecision.MOVE,
+            noteInsertedRecoveryDecision(123L, listOf(AnkiCardLocation(0, 1L)), 2L),
+        )
+        assertEquals(
+            NoteInsertedRecoveryDecision.COMPLETE,
+            noteInsertedRecoveryDecision(123L, listOf(AnkiCardLocation(0, 2L)), 2L),
+        )
+        assertEquals(
+            NoteInsertedRecoveryDecision.RESOLVE,
+            noteInsertedRecoveryDecision(123L, emptyList(), 2L),
+        )
+        assertEquals(
+            NoteInsertedRecoveryDecision.FAIL,
+            noteInsertedRecoveryDecision(123L, listOf(AnkiCardLocation(0, 1L)), 0L),
+        )
+    }
+
+    @Test
     fun phasesMakeMediaImportUncertaintyDistinctFromNoteInsertion() {
         assertEquals("media_importing", SubmissionPhase.MEDIA_IMPORTING.persisted)
         assertEquals("media_imported", SubmissionPhase.MEDIA_IMPORTED.persisted)
         assertEquals("started", SubmissionPhase.NOTE_INSERTING.persisted)
+        assertEquals("note_inserted", SubmissionPhase.NOTE_INSERTED.persisted)
+        assertEquals("destination_verified", SubmissionPhase.DESTINATION_VERIFIED.persisted)
         assertEquals(SubmissionPhase.MEDIA_IMPORTING, SubmissionPhase.fromPersisted("media_importing"))
     }
 }

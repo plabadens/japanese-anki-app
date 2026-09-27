@@ -7,7 +7,9 @@ import java.util.Base64
 internal enum class SubmissionPhase(val persisted: String) {
     MEDIA_IMPORTING("media_importing"),
     MEDIA_IMPORTED("media_imported"),
-    NOTE_INSERTING("started");
+    NOTE_INSERTING("started"),
+    NOTE_INSERTED("note_inserted"),
+    DESTINATION_VERIFIED("destination_verified");
 
     companion object {
         fun fromPersisted(value: String?): SubmissionPhase? = entries.firstOrNull { it.persisted == value }
@@ -47,6 +49,7 @@ internal data class FrozenSubmission(
     val targetEnd: Int,
     val media: MediaIdentity?,
     val importedFilename: String?,
+    val noteId: Long?,
 )
 
 internal object SubmissionRecoveryKeys {
@@ -72,6 +75,20 @@ internal object SubmissionRecoveryKeys {
     const val MEDIA_SIZE = "pending_media_size"
     const val MEDIA_MODIFIED = "pending_media_modified"
     const val IMPORTED_FILENAME = "pending_imported_filename"
+    const val NOTE_ID = "pending_note_id"
+}
+
+internal enum class NoteInsertedRecoveryDecision { MOVE, COMPLETE, RESOLVE, FAIL }
+
+internal fun noteInsertedRecoveryDecision(
+    noteId: Long?,
+    cards: List<AnkiCardLocation>?,
+    deckId: Long,
+): NoteInsertedRecoveryDecision = when {
+    noteId == null || cards == null || cards.isEmpty() -> NoteInsertedRecoveryDecision.RESOLVE
+    deckId <= 0L -> NoteInsertedRecoveryDecision.FAIL
+    cards.all { it.deckId == deckId } -> NoteInsertedRecoveryDecision.COMPLETE
+    else -> NoteInsertedRecoveryDecision.MOVE
 }
 
 internal fun nextSubmissionRevision(currentSequence: Long, currentPendingRevision: Long): Long =
@@ -132,6 +149,7 @@ internal fun readFrozenSubmission(preferences: SharedPreferences): FrozenSubmiss
         targetEnd = preferences.getInt(SubmissionRecoveryKeys.TARGET_END, -1),
         media = media,
         importedFilename = preferences.getString(SubmissionRecoveryKeys.IMPORTED_FILENAME, null),
+        noteId = preferences.getLong(SubmissionRecoveryKeys.NOTE_ID, -1L).takeIf { it > 0 },
     )
 }
 
@@ -167,6 +185,8 @@ internal fun SharedPreferences.Editor.putFrozenSubmission(
     }
     if (snapshot.importedFilename == null) remove(SubmissionRecoveryKeys.IMPORTED_FILENAME)
     else putString(SubmissionRecoveryKeys.IMPORTED_FILENAME, snapshot.importedFilename)
+    if (snapshot.noteId == null) remove(SubmissionRecoveryKeys.NOTE_ID)
+    else putLong(SubmissionRecoveryKeys.NOTE_ID, snapshot.noteId)
     return this
 }
 
@@ -193,5 +213,6 @@ internal fun clearFrozenSubmission(preferences: SharedPreferences) {
         .remove(SubmissionRecoveryKeys.MEDIA_SIZE)
         .remove(SubmissionRecoveryKeys.MEDIA_MODIFIED)
         .remove(SubmissionRecoveryKeys.IMPORTED_FILENAME)
+        .remove(SubmissionRecoveryKeys.NOTE_ID)
         .commit()
 }

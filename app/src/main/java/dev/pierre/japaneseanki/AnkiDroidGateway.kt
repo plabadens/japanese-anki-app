@@ -11,12 +11,12 @@ import java.io.File
 import java.math.BigInteger
 import java.security.MessageDigest
 
-/** Provider constants reference AnkiDroid v2.24.1, commit 9f579c10bb151146728220729c510acbbd8faba7. */
+/** Provider constants reference AnkiDroid v2.24.0, commit ebcf8e0e34921628b9b8a496c66ffd4adbb3705f. */
 class AnkiDroidGateway(
     private val resolver: ContentResolver,
     private val context: Context? = null,
 ) {
-    /** Imports a completed durable AVIF through AnkiDroid's v2.24.1 media provider. */
+    /** Imports a completed durable AVIF through AnkiDroid's v2.24.0 media provider. */
     fun importProcessedImage(file: File): String {
         val appContext = requireNotNull(context) {
             "A Context is required to grant AnkiDroid temporary access to image media."
@@ -73,19 +73,61 @@ class AnkiDroidGateway(
         model: AnkiNoteType,
         deck: AnkiDeck,
         fieldsByName: Map<String, String>,
-    ): Boolean = matchingNote(model, deck.id, fieldsByName)
+    ): Long? = matchingNoteId(model, deck.id, fieldsByName)
 
     /** Used only to reconcile an interrupted insert whose destination is not yet known. */
     fun hasMatchingNoteInAnyDeck(
         model: AnkiNoteType,
         fieldsByName: Map<String, String>,
-    ): Boolean = matchingNote(model, null, fieldsByName)
+    ): Long? = matchingNoteId(model, null, fieldsByName)
 
-    private fun matchingNote(
+    fun noteCards(noteId: Long): List<AnkiCardLocation> {
+        require(noteId > 0) { "Note ID must be positive." }
+        val cardsUri = Uri.withAppendedPath(Uri.withAppendedPath(NOTES_URI, noteId.toString()), "cards")
+        val cursor = try {
+            resolver.query(cardsUri, arrayOf(CARD_ORD, CARD_DECK_ID), null, null, null)
+        } catch (error: RuntimeException) {
+            throw AnkiProviderUncertainException("AnkiDroid card lookup outcome is uncertain.", error)
+        } ?: error("AnkiDroid could not query the note's cards.")
+        return cursor.use {
+            val ordColumn = it.getColumnIndexOrThrow(CARD_ORD)
+            val deckColumn = it.getColumnIndexOrThrow(CARD_DECK_ID)
+            buildList {
+                while (it.moveToNext()) add(AnkiCardLocation(it.getInt(ordColumn), it.getLong(deckColumn)))
+            }
+        }
+    }
+
+    /** Moves only cards belonging to noteId, then verifies every card's destination. */
+    fun ensureNoteInDeck(noteId: Long, deckId: Long): Boolean {
+        require(noteId > 0) { "Note ID must be positive." }
+        require(deckId > 0) { "Deck ID must be positive." }
+        val cards = noteCards(noteId)
+        if (cards.isEmpty()) return false
+        cards.filter { it.deckId != deckId }.forEach { card ->
+            val cardUri = Uri.withAppendedPath(
+                Uri.withAppendedPath(Uri.withAppendedPath(NOTES_URI, noteId.toString()), "cards"),
+                card.ord.toString(),
+            )
+            val updated = try {
+                resolver.update(cardUri, ContentValues().apply { put(CARD_DECK_ID, deckId) }, null, null)
+            } catch (error: RuntimeException) {
+                throw AnkiProviderUncertainException("AnkiDroid card move outcome is uncertain.", error)
+            }
+            check(updated == 1) { "AnkiDroid did not move the inserted note's card." }
+        }
+        val verified = noteCards(noteId)
+        check(verified.isNotEmpty() && verified.all { it.deckId == deckId }) {
+            "The inserted note's cards were not verified in the destination deck."
+        }
+        return true
+    }
+
+    private fun matchingNoteId(
         model: AnkiNoteType,
         destinationDeckId: Long?,
         fieldsByName: Map<String, String>,
-    ): Boolean {
+    ): Long? {
         require("SentKanji" in model.fields && "VocabKanji" in model.fields) {
             "Selected note type is missing required fields."
         }
@@ -127,31 +169,32 @@ class AnkiDroidGateway(
                 cards.use { cardCursor ->
                     val deckColumn = cardCursor.getColumnIndexOrThrow(CARD_DECK_ID)
                     while (cardCursor.moveToNext()) {
-                        if (destinationDeckId == null || cardCursor.getLong(deckColumn) == destinationDeckId) return true
+                        if (destinationDeckId == null || cardCursor.getLong(deckColumn) == destinationDeckId) return noteId
                     }
                 }
             }
         }
-        return false
+        return null
     }
 
-    /** Add one note using AnkiDroid's supported bulkInsert deck parameter. */
+    /** Inserts one note; AnkiDroid creates its cards in the model's default deck. */
     fun insertNote(
         model: AnkiNoteType,
-        deck: AnkiDeck,
         orderedFields: List<String>,
         tags: Set<String>,
-    ): Int {
+    ): Long {
         require(orderedFields.size == model.fields.size) { "Field count does not match selected note type." }
         val values = ContentValues().apply {
             put(NOTE_MODEL_ID, model.id)
             put(NOTE_FIELDS, orderedFields.joinToString(FIELD_SEPARATOR.toString()))
             put(NOTE_TAGS, tags.joinToString(" "))
         }
-        val uri = NOTES_URI.buildUpon()
-            .appendQueryParameter(DECK_ID_QUERY_PARAM, deck.id.toString())
-            .build()
-        return resolver.bulkInsert(uri, arrayOf(values))
+        val returnedUri = try {
+            resolver.insert(NOTES_URI, values)
+        } catch (error: RuntimeException) {
+            throw AnkiProviderUncertainException("AnkiDroid note insertion outcome is uncertain.", error)
+        } ?: error("AnkiDroid did not return the inserted note URI.")
+        return parseInsertedNoteId(returnedUri.toString())
     }
 
     fun decks(): List<AnkiDeck> = resolver.query(
@@ -192,8 +235,8 @@ class AnkiDroidGateway(
         private const val NOTE_CHECKSUM = "csum"
         private const val NOTE_TAGS = "tags"
         private const val NOTE_ID = "_id"
+        private const val CARD_ORD = "ord"
         private const val CARD_DECK_ID = "deck_id"
-        private const val DECK_ID_QUERY_PARAM = "deckId"
         private val BASE_URI = Uri.parse("content://$AUTHORITY")
         private val MODELS_URI = Uri.withAppendedPath(BASE_URI, "models")
         private val DECKS_URI = Uri.withAppendedPath(BASE_URI, "decks")
@@ -213,3 +256,12 @@ class AnkiDroidGateway(
 
 data class AnkiNoteType(val id: Long, val name: String, val fields: List<String>)
 data class AnkiDeck(val id: Long, val name: String)
+data class AnkiCardLocation(val ord: Int, val deckId: Long)
+
+internal class AnkiProviderUncertainException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
+
+internal fun parseInsertedNoteId(uri: String): Long {
+    val noteId = uri.substringBefore('?').substringAfterLast('/').toLongOrNull()
+    require(noteId != null && noteId > 0) { "AnkiDroid returned an invalid inserted note URI." }
+    return noteId
+}

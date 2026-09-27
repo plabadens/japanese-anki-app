@@ -90,6 +90,18 @@ private const val IMAGE_RECEIPT_MODIFIED = "image_import_receipt_modified"
 
 enum class AppRoute { Capture, Target, Review }
 
+data class SubmissionOutcome(val status: String, val noteId: Long? = null)
+
+internal fun ankiBrowserUriText(noteId: Long): String {
+    require(noteId > 0) { "Note ID must be positive." }
+    return "anki://x-callback-url/browser?search=nid%3A$noteId"
+}
+
+internal fun ankiBrowserUri(noteId: Long): Uri = Uri.parse(ankiBrowserUriText(noteId))
+
+internal fun ankiBrowserIntent(noteId: Long): Intent =
+    Intent(Intent.ACTION_VIEW, ankiBrowserUri(noteId)).setPackage("com.ichi2.anki")
+
 internal fun intentPayloadMatches(
     currentText: String?,
     currentImage: String?,
@@ -317,11 +329,14 @@ class MainActivity : ComponentActivity() {
                         SubmissionPhase.MEDIA_IMPORTING -> "Image import was interrupted before its receipt was saved. Do not retry automatically."
                         SubmissionPhase.MEDIA_IMPORTED -> "Image import was recorded, but note insertion did not start. Review before resuming."
                         SubmissionPhase.NOTE_INSERTING -> "A previous Send was interrupted. Verify its frozen outcome before retrying."
+                        SubmissionPhase.NOTE_INSERTED -> "The note ID was saved before deck assignment. Verifying its cards before retrying anything."
+                        SubmissionPhase.DESTINATION_VERIFIED -> "The inserted note's destination was verified. Finalizing recovery."
                         null -> null
                     },
                 )
             }
             var recoveryDuplicate by remember { mutableStateOf(false) }
+            var knownNoteId by remember { mutableStateOf<Long?>(null) }
             var frozenSnapshotAppliedRevision by remember { mutableStateOf(-1L) }
             var draftGeneration by remember { mutableStateOf(0L) }
             var omitImageForSend by remember { mutableStateOf(false) }
@@ -349,6 +364,7 @@ class MainActivity : ComponentActivity() {
                 recoveryRequired = false
                 recoveryPhase = null
                 recoveryDuplicate = false
+                knownNoteId = null
                 omitImageForSend = false
                 imageProcessingRevision++
                 imageProcessing = false
@@ -1323,7 +1339,6 @@ class MainActivity : ComponentActivity() {
                 val phase = recoveryPhase ?: SubmissionPhase.fromPersisted(
                     preferences.getString(SubmissionRecoveryKeys.STATUS, null),
                 ) ?: return@LaunchedEffect
-                if (phase != SubmissionPhase.NOTE_INSERTING) return@LaunchedEffect
                 val snapshot = readFrozenSubmission(preferences)
                 if (snapshot == null) {
                     recoveryMessage = "The frozen Send record is incomplete. Keep this draft and resolve the outcome manually before retrying."
@@ -1347,13 +1362,50 @@ class MainActivity : ComponentActivity() {
                     return@LaunchedEffect
                 }
                 val values = snapshot.modelFields.zip(snapshot.orderedFields).toMap()
+                if (phase == SubmissionPhase.NOTE_INSERTED || phase == SubmissionPhase.DESTINATION_VERIFIED) {
+                    val noteId = snapshot.noteId
+                    if (noteId == null) {
+                        recoveryMessage = "The inserted note ID was not saved. The outcome is uncertain; resolve it explicitly before retrying."
+                        return@LaunchedEffect
+                    }
+                    knownNoteId = noteId
+                    recoveryMessage = "Checking the saved note ID and destination cards in AnkiDroid…"
+                    try {
+                        val completed = withContext(Dispatchers.IO) {
+                            val gateway = AnkiDroidGateway(contentResolver)
+                            val cards = gateway.noteCards(noteId)
+                            when (noteInsertedRecoveryDecision(noteId, cards, snapshot.deckId)) {
+                                NoteInsertedRecoveryDecision.COMPLETE -> true
+                                NoteInsertedRecoveryDecision.MOVE -> gateway.ensureNoteInDeck(noteId, snapshot.deckId)
+                                NoteInsertedRecoveryDecision.RESOLVE -> false
+                                NoteInsertedRecoveryDecision.FAIL -> error("The frozen destination deck ID is invalid.")
+                            }
+                        }
+                        if (!completed) {
+                            recoveryMessage = "The saved note ID no longer resolves to cards. Do not insert again; explicitly resolve this outcome."
+                        } else {
+                            check(preferences.edit().putString(SubmissionRecoveryKeys.STATUS, SubmissionPhase.DESTINATION_VERIFIED.persisted).commit())
+                            check(preferences.edit().putString(SubmissionRecoveryKeys.STATUS, "done").commit())
+                            clearDraft()
+                            knownNoteId = null
+                            submitMessage = "Note ${noteId} recovered in the selected deck."
+                        }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        recoveryMessage = "Could not verify or move the saved note ID. Retry this recovery check; no new note will be inserted."
+                    }
+                    return@LaunchedEffect
+                }
+                if (phase != SubmissionPhase.NOTE_INSERTING) return@LaunchedEffect
                 recoveryMessage = "Checking the frozen Send revision in AnkiDroid…"
                 try {
-                    val duplicate = withContext(Dispatchers.IO) {
+                    val duplicateId = withContext(Dispatchers.IO) {
                         AnkiDroidGateway(contentResolver).hasMatchingNoteInAnyDeck(model, values)
                     }
-                    if (duplicate) {
+                    if (duplicateId != null) {
                         recoveryDuplicate = true
+                        knownNoteId = duplicateId
                         recoveryMessage = "A matching note exists for the frozen revision. Treat it as complete only after checking AnkiDroid."
                     } else if (decks.none { it.id == snapshot.deckId }) {
                         recoveryDuplicate = false
@@ -1362,6 +1414,7 @@ class MainActivity : ComponentActivity() {
                         recoveryRequired = false
                         frozenRetryReady = true
                         recoveryDuplicate = false
+                        knownNoteId = null
                         recoveryMessage = "No matching note was found for the frozen revision; retry will reuse its saved media receipt."
                     }
                 } catch (cancelled: CancellationException) {
@@ -1478,6 +1531,15 @@ class MainActivity : ComponentActivity() {
                     .putStringSet("dictionary_sense_indices", selectedSenseIndices.mapTo(mutableSetOf()) { it.toString() })
                     .remove("sentence_furigana_corrections")
                     .apply()
+            }
+
+            val openKnownNote: (Long) -> Unit = { noteId ->
+                val browserIntent = ankiBrowserIntent(noteId)
+                if (browserIntent.resolveActivity(packageManager) != null) {
+                    startActivity(browserIntent)
+                } else {
+                    submitMessage = "AnkiDroid browser is unavailable. Note $noteId in ${selectedDeck?.name ?: "the selected deck"} matches '${displayVocabulary}' in the submitted sentence '${displaySentence}'. Keep this draft for manual resolution."
+                }
             }
 
             androidx.activity.compose.BackHandler(enabled = submissionLocked) {
@@ -1898,6 +1960,11 @@ class MainActivity : ComponentActivity() {
                         }
                         submitMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                         recoveryMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                        knownNoteId?.let { noteId ->
+                            TextButton(onClick = { openKnownNote(noteId) }) {
+                                Text("Open matching note in AnkiDroid")
+                            }
+                        }
                         if (recoveryRequired && recoveryPhase == SubmissionPhase.NOTE_INSERTING &&
                             (!apiPermissionGranted || setupLoading || setupError != null || !setupLoadedSuccessfully)) {
                             Text("Recovery is held until AnkiDroid setup succeeds; the frozen draft has not been cleared.", style = MaterialTheme.typography.bodyMedium)
@@ -1943,6 +2010,16 @@ class MainActivity : ComponentActivity() {
                                 frozenRetryReady = true
                                 recoveryMessage = "Retrying the frozen Send; the draft remains locked until it finishes."
                             }) { Text("Retry frozen Send") }
+                        } else if (recoveryRequired && knownNoteId != null && recoveryMessage?.contains("no longer") == true) {
+                            Text("The saved note ID cannot be found. No automatic re-insert will be attempted; inspect AnkiDroid before resolving this draft.", style = MaterialTheme.typography.bodyMedium)
+                            TextButton(onClick = {
+                                clearPendingSubmission(preferences)
+                                recoveryRequired = false
+                                recoveryPhase = null
+                                frozenRetryReady = false
+                                knownNoteId = null
+                                recoveryMessage = "The missing saved note outcome was explicitly acknowledged; review the draft before a new Send."
+                            }) { Text("I checked; resolve outcome") }
                         } else if (recoveryRequired && recoveryMessage?.contains("unavailable") == true) {
                             TextButton(onClick = {
                                 clearPendingSubmission(preferences)
@@ -1982,14 +2059,16 @@ class MainActivity : ComponentActivity() {
                                 val tagSet = restoredFrozen?.tags ?: AnkiFieldContract.parseTags(tags)
                                 draftGeneration++
                                 isSubmitting = true
+                                knownNoteId = null
                                 submitMessage = null
                                 coroutineScope.launch {
                                     try {
                                         val outcome = withContext(Dispatchers.IO) {
                                             val gateway = AnkiDroidGateway(contentResolver, applicationContext)
-                                            if (gateway.hasDuplicate(model, deck, fields)) {
+                                            val duplicateId = gateway.hasDuplicate(model, deck, fields)
+                                            if (duplicateId != null) {
                                                 preferences.edit().putString(SubmissionRecoveryKeys.STATUS, "blocked").commit()
-                                                "duplicate"
+                                                SubmissionOutcome("duplicate", duplicateId)
                                             } else {
                                                 val frozen = if (restoredFrozen != null) {
                                                     check(restoredFrozen.importedFilename == null ||
@@ -2047,6 +2126,7 @@ class MainActivity : ComponentActivity() {
                                                         targetEnd = target?.end ?: -1,
                                                         media = media,
                                                         importedFilename = imported,
+                                                        noteId = null,
                                                     )
                                                     check(preferences.edit().putLong(
                                                         SubmissionRecoveryKeys.REVISION_SEQUENCE,
@@ -2100,28 +2180,31 @@ class MainActivity : ComponentActivity() {
                                                 check(preferences.edit().putFrozenSubmission(frozen, SubmissionPhase.NOTE_INSERTING).commit()) {
                                                     "Could not save frozen submission data."
                                                 }
-                                                val inserted = gateway.insertNote(model, deck, frozenMapping.values, tagSet)
-                                                val foundInDestination = gateway.hasDuplicate(model, deck, frozenFields)
-                                                val foundAnywhere = foundInDestination ||
-                                                    gateway.hasMatchingNoteInAnyDeck(model, frozenFields)
-                                                when {
-                                                    inserted == 1 && foundInDestination -> {
-                                                        check(preferences.edit().putString(SubmissionRecoveryKeys.STATUS, "done").commit())
-                                                        clearPersistedDraft(preferences, File(filesDir, "draft"))
-                                                        "created"
-                                                    }
-                                                    inserted == 1 || foundAnywhere -> "uncertain"
-                                                    else -> {
-                                                        clearPendingSubmission(preferences)
-                                                        "failed"
-                                                    }
+                                                // A process death between provider insert and this commit leaves NOTE_INSERTING without an ID;
+                                                // recovery must reconcile explicitly rather than blindly inserting again.
+                                                val insertedNoteId = gateway.insertNote(model, frozenMapping.values, tagSet)
+                                                val insertedSnapshot = frozen.copy(noteId = insertedNoteId)
+                                                check(preferences.edit().putFrozenSubmission(
+                                                    insertedSnapshot,
+                                                    SubmissionPhase.NOTE_INSERTED,
+                                                ).commit()) { "Could not persist the inserted note ID before deck assignment." }
+                                                check(gateway.ensureNoteInDeck(insertedNoteId, deck.id)) {
+                                                    "The inserted note no longer has cards; resolve the saved note ID before retrying."
                                                 }
+                                                check(preferences.edit().putFrozenSubmission(
+                                                    insertedSnapshot,
+                                                    SubmissionPhase.DESTINATION_VERIFIED,
+                                                ).commit()) { "Could not persist verified destination membership." }
+                                                check(preferences.edit().putString(SubmissionRecoveryKeys.STATUS, "done").commit())
+                                                clearPersistedDraft(preferences, File(filesDir, "draft"))
+                                                SubmissionOutcome("created", insertedNoteId)
                                             }
                                         }
-                                        when (outcome) {
+                                        when (outcome.status) {
                                             "duplicate" -> {
                                                 frozenRetryReady = false
                                                 recoveryPhase = null
+                                                knownNoteId = outcome.noteId
                                                 if (restoredFrozen != null) clearPendingSubmission(preferences)
                                                 submitMessage = "Blocked: a note with this sentence and vocabulary lemma already exists in the selected note type and deck."
                                             }
@@ -2131,14 +2214,8 @@ class MainActivity : ComponentActivity() {
                                                 recoveryRequired = false
                                                 recoveryPhase = null
                                                 recoveryDuplicate = false
+                                                knownNoteId = null
                                                 submitMessage = "Note added to ${deck.name}."
-                                            }
-                                            "uncertain" -> {
-                                                recoveryPhase = SubmissionPhase.NOTE_INSERTING
-                                                recoveryRequired = true
-                                                frozenRetryReady = false
-                                                recoveryDuplicate = false
-                                                recoveryMessage = "AnkiDroid returned an uncertain result. Checking the frozen Send revision…"
                                             }
                                             else -> {
                                                 frozenRetryReady = false
@@ -2160,6 +2237,8 @@ class MainActivity : ComponentActivity() {
                                                 SubmissionPhase.MEDIA_IMPORTING -> "Image import may have completed, but its receipt was not saved. Do not retry without explicit acknowledgement."
                                                 SubmissionPhase.MEDIA_IMPORTED -> "Image import was recorded, but note insertion did not start. Resume only after reviewing the frozen draft."
                                                 SubmissionPhase.NOTE_INSERTING -> "Could not confirm note insertion. Checking the frozen Send revision…"
+                                                SubmissionPhase.NOTE_INSERTED -> "Note ID was saved, but deck assignment was interrupted. Recovery will move only that note's cards."
+                                                SubmissionPhase.DESTINATION_VERIFIED -> "The note's destination was verified; recovery will finalize it without inserting again."
                                             }
                                         } else if (imageAttached) {
                                             submitMessage = "Could not import the selected image. The draft was kept; retry or remove the image."
@@ -2339,6 +2418,7 @@ private fun clearPersistedDraft(preferences: SharedPreferences, draftDirectory: 
         SubmissionRecoveryKeys.PITCH, SubmissionRecoveryKeys.TARGET_START, SubmissionRecoveryKeys.TARGET_END,
         SubmissionRecoveryKeys.MEDIA_PATH, SubmissionRecoveryKeys.MEDIA_SIZE,
         SubmissionRecoveryKeys.MEDIA_MODIFIED, SubmissionRecoveryKeys.IMPORTED_FILENAME,
+        SubmissionRecoveryKeys.NOTE_ID,
     )
     preferences.edit().also { editor -> draftKeys.forEach(editor::remove) }.commit()
 }
