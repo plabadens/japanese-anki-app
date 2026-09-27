@@ -15,7 +15,7 @@
         android:fullBackupContent="@xml/backup_rules"
         android:label="Japanese Anki"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        android:theme="@style/AppTheme">
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="dev.pierre.japaneseanki.media"
