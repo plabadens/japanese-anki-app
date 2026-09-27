@@ -3,6 +3,7 @@ package dev.pierre.japaneseanki
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.PrintStream
 import java.net.HttpURLConnection
 import java.net.URL
 import org.junit.Assert.assertEquals
@@ -24,7 +25,7 @@ class TranslationServiceTest {
         assertEquals("secret", connection.getRequestProperty("Ocp-Apim-Subscription-Key"))
         assertEquals("eastus", connection.getRequestProperty("Ocp-Apim-Subscription-Region"))
         assertEquals("application/json; charset=UTF-8", connection.getRequestProperty("Content-Type"))
-        assertTrue(connection.request.toString(Charsets.UTF_8).contains("こんにちは"))
+        assertEquals("[{\"Text\":\"こんにちは\"}]", connection.request.toString(Charsets.UTF_8))
         assertEquals(2_000, connection.connectTimeout)
         assertEquals(2_000, connection.readTimeout)
         assertFalse(connection.instanceFollowRedirects)
@@ -69,15 +70,28 @@ class TranslationServiceTest {
 
     @Test
     fun failuresDoNotExposeCredentialsOrSentence() {
-        val result = TranslationService(
-            AzureTranslator(AzureSpeechSynthesizer.ConnectionFactory { FakeConnection(401, "key and sentence") }),
-            UnavailableLocalTranslationFallback(),
-            "very-secret-key" to "eastus",
-        ).translate("private sentence")
+        val stdout = ByteArrayOutputStream()
+        val stderr = ByteArrayOutputStream()
+        val originalOut = System.out
+        val originalErr = System.err
+        val result = try {
+            System.setOut(PrintStream(stdout, true, Charsets.UTF_8))
+            System.setErr(PrintStream(stderr, true, Charsets.UTF_8))
+            TranslationService(
+                AzureTranslator(AzureSpeechSynthesizer.ConnectionFactory { FakeConnection(401, "key and sentence") }),
+                UnavailableLocalTranslationFallback(),
+                "very-secret-key" to "eastus",
+            ).translate("private sentence")
+        } finally {
+            System.setOut(originalOut)
+            System.setErr(originalErr)
+        }
         assertEquals(TranslationResult.Failed("Local translation is unavailable"), result)
         val message = (result as TranslationResult.Failed).message
-        assertFalse(message.contains("secret"))
-        assertFalse(message.contains("private"))
+        val logs = stdout.toString(Charsets.UTF_8) + stderr.toString(Charsets.UTF_8)
+        assertFalse(message.contains("very-secret-key"))
+        assertFalse(logs.contains("very-secret-key"))
+        assertFalse(logs.contains("private sentence"))
     }
 
     private class FakeConnection(private val status: Int, private val response: String) : HttpURLConnection(URL("https://api.cognitive.microsofttranslator.com/")) {
