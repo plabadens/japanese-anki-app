@@ -369,19 +369,24 @@ class MainActivity : ComponentActivity() {
                 route = AppRoute.Target
             }
             val processImage: (File, Boolean) -> Unit = { file, runOcr ->
-                val previousFiles = listOfNotNull(photoSourcePath, noteImagePath, processedImagePath)
+                val previousFiles = listOfNotNull(noteImagePath, processedImagePath)
                     .distinct().filter { it != file.absolutePath }
-                previousFiles.forEach { File(it).delete() }
+                if (!runOcr && photoSourcePath == noteImagePath) photoSourcePath = null
                 if (runOcr) photoSourcePath = file.absolutePath
                 noteImagePath = file.absolutePath
                 processedImagePath = null
                 imageError = null
                 imageProcessing = true
-                val destination = File(filesDir, "draft/${file.nameWithoutExtension}.avif")
+                val destination = File(filesDir, "draft/${java.util.UUID.randomUUID()}.avif")
                 coroutineScope.launch {
                     try {
                         val processed = ImageMediaProcessor.process(file, destination)
-                        if (noteImagePath == file.absolutePath) processedImagePath = processed.file.absolutePath
+                        if (noteImagePath == file.absolutePath) {
+                            processedImagePath = processed.file.absolutePath
+                            previousFiles.forEach { File(it).delete() }
+                        } else {
+                            processed.file.delete()
+                        }
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
@@ -972,6 +977,28 @@ class MainActivity : ComponentActivity() {
                 )
             }
 
+            if (showOcrSheet && ocrChoices.size > 1) {
+                ModalBottomSheet(onDismissRequest = { }) {
+                    Column(
+                        Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState())
+                            .padding(horizontal = 20.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text("Choose the text region", style = MaterialTheme.typography.titleLarge)
+                        ocrChoices.forEachIndexed { index, block ->
+                            OutlinedButton(
+                                onClick = {
+                                    showOcrSheet = false
+                                    ocrChoices = emptyList()
+                                    applyOcrText(block.text)
+                                },
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                            ) { Text("${index + 1}. ${block.text.trim()}") }
+                        }
+                    }
+                }
+            }
+
             val noteDraft = ManualNoteDraft(
                 sentence = editor.text,
                 target = target,
@@ -1092,6 +1119,14 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            androidx.compose.runtime.LaunchedEffect(photoSourcePath, noteImagePath, processedImagePath) {
+                preferences.edit()
+                    .putString("photo_source_path", photoSourcePath)
+                    .putString("note_image_path", noteImagePath)
+                    .putString("processed_image_path", processedImagePath)
+                    .apply()
+            }
+
             androidx.compose.runtime.LaunchedEffect(
                 editor.text, editor.selection, target, vocabulary, vocabularyReading, pitchAccentText, definition,
                 sentenceReading, definitionManuallyEdited, dependentFieldsStale, translation, notes, tags, selectedModelId, selectedDeckId,
@@ -1162,6 +1197,23 @@ class MainActivity : ComponentActivity() {
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         Text("Japanese Anki", style = MaterialTheme.typography.headlineMedium)
+                        imageError?.let { message ->
+                            Text(message, style = MaterialTheme.typography.bodyMedium)
+                            TextButton(onClick = {
+                                val source = noteImagePath?.let(::File)
+                                if (source?.isFile == true) attachImage(source)
+                                else noteImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            }) { Text("Retry image") }
+                            TextButton(onClick = {
+                                listOfNotNull(noteImagePath, processedImagePath)
+                                    .distinct().forEach { File(it).delete() }
+                                if (photoSourcePath == noteImagePath) photoSourcePath = null
+                                noteImagePath = null
+                                processedImagePath = null
+                                imageProcessing = false
+                                imageError = null
+                            }) { Text("Remove image") }
+                        }
                         if (route == AppRoute.Capture) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -1641,6 +1693,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         sharedText.value = textFromIntent(intent)
+        sharedImage.value = imageFromIntent(intent)
     }
 
     private fun isAnkiDroidInstalled(): Boolean = try {
@@ -1660,6 +1713,28 @@ class MainActivity : ComponentActivity() {
         return value?.toString()?.takeIf(String::isNotBlank)
     }
 
+    private fun imageFromIntent(intent: Intent?): Uri? = when (intent?.action) {
+        Intent.ACTION_SEND -> intent.getParcelableExtra(Intent.EXTRA_STREAM)
+            ?.let { it as? Uri }
+            ?.takeIf { intent.type?.startsWith("image/") == true }
+        else -> null
+    }
+
+    private fun copyImageToDraft(uri: Uri): File {
+        val directory = File(filesDir, "draft").apply { check(isDirectory || mkdirs()) }
+        val destination = File(directory, "source-${java.util.UUID.randomUUID()}.image")
+        try {
+            contentResolver.openInputStream(uri)?.use { input ->
+                destination.outputStream().use(input::copyTo)
+            } ?: error("Could not open shared image")
+            check(destination.isFile && destination.length() > 0) { "Shared image is empty" }
+            return destination
+        } catch (error: Exception) {
+            destination.delete()
+            throw error
+        }
+    }
+
     companion object {
         @Volatile private var dictionaryInstance: OfflineDictionary? = null
 
@@ -1677,7 +1752,7 @@ private fun clearPersistedDraft(preferences: SharedPreferences) {
         "leave_sentence_target_unannotated", "leave_vocabulary_unannotated", "dependent_fields_stale",
         "definition_manual", "definition_manual_stale", "translation", "notes", "tags", "submission_status", "pending_model_id", "pending_deck_id",
         "pending_sentence", "pending_lemma", "dictionary_entry_id", "dictionary_sense_indices",
-        "sentence_furigana_corrections",
+        "sentence_furigana_corrections", "photo_source_path", "note_image_path", "processed_image_path",
     )
     preferences.edit().also { editor -> draftKeys.forEach(editor::remove) }.commit()
 }
