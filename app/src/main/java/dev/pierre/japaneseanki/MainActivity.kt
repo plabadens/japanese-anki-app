@@ -691,18 +691,27 @@ class MainActivity : ComponentActivity() {
             }
             androidx.compose.runtime.LaunchedEffect(sharedImage.value) {
                 val uri = sharedImage.value ?: return@LaunchedEffect
-                sharedImage.value = null
                 captureMode = "Photo"
-                if (editor.text.isNotBlank()) {
-                    pendingSharedImageUri = uri
-                    pendingPhotoFile = null
-                    showReplace = true
-                } else {
-                    try {
-                        requestPhoto(copyImageToDraft(uri))
-                    } catch (_: Exception) {
-                        ocrError = "Could not open that photo. Choose another image or type the sentence."
+                try {
+                    val source = withContext(Dispatchers.IO) { copyImageToDraft(uri) }
+                    if (sharedImage.value != uri) {
+                        source.delete()
+                        return@LaunchedEffect
                     }
+                    clearConsumedImageIntent(uri)
+                    sharedImage.value = null
+                    if (editor.text.isNotBlank()) {
+                        pendingPhotoFile = source
+                        pendingSharedImageUri = null
+                        showReplace = true
+                    } else {
+                        requestPhoto(source)
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    if (sharedImage.value == uri) sharedImage.value = null
+                    ocrError = "Could not open that photo. Choose another image or type the sentence."
                 }
             }
             if (showSettings) {
@@ -1749,6 +1758,17 @@ class MainActivity : ComponentActivity() {
             ?.let { it as? Uri }
             ?.takeIf { intent.type?.startsWith("image/") == true }
         else -> null
+    }
+
+    private fun clearConsumedImageIntent(uri: Uri) {
+        if (imageFromIntent(intent) == uri) {
+            setIntent(Intent(intent).apply {
+                action = null
+                type = null
+                data = null
+                removeExtra(Intent.EXTRA_STREAM)
+            })
+        }
     }
 
     private fun copyImageToDraft(uri: Uri): File {
