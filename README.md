@@ -1,5 +1,7 @@
 # Japanese Anki Card Creator
 
+See `docs/toolchain-notes.md` for deferred toolchain work: the AGP 9.x upgrade (required eventually for the pinned `compileSdk = 37`), the release-APK lint lock gap, and emulator caveats.
+
 Native Android app for creating Japanese sentence-mining notes in AnkiDroid. See [SPEC.md](SPEC.md) for approved behavior and release gates.
 
 ## Build environment (NixOS x86_64)
