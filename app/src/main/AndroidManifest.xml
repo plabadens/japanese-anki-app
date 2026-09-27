@@ -1,6 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="com.ichi2.anki.permission.READ_WRITE_DATABASE" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <queries>
         <package android:name="com.ichi2.anki" />
@@ -15,6 +16,15 @@
         android:label="Japanese Anki"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="dev.pierre.japaneseanki.media"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/anki_media_paths" />
+        </provider>
         <activity
             android:name=".MainActivity"
             android:exported="true"

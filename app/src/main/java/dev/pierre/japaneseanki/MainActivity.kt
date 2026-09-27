@@ -82,6 +82,10 @@ import androidx.compose.ui.text.input.VisualTransformation
 
 private const val ANKIDROID_READ_WRITE_PERMISSION =
     "com.ichi2.anki.permission.READ_WRITE_DATABASE"
+private const val IMAGE_RECEIPT_PATH = "image_import_receipt_path"
+private const val IMAGE_RECEIPT_FILENAME = "image_import_receipt_filename"
+
+enum class AppRoute { Capture, Target, Review }
 
 class MainActivity : ComponentActivity() {
     private val sharedText = mutableStateOf<String?>(null)
@@ -311,6 +315,10 @@ class MainActivity : ComponentActivity() {
                 photoSourcePath = null
                 noteImagePath = null
                 processedImagePath = null
+                preferences.edit()
+                    .remove(IMAGE_RECEIPT_PATH)
+                    .remove(IMAGE_RECEIPT_FILENAME)
+                    .commit()
                 imageProcessing = false
                 imageError = null
                 ocrLoading = false
@@ -379,6 +387,8 @@ class MainActivity : ComponentActivity() {
                 processedImagePath = null
                 check(
                     preferences.edit()
+                        .remove(IMAGE_RECEIPT_PATH)
+                        .remove(IMAGE_RECEIPT_FILENAME)
                         .putString("photo_source_path", photoSourcePath)
                         .putString("note_image_path", noteImagePath)
                         .remove("processed_image_path")
@@ -481,9 +491,9 @@ class MainActivity : ComponentActivity() {
             androidx.compose.runtime.LaunchedEffect(Unit) {
                 val source = noteImagePath?.let(::File)?.takeIf(File::isFile)
                 if (source != null && processedImagePath?.let(::File)?.isFile != true) {
-                    processImage(source, runOcr = photoSourcePath == source.absolutePath && editor.text.isBlank())
+                    processImage(source, photoSourcePath == source.absolutePath && editor.text.isBlank())
                 } else if (photoSourcePath?.let(::File)?.isFile == true && editor.text.isBlank()) {
-                    processImage(File(photoSourcePath!!), runOcr = true)
+                    processImage(File(photoSourcePath!!), true)
                 }
             }
 
@@ -1030,6 +1040,18 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            val imageReceiptFilename = if (
+                processedImagePath != null &&
+                preferences.getString(IMAGE_RECEIPT_PATH, null) == processedImagePath
+            ) {
+                preferences.getString(IMAGE_RECEIPT_FILENAME, null)
+                    ?.let(AnkiMediaImporter::sanitizeFilename)
+            } else null
+            val imageAttached = noteImagePath != null
+            val imageReady = !imageAttached || (
+                !imageProcessing && imageError == null &&
+                    processedImagePath?.let(::File)?.isFile == true
+            )
             val noteDraft = ManualNoteDraft(
                 sentence = editor.text,
                 target = target,
@@ -1043,6 +1065,7 @@ class MainActivity : ComponentActivity() {
                 pitch = pitch,
                 dependentFieldsStale = dependentFieldsStale,
                 translation = translation,
+                imageFilename = imageReceiptFilename,
                 notes = notes,
                 sentenceFurigana = sentenceFurigana,
             )
@@ -1052,7 +1075,7 @@ class MainActivity : ComponentActivity() {
                 AnkiFieldContract.mapToModelOrder(it.fields, fieldsByName.orEmpty())
             }
             val canSend = apiPermissionGranted && selectedModel != null && selectedDeck != null &&
-                fieldsByName != null && modelMapping?.isValid == true && validationErrors.isEmpty() &&
+                fieldsByName != null && modelMapping?.isValid == true && validationErrors.isEmpty() && imageReady &&
                 !setupLoading && setupError == null && !recoveryRequired && !isSubmitting
 
             androidx.compose.runtime.LaunchedEffect(
@@ -1228,6 +1251,12 @@ class MainActivity : ComponentActivity() {
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         Text("Japanese Anki", style = MaterialTheme.typography.headlineMedium)
+                        if (imageAttached && imageProcessing) {
+                            Text("Preparing image for Anki…", style = MaterialTheme.typography.bodyMedium)
+                        }
+                        if (imageAttached && !imageProcessing && imageError == null && !imageReady) {
+                            Text("The selected image is not ready to send.", style = MaterialTheme.typography.bodyMedium)
+                        }
                         imageError?.let { message ->
                             Text(message, style = MaterialTheme.typography.bodyMedium)
                             TextButton(onClick = {
@@ -1241,6 +1270,10 @@ class MainActivity : ComponentActivity() {
                                 if (photoSourcePath == noteImagePath) photoSourcePath = null
                                 noteImagePath = null
                                 processedImagePath = null
+                                preferences.edit()
+                                    .remove(IMAGE_RECEIPT_PATH)
+                                    .remove(IMAGE_RECEIPT_FILENAME)
+                                    .commit()
                                 imageProcessing = false
                                 imageError = null
                             }) { Text("Remove image") }
@@ -1327,7 +1360,7 @@ class MainActivity : ComponentActivity() {
                             Text(message, style = MaterialTheme.typography.bodyMedium)
                             TextButton(onClick = {
                                 val source = photoSourcePath?.let(::File)?.takeIf(File::isFile)
-                                if (source != null) processImage(source, runOcr = true)
+                                if (source != null) processImage(source, true)
                                 else photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                             }) { Text("Retry photo text reading") }
                             TextButton(onClick = {
@@ -1585,9 +1618,10 @@ class MainActivity : ComponentActivity() {
                         if (recoveryRequired && recoveryDuplicate) {
                             TextButton(onClick = {
                                 clearPendingSubmission(preferences)
+                                clearDraft()
                                 recoveryRequired = false
                                 recoveryDuplicate = false
-                                submitMessage = "Pending Send resolved. The draft is unchanged; normal duplicate blocking still applies."
+                                submitMessage = "Pending Send marked complete."
                             }) { Text("Treat pending Send as complete") }
                             TextButton(onClick = {
                                 clearPendingSubmission(preferences)
@@ -1608,30 +1642,62 @@ class MainActivity : ComponentActivity() {
                                 val model = selectedModel ?: return@Button
                                 val deck = selectedDeck ?: return@Button
                                 val fields = fieldsByName ?: return@Button
-                                val mapping = modelMapping?.takeIf { it.isValid } ?: return@Button
                                 val tagSet = AnkiFieldContract.parseTags(tags)
                                 isSubmitting = true
                                 submitMessage = null
                                 coroutineScope.launch {
                                     try {
                                         val outcome = withContext(Dispatchers.IO) {
-                                            val gateway = AnkiDroidGateway(contentResolver)
+                                            val gateway = AnkiDroidGateway(contentResolver, applicationContext)
                                             if (gateway.hasDuplicate(model, deck, fields)) {
                                                 preferences.edit().putString("submission_status", "blocked").commit()
                                                 "duplicate"
                                             } else {
-                                                val pendingSaved = preferences.edit()
+                                                val receiptPath = preferences.getString(IMAGE_RECEIPT_PATH, null)
+                                                val receiptFilename = preferences.getString(IMAGE_RECEIPT_FILENAME, null)
+                                                    ?.let(AnkiMediaImporter::sanitizeFilename)
+                                                val importedFilename = if (!imageAttached) {
+                                                    null
+                                                } else if (
+                                                    processedImagePath != null &&
+                                                    receiptPath == processedImagePath &&
+                                                    receiptFilename != null
+                                                ) {
+                                                    receiptFilename
+                                                } else {
+                                                    val processed = processedImagePath?.let(::File)
+                                                        ?.takeIf(File::isFile)
+                                                        ?: error("The selected image is not ready for import.")
+                                                    gateway.importProcessedImage(processed)
+                                                }
+                                                val frozenDraft = noteDraft.copy(imageFilename = importedFilename)
+                                                val frozenFields = frozenDraft.fieldsByName()
+                                                    ?: error("The note changed before Send could be frozen.")
+                                                val frozenMapping = AnkiFieldContract.mapToModelOrder(
+                                                    model.fields,
+                                                    frozenFields,
+                                                )
+                                                check(frozenMapping.isValid) { frozenMapping.errors.joinToString() }
+                                                val pendingEditor = preferences.edit()
                                                     .putString("submission_status", "started")
                                                     .putLong("pending_model_id", model.id)
                                                     .putLong("pending_deck_id", deck.id)
-                                                    .putString("pending_sentence", fields.getValue("SentKanji"))
-                                                    .putString("pending_lemma", fields.getValue("VocabKanji"))
-                                                    .commit()
-                                                check(pendingSaved) { "Could not save submission recovery data." }
-                                                val inserted = gateway.insertNote(model, deck, mapping.values, tagSet)
-                                                val foundInDestination = gateway.hasDuplicate(model, deck, fields)
+                                                    .putString("pending_sentence", frozenFields.getValue("SentKanji"))
+                                                    .putString("pending_lemma", frozenFields.getValue("VocabKanji"))
+                                                if (importedFilename != null) {
+                                                    pendingEditor
+                                                        .putString(IMAGE_RECEIPT_PATH, processedImagePath)
+                                                        .putString(IMAGE_RECEIPT_FILENAME, importedFilename)
+                                                } else {
+                                                    pendingEditor
+                                                        .remove(IMAGE_RECEIPT_PATH)
+                                                        .remove(IMAGE_RECEIPT_FILENAME)
+                                                }
+                                                check(pendingEditor.commit()) { "Could not save submission recovery data." }
+                                                val inserted = gateway.insertNote(model, deck, frozenMapping.values, tagSet)
+                                                val foundInDestination = gateway.hasDuplicate(model, deck, frozenFields)
                                                 val foundAnywhere = foundInDestination ||
-                                                    gateway.hasMatchingNoteInAnyDeck(model, fields)
+                                                    gateway.hasMatchingNoteInAnyDeck(model, frozenFields)
                                                 when {
                                                     inserted == 1 && foundInDestination -> {
                                                         check(preferences.edit().putString("submission_status", "done").commit())
@@ -1665,6 +1731,8 @@ class MainActivity : ComponentActivity() {
                                         if (preferences.getString("submission_status", null) == "started") {
                                             recoveryRequired = true
                                             recoveryMessage = "Could not confirm Send. Checking whether the note was added…"
+                                        } else if (imageAttached) {
+                                            submitMessage = "Could not import the selected image. The draft was kept; retry or remove the image."
                                         } else {
                                             submitMessage = "Could not send the note. Check AnkiDroid API access and retry."
                                         }
@@ -1760,8 +1828,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun imageFromIntent(intent: Intent?): Uri? = when (intent?.action) {
-        Intent.ACTION_SEND -> intent.getParcelableExtra(Intent.EXTRA_STREAM)
-            ?.let { it as? Uri }
+        Intent.ACTION_SEND -> intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
             ?.takeIf { intent.type?.startsWith("image/") == true }
         else -> null
     }
@@ -1810,6 +1877,7 @@ private fun clearPersistedDraft(preferences: SharedPreferences) {
         "definition_manual", "definition_manual_stale", "translation", "notes", "tags", "submission_status", "pending_model_id", "pending_deck_id",
         "pending_sentence", "pending_lemma", "dictionary_entry_id", "dictionary_sense_indices",
         "sentence_furigana_corrections", "photo_source_path", "note_image_path", "processed_image_path",
+        IMAGE_RECEIPT_PATH, IMAGE_RECEIPT_FILENAME,
     )
     preferences.edit().also { editor -> draftKeys.forEach(editor::remove) }.commit()
 }

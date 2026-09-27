@@ -2,13 +2,49 @@ package dev.pierre.japaneseanki
 
 import android.content.ContentResolver
 import android.content.ContentValues
+import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.text.Html
+import androidx.core.content.FileProvider
+import java.io.File
 import java.math.BigInteger
 import java.security.MessageDigest
 
 /** Provider constants reference AnkiDroid v2.24.1, commit 9f579c10bb151146728220729c510acbbd8faba7. */
-class AnkiDroidGateway(private val resolver: ContentResolver) {
+class AnkiDroidGateway(
+    private val resolver: ContentResolver,
+    private val context: Context? = null,
+) {
+    /** Imports a completed durable AVIF through AnkiDroid's v2.24.1 media provider. */
+    fun importProcessedImage(file: File): String {
+        val appContext = requireNotNull(context) {
+            "A Context is required to grant AnkiDroid temporary access to image media."
+        }.applicationContext
+        require(file.isFile) { "Processed image file does not exist." }
+        val approvedDirectory = File(appContext.filesDir, MEDIA_DIRECTORY).canonicalFile
+        val canonicalFile = file.canonicalFile
+        require(canonicalFile.parentFile == approvedDirectory) {
+            "Processed image must be stored in the durable draft media directory."
+        }
+        val preferredName = AnkiMediaImporter.sanitizeFilename(canonicalFile.name)
+        require(canonicalFile.name == preferredName) { "Processed image filename is unsafe." }
+
+        val fileUri = FileProvider.getUriForFile(appContext, MEDIA_FILE_PROVIDER_AUTHORITY, canonicalFile)
+        appContext.grantUriPermission(ANKI_PACKAGE, fileUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        val importedUri = try {
+            val values = ContentValues().apply {
+                put(MEDIA_FILE_URI, fileUri.toString())
+                put(MEDIA_PREFERRED_NAME, preferredName)
+            }
+            resolver.insert(MEDIA_URI, values)
+                ?: error("AnkiDroid did not return an imported media URI.")
+        } finally {
+            appContext.revokeUriPermission(fileUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        return AnkiMediaImporter.importedFilename(importedUri.toString())
+            ?: error("AnkiDroid returned an unsafe media URI.")
+    }
     fun noteTypes(): List<AnkiNoteType> = resolver.query(
         MODELS_URI,
         arrayOf(ID, NAME, FIELD_NAMES),
@@ -56,6 +92,8 @@ class AnkiDroidGateway(private val resolver: ContentResolver) {
         val sentence = fieldsByName["SentKanji"] ?: error("Missing SentKanji value.")
         val lemma = fieldsByName["VocabKanji"] ?: error("Missing VocabKanji value.")
         val duplicateKey = DuplicateKey.fromFields(sentence, lemma)
+        val sentenceIndex = model.fields.indexOf("SentKanji")
+        require(sentenceIndex >= 0) { "Selected note type is missing required duplicate fields." }
 
         val projection = arrayOf(NOTE_ID, NOTE_FIELDS)
         val selection: String
@@ -137,6 +175,11 @@ class AnkiDroidGateway(private val resolver: ContentResolver) {
 
     companion object {
         private const val AUTHORITY = "com.ichi2.anki.flashcards"
+        private const val ANKI_PACKAGE = "com.ichi2.anki"
+        private const val MEDIA_DIRECTORY = "draft"
+        private const val MEDIA_FILE_PROVIDER_AUTHORITY = "dev.pierre.japaneseanki.media"
+        private const val MEDIA_FILE_URI = "file_uri"
+        private const val MEDIA_PREFERRED_NAME = "preferred_name"
         private const val FIELD_SEPARATOR = '\u001f'
         private const val ID = "_id"
         private const val NAME = "name"
@@ -156,6 +199,7 @@ class AnkiDroidGateway(private val resolver: ContentResolver) {
         private val DECKS_URI = Uri.withAppendedPath(BASE_URI, "decks")
         private val NOTES_URI = Uri.withAppendedPath(BASE_URI, "notes")
         private val NOTES_V2_URI = Uri.withAppendedPath(BASE_URI, "notes_v2")
+        private val MEDIA_URI = Uri.withAppendedPath(BASE_URI, "media")
 
         private fun firstFieldChecksum(html: String): Long {
             val stripped = html.replace(Regex("<.*?>"), "").replace("&nbsp;", " ")
