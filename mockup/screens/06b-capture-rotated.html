@@ -1,0 +1,32 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../shared.css">
+<style>
+  /* Phone rotated 90° clockwise (volume keys now on top). The layout is
+     screen-locked — nothing here moves, resizes, or reflows, exactly like a
+     normal camera app's viewfinder. Only the asymmetric glyphs (the mode
+     label text, the Settings icon) counter-rotate 90° so they stay upright
+     for the person holding the phone. The shutter ring and thumbnail swatch
+     are rotationally symmetric, so they are untouched. */
+  .counter-rotate{display:inline-block; transform:rotate(-90deg);}
+</style>
+</head>
+<body>
+  <div class="statusbar"><span>9:41</span><span>●●●</span></div>
+  <div class="screen">
+    <div class="modechips">
+      <div class="group">
+        <span class="modechip on"><span class="counter-rotate">Photo</span></span>
+        <span class="modechip"><span class="counter-rotate">Type</span></span>
+      </div>
+      <span class="gear-btn" aria-label="Settings"><svg class="mi counter-rotate" viewBox="0 -960 960 960"><path d="m370-80-16-128q-13-5-24.5-12T307-235l-119 50L78-375l103-78q-1-7-1-13.5v-27q0-6.5 1-13.5L78-585l110-190 119 50q11-8 23-15t24-12l16-128h220l16 128q13 5 24.5 12t22.5 15l119-50 110 190-103 78q1 7 1 13.5v27q0 6.5-2 13.5l103 78-110 190-118-50q-11 8-23 15t-24 12L590-80H370Zm70-80h79l14-106q31-8 57.5-23.5T639-327l99 41 39-68-86-65q5-14 7-29.5t2-31.5q0-16-2-31.5t-7-29.5l86-65-39-68-99 42q-22-23-48.5-38.5T533-694l-13-106h-79l-14 106q-31 8-57.5 23.5T321-633l-99-41-39 68 86 64q-5 15-7 30t-2 32q0 16 2 31t7 30l-86 65 39 68 99-42q22 23 48.5 38.5T427-266l13 106Zm42-180q58 0 99-41t41-99q0-58-41-99t-99-41q-59 0-99.5 41T342-480q0 58 40.5 99t99.5 41Zm-2-140Z"/></svg></span>
+    </div>
+    <div class="viewfinder bleed">
+      <div class="vf-frame">
+        <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+        <div class="vf-page"><span>毎朝 コーヒーを 飲みます。</span></div>
+      </div>
+    </div>
+    <div class="shutter-row"><div class="thumb-btn"></div><div class="shutter"></div><div style="width:44px"></div></div>
+  </div>
+</body></html>

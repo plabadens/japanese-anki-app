@@ -56,7 +56,7 @@ echo
 declare -A TALL_HEIGHTS=(
   ["27-settings-main"]=920
   ["32-settings-licenses"]=880
-  ["00-pitch-component"]=1420
+  ["00-pitch-component"]=2200
 )
 
 for html in "$SCREENS_DIR"/*.html; do

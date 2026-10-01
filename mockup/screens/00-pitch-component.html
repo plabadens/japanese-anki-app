@@ -4,8 +4,8 @@
 <style>
   body.tall{padding-bottom:40px;}
   .ref-section{padding:0 22px; margin-bottom:28px;}
-  .ref-title{font-family:var(--font-mono); font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin-bottom:10px;}
-  .ref-row{display:flex; align-items:center; gap:18px; flex-wrap:wrap; border:1px solid var(--rule); border-radius:16px; padding:14px 16px; margin-bottom:10px; background:var(--field-bg);}
+  .ref-title{font-family:var(--font-ui); font-size:12px; font-weight:500; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin-bottom:10px;}
+  .ref-row{display:flex; align-items:center; gap:18px; flex-wrap:wrap; border:1px solid var(--rule); border-radius:var(--shape-md); padding:14px 16px; margin-bottom:10px; background:var(--field-bg);}
   .ref-cap{font-size:13px; color:var(--muted); line-height:1.5; max-width:220px;}
   .ref-cap b{color:var(--ink);}
 </style>
@@ -14,7 +14,7 @@
   <div class="statusbar"><span>9:41</span><span>●●●</span></div>
   <div class="screen">
     <div class="screen-title">Dev reference — pitch diagram component</div>
-    <p class="mini">Not part of the app UI. This documents the two scales and four pattern hues used everywhere pitch appears (review card, Edit word sheet).</p>
+    <p class="mini">Not part of the app UI. This documents the two scales, the four pattern hues, and the fill convention used everywhere pitch appears (review card, Edit word sheet).</p>
   </div>
 
   <div class="ref-section">
@@ -23,11 +23,47 @@
       <svg width="38" height="24" viewBox="0 0 38 24">
         <rect x="2" y="2" width="14" height="20" rx="4" fill="var(--field-bg)" stroke="var(--rule)"/>
         <rect x="20" y="2" width="14" height="20" rx="4" fill="var(--field-bg)" stroke="var(--rule)"/>
-        <polyline points="9,9 27,15" fill="none" stroke="var(--pitch-atamadaka)" stroke-width="1.6" stroke-linecap="round"/>
-        <circle cx="9" cy="9" r="2" fill="var(--pitch-atamadaka)"/>
-        <circle cx="27" cy="15" r="2" fill="none" stroke="var(--pitch-atamadaka)" stroke-width="1.4"/>
+        <polyline points="9,7 27,17" fill="none" stroke="var(--pitch-atamadaka)" stroke-width="1.6" stroke-linecap="round"/>
+        <circle cx="9" cy="7" r="2.1" fill="var(--pitch-atamadaka)"/>
+        <circle cx="27" cy="17" r="2.1" fill="var(--pitch-atamadaka)"/>
       </svg>
-      <div class="ref-cap"><b>飲む — atamadaka ①.</b> Mora 1 high (filled dot), mora 2 low (outline dot), no kana underneath — the vocabulary’s own ruby already shows its lemma reading. Reused verbatim on the review card's vocab row.</div>
+      <div class="ref-cap"><b>飲む — atamadaka.</b> Mora 1 high, mora 2 low — height alone carries the drop, read together with the connecting line. No kana underneath — the vocabulary's own ruby already shows its lemma reading. Reused verbatim on the review card's vocab row.</div>
+    </div>
+  </div>
+
+  <div class="ref-section">
+    <div class="ref-title">Fill: normal mora vs. nasal mora</div>
+    <div class="ref-row">
+      <svg width="38" height="24" viewBox="0 0 38 24">
+        <rect x="2" y="2" width="14" height="20" rx="4" fill="var(--field-bg)" stroke="var(--rule)"/>
+        <circle cx="9" cy="12" r="2.1" fill="var(--pitch-heiban)"/>
+      </svg>
+      <div class="ref-cap"><b>Filled dot — normal mora.</b> The default for every mora. Fill no longer encodes high/low — that's the dot's vertical position and the contour line, above.</div>
+    </div>
+    <div class="ref-row">
+      <svg width="38" height="24" viewBox="0 0 38 24">
+        <rect x="2" y="2" width="14" height="20" rx="4" fill="var(--field-bg)" stroke="var(--rule)"/>
+        <circle cx="9" cy="12" r="2.1" fill="none" stroke="var(--pitch-heiban)" stroke-width="1.4"/>
+      </svg>
+      <div class="ref-cap"><b>Empty dot — nasal mora</b> (鼻濁音, the prenasalized が-row heard mid-word in careful/NHK-style Tokyo speech). Same pattern hue, hollow instead of filled, at whatever height its pitch already sits at.</div>
+    </div>
+    <div class="ref-row">
+      <svg width="100" height="46" viewBox="0 0 100 46">
+        <rect x="4" y="2" width="20" height="26" rx="6" fill="var(--field-bg)" stroke="var(--rule)"/>
+        <rect x="28" y="2" width="20" height="26" rx="6" fill="var(--field-bg)" stroke="var(--rule)"/>
+        <rect x="52" y="2" width="20" height="26" rx="6" fill="var(--field-bg)" stroke="var(--rule)"/>
+        <rect x="76" y="2" width="20" height="26" rx="6" fill="var(--field-bg)" stroke="var(--rule)"/>
+        <polyline points="14,22 38,8 62,8 86,8" fill="none" stroke="var(--pitch-heiban)" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="14" cy="22" r="3.2" fill="var(--pitch-heiban)"/>
+        <circle cx="38" cy="8" r="3.2" fill="var(--pitch-heiban)"/>
+        <circle cx="62" cy="8" r="3.2" fill="none" stroke="var(--pitch-heiban)" stroke-width="1.6"/>
+        <circle cx="86" cy="8" r="3.2" fill="var(--pitch-heiban)"/>
+        <text x="14" y="40" text-anchor="middle" font-size="10.5" fill="var(--ink)">お</text>
+        <text x="38" y="40" text-anchor="middle" font-size="10.5" fill="var(--ink)">ん</text>
+        <text x="62" y="40" text-anchor="middle" font-size="10.5" fill="var(--ink)">が</text>
+        <text x="86" y="40" text-anchor="middle" font-size="10.5" fill="var(--ink)">く</text>
+      </svg>
+      <div class="ref-cap"><b>音楽 — heiban, mora 3 (が) nasal.</b> <i>Illustrative only</i> — the pinned Kanjium <code>accents.txt</code> carries pitch positions but no nasal/devoicing markers, so today this diagram renders nasal when the source supplies it and stays all-filled otherwise. Gated in SPEC.md §15.</div>
     </div>
   </div>
 
@@ -37,43 +73,43 @@
       <svg width="52" height="46" viewBox="0 0 52 46">
         <rect x="4" y="2" width="20" height="26" rx="6" fill="var(--field-bg)" stroke="var(--rule)"/>
         <rect x="28" y="2" width="20" height="26" rx="6" fill="var(--field-bg)" stroke="var(--rule)"/>
-        <polyline points="14,9 38,21" fill="none" stroke="var(--pitch-atamadaka)" stroke-width="2" stroke-linecap="round"/>
-        <circle cx="14" cy="9" r="3.2" fill="var(--pitch-atamadaka)"/>
-        <circle cx="38" cy="21" r="3.2" fill="none" stroke="var(--pitch-atamadaka)" stroke-width="1.6"/>
+        <polyline points="14,8 38,22" fill="none" stroke="var(--pitch-atamadaka)" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="14" cy="8" r="3.2" fill="var(--pitch-atamadaka)"/>
+        <circle cx="38" cy="22" r="3.2" fill="var(--pitch-atamadaka)"/>
         <text x="14" y="40" text-anchor="middle" font-size="10.5" fill="var(--ink)">の</text>
         <text x="38" y="40" text-anchor="middle" font-size="10.5" fill="var(--ink)">む</text>
       </svg>
-      <div class="ref-cap"><b>飲む — atamadaka ①.</b> Same word, full scale: bordered block per mora, kana printed under its own dot. No pattern name, no accent number — the reading is the only label.</div>
+      <div class="ref-cap"><b>飲む — atamadaka.</b> Same word, full scale: bordered block per mora, kana printed under its own dot. No pattern name, no accent number — the reading is the only label.</div>
     </div>
     <div class="ref-row">
       <svg width="76" height="46" viewBox="0 0 76 46">
         <rect x="4" y="2" width="20" height="26" rx="6" fill="var(--field-bg)" stroke="var(--rule)"/>
         <rect x="28" y="2" width="20" height="26" rx="6" fill="var(--field-bg)" stroke="var(--rule)"/>
         <rect x="52" y="2" width="20" height="26" rx="6" fill="var(--field-bg)" stroke="var(--rule)"/>
-        <polyline points="14,9 38,21 62,21" fill="none" stroke="var(--pitch-atamadaka)" stroke-width="2" stroke-linecap="round"/>
-        <circle cx="14" cy="9" r="3.2" fill="var(--pitch-atamadaka)"/>
-        <circle cx="38" cy="21" r="3.2" fill="none" stroke="var(--pitch-atamadaka)" stroke-width="1.6"/>
-        <circle cx="62" cy="21" r="3.2" fill="none" stroke="var(--pitch-atamadaka)" stroke-width="1.6"/>
+        <polyline points="14,8 38,22 62,22" fill="none" stroke="var(--pitch-atamadaka)" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="14" cy="8" r="3.2" fill="var(--pitch-atamadaka)"/>
+        <circle cx="38" cy="22" r="3.2" fill="var(--pitch-atamadaka)"/>
+        <circle cx="62" cy="22" r="3.2" fill="var(--pitch-atamadaka)"/>
         <text x="14" y="40" text-anchor="middle" font-size="10.5" fill="var(--ink)">じょ</text>
         <text x="38" y="40" text-anchor="middle" font-size="10.5" fill="var(--ink)">う</text>
         <text x="62" y="40" text-anchor="middle" font-size="10.5" fill="var(--ink)">ず</text>
       </svg>
-      <div class="ref-cap"><b>上手 — atamadaka ①</b> (one of two listed patterns for this spelling).</div>
+      <div class="ref-cap"><b>上手 — atamadaka</b> (one of two listed patterns for this spelling).</div>
     </div>
     <div class="ref-row">
       <svg width="76" height="46" viewBox="0 0 76 46">
         <rect x="4" y="2" width="20" height="26" rx="6" fill="var(--field-bg)" stroke="var(--rule)"/>
         <rect x="28" y="2" width="20" height="26" rx="6" fill="var(--field-bg)" stroke="var(--rule)"/>
         <rect x="52" y="2" width="20" height="26" rx="6" fill="var(--field-bg)" stroke="var(--rule)"/>
-        <polyline points="14,21 38,9 62,9" fill="none" stroke="var(--pitch-heiban)" stroke-width="2" stroke-linecap="round"/>
-        <circle cx="14" cy="21" r="3.2" fill="none" stroke="var(--pitch-heiban)" stroke-width="1.6"/>
-        <circle cx="38" cy="9" r="3.2" fill="var(--pitch-heiban)"/>
-        <circle cx="62" cy="9" r="3.2" fill="var(--pitch-heiban)"/>
+        <polyline points="14,22 38,8 62,8" fill="none" stroke="var(--pitch-heiban)" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="14" cy="22" r="3.2" fill="var(--pitch-heiban)"/>
+        <circle cx="38" cy="8" r="3.2" fill="var(--pitch-heiban)"/>
+        <circle cx="62" cy="8" r="3.2" fill="var(--pitch-heiban)"/>
         <text x="14" y="40" text-anchor="middle" font-size="10.5" fill="var(--ink)">じょ</text>
         <text x="38" y="40" text-anchor="middle" font-size="10.5" fill="var(--ink)">う</text>
         <text x="62" y="40" text-anchor="middle" font-size="10.5" fill="var(--ink)">ず</text>
       </svg>
-      <div class="ref-cap"><b>上手 — heiban ⓪</b>, the other listed pattern. Both appear together in the Edit word sheet's pick-list (screen 23); which is active uses a neutral outline and check, not pitch color alone.</div>
+      <div class="ref-cap"><b>上手 — heiban</b>, the other listed pattern. Both appear together in the Edit word sheet's pick-list (screen 23); which is active uses a neutral outline and check, not pitch color alone.</div>
     </div>
   </div>
 
@@ -85,11 +121,11 @@
         <rect x="28" y="2" width="20" height="26" rx="6" fill="var(--field-bg)" stroke="var(--rule)"/>
         <rect x="52" y="2" width="20" height="26" rx="6" fill="var(--field-bg)" stroke="var(--rule)"/>
         <rect x="76" y="2" width="20" height="26" rx="6" fill="var(--field-bg)" stroke="var(--rule)"/>
-        <polyline points="14,21 38,9 62,21 86,21" fill="none" stroke="var(--pitch-nakadaka)" stroke-width="2" stroke-linecap="round"/>
-        <circle cx="14" cy="21" r="3.2" fill="none" stroke="var(--pitch-nakadaka)" stroke-width="1.6"/>
-        <circle cx="38" cy="9" r="3.2" fill="var(--pitch-nakadaka)"/>
-        <circle cx="62" cy="21" r="3.2" fill="none" stroke="var(--pitch-nakadaka)" stroke-width="1.6"/>
-        <circle cx="86" cy="21" r="3.2" fill="none" stroke="var(--pitch-nakadaka)" stroke-width="1.6"/>
+        <polyline points="14,22 38,8 62,22 86,22" fill="none" stroke="var(--pitch-nakadaka)" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="14" cy="22" r="3.2" fill="var(--pitch-nakadaka)"/>
+        <circle cx="38" cy="8" r="3.2" fill="var(--pitch-nakadaka)"/>
+        <circle cx="62" cy="22" r="3.2" fill="var(--pitch-nakadaka)"/>
+        <circle cx="86" cy="22" r="3.2" fill="var(--pitch-nakadaka)"/>
         <text x="14" y="40" text-anchor="middle" font-size="10.5" fill="var(--ink)">ア</text>
         <text x="38" y="40" text-anchor="middle" font-size="10.5" fill="var(--ink)">イ</text>
         <text x="62" y="40" text-anchor="middle" font-size="10.5" fill="var(--ink)">ウ</text>
@@ -103,17 +139,17 @@
         <rect x="28" y="2" width="20" height="26" rx="6" fill="var(--field-bg)" stroke="var(--rule)"/>
         <rect x="52" y="2" width="20" height="26" rx="6" fill="var(--field-bg)" stroke="var(--rule)"/>
         <rect x="76" y="2" width="20" height="26" rx="6" fill="var(--field-bg)" stroke="var(--rule)"/>
-        <polyline points="14,21 38,9 62,9 86,9 108,21" fill="none" stroke="var(--pitch-odaka)" stroke-width="2" stroke-linecap="round"/>
-        <circle cx="14" cy="21" r="3.2" fill="none" stroke="var(--pitch-odaka)" stroke-width="1.6"/>
-        <circle cx="38" cy="9" r="3.2" fill="var(--pitch-odaka)"/>
-        <circle cx="62" cy="9" r="3.2" fill="var(--pitch-odaka)"/>
-        <circle cx="86" cy="9" r="3.2" fill="var(--pitch-odaka)"/>
+        <polyline points="14,22 38,8 62,8 86,8 108,22" fill="none" stroke="var(--pitch-odaka)" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="14" cy="22" r="3.2" fill="var(--pitch-odaka)"/>
+        <circle cx="38" cy="8" r="3.2" fill="var(--pitch-odaka)"/>
+        <circle cx="62" cy="8" r="3.2" fill="var(--pitch-odaka)"/>
+        <circle cx="86" cy="8" r="3.2" fill="var(--pitch-odaka)"/>
         <text x="14" y="40" text-anchor="middle" font-size="10.5" fill="var(--ink)">ア</text>
         <text x="38" y="40" text-anchor="middle" font-size="10.5" fill="var(--ink)">イ</text>
         <text x="62" y="40" text-anchor="middle" font-size="10.5" fill="var(--ink)">ウ</text>
         <text x="86" y="40" text-anchor="middle" font-size="10.5" fill="var(--ink)">エ</text>
       </svg>
-      <div class="ref-cap"><b>Odaka hue</b> — a short trailing drop marks the word boundary, unlike heiban’s continuing high contour. The tail is not another mora or a prediction of sentence intonation.</div>
+      <div class="ref-cap"><b>Odaka hue</b> — a short trailing drop marks the word boundary, unlike heiban's continuing high contour. The tail is not another mora or a prediction of sentence intonation.</div>
     </div>
   </div>
 

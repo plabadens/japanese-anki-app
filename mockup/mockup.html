@@ -96,8 +96,8 @@
   <header class="intro">
     <p class="eyebrow">Reviewed UI concept — Japanese sentence-mining input app</p>
     <h1>Capture, choose, send</h1>
-    <p class="lede">33 representative states, rendered from HTML/CSS at a 412×915 reference viewport. These are design references, not a complete interactive application or proof of Android accessibility. <code>SPEC.md</code> governs behavior; the HTML/CSS generates the PNGs. Keyboard, long-content, and native accessibility checks remain required.</p>
-    <p class="lede">Built over six rounds of iteration in chat: three initial layout directions narrowed to Card &amp; Sheets, then refined around photo/OCR capture, pitch display, audio sourcing, translation, tags, a neutral interface color with pitch as the only chromatic element, and finally a pass making the review card the persistent ground truth for the whole session — sending, success, duplicate blocking, and error recovery are states of that one card, never separate screens.</p>
+    <p class="lede">34 representative states, all rendered from HTML/CSS at the same 412×915 reference viewport. These are design references, not a complete interactive application or proof of Android accessibility. <code>SPEC.md</code> governs behavior; the HTML/CSS generates the PNGs. Keyboard, long-content, and native accessibility checks remain required.</p>
+    <p class="lede">Built over rounds of iteration in chat: three initial layout directions narrowed to Card &amp; Sheets, then refined around photo/OCR capture, pitch display, audio sourcing, translation, tags, a neutral interface color with pitch as the only chromatic element, and a pass making the review card the persistent ground truth for the whole session. The component system now follows <a href="https://m3.material.io/">Material Design 3 Expressive</a> (the 2025 update) — a custom color scheme (sumi as <code>primary</code>, pitch hues kept outside it), Expressive's bolder type and shape scale, real segmented buttons, bottom sheets, and an extended FAB for Send, and inlined Material Symbols icons in place of plain Unicode glyphs. Expressive's richer color palettes and decorative "Hero Moment" shape library are deliberately declined — they conflict with an app used one-handed, mid-trip, dozens of times a session, where color means exactly one thing (pitch).</p>
   </header>
 
   <div class="toc">
@@ -110,8 +110,8 @@
     <div class="head"><span class="mark">spec</span><p style="font-weight:600; margin:0;">Reflected in <code>SPEC.md</code></p></div>
     <p>The interaction direction is specified; dependency and device verification remain open: on-device OCR, image sharing, and photo/image linking (§3.1, §4.2, §4.8), the review-card-as-ground-truth interaction model and Edit word sheet (§4.1–§4.5, §4.10), furigana's three visual states (§5.4), pick-not-drawn pitch selection and the per-mora block diagram (§5.5), the NHK-first audio chain with recording fully removed (§3.2, §6), automatic Azure-first/local-fallback translation (§7.2), tags-remember-last-note (§7.4), and the settings-vs-build-time reasoning for the Azure key (§4.9). The cumulative rationale for each is in §17's Decision precedence list.</p>
     <ul>
-      <li>New bundled dependencies this introduces — on-device OCR and a local ja→en fallback model — are release-gated in §15 (gates 11–12), the same tier as MeCab/UniDic.</li>
-      <li>Acceptance tests A08, A13, A15–A20, A24–A25, A32, A37, A41–A58 cover this concept's specific behaviors.</li>
+      <li>New bundled dependencies this introduces — on-device OCR and a local ja→en fallback model — are release-gated in §15 (gates 11–12), the same tier as MeCab/UniDic. A nasal-annotated pitch source is gate 14; the pinned Kanjium data has none today.</li>
+      <li>Acceptance tests A08, A13, A15–A20, A24–A25, A32, A37, A41–A64 cover this concept's specific behaviors.</li>
     </ul>
     <p class="open">Final-review decisions: readings are automatic and optional everywhere; dictionary misses preserve the sentence for editing or reselection; unexpected errors preserve the saved draft. These supersede the earlier reading-confirmation and discard-on-error policies. See <a href="REVIEW.md">the review record</a> for validation and remaining release gates.</p>
   </div>
@@ -165,11 +165,12 @@
 
   <section id="capture">
     <h2>Capture</h2>
-    <p class="section-lede">Two modes, remembered between sessions, with Settings reachable from either before a first sentence exists. Photo is the default; the same photo doubles as the card image unless split apart later. Corresponds to <code>SPEC.md</code> §4.2.</p>
+    <p class="section-lede">Two modes, remembered between sessions, with Settings reachable from either before a first sentence exists. Photo is the default; the same photo doubles as the card image unless split apart later. The camera captures 4:3 — a letterboxed, corner-bracketed frame within the live preview, not the full preview pane — running edge-to-edge to the screen's side edges like a real camera, with no inset or side rounding. Corresponds to <code>SPEC.md</code> §4.2.</p>
     <div class="filmstrip">
-      <div class="frame"><img class="shot" src="screens/06-capture-photo.png"><p class="frame-caption">06 — capture-photo<br>Photo mode, viewfinder, Settings beside the mode pills</p></div>
+      <div class="frame"><img class="shot" src="screens/06-capture-photo.png"><p class="frame-caption">06 — capture-photo<br>Photo mode, 4:3 letterboxed viewfinder, Settings beside the mode pills</p></div>
       <div class="frame"><img class="shot" src="screens/07-capture-type.png"><p class="frame-caption">07 — capture-type<br>Type mode, optional image</p></div>
       <div class="frame"><img class="shot" src="screens/08-ocr-ambiguity-sheet.png"><p class="frame-caption">08 — ocr-ambiguity-sheet<br>Backdrop is the live viewfinder — only if the photo has &gt;1 text region</p></div>
+      <div class="frame"><img class="shot" src="screens/06b-capture-rotated.png"><p class="frame-caption">06b — capture-rotated<br>Phone rotated clockwise: layout is screen-locked, like a normal camera app — only the mode label text and the Settings icon counter-rotate to stay upright; frame, shutter, and thumbnail don't move</p></div>
     </div>
   </section>
 
@@ -199,7 +200,7 @@
       <div class="frame"><img class="shot" src="screens/14-review-card-generating.png"><p class="frame-caption">14 — review-card-generating<br>Spinners on the online-sourced fields only — furigana/definition/pitch are local and already resolved</p></div>
       <div class="frame"><img class="shot" src="screens/15-review-card-flags.png"><p class="frame-caption">15 — review-card-flags<br>Ambiguous pitch + local-fallback translation, together — flag and edit are always two separate icons</p></div>
       <div class="frame"><img class="shot" src="screens/16-flag-explainer.png"><p class="frame-caption">16 — flag-explainer<br>Tapping the flag (not the pencil) explains the pitch ambiguity; Send remains available and the pencil opens Edit word</p></div>
-      <div class="frame"><img class="shot" src="screens/17-sending.png"><p class="frame-caption">17 — sending<br>Full card unchanged; only the button becomes a spinner</p></div>
+      <div class="frame"><img class="shot" src="screens/17-sending.png"><p class="frame-caption">17 — sending<br>Full card unchanged; only the FAB's icon becomes a spinner</p></div>
       <div class="frame"><img class="shot" src="screens/18-success.png"><p class="frame-caption">18 — success<br>Filled checkmark and Notes remain on the same card; a blank capture screen follows immediately after</p></div>
       <div class="frame"><img class="shot" src="screens/19-duplicate-blocked.png"><p class="frame-caption">19 — duplicate-blocked<br>§9.3 duplicate rule — card stays as submitted; Open in AnkiDroid opens the existing duplicate there, not an internal review</p></div>
       <div class="frame"><img class="shot" src="screens/20-send-uncertain.png"><p class="frame-caption">20 — send-uncertain<br>§9.5 unresolved outcome after reconciliation — inspect AnkiDroid before a checked retry</p></div>
@@ -231,7 +232,8 @@
     <div class="filmstrip">
       <div class="frame"><img class="shot" src="screens/00-pitch-component.png"><p class="frame-caption">00 — pitch-component<br>Compact + full scale, all four hues, missing state</p></div>
     </div>
-    <p class="mechanism">Compact scale (card row, screens 13/15): small bordered block per mora, no kana underneath — the vocabulary's ruby shows its lemma reading, which may differ from the inflected sentence target. Full scale (Edit word sheet, screens 22–23): same blocks, larger, kana printed beneath each dot, since nothing else on that sheet shows the reading. Both: one color for the whole diagram per pattern type; a filled dot is a high mora, an outline dot is low. Visible numeric/name labels are omitted, but TalkBack announces the reading and drop. A neutral check and outline indicate selection; a trailing contour cue distinguishes a final-mora drop from no drop without relying on color. Long diagrams scroll rather than losing morae.</p>
+    <p class="mechanism">Compact scale (card row, screens 13/15): small bordered block per mora, no kana underneath — the vocabulary's ruby shows its lemma reading, which may differ from the inflected sentence target. Full scale (Edit word sheet, screens 22–23): same blocks, larger, kana printed beneath each dot, since nothing else on that sheet shows the reading. Both: one color for the whole diagram per pattern type; high/low is the dot's vertical position plus the contour line, nothing else — a filled dot is a normal mora, a hollow dot is a nasal one (鼻濁音), independent of whether that mora is high or low. Visible numeric/name labels are omitted, but TalkBack announces the reading and drop. A neutral check and outline indicate selection; a trailing contour cue distinguishes a final-mora drop from no drop without relying on color. Long diagrams scroll rather than losing morae.</p>
+    <p class="mechanism">The nasal/normal fill is <b>release-gated</b>: the pinned Kanjium <code>accents.txt</code> carries pitch positions only, no nasal marker, so every diagram renders all-filled until a nasal-annotated source is selected and pinned (<code>SPEC.md</code> §15 gate 14, §17). Screen 00's 音楽 example is illustrative, not drawn from live app data.</p>
   </section>
 
   <section id="furigana">
