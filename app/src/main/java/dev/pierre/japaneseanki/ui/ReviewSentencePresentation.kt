@@ -24,7 +24,12 @@ internal fun reviewSentenceParts(
     while (index < sentence.length) {
         val annotation = readings[index]?.takeIf { it.span.end <= sentence.length }
         if (annotation != null) {
-            parts += ReviewSentencePart(annotation.surface, annotation.reading)
+            val isTarget = annotation.span.start == target.start && annotation.span.end == target.end
+            parts += ReviewSentencePart(
+                annotation.surface,
+                if (isTarget && targetReading.isNotBlank()) targetReading else annotation.reading,
+                highlighted = isTarget,
+            )
             index = annotation.span.end
             continue
         }

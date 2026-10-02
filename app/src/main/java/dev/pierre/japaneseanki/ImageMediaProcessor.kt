@@ -63,7 +63,9 @@ object ImageMediaProcessor {
                     writer.addBitmap(bitmap!!)
                     writer.stop(0)
                 }
-                check(temporary.isFile && temporary.length() > 0) { "AVIF encoder produced no image" }
+                check(temporary.isFile && hasStaticAvifFileType(temporary)) {
+                    "AVIF encoder did not produce a static AVIF image"
+                }
                 try {
                     Files.move(
                         temporary.toPath(),
@@ -97,4 +99,27 @@ object ImageMediaProcessor {
         val bottom = (bitmap.height * crop.bottom).toInt().coerceIn(top + 1, bitmap.height)
         return Bitmap.createBitmap(bitmap, left, top, right - left, bottom - top)
     }
+}
+
+/** Checks that an encoded ISO-BMFF file advertises static AVIF, not AVIS sequence output. */
+internal fun hasStaticAvifFileType(file: File): Boolean {
+    // The ftyp box is short in conforming images; bound parsing rather than trusting file input.
+    val header = ByteArray(minOf(file.length(), 4096L).toInt())
+    if (header.size < 16) return false
+    val headerRead = runCatching {
+        file.inputStream().use { it.readNBytes(header.size).contentEquals(header) }
+    }.getOrDefault(false)
+    if (!headerRead) return false
+    if (header.copyOfRange(4, 8).toString(Charsets.US_ASCII) != "ftyp") return false
+    val boxSize = ((header[0].toLong() and 0xff) shl 24) or
+        ((header[1].toLong() and 0xff) shl 16) or
+        ((header[2].toLong() and 0xff) shl 8) or
+        (header[3].toLong() and 0xff)
+    if (boxSize < 16 || boxSize % 4L != 0L || boxSize > file.length() || boxSize > header.size) return false
+    val majorBrand = header.copyOfRange(8, 12).toString(Charsets.US_ASCII)
+    val compatibleBrands = (16 until boxSize.toInt() - 3 step 4).map { offset ->
+        header.copyOfRange(offset, offset + 4).toString(Charsets.US_ASCII)
+    }
+    val brands = compatibleBrands + majorBrand
+    return "avif" in brands && "avis" !in brands
 }

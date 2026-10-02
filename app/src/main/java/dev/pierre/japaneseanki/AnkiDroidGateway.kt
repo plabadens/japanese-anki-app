@@ -5,11 +5,8 @@ import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.text.Html
 import androidx.core.content.FileProvider
 import java.io.File
-import java.math.BigInteger
-import java.security.MessageDigest
 
 /** Provider constants reference AnkiDroid v2.24.0, commit ebcf8e0e34921628b9b8a496c66ffd4adbb3705f. */
 class AnkiDroidGateway(
@@ -45,29 +42,33 @@ class AnkiDroidGateway(
         return AnkiMediaImporter.importedFilename(importedUri.toString())
             ?: error("AnkiDroid returned an unsafe media URI.")
     }
-    fun noteTypes(): List<AnkiNoteType> = resolver.query(
-        MODELS_URI,
-        arrayOf(ID, NAME, FIELD_NAMES),
-        null,
-        null,
-        null,
-    )?.use { cursor ->
-        val idColumn = cursor.getColumnIndexOrThrow(ID)
-        val nameColumn = cursor.getColumnIndexOrThrow(NAME)
-        val fieldsColumn = cursor.getColumnIndexOrThrow(FIELD_NAMES)
-        buildList {
-            while (cursor.moveToNext()) {
-                val rawFields = cursor.getString(fieldsColumn).orEmpty()
-                add(
-                    AnkiNoteType(
-                        id = cursor.getLong(idColumn),
-                        name = cursor.getString(nameColumn).orEmpty(),
-                        fields = rawFields.split(FIELD_SEPARATOR).filter(String::isNotEmpty),
-                    ),
-                )
+    fun noteTypes(): List<AnkiNoteType> = try {
+        resolver.query(
+            MODELS_URI,
+            arrayOf(ID, NAME, FIELD_NAMES),
+            null,
+            null,
+            null,
+        )?.use { cursor ->
+            val idColumn = cursor.getColumnIndexOrThrow(ID)
+            val nameColumn = cursor.getColumnIndexOrThrow(NAME)
+            val fieldsColumn = cursor.getColumnIndexOrThrow(FIELD_NAMES)
+            buildList {
+                while (cursor.moveToNext()) {
+                    val rawFields = cursor.getString(fieldsColumn).orEmpty()
+                    add(
+                        AnkiNoteType(
+                            id = cursor.getLong(idColumn),
+                            name = cursor.getString(nameColumn).orEmpty(),
+                            fields = rawFields.split(FIELD_SEPARATOR).filter(String::isNotEmpty),
+                        ),
+                    )
+                }
             }
-        }
-    } ?: error("AnkiDroid did not return note types.")
+        } ?: error("AnkiDroid did not return note types. Check AnkiDroid API access and retry.")
+    } catch (error: SecurityException) {
+        throw ankiPermissionError("read available note types", error)
+    }
 
     fun hasDuplicate(
         model: AnkiNoteType,
@@ -134,7 +135,7 @@ class AnkiDroidGateway(
         fieldsByName: Map<String, String>,
     ): Long? {
         require("SentKanji" in model.fields && "VocabKanji" in model.fields) {
-            "Selected note type is missing required fields."
+            "Selected note type is missing SentKanji or VocabKanji; choose a note type with the required fields."
         }
         val sentence = fieldsByName["SentKanji"] ?: error("Missing SentKanji value.")
         val lemma = fieldsByName["VocabKanji"] ?: error("Missing VocabKanji value.")
@@ -143,18 +144,13 @@ class AnkiDroidGateway(
         require(sentenceIndex >= 0) { "Selected note type is missing required duplicate fields." }
 
         val projection = arrayOf(NOTE_ID, NOTE_FIELDS)
-        val selection: String
-        val args: Array<String>
-        if (sentenceIndex == 0) {
-            selection = "$NOTE_MODEL_ID=? AND $NOTE_CHECKSUM=?"
-            args = arrayOf(model.id.toString(), firstFieldChecksum(sentence).toString())
-        } else {
-            // Anki stores a checksum only for the first field; preserve correctness for reordered models.
-            selection = "$NOTE_MODEL_ID=?"
-            args = arrayOf(model.id.toString())
-        }
-        val candidates = resolver.query(NOTES_V2_URI, projection, selection, args, null)
-            ?: error("AnkiDroid could not complete the duplicate query.")
+        // Scan this model's notes rather than relying on Anki's first-field checksum. The
+        // checksum cannot represent the app's trimmed, markup-decoded two-field equality.
+        val candidates = try {
+            resolver.query(NOTES_V2_URI, projection, "$NOTE_MODEL_ID=?", arrayOf(model.id.toString()), null)
+        } catch (error: SecurityException) {
+            throw ankiPermissionError("check for duplicate notes", error)
+        } ?: error("AnkiDroid could not complete the duplicate query. Check AnkiDroid API access and retry.")
         candidates.use { cursor ->
             val idColumn = cursor.getColumnIndexOrThrow(NOTE_ID)
             val fieldsColumn = cursor.getColumnIndexOrThrow(NOTE_FIELDS)
@@ -169,8 +165,11 @@ class AnkiDroidGateway(
                     Uri.withAppendedPath(NOTES_URI, noteId.toString()),
                     "cards",
                 )
-                val cards = resolver.query(cardsUri, arrayOf(CARD_DECK_ID), null, null, null)
-                    ?: error("AnkiDroid could not check a matching note's deck.")
+                val cards = try {
+                    resolver.query(cardsUri, arrayOf(CARD_DECK_ID), null, null, null)
+                } catch (error: SecurityException) {
+                    throw ankiPermissionError("check the destination deck for duplicate notes", error)
+                } ?: error("AnkiDroid could not check a matching note's deck. Check API access and retry.")
                 cards.use { cardCursor ->
                     val deckColumn = cardCursor.getColumnIndexOrThrow(CARD_DECK_ID)
                     while (cardCursor.moveToNext()) {
@@ -196,6 +195,8 @@ class AnkiDroidGateway(
         }
         val returnedUri = try {
             resolver.insert(NOTES_URI, values)
+        } catch (error: SecurityException) {
+            throw ankiPermissionError("insert the new note", error)
         } catch (error: RuntimeException) {
             throw AnkiProviderUncertainException("AnkiDroid note insertion outcome is uncertain.", error)
         }
@@ -210,24 +211,28 @@ class AnkiDroidGateway(
         }
     }
 
-    fun decks(): List<AnkiDeck> = resolver.query(
-        DECKS_URI,
-        arrayOf(DECK_ID, DECK_NAME, DECK_DYNAMIC),
-        null,
-        null,
-        null,
-    )?.use { cursor ->
-        val idColumn = cursor.getColumnIndexOrThrow(DECK_ID)
-        val nameColumn = cursor.getColumnIndexOrThrow(DECK_NAME)
-        val dynamicColumn = cursor.getColumnIndexOrThrow(DECK_DYNAMIC)
-        buildList {
-            while (cursor.moveToNext()) {
-                if (cursor.getInt(dynamicColumn) == 0) {
-                    add(AnkiDeck(cursor.getLong(idColumn), cursor.getString(nameColumn).orEmpty()))
+    fun decks(): List<AnkiDeck> = try {
+        resolver.query(
+            DECKS_URI,
+            arrayOf(DECK_ID, DECK_NAME, DECK_DYNAMIC),
+            null,
+            null,
+            null,
+        )?.use { cursor ->
+            val idColumn = cursor.getColumnIndexOrThrow(DECK_ID)
+            val nameColumn = cursor.getColumnIndexOrThrow(DECK_NAME)
+            val dynamicColumn = cursor.getColumnIndexOrThrow(DECK_DYNAMIC)
+            buildList {
+                while (cursor.moveToNext()) {
+                    if (cursor.getInt(dynamicColumn) == 0) {
+                        add(AnkiDeck(cursor.getLong(idColumn), cursor.getString(nameColumn).orEmpty()))
+                    }
                 }
             }
-        }
-    } ?: error("AnkiDroid did not return decks.")
+        } ?: error("AnkiDroid did not return decks. Check AnkiDroid API access and retry.")
+    } catch (error: SecurityException) {
+        throw ankiPermissionError("read available decks", error)
+    }
 
     companion object {
         private const val AUTHORITY = "com.ichi2.anki.flashcards"
@@ -245,7 +250,6 @@ class AnkiDroidGateway(
         private const val DECK_DYNAMIC = "deck_dyn"
         private const val NOTE_MODEL_ID = "mid"
         private const val NOTE_FIELDS = "flds"
-        private const val NOTE_CHECKSUM = "csum"
         private const val NOTE_TAGS = "tags"
         private const val NOTE_ID = "_id"
         private const val CARD_ORD = "ord"
@@ -256,20 +260,18 @@ class AnkiDroidGateway(
         private val NOTES_URI = Uri.withAppendedPath(BASE_URI, "notes")
         private val NOTES_V2_URI = Uri.withAppendedPath(BASE_URI, "notes_v2")
         private val MEDIA_URI = Uri.withAppendedPath(BASE_URI, "media")
-
-        private fun firstFieldChecksum(html: String): Long {
-            val stripped = html.replace(Regex("<.*?>"), "").replace("&nbsp;", " ")
-            val plainText = Html.fromHtml(stripped, Html.FROM_HTML_MODE_LEGACY).toString()
-            val digest = MessageDigest.getInstance("SHA-1")
-                .digest(plainText.toByteArray(Charsets.UTF_8))
-            return BigInteger(1, digest).toString(16).padStart(40, '0').take(8).toLong(16)
-        }
     }
 }
 
 data class AnkiNoteType(val id: Long, val name: String, val fields: List<String>)
 data class AnkiDeck(val id: Long, val name: String)
 data class AnkiCardLocation(val ord: Int, val deckId: Long)
+
+private fun ankiPermissionError(operation: String, cause: SecurityException): IllegalStateException =
+    IllegalStateException(
+        "AnkiDroid denied permission to $operation. Grant this app AnkiDroid API access in AnkiDroid settings, then retry.",
+        cause,
+    )
 
 internal class AnkiProviderUncertainException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
 internal class AnkiProviderDefiniteInsertException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)

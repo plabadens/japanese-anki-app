@@ -99,6 +99,7 @@ class DuplicateKey private constructor(val sentence: String, val lemma: String) 
                     "lt" -> "<"
                     "gt" -> ">"
                     "quot" -> "\""
+                    "nbsp" -> "\u00a0"
                     "#39", "apos" -> "'"
                     else -> decodeNumericEntity(entity)
                 }

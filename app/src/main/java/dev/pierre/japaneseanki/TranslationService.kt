@@ -1,6 +1,13 @@
 package dev.pierre.japaneseanki
 
+import android.content.Context
 import android.content.SharedPreferences
+import com.google.android.gms.tasks.Tasks
+import com.google.mlkit.common.model.DownloadConditions
+import com.google.mlkit.nl.translate.TranslateLanguage
+import com.google.mlkit.nl.translate.Translation
+import com.google.mlkit.nl.translate.Translator
+import com.google.mlkit.nl.translate.TranslatorOptions
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -14,7 +21,51 @@ sealed interface TranslationResult {
 
 fun interface LocalTranslationFallback { fun translate(sentence: String): String? }
 
-/** Release-gated seam: no model is bundled; unavailable is explicit and never uses a network service. */
+enum class TranslationModelStatus { NOT_DOWNLOADED, DOWNLOADING, READY, ERROR }
+
+/** ML Kit downloads its ja→en model on demand and translates locally once that download completes. */
+class MlKitLocalTranslationFallback(@Suppress("UNUSED_PARAMETER") context: Context) : LocalTranslationFallback {
+    private val translator: Translator = Translation.getClient(
+        TranslatorOptions.Builder()
+            .setSourceLanguage(TranslateLanguage.JAPANESE)
+            .setTargetLanguage(TranslateLanguage.ENGLISH)
+            .build(),
+    )
+
+    @Volatile var modelStatus: TranslationModelStatus = TranslationModelStatus.NOT_DOWNLOADED
+        private set
+
+    override fun translate(sentence: String): String? = synchronized(lock) {
+        modelStatus = TranslationModelStatus.DOWNLOADING
+        try {
+            Tasks.await(translator.downloadModelIfNeeded(DownloadConditions.Builder().build()))
+            modelStatus = TranslationModelStatus.READY
+            Tasks.await(translator.translate(sentence))
+        } catch (_: Exception) {
+            modelStatus = TranslationModelStatus.ERROR
+            null
+        }
+    }
+
+    /** Retry the initial model download; subsequent calls translate offline from the downloaded model. */
+    fun retryModelDownload(): Boolean = synchronized(lock) {
+        modelStatus = TranslationModelStatus.DOWNLOADING
+        try {
+            Tasks.await(translator.downloadModelIfNeeded(DownloadConditions.Builder().build()))
+            modelStatus = TranslationModelStatus.READY
+            true
+        } catch (_: Exception) {
+            modelStatus = TranslationModelStatus.ERROR
+            false
+        }
+    }
+
+    fun close() = translator.close()
+
+    private companion object { val lock = Any() }
+}
+
+/** Explicit unavailable implementation for callers/tests that have not wired an Android context. */
 class UnavailableLocalTranslationFallback : LocalTranslationFallback {
     override fun translate(sentence: String): String? = null
 }

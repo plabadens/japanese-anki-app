@@ -62,18 +62,30 @@ class AudioGenerationTest {
     }
 
     @Test fun obsoleteAudioCompletionCannotReplaceNewRevisionAndFailureCanBeRetriedExplicitly() {
+        val root = Files.createTempDirectory(java.nio.file.Path.of("build"), "audio-revision-state").toFile()
+        try {
+            val result = RevisionedAudioResult()
+            val oldRequest = AudioRequestIdentity(AudioItem.SENTENCE, 0, "猫です")
+            val currentRequest = AudioRequestIdentity(AudioItem.SENTENCE, 1, "犬です")
+            result.begin(oldRequest)
+            result.begin(currentRequest)
+            assertFalse(result.beginIfNeeded(oldRequest)) // a delayed automatic request cannot regress the revision
+            assertFalse(result.complete(oldRequest, writeValidWav(File(root, "old.wav"))))
+            assertTrue(result.fail(currentRequest, retryable = true))
+            assertTrue(result.state is AudioGenerationState.Failed)
+            assertTrue(result.retry(currentRequest))
+            val ready = writeValidWav(File(root, "new.wav"))
+            assertTrue(result.complete(currentRequest, ready))
+            assertEquals(ready.name, (result.state as AudioGenerationState.Ready).file.name)
+        } finally { root.deleteRecursively() }
+    }
+
+    @Test fun incompleteAudioCannotEnterReadyState() {
         val result = RevisionedAudioResult()
-        val oldRequest = AudioRequestIdentity(AudioItem.SENTENCE, 0, "猫です")
-        val currentRequest = AudioRequestIdentity(AudioItem.SENTENCE, 1, "犬です")
-        result.begin(oldRequest)
-        result.begin(currentRequest)
-        assertFalse(result.beginIfNeeded(oldRequest)) // a delayed automatic request cannot regress the revision
-        assertFalse(result.complete(oldRequest, File("old.wav")))
-        assertTrue(result.fail(currentRequest, retryable = true))
+        val request = AudioRequestIdentity(AudioItem.SENTENCE, 0, "猫です")
+        result.begin(request)
+        assertFalse(result.complete(request, File("missing.wav")))
         assertTrue(result.state is AudioGenerationState.Failed)
-        assertTrue(result.retry(currentRequest))
-        assertTrue(result.complete(currentRequest, File("new.wav")))
-        assertEquals("new.wav", (result.state as AudioGenerationState.Ready).file.name)
     }
 
     @Test fun vocabularyUsesRecordingThenAzureThenOfflineAndSentenceSkipsRecording() {
@@ -89,7 +101,12 @@ class AudioGenerationTest {
                 },
             )
             val chain = AudioSourceChain(
-                AudioSourceConfiguration(recordedPronunciationEnabled = true, azureConfigured = true),
+                AudioSourceConfiguration(
+                    recordedPronunciationEnabled = true,
+                    recordedSourceIdentityVerified = true,
+                    recordedRightsVerified = true,
+                    azureConfigured = true,
+                ),
                 binding(AudioSource.RECORDED_PRONUNCIATION, true),
                 binding(AudioSource.AZURE, false),
                 binding(AudioSource.ANDROID_OFFLINE, false),
@@ -132,6 +149,34 @@ class AudioGenerationTest {
         assertNotEquals(base, base.copy(engine = "engine-two"))
     }
 
+    @Test fun recordingIsIneligibleWithoutVerifiedSourceRightsAndResolvedEntry() {
+        val root = Files.createTempDirectory(java.nio.file.Path.of("build"), "audio-recording-gate").toFile()
+        try {
+            var calls = 0
+            val recording = AudioProviderBinding(
+                AudioSourceIdentity(AudioSource.RECORDED_PRONUNCIATION, "NHK-2016", voice = "recording", rate = 1f),
+                AudioProvider { _, output -> calls++; writeValidWav(output) },
+            )
+            val unverified = AudioSourceChain(
+                AudioSourceConfiguration(recordedPronunciationEnabled = true, azureConfigured = false),
+                recording, null, null,
+            )
+            assertTrue(unverified.generate(AudioSynthesisRequest(AudioItem.VOCABULARY, "猫", 1, "entry"), root).let { it is AudioChainResult.Failed })
+            val verified = AudioSourceChain(
+                AudioSourceConfiguration(
+                    recordedPronunciationEnabled = true,
+                    recordedSourceIdentityVerified = true,
+                    recordedRightsVerified = true,
+                ),
+                recording, null, null,
+            )
+            assertTrue(verified.generate(AudioSynthesisRequest(AudioItem.VOCABULARY, "猫", 2), root).let { it is AudioChainResult.Failed })
+            assertEquals(0, calls)
+            assertTrue(verified.generate(AudioSynthesisRequest(AudioItem.VOCABULARY, "猫", 3, "entry"), root) is AudioChainResult.Ready)
+            assertEquals(1, calls)
+        } finally { root.deleteRecursively() }
+    }
+
     @Test fun allUnavailableReturnsFailureAndUnchangedReadyRequestDoesNotRestart() {
         val root = Files.createTempDirectory(java.nio.file.Path.of("build"), "audio-chain-failure").toFile()
         try {
@@ -168,8 +213,14 @@ class AudioGenerationTest {
             val key = AudioCacheKey("RECORDED_PRONUNCIATION:nhk", "猫", "recorded", 1f, entryIdentity = "entry-1")
             cache.put(key, writeValidWav(File(root, "seed.wav")))
             var called = false
-            val chain = AudioSourceChain(AudioSourceConfiguration(recordedPronunciationEnabled = true),
-                AudioProviderBinding(identity, AudioProvider { _, _ -> called = true; error("must use cache") }, available = { false }), null, null, cache)
+            val chain = AudioSourceChain(
+                AudioSourceConfiguration(
+                    recordedPronunciationEnabled = true,
+                    recordedSourceIdentityVerified = true,
+                    recordedRightsVerified = true,
+                ),
+                AudioProviderBinding(identity, AudioProvider { _, _ -> called = true; error("must use cache") }, available = { false }), null, null, cache,
+            )
             val result = chain.generate(AudioSynthesisRequest(AudioItem.VOCABULARY, "猫", 0, "entry-1"), File(root, "draft"))
             assertTrue(result is AudioChainResult.Ready)
             assertFalse(called)

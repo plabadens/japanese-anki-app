@@ -45,6 +45,13 @@ class AnkiFieldContractTest {
         assertEquals("", serializedFields.split('\u001f', limit = Int.MAX_VALUE).last())
     }
 
+    @Test fun duplicateKeyTrimsOuterWhitespaceButPreservesInternalWhitespaceAndDecodesEntities() {
+        val key = DuplicateKey.fromFields("  <b>猫</b>&nbsp;と犬  ", " 犬 &#x732B; ")
+        assertTrue(key.matches(DuplicateKey.fromFields("猫\u00a0と犬", "犬 猫")))
+        assertFalse(key.matches(DuplicateKey.fromFields("猫 と犬", "犬 猫")))
+        assertFalse(key.matches(DuplicateKey.fromFields("猫\u00a0 と犬", "犬 猫")))
+    }
+
     @Test fun duplicateKeyFailsClosedForMissingFieldsOrTruncatedSerializedFields() {
         assertThrows(IllegalArgumentException::class.java) {
             DuplicateKey.fromModelFields(listOf("SentKanji"), "sentence")

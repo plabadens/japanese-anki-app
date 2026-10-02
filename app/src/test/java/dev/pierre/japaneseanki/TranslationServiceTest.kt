@@ -49,6 +49,16 @@ class TranslationServiceTest {
     }
 
     @Test
+    fun unavailableFallbackCanBeRetriedAndMachineResultIsMarkedLocal() {
+        var available = false
+        val fallback = LocalTranslationFallback { if (available) "Offline result" else null }
+        val service = TranslationService(local = fallback)
+        assertEquals(TranslationResult.Failed("Local translation is unavailable"), service.translate("文"))
+        available = true
+        assertEquals(TranslationResult.Ready("Offline result", TranslationSource.LOCAL), service.translate("文"))
+    }
+
+    @Test
     fun resultSourceAndManualSaveClearLocalMark() {
         val localReady = TranslationResult.Ready("local", TranslationSource.LOCAL)
         assertEquals(TranslationSource.LOCAL, (localReady as TranslationResult.Ready).source)

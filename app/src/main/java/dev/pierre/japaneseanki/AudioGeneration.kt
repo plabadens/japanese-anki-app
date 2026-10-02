@@ -220,6 +220,10 @@ class RevisionedAudioResult {
 
     fun complete(request: AudioRequestIdentity, file: File): Boolean = synchronized(transitionLock) {
         if ((state as? AudioGenerationState.Generating)?.request != request) return false
+        if (runCatching { AudioFileValidator.requireWav(file) }.isFailure) {
+            state = AudioGenerationState.Failed(request, retryable = true)
+            return false
+        }
         state = AudioGenerationState.Ready(request, file)
         true
     }

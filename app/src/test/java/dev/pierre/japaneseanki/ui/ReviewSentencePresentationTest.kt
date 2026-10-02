@@ -13,6 +13,17 @@ class ReviewSentencePresentationTest {
         assertEquals("猫", parts.filter { it.reading != null }.single().text)
     }
 
+    @Test fun highlightsFuriganaAnnotatedTargetOccurrence() {
+        val parts = reviewSentenceParts(
+            "猫と猫",
+            TargetSpan(2, 3),
+            "ねこ",
+            listOf(FuriganaSpan(TargetSpan(0, 1), "猫", "ねこ"), FuriganaSpan(TargetSpan(2, 3), "猫", "ねこ")),
+        )
+        assertEquals(2, parts.count { it.reading == "ねこ" })
+        assertTrue(parts.single { it.highlighted }.text == "猫")
+    }
+
     @Test fun leavesUnresolvedKanjiMarkedAndShowsKnownReadingInline() {
         val parts = reviewSentenceParts(
             "東京へ行く",

@@ -5,6 +5,7 @@ import android.widget.ImageView
 import androidx.compose.foundation.background
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,20 +18,24 @@ import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.Placeholder
@@ -48,6 +53,12 @@ import dev.pierre.japaneseanki.PitchDiagramScale
 import dev.pierre.japaneseanki.PitchPatternDiagram
 import dev.pierre.japaneseanki.TargetSpan
 import java.io.File
+
+internal sealed interface ReviewSendPresentation {
+    data object Ready : ReviewSendPresentation
+    data object Sending : ReviewSendPresentation
+    data class Status(val message: String, val actionLabel: String? = null) : ReviewSendPresentation
+}
 
 @Composable
 internal fun ReviewCard(
@@ -69,6 +80,13 @@ internal fun ReviewCard(
     onTogglePitchInfo: () -> Unit,
     onEdit: () -> Unit,
     onAddTag: () -> Unit,
+    generatingFields: Set<String> = emptySet(),
+    translationUsesFallback: Boolean = false,
+    translationInfoExpanded: Boolean = false,
+    onToggleTranslationInfo: () -> Unit = {},
+    sendPresentation: ReviewSendPresentation? = null,
+    onSend: (() -> Unit)? = null,
+    onSendStatusAction: (() -> Unit)? = null,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -87,7 +105,7 @@ internal fun ReviewCard(
                     else -> Text("No image", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            ReviewFieldRow("Sentence", onEdit = onEdit, playable = true) {
+            ReviewFieldRow("Sentence", onEdit = onEdit, playable = true, generating = "Sentence" in generatingFields) {
                 val parts = reviewSentenceParts(sentence, target, sentenceReading, furigana)
                 val sentenceLayout = remember(sentence, target, sentenceReading, furigana) { mutableStateOf<TextLayoutResult?>(null) }
                 val unresolvedColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -159,32 +177,72 @@ internal fun ReviewCard(
                     },
                 )
             }
-            ReviewFieldRow("Vocabulary", onEdit = onEdit, playable = true) {
+            ReviewFieldRow("Vocabulary", onEdit = onEdit, playable = true, generating = "Vocabulary" in generatingFields) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     RubyText(vocabulary, vocabularyReading)
                     pitch?.let { PitchPatternDiagram(it, PitchDiagramScale.Compact) }
-                    if (pitchHasAlternatives) {
-                        IconButton(onClick = onTogglePitchInfo, modifier = Modifier.size(40.dp).semantics {
-                            contentDescription = if (pitchInfoExpanded) "Dismiss pitch explanation" else "Explain alternate pitch pattern"
+                    if (pitchHasAlternatives || pitch == null) {
+                        IconButton(onClick = onTogglePitchInfo, modifier = Modifier.size(48.dp).semantics {
+                            contentDescription = if (pitchInfoExpanded) "Dismiss pitch explanation" else if (pitch == null) "Explain missing pitch pattern" else "Explain alternate pitch pattern"
+                            stateDescription = if (pitchInfoExpanded) "Expanded" else "Collapsed"
                         }) { Text("!", color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     }
                 }
                 if (pitchInfoExpanded) {
                     Text(
-                        "More than one pitch pattern is listed for this reading; the first match is shown.",
+                        if (pitch == null) "No pitch pattern is available for this reading." else "More than one pitch pattern is listed for this reading; the first match is shown.",
                         modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
                             .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp)).padding(10.dp),
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
             }
-            ReviewFieldRow("Definition", onEdit = onEdit) { Text(definition.ifBlank { "Add a definition" }, style = MaterialTheme.typography.bodyLarge) }
-            ReviewFieldRow("Translation", onEdit = onEdit, playable = true) { Text(translation.ifBlank { "Not available yet" }, style = MaterialTheme.typography.bodyLarge) }
+            ReviewFieldRow("Definition", onEdit = onEdit, generating = "Definition" in generatingFields) { Text(definition.ifBlank { "Add a definition" }, style = MaterialTheme.typography.bodyLarge) }
+            ReviewFieldRow("Translation", onEdit = onEdit, playable = true, generating = "Translation" in generatingFields) {
+                Text(if ("Translation" in generatingFields) "Translating…" else translation.ifBlank { "Not available yet" }, style = MaterialTheme.typography.bodyLarge)
+                if (translationUsesFallback) {
+                    IconButton(onClick = onToggleTranslationInfo, modifier = Modifier.size(48.dp).semantics {
+                        contentDescription = if (translationInfoExpanded) "Dismiss offline translation explanation" else "Explain offline translation"
+                        stateDescription = if (translationInfoExpanded) "Expanded" else "Collapsed"
+                    }) { Text("!", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                }
+                if (translationInfoExpanded) Text(
+                    "This translation was produced offline.",
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp)).padding(10.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
             ReviewFieldRow("Notes", onEdit = onEdit) { Text(notes.ifBlank { "No notes" }, style = MaterialTheme.typography.bodyLarge) }
             ReviewFieldRow("Tags", onEdit = onAddTag) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    tags.filter(String::isNotBlank).forEach { AssistChip(onClick = onAddTag, label = { Text(it) }) }
-                    AssistChip(onClick = onAddTag, label = { Text("+") })
+                    tags.filter(String::isNotBlank).forEach { tag ->
+                        AssistChip(onClick = onAddTag, label = { Text(tag) }, modifier = Modifier.semantics { contentDescription = "Tag $tag" })
+                    }
+                    AssistChip(onClick = onAddTag, label = { Text("Add tag") }, modifier = Modifier.semantics { contentDescription = "Add tag" })
+                }
+            }
+            sendPresentation?.let { presentation ->
+                when (presentation) {
+                    ReviewSendPresentation.Ready -> Button(
+                        onClick = { onSend?.invoke() }, enabled = onSend != null,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    ) { Text("Send to AnkiDroid") }
+                    ReviewSendPresentation.Sending -> Button(
+                        onClick = {}, enabled = false,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics { stateDescription = "Sending" },
+                    ) {
+                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(10.dp))
+                        Text("Sending…")
+                    }
+                    is ReviewSendPresentation.Status -> Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                        Text(presentation.message, style = MaterialTheme.typography.bodyMedium)
+                        if (presentation.actionLabel != null) TextButton(
+                            onClick = { onSendStatusAction?.invoke() }, enabled = onSendStatusAction != null,
+                            modifier = Modifier.heightIn(min = 48.dp),
+                        ) { Text(presentation.actionLabel) }
+                    }
                 }
             }
         }
@@ -196,6 +254,7 @@ private fun ReviewFieldRow(
     label: String,
     onEdit: () -> Unit,
     playable: Boolean = false,
+    generating: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     Row(
@@ -207,10 +266,17 @@ private fun ReviewFieldRow(
             Spacer(Modifier.size(4.dp))
             content()
         }
-        if (playable) IconButton(onClick = {}, modifier = Modifier.size(40.dp).semantics { contentDescription = "Play $label audio (not available yet)" }) {
-            Text("▶", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (playable) {
+            if (generating) Box(Modifier.size(48.dp).semantics {
+                contentDescription = "Generating $label"
+                stateDescription = "In progress"
+            }, contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+            } else IconButton(onClick = {}, modifier = Modifier.size(48.dp).semantics { contentDescription = "Play $label audio (not available yet)" }) {
+                Text("▶", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
-        IconButton(onClick = onEdit, modifier = Modifier.size(40.dp).semantics { contentDescription = "Edit $label" }) {
+        IconButton(onClick = onEdit, modifier = Modifier.size(48.dp).semantics { contentDescription = "Edit $label" }) {
             Text("✎", fontSize = 17.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
