@@ -404,6 +404,7 @@ class MainActivity : ComponentActivity() {
             var showModelMenu by remember { mutableStateOf(false) }
             var showDeckMenu by remember { mutableStateOf(false) }
             var isSubmitting by remember { mutableStateOf(false) }
+            var duplicateBlocked by remember { mutableStateOf(false) }
             var submitMessage by remember { mutableStateOf<String?>(null) }
             val restoredPhase = SubmissionPhase.fromPersisted(
                 preferences.getString(SubmissionRecoveryKeys.STATUS, null),
@@ -437,7 +438,7 @@ class MainActivity : ComponentActivity() {
             val selectedModel = noteTypes.firstOrNull { it.id == selectedModelId }
             val selectedDeck = decks.firstOrNull { it.id == selectedDeckId }
             val incoming = sharedText.value
-            val submissionLocked = isSubmitting || recoveryRequired || frozenRetryReady
+            val submissionLocked = isSubmitting || recoveryRequired || frozenRetryReady || duplicateBlocked
             val currentSubmissionLocked = rememberUpdatedState(submissionLocked)
             val currentDraftGeneration = rememberUpdatedState(draftGeneration)
             val currentEditorInputRevision = rememberUpdatedState(editorInputRevision)
@@ -451,6 +452,11 @@ class MainActivity : ComponentActivity() {
             fun asyncSetupIsCurrent(generation: Long): Boolean =
                 !currentSubmissionLocked.value && currentSetupGeneration.value == generation
             val hasManualDefinition = definitionManuallyEdited && definition.isNotBlank()
+            val persistLastSentTags: (FrozenSubmission) -> Unit = { snapshot ->
+                check(settings.edit().putString("last_note_tags", snapshot.tags.joinToString(" ")).commit()) {
+                    "Could not save the tags from the confirmed note."
+                }
+            }
             val clearDraft = {
                 listOfNotNull(photoSourcePath, noteImagePath, processedImagePath).distinct().forEach { File(it).delete() }
                 editorInputRevision++
@@ -462,6 +468,7 @@ class MainActivity : ComponentActivity() {
                 clearPersistedDraft(preferences, File(filesDir, "draft"))
                 publishedFrozenSnapshot = null
                 completedSubmission = null
+                duplicateBlocked = false
                 submitMessage = null
                 frozenSnapshotAppliedRevision = -1L
                 draftGeneration++
@@ -1542,12 +1549,10 @@ class MainActivity : ComponentActivity() {
                 (if (frozenRetryReady) effectiveFrozenFields != null else fieldsByName != null && validationErrors.isEmpty()) &&
                 effectiveMapping?.isValid == true && sendImageReady && frozenDestinationReady &&
                 (frozenRetryReady || (!dictionaryLoading && !dictionarySearchLoading)) &&
-                setupLoadedSuccessfully && !setupLoading && setupError == null && !recoveryRequired && !isSubmitting
+                setupLoadedSuccessfully && !setupLoading && setupError == null && !recoveryRequired &&
+                !isSubmitting && !duplicateBlocked
 
-            androidx.compose.runtime.LaunchedEffect(submissionLocked, publishedFrozenSnapshot) {
-                if (!submissionLocked) return@LaunchedEffect
-                val snapshot = publishedFrozenSnapshot ?: readFrozenSubmission(preferences) ?: return@LaunchedEffect
-                if (frozenSnapshotAppliedRevision == snapshot.revision) return@LaunchedEffect
+            val applyFrozenSubmissionToDraft: (FrozenSubmission) -> Unit = { snapshot ->
                 replaceEditorText(snapshot.sentence, true)
                 target = TargetSpan(snapshot.targetStart, snapshot.targetEnd)
                     .takeIf { it.textIn(snapshot.sentence) != null }
@@ -1577,6 +1582,13 @@ class MainActivity : ComponentActivity() {
                 selectedDictionaryEntryId = null
                 route = AppRoute.Review
                 frozenSnapshotAppliedRevision = snapshot.revision
+            }
+
+            androidx.compose.runtime.LaunchedEffect(submissionLocked, publishedFrozenSnapshot) {
+                if (!submissionLocked) return@LaunchedEffect
+                val snapshot = publishedFrozenSnapshot ?: readFrozenSubmission(preferences) ?: return@LaunchedEffect
+                if (frozenSnapshotAppliedRevision == snapshot.revision) return@LaunchedEffect
+                applyFrozenSubmissionToDraft(snapshot)
             }
 
             androidx.compose.runtime.LaunchedEffect(
@@ -1633,6 +1645,7 @@ class MainActivity : ComponentActivity() {
                             recoveryMessage = "The saved note ID no longer resolves to cards. Do not insert again; explicitly resolve this outcome."
                         } else {
                             check(preferences.edit().putString(SubmissionRecoveryKeys.STATUS, SubmissionPhase.DESTINATION_VERIFIED.persisted).commit())
+                            persistLastSentTags(snapshot)
                             check(preferences.edit().putString(SubmissionRecoveryKeys.STATUS, "done").commit())
                             recoveryRequired = false
                             recoveryPhase = null
@@ -1819,11 +1832,31 @@ class MainActivity : ComponentActivity() {
                         Text("Open matching note in AnkiDroid")
                     }
                 }
+                if (duplicateBlocked) TextButton(onClick = {
+                    val blockedSnapshot = publishedFrozenSnapshot ?: readFrozenSubmission(preferences)
+                    if (blockedSnapshot != null) applyFrozenSubmissionToDraft(blockedSnapshot)
+                    clearPendingSubmission(preferences)
+                    duplicateBlocked = false
+                    recoveryRequired = false
+                    recoveryPhase = null
+                    frozenRetryReady = false
+                    publishedFrozenSnapshot = null
+                    frozenSnapshotAppliedRevision = -1L
+                    knownNoteId = null
+                    submitMessage = null
+                    recoveryMessage = null
+                    autoOpenReview = false
+                    route = AppRoute.Target
+                    draftGeneration++
+                }, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text("Edit and recheck")
+                }
                 if (recoveryRequired && recoveryPhase == SubmissionPhase.NOTE_INSERTING &&
                     (!apiPermissionGranted || setupLoading || setupError != null || !setupLoadedSuccessfully)) {
                     Text("Recovery is held until AnkiDroid setup succeeds; the frozen draft has not been cleared.", style = MaterialTheme.typography.bodyMedium)
                 } else if (recoveryRequired && recoveryDuplicate) {
                     TextButton(onClick = {
+                        (publishedFrozenSnapshot ?: readFrozenSubmission(preferences))?.let(persistLastSentTags)
                         clearPendingSubmission(preferences)
                         clearDraftAfterUnlock = true
                         recoveryRequired = false
@@ -1958,11 +1991,12 @@ class MainActivity : ComponentActivity() {
                                 translation = displayTranslation,
                                 translationUsesFallback = translationSource == TranslationSource.LOCAL && !translationDraft.manuallyEdited,
                                 translationInfoExpanded = translationInfoExpanded,
-                                translationPending = activeTranslationResult() is TranslationResult.Pending,
+                                generatingFields = if (activeTranslationResult() is TranslationResult.Pending) setOf("Translation") else emptySet(),
                                 translationError = (activeTranslationResult() as? TranslationResult.Failed)?.message,
                                 translationStale = translationDraft.manuallyEdited && translationDraft.stale,
                                 translationSuggestion = (translationDraft.suggestion as? TranslationResult.Ready)?.text,
                                 translationEditable = !submissionLocked && completedSubmission == null,
+                                editingEnabled = !submissionLocked && completedSubmission == null,
                                 onTranslationChange = { text ->
                                     translationRequestRevision++
                                     translationInfoExpanded = false
@@ -1993,11 +2027,14 @@ class MainActivity : ComponentActivity() {
                                 pitchHasAlternatives = pitchCandidates.size > 1,
                                 pitchInfoExpanded = pitchInfoExpanded,
                                 onTogglePitchInfo = { pitchInfoExpanded = !pitchInfoExpanded },
-                                onEdit = { autoOpenReview = false; route = AppRoute.Target },
-                                onAddTag = { autoOpenReview = false; route = AppRoute.Target },
+                                onEdit = { if (!submissionLocked) { autoOpenReview = false; route = AppRoute.Target } },
+                                onAddTag = { if (!submissionLocked) { autoOpenReview = false; route = AppRoute.Target } },
                                 sendPresentation = when {
                                     isSubmitting -> ReviewSendPresentation.Sending
                                     completedSubmission != null -> ReviewSendPresentation.Status("Note sent to AnkiDroid.")
+                                    duplicateBlocked -> ReviewSendPresentation.Status(
+                                        submitMessage ?: "A matching note already exists in AnkiDroid.",
+                                    )
                                     recoveryRequired -> ReviewSendPresentation.Status(
                                         recoveryMessage ?: "Pending Send needs review.",
                                     )
@@ -2005,10 +2042,10 @@ class MainActivity : ComponentActivity() {
                                     submitMessage != null -> ReviewSendPresentation.Status(submitMessage!!, "Retry Send")
                                     else -> ReviewSendPresentation.Ready
                                 },
-                                onSend = if (canSend && completedSubmission == null &&
+                                onSend = if (canSend && completedSubmission == null && !duplicateBlocked &&
                                     submitMessage?.startsWith("Blocked:") != true
                                 ) ({ submitAction() }) else null,
-                                onSendStatusAction = if (canSend && completedSubmission == null) ({ submitAction() }) else null,
+                                onSendStatusAction = if (canSend && completedSubmission == null && !duplicateBlocked) ({ submitAction() }) else null,
                                 sendStatusContent = sendRecoveryContent,
                             )
                         } else {
@@ -2404,7 +2441,7 @@ class MainActivity : ComponentActivity() {
                             style = MaterialTheme.typography.bodyMedium,
                         )
                         submitAction = submitAction@{
-                            if (!canSend || isSubmitting || recoveryRequired || completedSubmission != null ||
+                            if (!canSend || isSubmitting || recoveryRequired || duplicateBlocked || completedSubmission != null ||
                                 submitMessage?.startsWith("Blocked:") == true
                             ) {
                                 return@submitAction
@@ -2609,6 +2646,7 @@ class MainActivity : ComponentActivity() {
                                                 insertedSnapshot,
                                                 SubmissionPhase.DESTINATION_VERIFIED,
                                             ).commit()) { "Could not persist verified destination membership." }
+                                            persistLastSentTags(insertedSnapshot)
                                             check(preferences.edit().putString(SubmissionRecoveryKeys.STATUS, "done").commit())
                                             clearPersistedDraft(preferences, File(filesDir, "draft"))
                                             SubmissionOutcome("created", insertedNoteId)
@@ -2618,6 +2656,7 @@ class MainActivity : ComponentActivity() {
                                         "duplicate" -> {
                                             frozenRetryReady = false
                                             recoveryPhase = null
+                                            duplicateBlocked = true
                                             knownNoteId = outcome.noteId
                                             if (restoredFrozen != null) clearPendingSubmission(preferences)
                                             submitMessage = "Blocked: a note with this sentence and vocabulary lemma already exists."
@@ -2674,7 +2713,8 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         if (visibleRoute != AppRoute.Review || reviewTarget == null) Button(
-                            enabled = completedSubmission == null && submitMessage?.startsWith("Blocked:") != true && canSend,
+                            enabled = completedSubmission == null && !duplicateBlocked &&
+                                submitMessage?.startsWith("Blocked:") != true && canSend,
                             onClick = { submitAction() },
                         ) {
                             if (isSubmitting) {

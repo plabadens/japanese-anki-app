@@ -84,11 +84,11 @@ internal fun ReviewCard(
     generatingFields: Set<String> = emptySet(),
     translationUsesFallback: Boolean = false,
     translationInfoExpanded: Boolean = false,
-    translationPending: Boolean = false,
     translationError: String? = null,
     translationStale: Boolean = false,
     translationSuggestion: String? = null,
     translationEditable: Boolean = true,
+    editingEnabled: Boolean = true,
     onTranslationChange: (String) -> Unit = {},
     onRetryTranslation: () -> Unit = {},
     onKeepMyTranslation: () -> Unit = {},
@@ -105,7 +105,7 @@ internal fun ReviewCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            ReviewFieldRow("Image", onEdit = onEdit) {
+            ReviewFieldRow("Image", onEdit = onEdit, editingEnabled = editingEnabled) {
                 when {
                     imagePath != null && File(imagePath).isFile -> AndroidView(
                         factory = { context -> ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_CROP } },
@@ -116,7 +116,7 @@ internal fun ReviewCard(
                     else -> Text("No image", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            ReviewFieldRow("Sentence", onEdit = onEdit, playable = true, generating = "Sentence" in generatingFields) {
+            ReviewFieldRow("Sentence", onEdit = onEdit, editingEnabled = editingEnabled, playable = true, generating = "Sentence" in generatingFields) {
                 val parts = reviewSentenceParts(sentence, target, sentenceReading, furigana)
                 val sentenceLayout = remember(sentence, target, sentenceReading, furigana) { mutableStateOf<TextLayoutResult?>(null) }
                 val unresolvedColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -188,7 +188,7 @@ internal fun ReviewCard(
                     },
                 )
             }
-            ReviewFieldRow("Vocabulary", onEdit = onEdit, playable = true, generating = "Vocabulary" in generatingFields) {
+            ReviewFieldRow("Vocabulary", onEdit = onEdit, editingEnabled = editingEnabled, playable = true, generating = "Vocabulary" in generatingFields) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     RubyText(vocabulary, vocabularyReading)
                     pitch?.let { PitchPatternDiagram(it, PitchDiagramScale.Compact) }
@@ -208,20 +208,21 @@ internal fun ReviewCard(
                     )
                 }
             }
-            ReviewFieldRow("Definition", onEdit = onEdit, generating = "Definition" in generatingFields) { Text(definition.ifBlank { "Add a definition" }, style = MaterialTheme.typography.bodyLarge) }
-            ReviewFieldRow("Translation", onEdit = onEdit, playable = true, generating = "Translation" in generatingFields) {
+            ReviewFieldRow("Definition", onEdit = onEdit, editingEnabled = editingEnabled, generating = "Definition" in generatingFields) { Text(definition.ifBlank { "Add a definition" }, style = MaterialTheme.typography.bodyLarge) }
+            ReviewFieldRow("Translation", onEdit = onEdit, editingEnabled = editingEnabled, playable = true, generating = "Translation" in generatingFields) {
                 OutlinedTextField(
                     value = translation,
                     onValueChange = onTranslationChange,
                     readOnly = !translationEditable,
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Sentence translation (optional)") },
+                    label = {
+                        Text(
+                            if ("Translation" in generatingFields && translation.isBlank()) "Translating sentence…"
+                            else "Sentence translation (optional)",
+                        )
+                    },
                     minLines = 2,
                 )
-                if (translationPending) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                    Text("Translating sentence…", style = MaterialTheme.typography.bodySmall)
-                }
                 translationError?.let { message ->
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(message, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
@@ -256,13 +257,13 @@ internal fun ReviewCard(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            ReviewFieldRow("Notes", onEdit = onEdit) { Text(notes.ifBlank { "No notes" }, style = MaterialTheme.typography.bodyLarge) }
-            ReviewFieldRow("Tags", onEdit = onAddTag) {
+            ReviewFieldRow("Notes", onEdit = onEdit, editingEnabled = editingEnabled) { Text(notes.ifBlank { "No notes" }, style = MaterialTheme.typography.bodyLarge) }
+            ReviewFieldRow("Tags", onEdit = onAddTag, editingEnabled = editingEnabled) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     tags.filter(String::isNotBlank).forEach { tag ->
-                        AssistChip(onClick = onAddTag, label = { Text(tag) }, modifier = Modifier.semantics { contentDescription = "Tag $tag" })
+                        AssistChip(enabled = editingEnabled, onClick = onAddTag, label = { Text(tag) }, modifier = Modifier.semantics { contentDescription = "Tag $tag" })
                     }
-                    AssistChip(onClick = onAddTag, label = { Text("Add tag") }, modifier = Modifier.semantics { contentDescription = "Add tag" })
+                    AssistChip(enabled = editingEnabled, onClick = onAddTag, label = { Text("Add tag") }, modifier = Modifier.semantics { contentDescription = "Add tag" })
                 }
             }
             sendPresentation?.let { presentation ->
@@ -299,6 +300,7 @@ private fun ReviewFieldRow(
     onEdit: () -> Unit,
     playable: Boolean = false,
     generating: Boolean = false,
+    editingEnabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     Row(
@@ -320,7 +322,7 @@ private fun ReviewFieldRow(
                 Text("▶", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        IconButton(onClick = onEdit, modifier = Modifier.size(48.dp).semantics { contentDescription = "Edit $label" }) {
+        IconButton(enabled = editingEnabled, onClick = onEdit, modifier = Modifier.size(48.dp).semantics { contentDescription = "Edit $label" }) {
             Text("✎", fontSize = 17.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
