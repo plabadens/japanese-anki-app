@@ -107,7 +107,10 @@ internal fun hasStaticAvifFileType(file: File): Boolean {
     val header = ByteArray(minOf(file.length(), 4096L).toInt())
     if (header.size < 16) return false
     val headerRead = runCatching {
-        file.inputStream().use { it.readNBytes(header.size).contentEquals(header) }
+        file.inputStream().use { input ->
+            java.io.DataInputStream(input).readFully(header)
+            true
+        }
     }.getOrDefault(false)
     if (!headerRead) return false
     if (header.copyOfRange(4, 8).toString(Charsets.US_ASCII) != "ftyp") return false

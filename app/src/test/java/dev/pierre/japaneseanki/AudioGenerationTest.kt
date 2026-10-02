@@ -111,7 +111,7 @@ class AudioGenerationTest {
                 binding(AudioSource.AZURE, false),
                 binding(AudioSource.ANDROID_OFFLINE, false),
             )
-            val vocabulary = chain.generate(AudioSynthesisRequest(AudioItem.VOCABULARY, "猫", 0), File(root, "word"))
+            val vocabulary = chain.generate(AudioSynthesisRequest(AudioItem.VOCABULARY, "猫", 0, entryIdentity = "cat-entry"), File(root, "word"))
             assertEquals(listOf("RECORDED_PRONUNCIATION", "AZURE"), calls)
             assertTrue(vocabulary is AudioChainResult.Ready && vocabulary.source == AudioSource.AZURE)
             calls.clear()
@@ -185,7 +185,7 @@ class AudioGenerationTest {
             val result = RevisionedAudioResult()
             val request = AudioRequestIdentity(AudioItem.SENTENCE, 1, "text")
             assertTrue(result.beginIfNeeded(request))
-            assertTrue(result.complete(request, source(root, "ready.wav", "wav")))
+            assertTrue(result.complete(request, writeValidWav(File(root, "ready.wav"))))
             assertFalse(result.beginIfNeeded(request))
             assertFalse(result.retry(request))
             val failedRequest = AudioRequestIdentity(AudioItem.SENTENCE, 2, "changed")
@@ -255,6 +255,4 @@ class AudioGenerationTest {
         file.writeBytes(bytes.array())
         return file
     }
-
-    private fun source(root: File, name: String, content: String): File = File(root, name).apply { writeText(content) }
 }
