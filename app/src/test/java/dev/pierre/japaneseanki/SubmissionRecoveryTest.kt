@@ -7,6 +7,14 @@ import org.junit.Assert.assertThrows
 
 class SubmissionRecoveryTest {
     @Test
+    fun restoredDraftTagsPreferLastSentTagsBeforeSettingsDefaults() {
+        assertEquals("last note", initialDraftTags(null, "last note", "settings default"))
+        assertEquals("saved draft", initialDraftTags("saved draft", "last note", "settings default"))
+        assertEquals("", initialDraftTags("", "last note", "settings default"))
+        assertEquals("settings default", initialDraftTags(null, null, "settings default"))
+    }
+
+    @Test
     fun encodedFieldsRoundTripIncludingEmptyAndMarkupValues() {
         val values = listOf("", "<b>日本語</b>", "line one\nline two", "& | .")
         assertEquals(values, decodeSubmissionValues(encodeSubmissionValues(values)))

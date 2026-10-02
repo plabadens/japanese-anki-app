@@ -308,7 +308,15 @@ class MainActivity : ComponentActivity() {
             var translationInfoExpanded by remember { mutableStateOf(false) }
             var notes by remember { mutableStateOf(preferences.getString("notes", "").orEmpty()) }
             var defaultTags by remember { mutableStateOf(settings.getString("default_tags", "").orEmpty()) }
-            var tags by remember { mutableStateOf(preferences.getString("tags", defaultTags).orEmpty()) }
+            var tags by remember {
+                mutableStateOf(
+                    initialDraftTags(
+                        preferences.getString("tags", null),
+                        settings.getString("last_note_tags", null),
+                        defaultTags,
+                    ),
+                )
+            }
             val restoredPendingPhoto = preferences.getString("pending_replacement_image_path", null)
                 ?.let(::File)?.takeIf(File::isFile)
             var showReplace by remember { mutableStateOf(restoredPendingPhoto != null) }
@@ -429,7 +437,6 @@ class MainActivity : ComponentActivity() {
             var publishedFrozenSnapshot by remember { mutableStateOf<FrozenSubmission?>(null) }
             var completedSubmission by remember { mutableStateOf<FrozenSubmission?>(null) }
             var pitchInfoExpanded by remember { mutableStateOf(false) }
-            var clearDraftAfterUnlock by remember { mutableStateOf(false) }
             var frozenSnapshotAppliedRevision by remember { mutableStateOf(-1L) }
             var draftGeneration by remember { mutableStateOf(0L) }
             var editorInputRevision by remember { mutableStateOf(0L) }
@@ -544,15 +551,6 @@ class MainActivity : ComponentActivity() {
                 if (completedSubmission != null) {
                     kotlinx.coroutines.delay(900)
                     if (completedSubmission != null) clearDraft()
-                }
-            }
-
-            androidx.compose.runtime.LaunchedEffect(
-                isSubmitting, recoveryRequired, frozenRetryReady, clearDraftAfterUnlock,
-            ) {
-                if (clearDraftAfterUnlock && !isSubmitting && !recoveryRequired && !frozenRetryReady) {
-                    clearDraftAfterUnlock = false
-                    clearDraft()
                 }
             }
 
@@ -1650,7 +1648,7 @@ class MainActivity : ComponentActivity() {
                             recoveryRequired = false
                             recoveryPhase = null
                             frozenRetryReady = false
-                            clearDraftAfterUnlock = true
+                            completedSubmission = snapshot
                             knownNoteId = null
                             submitMessage = "Note ${noteId} recovered in the selected deck."
                         }
@@ -1856,12 +1854,20 @@ class MainActivity : ComponentActivity() {
                     Text("Recovery is held until AnkiDroid setup succeeds; the frozen draft has not been cleared.", style = MaterialTheme.typography.bodyMedium)
                 } else if (recoveryRequired && recoveryDuplicate) {
                     TextButton(onClick = {
-                        (publishedFrozenSnapshot ?: readFrozenSubmission(preferences))?.let(persistLastSentTags)
-                        clearPendingSubmission(preferences)
-                        clearDraftAfterUnlock = true
+                        val confirmedSnapshot = publishedFrozenSnapshot ?: readFrozenSubmission(preferences)
+                        if (confirmedSnapshot == null) {
+                            recoveryMessage = "The frozen Send is unavailable; keep the draft and resolve the outcome manually."
+                            return@TextButton
+                        }
+                        persistLastSentTags(confirmedSnapshot)
+                        check(preferences.edit().putString(SubmissionRecoveryKeys.STATUS, "done").commit()) {
+                            "Could not save the resolved Send state."
+                        }
+                        completedSubmission = confirmedSnapshot
                         recoveryRequired = false
                         recoveryPhase = null
                         recoveryDuplicate = false
+                        knownNoteId = null
                         submitMessage = "Pending Send marked complete."
                     }) { Text("Treat pending Send as complete") }
                 } else if (recoveryRequired && recoveryPhase == SubmissionPhase.MEDIA_IMPORTING) {
@@ -2031,7 +2037,9 @@ class MainActivity : ComponentActivity() {
                                 onAddTag = { if (!submissionLocked) { autoOpenReview = false; route = AppRoute.Target } },
                                 sendPresentation = when {
                                     isSubmitting -> ReviewSendPresentation.Sending
-                                    completedSubmission != null -> ReviewSendPresentation.Status("Note sent to AnkiDroid.")
+                                    completedSubmission != null -> ReviewSendPresentation.Status(
+                                        submitMessage ?: "Note sent to AnkiDroid.",
+                                    )
                                     duplicateBlocked -> ReviewSendPresentation.Status(
                                         submitMessage ?: "A matching note already exists in AnkiDroid.",
                                     )
@@ -2663,7 +2671,6 @@ class MainActivity : ComponentActivity() {
                                         }
                                         "created" -> {
                                             completedSubmission = publishedFrozenSnapshot ?: readFrozenSubmission(preferences)
-                                            clearDraftAfterUnlock = false
                                             frozenRetryReady = false
                                             recoveryRequired = false
                                             recoveryPhase = null
@@ -2865,6 +2872,9 @@ class MainActivity : ComponentActivity() {
             }
     }
 }
+
+internal fun initialDraftTags(draftTags: String?, lastNoteTags: String?, defaultTags: String?): String =
+    draftTags ?: lastNoteTags ?: defaultTags.orEmpty()
 
 private fun clearPersistedDraft(preferences: SharedPreferences, draftDirectory: File? = null) {
     val ownedDirectory = draftDirectory?.canonicalFile

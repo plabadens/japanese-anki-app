@@ -209,20 +209,30 @@ internal fun ReviewCard(
                 }
             }
             ReviewFieldRow("Definition", onEdit = onEdit, editingEnabled = editingEnabled, generating = "Definition" in generatingFields) { Text(definition.ifBlank { "Add a definition" }, style = MaterialTheme.typography.bodyLarge) }
-            ReviewFieldRow("Translation", onEdit = onEdit, editingEnabled = editingEnabled, playable = true, generating = "Translation" in generatingFields) {
-                OutlinedTextField(
-                    value = translation,
-                    onValueChange = onTranslationChange,
-                    readOnly = !translationEditable,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = {
-                        Text(
-                            if ("Translation" in generatingFields && translation.isBlank()) "Translating sentence…"
-                            else "Sentence translation (optional)",
-                        )
-                    },
-                    minLines = 2,
-                )
+            ReviewFieldRow("Translation", onEdit = onEdit, editingEnabled = editingEnabled) {
+                val translationPending = "Translation" in generatingFields
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = translation,
+                        onValueChange = onTranslationChange,
+                        readOnly = !translationEditable,
+                        modifier = Modifier.weight(1f),
+                        label = {
+                            Text(
+                                if (translationPending && translation.isBlank()) "Translating sentence…"
+                                else "Sentence translation (optional)",
+                            )
+                        },
+                        minLines = 2,
+                    )
+                    if (translationPending) CircularProgressIndicator(
+                        Modifier.size(20.dp).semantics {
+                            contentDescription = "Generating Translation"
+                            stateDescription = "In progress"
+                        },
+                        strokeWidth = 2.dp,
+                    )
+                }
                 translationError?.let { message ->
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(message, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
