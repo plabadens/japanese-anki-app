@@ -46,7 +46,7 @@ Low-level implementation choices not fixed here may be decided during developmen
 
 Android 15–17 must be supported; targeting Android 17 does not imply rejecting future compatible releases. Compatibility with future releases is not part of first-version acceptance.
 
-All application-specific linguistic engines and datasets must be bundled. AnkiDroid, Android system facilities, installed Android TTS engines/voices, and explicitly configured online audio services are external dependencies, not assets that the APK must bundle.
+Application-specific linguistic engines and datasets must be bundled except for the selected ML Kit ja→en Translation model, whose on-device model lifecycle permits initial download; translation is unavailable offline until that download completes, then works offline. Japanese OCR uses ML Kit's bundled on-device model and must be available offline from first launch. AnkiDroid, Android system facilities, installed Android TTS engines/voices, and explicitly configured online audio services are external dependencies, not assets that the APK must bundle.
 
 ## 3. Scope
 
@@ -95,15 +95,15 @@ The interface must:
 - Use English UI text and system light/dark theme.
 - Support phone portrait and landscape without losing the draft or selection.
 - Support font scaling to 200%, accessible touch controls of at least 48 × 48 dp without overlapping hit regions, and meaningful row-specific TalkBack labels and selected/disabled states. Normal text must reach 4.5:1 contrast in both themes; actionable icons must reach 3:1. Reserve system-bar and keyboard insets, scroll long card/sheet content, and keep the active editor and its completion action reachable in portrait and landscape. Do not shrink text or pitch diagrams indefinitely to fit.
-- Build the interface on **Material Design 3 Expressive** (`m3.material.io`, the 2025 update) — its type scale, shape scale, component anatomy (segmented buttons, modal bottom sheets, list items, chips, rich tooltips, the extended FAB), and Jetpack Compose Material3, which the app is otherwise already built on (§2). Use a **custom** M3 color scheme, not Material's baseline tonal palette: sumi maps to the `primary` role and the app's warm neutrals to the `surface`/`outline` roles, but the four pitch hues are defined *outside* the color scheme entirely, as literal tokens, so no M3 dynamic-color or tonal-elevation pass can tint them. Use Material Symbols (outlined) for interface icons, embedded as inline vector assets rather than a fetched icon font, consistent with the app's offline-by-default requirement (§3.1). Expressive's updated type scale and shape tokens are adopted; its richer/expanded color palettes and 35-shape "Hero Moments" library are not — this app has no secondary/tertiary color role, and nothing about mid-trip, one-handed, dozens-of-times-a-session use calls for grid-breaking decorative shapes. Beyond the review card's Send FAB (§4.5), M3 conventions do not override interaction decisions fixed elsewhere in this document — no snackbar for success, no top app bar on the review card, no navigation bar.
-  Two known, deliberate departures from default M3, not oversights: settings rows render as individually outlined/rounded cards rather than the stock flush `ListItem`; tag/filter chips render at M3's real 32dp visual height with the 48dp touch target handled separately (padding/`minimumInteractiveComponentSize`) rather than drawn into the chip itself. Two known gaps specific to the static mockups, not decisions: pressed/hover/focus state layers are not depicted in a PNG and must still be implemented normally in Compose; likewise Expressive's spring-based motion system has no static representation.
+- Build the interface on **Material Design 3 Expressive** (`m3.material.io`, the 2025 update) — its type scale, shape scale, and component anatomy (segmented buttons, modal bottom sheets, list items, chips, rich tooltips), via Jetpack Compose Material3, which the app is otherwise already built on (§2). Use a **custom** color scheme, not Material's baseline tonal palette: sumi maps to `primary`, the app's warm neutrals to `surface`/`outline`, and the four pitch hues stay *outside* the scheme as literal tokens so no dynamic-color pass can tint them. Use Material Symbols (outlined) for icons, inlined as vector assets rather than a fetched font (§3.1). Adopt Expressive's type/shape updates; decline its richer/expanded color palettes and 35-shape "Hero Moments" library — this app has no secondary/tertiary color role, and nothing about mid-trip, one-handed, dozens-of-times-a-session use calls for decorative shapes. M3 conventions do not override interaction decisions fixed elsewhere in this document — no snackbar for success, no FAB, no top app bar or navigation bar on the review card.
+  Deliberate, documented departures from default M3: settings rows are individually outlined/rounded cards, not the stock flush `ListItem`; tag/filter chips use M3's real 32dp visual height, with the 48dp touch target added via padding rather than drawn into the chip. Static-mockup gaps, not decisions: pressed/hover/focus state layers and Expressive's spring-based motion have no PNG representation and must still be implemented normally in Compose.
 - Use exactly one neutral ink tone (light theme: a dark charcoal; dark theme: a light parchment tone) for every interactive control — buttons, selected chips, sheet titles. The only saturated color anywhere in the interface is the four-way pitch-pattern color coding described in §5.5, reused from the reference template's own palette (`misc/Sentence (JA)/template.css`); color never carries any other meaning.
 - Identify loading, missing, and failed values without relying on color alone. A field still generating (typically an online-sourced one — audio, translation; local lookups such as furigana and pitch are fast enough to rarely show this state) shows a small neutral spinner in place of its usual icon or value, never a blank or stale-looking gap.
 - Mark a field with something worth a second look — an ambiguous or missing pitch pattern, a translation produced by the offline fallback — with one small neutral icon, not colored, not a caption. That icon's only job is explanation: tapping it surfaces a short, dismissible note (e.g. "this spelling has more than one listed pattern — picked automatically"). It is not the field's edit entry point; the separate edit icon is.
 - Never phrase visible interface text in terms of the interface's own mechanics — no "no sheet needed," no "tap to confirm the dialog." Say what happened or what to do, nothing about how the screen is built. Where there is nothing to confirm, the absence of a prompt is the signal; add no text to announce it.
 - Allow playback of attached sentence and word audio from the review card.
 - Show current tags before sending. The destination deck and note type are Settings facts (§4.9), not something the review card redisplays.
-- Provide a direct **Send** action from the review card as an extended FAB (floating, not docked full-width), labelled "Send" with a send icon — present in the idle and sending states only (§4.5).
+- Provide a direct **Send to AnkiDroid** action from the review card (§4.5).
 - Offer a Settings entry point on the capture screen (§4.2) — its sole placement — so setup (note type, deck, Azure) can happen before a first sentence exists. Place it in the capture screen's own mode-switch row, to the right of the Photo/Type control; it is application content, not a system status-bar element, and must never be drawn into the OS status bar area.
 
 Automatic choice sheets are raised only for OCR-region or dictionary-entry ambiguity. A single match resolves silently. User-requested editing sheets, draft-replacement confirmation, and error recovery are separate, explicit cases; they do not violate this rule. Pitch alternatives appear only when the user opens Edit word, never as an automatic interruption.
@@ -161,7 +161,7 @@ Editing behavior per row:
 - **Notes**: an optional value with an always-present row, empty by default, expanding to a plain text field on tap.
 - **Tags**: shown as chips seeded from whatever tags the previous note used; a trailing "+" opens a sheet listing tags loaded from AnkiDroid plus a field to create a new one.
 
-Send is a floating extended FAB (bottom-right, over the scrolling card, not docked full-width) once required fields are complete; while submission is in flight its icon becomes a spinner and its label reads "Sending…", with the rest of the card — including an empty Notes row exactly as elsewhere — unchanged and fully legible underneath. The FAB exists only for these two states. On success, a small neutral confirmation appears as the card's own status row — not inside the FAB — immediately before the card is replaced by a fresh blank capture screen; on a blocked duplicate or an uncertain outcome, a small neutral status message with its recovery action(s) likewise appears as that status row, and the FAB is not shown. During sending, success confirmation, duplicate blocking, and uncertain-outcome recovery, the rest of the card remains exactly as submitted, including the Notes row whether empty or populated, until success resets to capture or the other outcome is resolved (§9.4, §9.5). The note type and destination deck are configured in Settings (§4.9) and are not redisplayed on the card itself. The scrolling card reserves bottom clearance so its last row is never hidden under the floating FAB.
+The card's bottom action area is a single region that changes state rather than being replaced by a different screen: a full-width **Send to AnkiDroid** button once required fields are complete; a disabled, spinner-marked "Sending…" state while submission is in flight, with the rest of the card — including an empty Notes row exactly as elsewhere — unchanged and fully legible; on success, a small neutral confirmation in the same area immediately before the card is replaced by a fresh blank capture screen; on a blocked duplicate or an uncertain outcome, a small neutral status message with its recovery action(s) in that same area. Throughout, the rest of the card remains exactly as submitted, including the Notes row whether empty or populated, until success resets to capture or the other outcome is resolved (§9.4, §9.5). The note type and destination deck are configured in Settings (§4.9) and are not redisplayed on the card itself.
 
 A field's explanatory popover (§4.1) is non-modal and associated with the tapped mark. Keep Send and field controls unobscured; if space is tight, place the explanation in the card's flow rather than clipping it. All rows remain accessible by scrolling. An optional-enrichment status can offer Retry for a failed/interrupted item; this is not a control for regenerating an already completed result.
 
@@ -206,7 +206,7 @@ Settings holds what is configured once and rarely revisited, with **Sources & li
 - Existing destination deck.
 - A seed set of default tags, applied only to the very first note on a fresh install; every note after that seeds its tags from whichever set the previous note was sent with (§7.4).
 - Azure multi-service resource key and region, Japanese TTS voice, and speaking rate. The single-key setup requires a resource that authorizes both Speech and Translator, not merely a shared Azure account; validate the two services separately and use their respective local fallbacks on failure (§7.2).
-- Installed Android TTS engine/Japanese voice and speaking rate — the offline fallback for audio only. Translation uses a separate bundled ja→en model and never depends on the selected TTS engine or voice.
+- Installed Android TTS engine/Japanese voice and speaking rate — the offline fallback for audio only. Translation uses ML Kit on-device ja→en Translation, allows its initial model download, is unavailable offline until that download completes, then works offline; it never depends on the selected TTS engine or voice.
 - Audio cache usage and clearing.
 - Dataset/source versions and attribution.
 - **Sources & licenses**, at the bottom of this screen.
@@ -241,8 +241,8 @@ While submitting or reconciling an uncertain insertion, freeze editing and keep 
 | Morphological dictionary | Full UniDic | Bundled, pinned edition |
 | English definitions | JMdict Japanese/English data | Bundled, locally searchable representation |
 | Pitch metadata | Kanjium | Bundled, locally searchable representation |
-| Sentence/word OCR | Candidate: on-device Japanese text recognizer, source TBD | On-device only; no network call for text recognition |
-| Translation fallback | Candidate: compact bundled ja→en model, source TBD | Bundled native runtime + model, pinned |
+| Sentence/word OCR | Bundled ML Kit Japanese text recognition | On-device; verify offline first-launch availability and no network call for recognition |
+| Translation fallback | ML Kit on-device ja→en Translation | On-device after initial model download; no selected Android TTS voice dependency |
 
 Exact releases, UniDic edition, source URLs, checksums, and derived-data formats must be pinned during implementation and recorded in build inputs and release documentation.
 
@@ -250,7 +250,7 @@ JMdict is not a MeCab morphological dictionary. MeCab/UniDic, JMdict, and Kanjiu
 
 ### 5.2 Offline and coverage requirements
 
-- Tokenization, lemma analysis, dictionary lookup, furigana, and pitch lookup must operate without a network connection after installation.
+- Tokenization, lemma analysis, dictionary lookup, furigana, and pitch lookup must operate without a network connection after installation. Bundled ML Kit Japanese OCR must be available offline from first launch; ML Kit ja→en Translation may require an initial model download and must work offline after that download completes.
 - Dataset coverage takes priority over APK size; no fixed APK-size cap is approved.
 - Do not silently restrict selected datasets to common words to reduce size.
 - Filtering JMdict to the approved Japanese/English content is consistent with scope.
@@ -331,8 +331,6 @@ The selected candidate is AJATT's **NHK-2016 pronunciation index**.
 - Never claim a recording matches the selected accent without supporting metadata.
 - Treat missing or unusable recordings as a reason to continue through the TTS fallback chain.
 
-**Rights gate:** verify authorization for accessing, saving, and using the underlying recordings before enabling the integration. A publicly accessible repository or its software license is not sufficient evidence of rights to NHK recordings. If this gate fails, request approval for another source or revised scope; do not silently ship the source or permanently remove recorded-audio functionality.
-
 ### 6.3 Azure TTS
 
 - Use the user's API key and region, not an application-owned shared credential.
@@ -398,7 +396,7 @@ Processing requirements:
 5. Encode a static **AVIF** using a balanced fixed lossy preset.
 6. Store a durable processed copy for the draft and eventual media import.
 
-Use an encoder that works on both supported ABIs. Prefer a suitable platform capability when available; a bundled encoder such as libavif plus a compatible AV1 encoder is an implementation candidate, not an already verified dependency.
+Test the Android platform AVIF encoder first on supported API levels 35–37 and both supported ABIs. Use it only if it satisfies the AVIF output, quality, reliability, and packaging/runtime requirements; if it cannot, use a pinned bundled encoder (for example libavif plus a compatible AV1 encoder) after verifying its license and native packaging. Neither platform encoder support nor a bundled encoder's suitability is assumed.
 
 Encoding must run off the main UI thread. Choose exact quality/speed settings through representative image tests, especially screenshots containing small text. The requirement is compact AVIF with acceptable readability, not an impossible guarantee of globally minimal file size.
 
@@ -409,11 +407,11 @@ An encoding failure must preserve the draft and permit retry or removal of the o
 `SentEng` generates automatically once the sentence is known, using the same online-preferred, offline-fallback shape as audio (§6.1):
 
 1. Azure Translator, if configured and available.
-2. A bundled local ja→en model.
+2. ML Kit on-device ja→en Translation, with its initial model download permitted. Translation is unavailable offline until the download completes and works offline thereafter; it is independent of Android TTS engine/voice selection.
 
 The result is always directly editable in place. When the local fallback produced the current text, the translation row carries the same small neutral mark used for pitch uncertainty (§4.1, §5.5); saving an edit clears it regardless of which source produced the original text. Saving an edit to the sentence text invalidates its translation. Automatically replace machine-owned text; preserve manually edited text for the explicit keep/replace decision in §10.2. There is no manual regeneration of valid completed text.
 
-**Release gate:** the local fallback model's translation quality against real mined-sentence text — short, often context-free fragments such as signs, menus, and subtitles, not clean textbook Japanese — must be verified before it ships as the default behavior; see §15. Azure Translator requires its own service authorization even when the same multi-service resource key is used for TTS (§4.9). If both translation providers fail, leave the optional value empty with Retry in its status explanation; the note remains sendable.
+**Release gate:** verify ML Kit's model download lifecycle, download failure and retry behavior, offline availability after download, translation quality against real mined-sentence text (short, often context-free fragments such as signs, menus, and subtitles, not clean textbook Japanese), privacy behavior, and model/app size before release; see §15. Azure Translator requires its own service authorization even when the same multi-service resource key is used for TTS (§4.9). If both translation providers fail, leave the optional value empty with Retry in its status explanation; the note remains sendable.
 
 ### 7.3 Notes
 
@@ -592,8 +590,8 @@ The exact state-management architecture is not prescribed. Correctness and durab
 - Protect stored API secrets with Android Keystore-backed protection.
 - Keep secrets out of source control, Nix inputs/store paths, APK resources, logs, crash messages, and exported fields.
 - Do not log sentence content, private notes, or private media.
-- OCR runs entirely on-device; a captured photo is never uploaded for text recognition.
-- Online pronunciation lookups, cloud synthesis, and cloud translation necessarily disclose their request text/lookup terms to configured services; no additional unrelated network processing is allowed.
+- OCR text recognition runs entirely on-device; a captured photo is never uploaded for recognition. Verify the bundled ML Kit model's terms and privacy behavior before release.
+- Online pronunciation lookups, cloud synthesis, and cloud translation necessarily disclose their request text/lookup terms to configured services; no additional unrelated network processing is allowed. The explicitly selected ML Kit translation model may be downloaded on demand; translation text is processed on-device after download.
 - Use secure transport and validate downloaded media before use.
 - Request camera and AnkiDroid access only through supported permission mechanisms and handle denial gracefully.
 - Use the system photo picker rather than requiring unnecessary broad library access.
@@ -614,7 +612,7 @@ Document any Android SDK license acceptance or emulator prerequisites. Do not re
 - Declare and pin build inputs, including transitive dependencies and linguistic source data.
 - Use fixed versions/content hashes rather than floating downloads of `latest`.
 - After fetching declared inputs, the build itself must be network-independent and sandboxed.
-- Bundle required runtime linguistic data/native libraries in the APK.
+- Bundle required runtime linguistic data/native libraries and the ML Kit Japanese OCR model in the APK. The explicitly selected ML Kit translation model may use its platform-managed on-demand download lifecycle; pin and validate all declared build inputs.
 - Avoid timestamps, local paths, nondeterministic archive ordering, or generated metadata that changes the unsigned artifact between identical builds.
 - Include any preprocessed dictionary/index generation in the reproducibility boundary.
 
@@ -656,7 +654,7 @@ Automate linguistic, serialization, state, and build tests where practical. Use 
 | ID | Scenario | Required result |
 |---|---|---|
 | A01 | Install on Android 15 ARM64 phone and Android 16/17 x86_64 emulators | Application starts, bundled native dependencies load, local enrichment works across the supported releases and both ABIs |
-| A02 | Run without network after installation | Tokenization, JMdict lookup, furigana, and pitch lookup remain available |
+| A02 | Run without network after installation | Tokenization, JMdict lookup, furigana, and pitch lookup remain available; bundled OCR works from first launch; translation remains unavailable until its initial ML Kit model download completes, then works offline |
 | A03 | Select an inflected word | Sentence preserves surface form; vocabulary uses the resolved dictionary lemma, changed by reselection rather than free-text editing |
 | A04 | Select a repeated word occurrence | Only the chosen occurrence is highlighted in both sentence fields |
 | A05 | Adjust selection across tokens | Contiguous phrase is preserved; lookup failure preserves the draft and offers text editing or reselection, not manual vocabulary entry |
@@ -675,8 +673,8 @@ Automate linguistic, serialization, state, and build tests where practical. Use 
 | A18 | All audio sources unavailable | The row's small neutral state icon replaces its play control; other data preserved; export allowed without audio |
 | A19 | Edit the sentence text or reselect the target after initial audio generation | Saving the edit automatically restarts the affected audio's source-priority chain; card text is unaffected; no manual control is involved |
 | A20 | *(retired)* — recording removed from scope (§3.2, §6.5) | — |
-| A21 | Pick/capture and crop an image | Correct orientation, at most 2048 px longest edge, no upscaling, AVIF output, metadata removal |
-| A22 | Screenshot with small text | Fixed AVIF preset retains acceptable readability and actual AnkiDroid displays it |
+| A21 | Pick/capture and crop an image on API 35–37 and both supported ABIs | Correct orientation, at most 2048 px longest edge, no upscaling, AVIF output, metadata removal; test platform encoder first and use pinned bundled encoder only if platform requirements are not met |
+| A22 | Screenshot with small text on the selected AVIF encoder | Fixed preset retains acceptable readability and actual AnkiDroid displays it; record whether the tested encoder is platform or pinned bundled fallback |
 | A23 | Change target while requests run | Obsolete results cannot overwrite the new target |
 | A24 | Change text after a manual definition/translation correction | Protected text remains and is marked stale; Keep my text / Use new suggestion resolves it without silently overwriting work |
 | A25 | Close/rotate/kill app with a draft or interrupted optional request | Saved work and durable media restore; billable work does not silently retry; the interrupted item offers explicit Retry without regenerating completed items |
@@ -716,31 +714,33 @@ Automate linguistic, serialization, state, and build tests where practical. Use 
 | A59 | A word with a nasal-marked mora, once a nasal-annotated pitch source is pinned (§15 gate 14) | That mora's dot renders hollow at its already-correct high/low position; every other mora stays filled; no diagram anywhere is read as high/low from fill |
 | A60 | Rotate the phone while in Photo mode | Layout does not reflow or relocate any control; the Photo/Type label text and the Settings icon counter-rotate 90° to stay upright; the 4:3 frame, shutter, and thumbnail are unchanged |
 | A61 | Inspect interface icons under TalkBack and 200% font scale | Icons are Material Symbols vector glyphs sized from their control's font-size, not a fetched icon font; labels remain on the icon's container, not the glyph itself |
-| A62 | Scroll the review card to its last row in the idle and sending states | The Send/Sending FAB floats above the content without ever hiding the last row; reserved bottom clearance, not overlap, keeps it reachable |
-| A63 | Reach success, duplicate-blocked, or uncertain-outcome state | No FAB is shown; the existing status row (§4.5, §9.4–§9.5) is the only action surface, exactly as before the FAB was introduced |
-| A64 | Inspect the Photo-mode camera preview in either orientation | The live preview is flush with the screen's left/right edges — no side margin, no side corner rounding; only its top and bottom are bounded by the mode-switch and shutter rows |
+| A62 | Inspect the Photo-mode camera preview in either orientation | The live preview is flush with the screen's left/right edges — no side margin, no side corner rounding; only its top and bottom are bounded by the mode-switch and shutter rows |
+| A63 | Capture realistic Japanese text with no network on a fresh installation | Bundled ML Kit Japanese OCR recognizes signs, menus, book pages, and screenshots on-device; record accuracy, app/model size, license/terms, privacy behavior, and confirm no model download or network call is needed |
+| A64 | Use ML Kit ja→en translation before and after its initial model download | Before download, show unavailable/failure with Retry and preserve the draft; after successful download, translate offline; verify translation quality, model lifecycle/failure/retry, privacy, size, and independence from Android TTS voice |
+| A65 | Resolve required Material3 Expressive components against pinned dependencies | Use stable APIs where available; if stable APIs lack required features, explicitly accept and validate the experimental APIs rather than silently dropping required design behavior |
 
 Template defects must be distinguished from application serialization defects. Accents of 10 or more and unusual mora sequences should be included in compatibility reporting even when an external template limitation prevents perfect display.
 
 ## 15. Release gates and unresolved verification
 
-Product behavior is approved. Feasible candidate designs are not validated integrations. OCR, local translation, and AVIF still require pinned code/model/runtime revisions, checksums, applicable licenses, both-ABI packaging, offline-first-launch behavior, and measured memory/latency/quality. They cannot be omitted or replaced by a network-only service without approval. The following external facts must be verified during implementation before release:
+Product behavior is approved. Feasible candidate designs are not validated integrations. ML Kit Japanese OCR and on-device ja→en Translation, and AVIF encoding, still require verification of applicable licenses/terms, model and runtime behavior, privacy, size, measured memory/latency/quality, and applicable ABI/API compatibility. OCR must run on-device; translation permits its initial model download and then works offline. They cannot be omitted or replaced by a network-only service without approval. The following external facts must be verified during implementation before release:
 
 1. **SDK/toolchain:** pin working Android 15/API 35 minimum and Android 17/API 37 target SDK/toolchain, JDK, Gradle/Android plugin, NDK, and Nix inputs; verify native loading and platform compatibility on Android 15–17 and both ABIs.
 2. **Linguistic stack:** UniDic CWJ 3.1.1 source is pinned and the BSD license selected in `datasets/unidic/`; complete and verify MeCab Android binaries/JNI, full-dictionary loading, licensing, coverage, memory use, reading alignment, and reproducible packaging.
 3. **JMdict/Kanjium:** pin snapshots; verify notices, transformations, lookup correctness, and source-backed phonetic capabilities.
-4. **Recorded audio rights:** establish the permitted use of the NHK-2016 recordings and source. Do not enable it based solely on repository accessibility or a code license.
-5. **Azure:** approve TTS voice quality/price and Translator quality/price, verify region/key configuration for both, downloadable TTS output, rate control, and safe credential storage.
+5. **Azure:** approve TTS voice quality/price and Translator quality/price, 
+   verify region/key configuration for both, downloadable TTS output, rate 
+control, and safe credential storage.
 6. **On-device TTS:** verify voice discovery, offline capability, file synthesis, and usable output with the selected test engine.
 7. **AnkiDroid:** pin a tested release/API version; verify field-name mapping for reordered/extra fields, permissions, media transfer, destination-deck duplicate blocking (including permitting same sentence with a different lemma despite the first-field helper), and uncertain-outcome handling.
-8. **AVIF:** select a working encoder and fixed preset, verify licenses/native packaging, acceptable processing behavior, and actual AnkiDroid rendering.
+8. **AVIF:** first test the Android platform AVIF encoder on API 35–37 and both supported ABIs for required output, quality, and reliability. Use a pinned bundled encoder only if the platform encoder cannot satisfy those requirements; verify its license/native packaging, fixed preset, acceptable processing behavior, and actual AnkiDroid rendering. Do not assume either encoder path works without testing.
 9. **Reproducibility:** demonstrate clean-build equality, not just dependency pinning or successful builds inside a shell.
 10. **Template compatibility:** test generated notes with the supplied template in AnkiDroid and document external rendering limitations separately.
-11. **On-device OCR:** select a working Japanese text recognizer; verify accuracy on realistic photographed text (signs, menus, book pages, screenshots), licensing, packaging size, and that it runs fully on-device with no network call.
-12. **Local translation fallback:** select a candidate bundled ja→en model; verify translation quality against real mined-sentence text (short, often context-free fragments, not clean textbook Japanese), licensing, packaging size, and native-runtime integration on both ABIs.
+11. **Bundled ML Kit Japanese OCR:** verify Japanese recognition accuracy on realistic photographed text (signs, menus, book pages, screenshots), applicable terms/licensing, bundled model packaging size, privacy behavior, offline availability from first launch, and on-device recognition without network access; do not assume accuracy.
+12. **ML Kit on-device ja→en Translation:** verify initial model download lifecycle, offline use after download, failure/retry behavior, translation quality against real mined-sentence text (short, often context-free fragments, not clean textbook Japanese), applicable terms/licensing, privacy behavior, and model/app size. Confirm independence from Android TTS engine/voice; do not assume model availability or quality.
 13. **AnkiDroid note deep-link:** validate the source-supported browser `search=nid:<noteId>` route from this third-party app against the pinned installed version (§9.3), including handler absence and return-to-draft behavior. Source evidence is not a device test.
 14. **Nasal/devoiced pitch source:** the pinned `datasets/kanjium/accents.txt` supplies pitch positions only, confirmed by inspection (no nasal or devoicing field). Select and pin a source that does, or accept the pitch diagram rendering all-filled indefinitely (§5.5); do not fabricate nasal/devoicing marks from position data alone.
-15. **Material3 Expressive availability:** the pinned Compose BOM (`gradle/libs.versions.toml`, `compose-bom = "2025.09.00"`) resolves to a Material3 version that has not been confirmed to expose stable `MaterialExpressiveTheme`/expressive component APIs (vs. alpha-only). Confirm the resolved `androidx.compose.material3:material3` version and its Expressive API stability before relying on them; if unavailable or still experimental, either accept the experimental-API dependency explicitly or fall back to baseline M3 components styled to match this spec's type/shape tokens by hand.
+15. **Material3 Expressive availability:** confirm the resolved `androidx.compose.material3:material3` version and availability/stability of required Expressive APIs. Use stable APIs when they provide the required components; if required APIs are not available in the stable version, explicitly allow and validate the experimental Material3 Expressive APIs rather than treating their use as prohibited.
 
 If a gate cannot be satisfied, return for an explicit decision. Do not silently substitute a provider, change image format, weaken reproducibility, require a network for linguistic enrichment, or omit the preferred recorded-word source.
 
@@ -771,8 +771,8 @@ These references inform the design; implementations must pin appropriate version
 - [Azure text-to-speech REST API](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/rest-text-to-speech)
 - [Azure language/voice support](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support)
 - [Azure Translator authentication and multi-service resources](https://learn.microsoft.com/en-us/azure/ai-services/translator/text-translation/reference/authentication)
-- [ML Kit Japanese text recognition, bundled option](https://developers.google.com/ml-kit/vision/text-recognition/v2/android) — candidate only; verify SDK data collection/terms against §11, offline first launch, and both ABIs before selection.
-- [OPUS-MT Japanese–English model card](https://huggingface.co/Helsinki-NLP/opus-mt-ja-en) — candidate weights, not a selected Android runtime; verify artifact licensing, conversion, tokenizer parity, footprint, and translation quality.
+- [ML Kit Japanese text recognition](https://developers.google.com/ml-kit/vision/text-recognition/v2/android) — selected on-device OCR direction; verify Japanese accuracy, model delivery, applicable terms, privacy, and size under §15.
+- [ML Kit on-device Translation](https://developers.google.com/ml-kit/language/translation/android) — selected on-device ja→en direction; initial model download is permitted; verify lifecycle, offline-after-download behavior, quality, privacy, applicable terms, and size under §15.
 - [Pinned AnkiDroid browser intent](https://github.com/ankidroid/Anki-Android/blob/ebcf8e0e34921628b9b8a496c66ffd4adbb3705f/AnkiDroid/src/main/AndroidManifest.xml) and [search-parameter parsing](https://github.com/ankidroid/Anki-Android/blob/ebcf8e0e34921628b9b8a496c66ffd4adbb3705f/AnkiDroid/src/main/java/com/ichi2/anki/browser/CardBrowserLaunchOptions.kt)
 - [libavif](https://github.com/AOMediaCodec/libavif)
 - [Material Design 3](https://m3.material.io/) — color roles, type scale, shape scale, and component anatomy the mockups and app UI are built against (§4.1).
@@ -806,7 +806,8 @@ This specification consolidates the approved interview outcomes. Later decisions
 - Android 15/API 35 is the minimum; Android 17/API 37 is the target.
 - A reproducible unsigned APK build is required, not merely a Nix development shell.
 - The interface is built on Material Design 3 with a custom color scheme (sumi as `primary`; pitch hues kept outside the scheme) and inlined Material Symbols icons — supersedes the earlier unstyled/generic-glyph mockup pass. M3 component conventions (snackbar, top app bar, FAB, nav bar) do not override interaction decisions fixed elsewhere in this document.
-- A pitch mora's dot fill encodes nasalization (filled = normal, hollow = nasal), not high/low; high/low is carried by the dot's vertical position and the contour line alone. Supersedes the earlier fill-encodes-high/low convention. Release-gated on a nasal-annotated pitch source (§15 gate 14) — the pinned Kanjium data has none, so diagrams render all-filled until one is pinned.
+- A floating Send FAB was tried and reverted to the full-width docked button (§4.5): a FAB fits starting something new, not submitting something already reviewed, and the "no FAB" rule above is intentional, not a leftover.
+- A pitch mora's dot fill encodes nasalization (filled = normal, hollow = nasal), not high/low; high/low is carried by the dot's vertical position and the contour line alone. Supersedes the earlier fill-encodes-high/low convention. Release-gated on a verified, pinned nasal/devoicing source (§15 gate 14); absent such a source, render every pitch dot filled indefinitely.
 - The camera captures at 4:3 with a letterboxed, corner-bracketed preview frame, running edge-to-edge horizontally with no side margin or rounding — supersedes both the earlier undifferentiated-aspect viewfinder and this document's own earlier draft of an inset, rounded-card viewfinder. Rotating the phone counter-rotates only the Photo/Type label and Settings icon glyphs, like a standard camera app; it does not reflow the layout or relocate the shutter/thumbnail/frame (supersedes this document's own earlier draft of a reflowed, rail-based landscape layout).
-- Send is an extended FAB, present only in the idle and sending states, not a full-width docked button — supersedes the earlier full-width-button-in-every-state model and the earlier "no FAB on the review card" rule. Success, duplicate-blocked, and uncertain-outcome states keep their existing status-row treatment unchanged; they were never a button and do not grow a FAB state.
-- The interface targets Material Design 3 **Expressive** specifically, not an unversioned "M3" — its type/shape updates are adopted, its richer-palette and decorative-shape themes are declined as conflicting with this app's single-neutral-plus-pitch-color rule (supersedes the earlier undated M3 adoption).
+- The interface targets Material Design 3 **Expressive** specifically, not an unversioned "M3" — its type/shape updates are adopted, its richer-palette and decorative-shape themes are declined as conflicting with this app's single-neutral-plus-pitch-color rule (supersedes the earlier undated M3 adoption). Stable APIs are preferred; required Expressive APIs may use explicitly accepted experimental APIs if stable APIs lack them.
+- Japanese OCR uses bundled on-device ML Kit; ja→en translation uses on-device ML Kit with its initial model download permitted, works offline afterward, and does not depend on Android TTS voice. AVIF encoding tests the platform encoder on API 35–37/both ABIs first and uses a pinned bundled encoder only if platform capability cannot satisfy requirements.

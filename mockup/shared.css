@@ -27,9 +27,11 @@
    wholesale — three of its five headline themes actively conflict with this
    app's own thesis and are declined on purpose, the same way the custom
    color scheme above declines the M3 baseline palette.
-     Adopted:  bigger/bolder emphasized type (headlines, FAB label, sheet
-               titles below); the new FAB size set (.fab-extended); a
-               mechanical bump to the large/extra-large shape tokens.
+     Adopted:  bigger/bolder emphasized type (headlines, sheet titles below);
+               a mechanical bump to the large/extra-large shape tokens.
+               A Send FAB was tried and reverted (SPEC.md §17) — floating
+               emphasis fits starting something new, not submitting a
+               completed review; it's back to a full-width docked button.
      Declined: "richer palettes with clearer primary/secondary/tertiary
                separation" — this app has no secondary/tertiary role, color
                still means exactly one thing (pitch); the 35-shape "Hero
@@ -157,9 +159,9 @@ body.tall .screen{height:auto;}
 ruby{ruby-align:center;} rt{font-size:11px; color:var(--muted);}
 .furi-gap{text-decoration:underline dotted var(--muted); text-underline-offset:4px;}
 
-.scrim{position:absolute; left:0; right:0; top:48px; bottom:0; background:rgba(10,9,7,.42); z-index:10;}
+.scrim{position:absolute; left:0; right:0; top:48px; bottom:0; background:rgba(10,9,7,.42);}
 /* M3 modal bottom sheet: shape.extraLarge (28dp) top corners, surface-container-high tone */
-.sheet{position:absolute; left:0; right:0; bottom:0; max-height:calc(100dvh - 48px); overflow-y:auto; background:var(--surface-container-high); border-radius:var(--shape-xl) var(--shape-xl) 0 0; padding:16px 20px 22px; box-shadow:0 -14px 40px rgba(0,0,0,.28); display:flex; flex-direction:column; gap:14px; z-index:20;}
+.sheet{position:absolute; left:0; right:0; bottom:0; max-height:calc(100dvh - 48px); overflow-y:auto; background:var(--surface-container-high); border-radius:var(--shape-xl) var(--shape-xl) 0 0; padding:16px 20px 22px; box-shadow:0 -14px 40px rgba(0,0,0,.28); display:flex; flex-direction:column; gap:14px;}
 .sheet-handle{width:32px; height:4px; border-radius:var(--shape-full); background:var(--rule); margin:0 auto 4px;}
 
 .rulecall{border:1px solid var(--rule); border-radius:var(--shape-md); padding:16px 18px; background:var(--field-bg); font-size:14.5px; line-height:1.6; color:var(--ink);}
@@ -294,24 +296,3 @@ ruby{ruby-align:center;} rt{font-size:11px; color:var(--muted);}
 .action-area{display:flex; flex-direction:column; gap:12px;}
 .status-row{display:flex; align-items:center; gap:10px; font-size:15px; color:var(--ink);}
 .status-row .sub{font-size:13px; color:var(--muted); margin-top:2px;}
-
-/* M3 Expressive extended FAB — Send's idle/sending states only. Success,
-   blocked, and uncertain already replace the action area with their own
-   status-row (above) and were never a button to begin with, so there is no
-   FAB state for them — it would divorce the explanation text from the
-   control. Floats fixed above the scrolling card; .screen.has-fab adds
-   scroll-bottom clearance so the last row never sits under it. Elevation is
-   a second deliberate exception to this app's flat/outlined surfaces (the
-   first is the bottom sheet) — a FAB reads as "floating" only if it visibly
-   lifts off the page. */
-.screen.has-fab{padding-bottom:96px;}
-.fab-extended{
-  position:fixed; right:20px; bottom:24px; z-index:5;
-  display:inline-flex; align-items:center; gap:10px;
-  height:56px; padding:0 22px; border:none; border-radius:var(--shape-full);
-  background:var(--accent); color:var(--on-accent);
-  font-family:var(--font-ui); font-size:16px; font-weight:600; letter-spacing:.01em;
-  box-shadow:0 6px 14px rgba(20,18,14,.26), 0 2px 4px rgba(20,18,14,.18);
-}
-.fab-extended .mi{width:24px; height:24px;}
-.fab-extended .spinner{border-color:rgba(255,255,255,.4); border-top-color:var(--on-accent);}
