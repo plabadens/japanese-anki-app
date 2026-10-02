@@ -79,6 +79,29 @@ class TranslationServiceTest {
     }
 
     @Test
+    fun staleManualTranslationIsKeptUntilExplicitKeepOrSuggestionChoice() {
+        val manual = TranslationDraft("old sentence", TranslationResult.Ready("my text", TranslationSource.MANUAL), true)
+        val stale = manual.sentenceChanged("new sentence")
+        assertTrue(stale.stale)
+        assertEquals("my text", (stale.result as TranslationResult.Ready).text)
+        assertEquals(TranslationResult.Pending, stale.suggestion)
+
+        val withSuggestion = stale.requestFinished(TranslationResult.Ready("new suggestion", TranslationSource.LOCAL))
+        assertEquals("my text", (withSuggestion.result as TranslationResult.Ready).text)
+        assertEquals("new suggestion", (withSuggestion.suggestion as TranslationResult.Ready).text)
+        assertEquals(TranslationSource.MANUAL, (withSuggestion.keepMyText().result as TranslationResult.Ready).source)
+        assertEquals("new suggestion", (withSuggestion.useSuggestion().result as TranslationResult.Ready).text)
+
+        val failedSuggestion = stale.requestStarted().requestFinished(TranslationResult.Failed("unavailable"))
+        assertEquals("my text", (failedSuggestion.result as TranslationResult.Ready).text)
+        assertEquals("unavailable", (failedSuggestion.suggestion as TranslationResult.Failed).message)
+        val retried = failedSuggestion.requestStarted().requestFinished(
+            TranslationResult.Ready("replacement", TranslationSource.AZURE),
+        )
+        assertEquals("replacement", (retried.suggestion as TranslationResult.Ready).text)
+    }
+
+    @Test
     fun failuresDoNotExposeCredentialsOrSentence() {
         val stdout = ByteArrayOutputStream()
         val stderr = ByteArrayOutputStream()

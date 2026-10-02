@@ -24,6 +24,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -83,6 +84,15 @@ internal fun ReviewCard(
     generatingFields: Set<String> = emptySet(),
     translationUsesFallback: Boolean = false,
     translationInfoExpanded: Boolean = false,
+    translationPending: Boolean = false,
+    translationError: String? = null,
+    translationStale: Boolean = false,
+    translationSuggestion: String? = null,
+    translationEditable: Boolean = true,
+    onTranslationChange: (String) -> Unit = {},
+    onRetryTranslation: () -> Unit = {},
+    onKeepMyTranslation: () -> Unit = {},
+    onUseTranslationSuggestion: () -> Unit = {},
     onToggleTranslationInfo: () -> Unit = {},
     sendPresentation: ReviewSendPresentation? = null,
     onSend: (() -> Unit)? = null,
@@ -200,7 +210,39 @@ internal fun ReviewCard(
             }
             ReviewFieldRow("Definition", onEdit = onEdit, generating = "Definition" in generatingFields) { Text(definition.ifBlank { "Add a definition" }, style = MaterialTheme.typography.bodyLarge) }
             ReviewFieldRow("Translation", onEdit = onEdit, playable = true, generating = "Translation" in generatingFields) {
-                Text(if ("Translation" in generatingFields) "Translating…" else translation.ifBlank { "Not available yet" }, style = MaterialTheme.typography.bodyLarge)
+                OutlinedTextField(
+                    value = translation,
+                    onValueChange = onTranslationChange,
+                    readOnly = !translationEditable,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Sentence translation (optional)") },
+                    minLines = 2,
+                )
+                if (translationPending) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Text("Translating sentence…", style = MaterialTheme.typography.bodySmall)
+                }
+                translationError?.let { message ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(message, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                        TextButton(enabled = translationEditable, onClick = onRetryTranslation, modifier = Modifier.heightIn(min = 48.dp)) {
+                            Text("Retry")
+                        }
+                    }
+                }
+                if (translationStale) {
+                    Text("Your text is for the previous sentence.", style = MaterialTheme.typography.bodySmall)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(enabled = translationEditable, onClick = onKeepMyTranslation, modifier = Modifier.heightIn(min = 48.dp)) {
+                            Text("Keep my text")
+                        }
+                        if (translationSuggestion != null) TextButton(
+                            enabled = translationEditable,
+                            onClick = onUseTranslationSuggestion,
+                            modifier = Modifier.heightIn(min = 48.dp),
+                        ) { Text("Use new suggestion") }
+                    }
+                }
                 if (translationUsesFallback) {
                     IconButton(onClick = onToggleTranslationInfo, modifier = Modifier.size(48.dp).semantics {
                         contentDescription = if (translationInfoExpanded) "Dismiss offline translation explanation" else "Explain offline translation"

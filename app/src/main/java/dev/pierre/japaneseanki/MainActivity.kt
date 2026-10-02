@@ -234,7 +234,78 @@ class MainActivity : ComponentActivity() {
                     preferences.getBoolean("definition_manual", false))
             }
             var showDictionarySheet by remember { mutableStateOf(false) }
-            var translation by remember { mutableStateOf(preferences.getString("translation", "").orEmpty()) }
+            val restoredTranslationText = preferences.getString("translation", "").orEmpty()
+            val restoredTranslationSource = preferences.getString("translation_source", null)
+                ?.let { saved -> TranslationSource.entries.firstOrNull { it.name == saved } }
+            val restoredTranslationWasPending = preferences.getBoolean("translation_pending", false)
+            val restoredTranslationError = preferences.getString("translation_error", null)
+            val restoredSuggestionError = preferences.getString("translation_suggestion_error", null)
+            val restoredTranslationManual = preferences.getBoolean(
+                "translation_manual",
+                restoredTranslationSource == TranslationSource.MANUAL ||
+                    (restoredTranslationText.isNotBlank() && restoredTranslationSource == null),
+            )
+            val restoredTranslationStale = preferences.getBoolean("translation_stale", false)
+            val restoredSuggestionText = preferences.getString("translation_suggestion", null)
+            val restoredSuggestionSource = preferences.getString("translation_suggestion_source", null)
+                ?.let { saved -> TranslationSource.entries.firstOrNull { it.name == saved } }
+            val interruptedTranslation = TranslationResult.Failed("Translation was interrupted. Tap Retry to continue.")
+            var translationDraft by remember {
+                mutableStateOf(
+                    TranslationDraft(
+                        sentence = preferences.getString(
+                            "translation_sentence",
+                            preferences.getString("sentence", "").orEmpty(),
+                        ).orEmpty(),
+                        result = when {
+                            restoredTranslationManual -> TranslationResult.Ready(restoredTranslationText, TranslationSource.MANUAL)
+                            restoredTranslationSource != null && restoredTranslationText.isNotBlank() ->
+                                TranslationResult.Ready(restoredTranslationText, restoredTranslationSource)
+                            restoredTranslationText.isNotBlank() -> TranslationResult.Ready(restoredTranslationText, TranslationSource.MANUAL)
+                            restoredTranslationWasPending -> interruptedTranslation
+                            restoredTranslationError != null -> TranslationResult.Failed(restoredTranslationError)
+                            else -> TranslationResult.Pending
+                        },
+                        manuallyEdited = restoredTranslationManual,
+                        stale = restoredTranslationStale,
+                        suggestion = when {
+                            restoredSuggestionText != null && restoredSuggestionSource != null ->
+                                TranslationResult.Ready(restoredSuggestionText, restoredSuggestionSource)
+                            restoredTranslationWasPending && restoredTranslationManual && restoredTranslationStale ->
+                                interruptedTranslation
+                            restoredSuggestionError != null -> TranslationResult.Failed(restoredSuggestionError)
+                            else -> null
+                        },
+                    ),
+                )
+            }
+            val translation = (translationDraft.result as? TranslationResult.Ready)?.text.orEmpty()
+            val translationSource = (translationDraft.result as? TranslationResult.Ready)?.source
+            var translationAttemptedSentence by remember {
+                mutableStateOf(preferences.getString("translation_attempted_sentence", null))
+            }
+            var translationAutoAllowed by remember {
+                mutableStateOf(preferences.getString("sentence", "").isNullOrBlank())
+            }
+            var translationRetry by remember { mutableStateOf(0) }
+            var lastHandledTranslationRetry by remember { mutableStateOf(0) }
+            var translationRequestRevision by remember { mutableStateOf(0) }
+            val currentTranslationRequestRevision = rememberUpdatedState(translationRequestRevision)
+            val updateTranslationSentence: (String) -> Unit = { sentence ->
+                translationRequestRevision++
+                translationAutoAllowed = true
+                translationDraft = translationDraft.sentenceChanged(sentence)
+            }
+            val activeTranslationResult: () -> TranslationResult = {
+                if (translationDraft.manuallyEdited && translationDraft.stale) {
+                    translationDraft.suggestion ?: TranslationResult.Pending
+                } else translationDraft.result
+            }
+            val localTranslationFallback = remember { MlKitLocalTranslationFallback(applicationContext) }
+            DisposableEffect(localTranslationFallback) {
+                onDispose { localTranslationFallback.close() }
+            }
+            var translationInfoExpanded by remember { mutableStateOf(false) }
             var notes by remember { mutableStateOf(preferences.getString("notes", "").orEmpty()) }
             var defaultTags by remember { mutableStateOf(settings.getString("default_tags", "").orEmpty()) }
             var tags by remember { mutableStateOf(preferences.getString("tags", defaultTags).orEmpty()) }
@@ -426,7 +497,12 @@ class MainActivity : ComponentActivity() {
                 definitionManuallyEdited = false
                 definitionProvenanceKnown = true
                 dependentFieldsStale = false
-                translation = ""
+                translationDraft = TranslationDraft("", TranslationResult.Pending)
+                translationAttemptedSentence = null
+                translationAutoAllowed = false
+                translationRetry = 0
+                lastHandledTranslationRetry = 0
+                translationRequestRevision++
                 notes = ""
                 tags = settings.getString("last_note_tags", defaultTags).orEmpty()
                 selectedDictionaryEntry = null
@@ -436,6 +512,9 @@ class MainActivity : ComponentActivity() {
             val replaceEditorText: (String, Boolean) -> Unit = { text, invalidateDraftGeneration ->
                 editorInputRevision++
                 if (invalidateDraftGeneration) draftGeneration++
+                if (text != editor.text) {
+                    if (submissionLocked) translationRequestRevision++ else updateTranslationSentence(text)
+                }
                 editor = TextFieldValue(text, selection = TextRange(text.length))
             }
 
@@ -745,6 +824,77 @@ class MainActivity : ComponentActivity() {
                     if (asyncSetupIsCurrent(callbackGeneration)) analyzerError = "UniDic could not be installed. Check available storage and retry."
                 } finally {
                     analyzerLoading = false
+                }
+            }
+
+            androidx.compose.runtime.LaunchedEffect(
+                editor.text, translationRequestRevision, translationRetry, translationAutoAllowed, submissionLocked,
+            ) {
+                val sentence = editor.text
+                if (sentence.isBlank() || submissionLocked) return@LaunchedEffect
+
+                var requestDraft = translationDraft
+                if (requestDraft.sentence != sentence) {
+                    requestDraft = requestDraft.sentenceChanged(sentence)
+                    translationDraft = requestDraft
+                }
+                if (requestDraft.manuallyEdited && !requestDraft.stale) return@LaunchedEffect
+                if (!requestDraft.manuallyEdited && !requestDraft.stale && requestDraft.result is TranslationResult.Ready) {
+                    return@LaunchedEffect
+                }
+
+                val explicitRetry = translationRetry != lastHandledTranslationRetry
+                if (translationAttemptedSentence == sentence && !explicitRetry) {
+                    val active = if (requestDraft.manuallyEdited && requestDraft.stale) {
+                        requestDraft.suggestion ?: TranslationResult.Pending
+                    } else requestDraft.result
+                    if (active is TranslationResult.Pending) {
+                        translationDraft = requestDraft.requestFinished(
+                            TranslationResult.Failed("Translation needs retry. Tap Retry to continue."),
+                        )
+                    }
+                    return@LaunchedEffect
+                }
+                if (!translationAutoAllowed && !explicitRetry) {
+                    translationDraft = requestDraft.requestFinished(
+                        TranslationResult.Failed("Translation was not started. Tap Retry to continue."),
+                    )
+                    return@LaunchedEffect
+                }
+
+                lastHandledTranslationRetry = translationRetry
+                val requestRevision = translationRequestRevision
+                kotlinx.coroutines.delay(350)
+                if (sentence != editor.text || requestRevision != currentTranslationRequestRevision.value ||
+                    currentSubmissionLocked.value
+                ) return@LaunchedEffect
+
+                translationDraft = translationDraft.requestStarted()
+                translationAttemptedSentence = sentence
+                val requestRecorded = preferences.edit()
+                    .putString("translation_attempted_sentence", sentence)
+                    .putBoolean("translation_pending", true)
+                    .commit()
+                if (!requestRecorded) {
+                    translationDraft = translationDraft.requestFinished(
+                        TranslationResult.Failed("Translation request could not be recorded. Tap Retry to continue."),
+                    )
+                    return@LaunchedEffect
+                }
+
+                val result = try {
+                    withContext(Dispatchers.IO) {
+                        TranslationService.fromSettings(settings, local = localTranslationFallback).translate(sentence)
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    TranslationResult.Failed("Translation is unavailable. Tap Retry to continue.")
+                }
+                if (sentence == editor.text && requestRevision == currentTranslationRequestRevision.value &&
+                    !currentSubmissionLocked.value
+                ) {
+                    translationDraft = translationDraft.requestFinished(result)
                 }
             }
 
@@ -1405,7 +1555,15 @@ class MainActivity : ComponentActivity() {
                 vocabularyReading = snapshot.vocabularyReading
                 sentenceReading = snapshot.sentenceReading
                 definition = snapshot.definition
-                translation = snapshot.translation
+                translationDraft = if (translation == snapshot.translation) {
+                    translationDraft.copy(sentence = snapshot.sentence)
+                } else {
+                    TranslationDraft(
+                        sentence = snapshot.sentence,
+                        result = TranslationResult.Ready(snapshot.translation, TranslationSource.MANUAL),
+                        manuallyEdited = true,
+                    )
+                }
                 notes = snapshot.notes
                 tags = snapshot.tags.joinToString(" ")
                 pitchAccentText = snapshot.pitchAccentText
@@ -1596,8 +1754,8 @@ class MainActivity : ComponentActivity() {
 
             androidx.compose.runtime.LaunchedEffect(
                 editor.text, editor.selection, target, vocabulary, vocabularyReading, pitchAccentText, definition,
-                sentenceReading, definitionManuallyEdited, dependentFieldsStale, translation, notes, tags, selectedModelId, selectedDeckId,
-                selectedDictionaryEntryId, selectedSenseIndices, completedSubmission,
+                sentenceReading, definitionManuallyEdited, dependentFieldsStale, translationDraft, translationAttemptedSentence,
+                notes, tags, selectedModelId, selectedDeckId, selectedDictionaryEntryId, selectedSenseIndices, completedSubmission,
             ) {
                 if (completedSubmission != null) return@LaunchedEffect
                 preferences.edit()
@@ -1617,6 +1775,25 @@ class MainActivity : ComponentActivity() {
                     .remove("leave_sentence_target_unannotated")
                     .remove("leave_vocabulary_unannotated")
                     .putString("translation", translation)
+                    .putString("translation_sentence", translationDraft.sentence)
+                    .putString("translation_source", (translationDraft.result as? TranslationResult.Ready)?.source?.name)
+                    .putBoolean("translation_manual", translationDraft.manuallyEdited)
+                    .putBoolean("translation_stale", translationDraft.stale)
+                    .putBoolean("translation_pending", activeTranslationResult() is TranslationResult.Pending)
+                    .putString("translation_error", (activeTranslationResult() as? TranslationResult.Failed)?.message)
+                    .putString(
+                        "translation_suggestion",
+                        (translationDraft.suggestion as? TranslationResult.Ready)?.text,
+                    )
+                    .putString(
+                        "translation_suggestion_source",
+                        (translationDraft.suggestion as? TranslationResult.Ready)?.source?.name,
+                    )
+                    .putString(
+                        "translation_suggestion_error",
+                        (translationDraft.suggestion as? TranslationResult.Failed)?.message,
+                    )
+                    .putString("translation_attempted_sentence", translationAttemptedSentence)
                     .putString("notes", notes)
                     .putString("tags", tags)
                     .putLong("model_id", selectedModelId ?: -1)
@@ -1779,6 +1956,31 @@ class MainActivity : ComponentActivity() {
                                 pitch = displayPitch,
                                 definition = displayDefinition,
                                 translation = displayTranslation,
+                                translationUsesFallback = translationSource == TranslationSource.LOCAL && !translationDraft.manuallyEdited,
+                                translationInfoExpanded = translationInfoExpanded,
+                                translationPending = activeTranslationResult() is TranslationResult.Pending,
+                                translationError = (activeTranslationResult() as? TranslationResult.Failed)?.message,
+                                translationStale = translationDraft.manuallyEdited && translationDraft.stale,
+                                translationSuggestion = (translationDraft.suggestion as? TranslationResult.Ready)?.text,
+                                translationEditable = !submissionLocked && completedSubmission == null,
+                                onTranslationChange = { text ->
+                                    translationRequestRevision++
+                                    translationInfoExpanded = false
+                                    translationDraft = translationDraft.saveManualEdit(text)
+                                },
+                                onRetryTranslation = {
+                                    translationAutoAllowed = true
+                                    translationRetry++
+                                },
+                                onKeepMyTranslation = {
+                                    translationRequestRevision++
+                                    translationDraft = translationDraft.keepMyText()
+                                },
+                                onUseTranslationSuggestion = {
+                                    translationRequestRevision++
+                                    translationDraft = translationDraft.useSuggestion()
+                                },
+                                onToggleTranslationInfo = { translationInfoExpanded = !translationInfoExpanded },
                                 notes = displayNotes,
                                 tags = displayTags.split(Regex("\\s+")).filter(String::isNotBlank),
                                 imagePath = frozenForDisplay?.media?.path ?: noteImagePath,
@@ -1902,6 +2104,7 @@ class MainActivity : ComponentActivity() {
                             onValueChange = { updated ->
                                 if (updated.text != editor.text) {
                                     draftGeneration++
+                                    updateTranslationSentence(updated.text)
                                     if (hasManualDefinition) dependentFieldsStale = true
                                     selectTarget(null)
                                     japaneseTokens = emptyList()
@@ -2077,7 +2280,11 @@ class MainActivity : ComponentActivity() {
                             OutlinedTextField(
                                 value = displayTranslation,
                                 readOnly = submissionLocked,
-                                onValueChange = { translation = it },
+                                onValueChange = {
+                                    translationRequestRevision++
+                                    translationInfoExpanded = false
+                                    translationDraft = translationDraft.saveManualEdit(it)
+                                },
                                 modifier = Modifier.fillMaxWidth(),
                                 label = { Text("Sentence translation (optional)") },
                                 minLines = 2,
@@ -2241,6 +2448,13 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                             draftGeneration++
+                            translationRequestRevision++
+                            translationAutoAllowed = false
+                            if (activeTranslationResult() is TranslationResult.Pending) {
+                                translationDraft = translationDraft.requestFinished(
+                                    TranslationResult.Failed("Translation paused while sending. Retry after resolving this Send."),
+                                )
+                            }
                             dictionaryLoading = false
                             dictionarySearchLoading = false
                             analyzerLoading = false
@@ -2628,7 +2842,10 @@ private fun clearPersistedDraft(preferences: SharedPreferences, draftDirectory: 
         "sentence", "selection_start", "selection_end", "target_start", "target_end",
         "vocabulary", "vocabulary_reading", "pitch_accent", "definition", "definition_manual_stale", "sentence_reading",
         "leave_sentence_target_unannotated", "leave_vocabulary_unannotated", "dependent_fields_stale",
-        "definition_manual", "definition_manual_stale", "translation", "notes", "tags", "submission_status", "pending_model_id", "pending_deck_id",
+        "definition_manual", "definition_manual_stale", "translation", "translation_sentence", "translation_source",
+        "translation_manual", "translation_stale", "translation_pending", "translation_error",
+        "translation_suggestion", "translation_suggestion_source", "translation_suggestion_error",
+        "translation_attempted_sentence", "notes", "tags", "submission_status", "pending_model_id", "pending_deck_id",
         "pending_sentence", "pending_lemma", "dictionary_entry_id", "dictionary_sense_indices",
         "sentence_furigana_corrections", "photo_source_path", "note_image_path", "processed_image_path",
         IMAGE_RECEIPT_PATH, IMAGE_RECEIPT_FILENAME, IMAGE_RECEIPT_SIZE, IMAGE_RECEIPT_MODIFIED,

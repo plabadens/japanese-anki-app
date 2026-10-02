@@ -76,19 +76,50 @@ data class TranslationDraft(
     val result: TranslationResult,
     val manuallyEdited: Boolean = false,
     val stale: Boolean = false,
+    val suggestion: TranslationResult? = null,
 ) {
     fun sentenceChanged(newSentence: String): TranslationDraft {
         if (newSentence == sentence) return this
-        return if (manuallyEdited && result is TranslationResult.Ready) copy(sentence = newSentence, stale = true)
-        else TranslationDraft(newSentence, TranslationResult.Pending)
+        return if (manuallyEdited && result is TranslationResult.Ready) {
+            copy(sentence = newSentence, stale = true, suggestion = TranslationResult.Pending)
+        } else {
+            TranslationDraft(newSentence, TranslationResult.Pending)
+        }
+    }
+
+    fun requestStarted(): TranslationDraft = if (manuallyEdited && stale) {
+        copy(suggestion = TranslationResult.Pending)
+    } else {
+        copy(result = TranslationResult.Pending, suggestion = null)
+    }
+
+    fun requestFinished(outcome: TranslationResult): TranslationDraft = if (manuallyEdited && stale) {
+        copy(suggestion = outcome)
+    } else {
+        copy(result = outcome, manuallyEdited = false, stale = false, suggestion = null)
+    }
+
+    fun keepMyText(): TranslationDraft {
+        val current = result as? TranslationResult.Ready ?: return this
+        return copy(
+            result = TranslationResult.Ready(current.text, TranslationSource.MANUAL),
+            manuallyEdited = true,
+            stale = false,
+            suggestion = null,
+        )
+    }
+
+    fun useSuggestion(): TranslationDraft {
+        val readySuggestion = suggestion as? TranslationResult.Ready ?: return this
+        return copy(result = readySuggestion, manuallyEdited = false, stale = false, suggestion = null)
     }
 
     /** Saving an edit clears the local-fallback explanatory mark regardless of prior source. */
     fun saveManualEdit(text: String): TranslationDraft = copy(
-        result = if (text.isBlank()) TranslationResult.Failed("Translation is empty")
-        else TranslationResult.Ready(text, TranslationSource.MANUAL),
+        result = TranslationResult.Ready(text, TranslationSource.MANUAL),
         manuallyEdited = true,
         stale = false,
+        suggestion = null,
     )
 }
 
