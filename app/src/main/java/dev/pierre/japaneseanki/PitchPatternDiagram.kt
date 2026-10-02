@@ -97,7 +97,7 @@ internal fun PitchPatternDiagram(
             }
             centers.forEachIndexed { index, center ->
                 drawCircle(pitchColor, radius = dotRadius.toPx(), center = center)
-                if (!pitch.highLevels[index]) {
+                if (pitchDotIsHollow(isSourceBackedNasalMora = false)) {
                     drawCircle(surface, radius = (dotRadius - 0.9.dp).toPx(), center = center)
                 }
             }
@@ -118,6 +118,9 @@ internal fun PitchPatternDiagram(
         }
     }
 }
+
+internal fun pitchDotIsHollow(isSourceBackedNasalMora: Boolean): Boolean =
+    isSourceBackedNasalMora
 
 @Composable
 private fun pitchColor(pattern: PitchPatternKind): Color {

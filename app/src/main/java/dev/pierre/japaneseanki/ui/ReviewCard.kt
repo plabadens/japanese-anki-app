@@ -87,6 +87,7 @@ internal fun ReviewCard(
     sendPresentation: ReviewSendPresentation? = null,
     onSend: (() -> Unit)? = null,
     onSendStatusAction: (() -> Unit)? = null,
+    sendStatusContent: @androidx.compose.runtime.Composable () -> Unit = {},
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -238,6 +239,7 @@ internal fun ReviewCard(
                     }
                     is ReviewSendPresentation.Status -> Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
                         Text(presentation.message, style = MaterialTheme.typography.bodyMedium)
+                        sendStatusContent()
                         if (presentation.actionLabel != null) TextButton(
                             onClick = { onSendStatusAction?.invoke() }, enabled = onSendStatusAction != null,
                             modifier = Modifier.heightIn(min = 48.dp),

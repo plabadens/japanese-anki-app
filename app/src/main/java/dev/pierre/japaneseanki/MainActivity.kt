@@ -61,6 +61,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import dev.pierre.japaneseanki.ui.ReviewCard
+import dev.pierre.japaneseanki.ui.ReviewSendPresentation
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -389,6 +390,8 @@ class MainActivity : ComponentActivity() {
                 processedImagePath = null
                 clearPersistedDraft(preferences, File(filesDir, "draft"))
                 publishedFrozenSnapshot = null
+                completedSubmission = null
+                submitMessage = null
                 frozenSnapshotAppliedRevision = -1L
                 draftGeneration++
                 frozenRetryReady = false
@@ -448,6 +451,13 @@ class MainActivity : ComponentActivity() {
                     draftGeneration++
                     imageProcessingRevision++
                     ocrLoading = false
+                }
+            }
+
+            androidx.compose.runtime.LaunchedEffect(completedSubmission) {
+                if (completedSubmission != null) {
+                    kotlinx.coroutines.delay(900)
+                    if (completedSubmission != null) clearDraft()
                 }
             }
 
@@ -1626,6 +1636,87 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            val sendRecoveryContent: @androidx.compose.runtime.Composable () -> Unit = {
+                knownNoteId?.let { noteId ->
+                    TextButton(onClick = { openKnownNote(noteId) }) {
+                        Text("Open matching note in AnkiDroid")
+                    }
+                }
+                if (recoveryRequired && recoveryPhase == SubmissionPhase.NOTE_INSERTING &&
+                    (!apiPermissionGranted || setupLoading || setupError != null || !setupLoadedSuccessfully)) {
+                    Text("Recovery is held until AnkiDroid setup succeeds; the frozen draft has not been cleared.", style = MaterialTheme.typography.bodyMedium)
+                } else if (recoveryRequired && recoveryDuplicate) {
+                    TextButton(onClick = {
+                        clearPendingSubmission(preferences)
+                        clearDraftAfterUnlock = true
+                        recoveryRequired = false
+                        recoveryPhase = null
+                        recoveryDuplicate = false
+                        submitMessage = "Pending Send marked complete."
+                    }) { Text("Treat pending Send as complete") }
+                } else if (recoveryRequired && recoveryPhase == SubmissionPhase.MEDIA_IMPORTING) {
+                    TextButton(onClick = {
+                        clearPendingSubmission(preferences)
+                        recoveryRequired = false
+                        recoveryPhase = null
+                        recoveryMessage = "Image import retry requires a new explicit Send and may create duplicate media."
+                    }) { Text("Retry image import (may duplicate media)") }
+                    TextButton(onClick = {
+                        clearPendingSubmission(preferences)
+                        removeDraftImage()
+                        recoveryRequired = false
+                        recoveryPhase = null
+                        recoveryMessage = "The interrupted image was discarded; the rest of the draft was kept."
+                    }) { Text("Remove interrupted image") }
+                } else if (recoveryRequired && recoveryPhase == SubmissionPhase.MEDIA_IMPORTED) {
+                    TextButton(onClick = {
+                        recoveryRequired = false
+                        frozenRetryReady = true
+                        recoveryMessage = "Resuming the frozen Send will reuse the saved media receipt."
+                    }) { Text("Resume frozen Send") }
+                    TextButton(onClick = {
+                        clearPendingSubmission(preferences)
+                        removeDraftImage()
+                        recoveryRequired = false
+                        recoveryPhase = null
+                        recoveryMessage = "Pending Send cleared after review; configure the destination before retrying."
+                    }) { Text("I checked; configure destination") }
+                } else if (recoveryRequired && recoveryMessage?.contains("No matching note") == true) {
+                    TextButton(onClick = {
+                        recoveryRequired = false
+                        frozenRetryReady = true
+                        recoveryMessage = "Retrying the frozen Send; the draft remains locked until it finishes."
+                    }) { Text("Retry frozen Send") }
+                } else if (recoveryRequired && knownNoteId != null && recoveryMessage?.contains("no longer") == true) {
+                    Text("The saved note ID cannot be found. No automatic re-insert will be attempted; inspect AnkiDroid before resolving this draft.", style = MaterialTheme.typography.bodyMedium)
+                    TextButton(onClick = {
+                        clearPendingSubmission(preferences)
+                        recoveryRequired = false
+                        recoveryPhase = null
+                        frozenRetryReady = false
+                        knownNoteId = null
+                        recoveryMessage = "The missing saved note outcome was explicitly acknowledged; review the draft before a new Send."
+                    }) { Text("I checked; resolve outcome") }
+                } else if (recoveryRequired && recoveryMessage?.contains("unavailable") == true) {
+                    TextButton(onClick = {
+                        clearPendingSubmission(preferences)
+                        recoveryRequired = false
+                        recoveryPhase = null
+                        recoveryMessage = "Outcome acknowledged; choose a valid destination before retrying."
+                    }) { Text("I checked; configure destination") }
+                } else if (recoveryRequired && recoveryMessage?.startsWith("Could not verify") == true) {
+                    TextButton(onClick = { setupReload++ }) { Text("Retry pending-send check") }
+                } else if (recoveryRequired) {
+                    TextButton(onClick = {
+                        clearPendingSubmission(preferences)
+                        recoveryRequired = false
+                        recoveryPhase = null
+                        recoveryDuplicate = false
+                        recoveryMessage = "Pending Send held for manual resolution; configure the destination before retrying."
+                    }) { Text("I checked; configure destination") }
+                }
+            }
+
             androidx.activity.compose.BackHandler(enabled = submissionLocked) {
                 when {
                     showSettings -> showSettings = false
@@ -1675,6 +1766,7 @@ class MainActivity : ComponentActivity() {
                             .padding(20.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
+                        var submitAction: () -> Unit = {}
                         val reviewTarget = displayTarget?.takeIf { it.textIn(displaySentence) != null }
                         if (visibleRoute == AppRoute.Review && reviewTarget != null) {
                             ReviewCard(
@@ -1701,6 +1793,21 @@ class MainActivity : ComponentActivity() {
                                 onTogglePitchInfo = { pitchInfoExpanded = !pitchInfoExpanded },
                                 onEdit = { autoOpenReview = false; route = AppRoute.Target },
                                 onAddTag = { autoOpenReview = false; route = AppRoute.Target },
+                                sendPresentation = when {
+                                    isSubmitting -> ReviewSendPresentation.Sending
+                                    completedSubmission != null -> ReviewSendPresentation.Status("Note sent to AnkiDroid.")
+                                    recoveryRequired -> ReviewSendPresentation.Status(
+                                        recoveryMessage ?: "Pending Send needs review.",
+                                    )
+                                    submitMessage?.startsWith("Blocked:") == true -> ReviewSendPresentation.Status(submitMessage.orEmpty())
+                                    submitMessage != null -> ReviewSendPresentation.Status(submitMessage!!, "Retry Send")
+                                    else -> ReviewSendPresentation.Ready
+                                },
+                                onSend = if (canSend && completedSubmission == null &&
+                                    submitMessage?.startsWith("Blocked:") != true
+                                ) ({ submitAction() }) else null,
+                                onSendStatusAction = if (canSend && completedSubmission == null) ({ submitAction() }) else null,
+                                sendStatusContent = sendRecoveryContent,
                             )
                         } else {
                         Text("Japanese Anki", style = MaterialTheme.typography.headlineMedium)
@@ -2080,350 +2187,281 @@ class MainActivity : ComponentActivity() {
                                 }) { Text("Grant AnkiDroid API permission") }
                             }
                         }
-                        submitMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
-                        recoveryMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
-                        knownNoteId?.let { noteId ->
-                            TextButton(onClick = { openKnownNote(noteId) }) {
-                                Text("Open matching note in AnkiDroid")
-                            }
-                        }
-                        if (recoveryRequired && recoveryPhase == SubmissionPhase.NOTE_INSERTING &&
-                            (!apiPermissionGranted || setupLoading || setupError != null || !setupLoadedSuccessfully)) {
-                            Text("Recovery is held until AnkiDroid setup succeeds; the frozen draft has not been cleared.", style = MaterialTheme.typography.bodyMedium)
-                        } else if (recoveryRequired && recoveryDuplicate) {
-                            TextButton(onClick = {
-                                clearPendingSubmission(preferences)
-                                clearDraftAfterUnlock = true
-                                recoveryRequired = false
-                                recoveryPhase = null
-                                recoveryDuplicate = false
-                                submitMessage = "Pending Send marked complete."
-                            }) { Text("Treat pending Send as complete") }
-                        } else if (recoveryRequired && recoveryPhase == SubmissionPhase.MEDIA_IMPORTING) {
-                            TextButton(onClick = {
-                                clearPendingSubmission(preferences)
-                                recoveryRequired = false
-                                recoveryPhase = null
-                                recoveryMessage = "Image import retry requires a new explicit Send and may create duplicate media."
-                            }) { Text("Retry image import (may duplicate media)") }
-                            TextButton(onClick = {
-                                clearPendingSubmission(preferences)
-                                removeDraftImage()
-                                recoveryRequired = false
-                                recoveryPhase = null
-                                recoveryMessage = "The interrupted image was discarded; the rest of the draft was kept."
-                            }) { Text("Remove interrupted image") }
-                        } else if (recoveryRequired && recoveryPhase == SubmissionPhase.MEDIA_IMPORTED) {
-                            TextButton(onClick = {
-                                recoveryRequired = false
-                                frozenRetryReady = true
-                                recoveryMessage = "Resuming the frozen Send will reuse the saved media receipt."
-                            }) { Text("Resume frozen Send") }
-                            TextButton(onClick = {
-                                clearPendingSubmission(preferences)
-                                removeDraftImage()
-                                recoveryRequired = false
-                                recoveryPhase = null
-                                recoveryMessage = "Pending Send cleared after review; configure the destination before retrying."
-                            }) { Text("I checked; configure destination") }
-                        } else if (recoveryRequired && recoveryMessage?.contains("No matching note") == true) {
-                            TextButton(onClick = {
-                                recoveryRequired = false
-                                frozenRetryReady = true
-                                recoveryMessage = "Retrying the frozen Send; the draft remains locked until it finishes."
-                            }) { Text("Retry frozen Send") }
-                        } else if (recoveryRequired && knownNoteId != null && recoveryMessage?.contains("no longer") == true) {
-                            Text("The saved note ID cannot be found. No automatic re-insert will be attempted; inspect AnkiDroid before resolving this draft.", style = MaterialTheme.typography.bodyMedium)
-                            TextButton(onClick = {
-                                clearPendingSubmission(preferences)
-                                recoveryRequired = false
-                                recoveryPhase = null
-                                frozenRetryReady = false
-                                knownNoteId = null
-                                recoveryMessage = "The missing saved note outcome was explicitly acknowledged; review the draft before a new Send."
-                            }) { Text("I checked; resolve outcome") }
-                        } else if (recoveryRequired && recoveryMessage?.contains("unavailable") == true) {
-                            TextButton(onClick = {
-                                clearPendingSubmission(preferences)
-                                recoveryRequired = false
-                                recoveryPhase = null
-                                recoveryMessage = "Outcome acknowledged; choose a valid destination before retrying."
-                            }) { Text("I checked; configure destination") }
-                        } else if (recoveryRequired && recoveryMessage?.startsWith("Could not verify") == true) {
-                            TextButton(onClick = { setupReload++ }) { Text("Retry pending-send check") }
-                        } else if (recoveryRequired) {
-                            TextButton(onClick = {
-                                clearPendingSubmission(preferences)
-                                recoveryRequired = false
-                                recoveryPhase = null
-                                recoveryDuplicate = false
-                                recoveryMessage = "Pending Send held for manual resolution; configure the destination before retrying."
-                            }) { Text("I checked; configure destination") }
+                        if (visibleRoute != AppRoute.Review || reviewTarget == null) {
+                            submitMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                            recoveryMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                            sendRecoveryContent()
                         }
                         if (visibleRoute != AppRoute.Review) Text(
                             "Draft saved on this device.",
                             style = MaterialTheme.typography.bodyMedium,
                         )
-                        Button(
-                            enabled = completedSubmission == null && submitMessage?.startsWith("Blocked:") != true && canSend,
-                            onClick = {
-                                val model = selectedModel ?: return@Button
-                                val deck = selectedDeck ?: return@Button
-                                val restoredFrozen = if (frozenRetryReady) readFrozenSubmission(preferences) else null
-                                if (frozenRetryReady && (restoredFrozen == null || restoredFrozen.modelId != model.id ||
-                                        restoredFrozen.deckId != deck.id || restoredFrozen.modelFields != model.fields)
-                                ) {
-                                    submitMessage = "The frozen Send destination is unavailable; resolve it before retrying."
-                                    return@Button
-                                }
-                                val fields = restoredFrozen?.modelFields?.zip(restoredFrozen.orderedFields)?.toMap()
-                                    ?: fieldsByName ?: return@Button
-                                val tagSet = restoredFrozen?.tags ?: AnkiFieldContract.parseTags(tags)
-                                publishedFrozenSnapshot = restoredFrozen ?: modelMapping?.takeIf { it.isValid }?.let { mapping ->
-                                    FrozenSubmission(
-                                        revision = nextSubmissionRevision(
-                                            preferences.getLong(SubmissionRecoveryKeys.REVISION_SEQUENCE, 0L),
-                                            preferences.getLong(SubmissionRecoveryKeys.REVISION, 0L),
-                                        ),
-                                        modelId = model.id,
-                                        deckId = deck.id,
-                                        modelFields = model.fields,
-                                        orderedFields = mapping.values,
-                                        sentence = editor.text,
-                                        lemma = vocabulary,
-                                        vocabularyReading = vocabularyReading,
-                                        sentenceReading = sentenceReading,
-                                        definition = definition,
-                                        translation = translation,
-                                        notes = notes,
-                                        tags = tagSet,
-                                        pitchAccentText = pitchAccentText,
-                                        targetStart = target?.start ?: -1,
-                                        targetEnd = target?.end ?: -1,
-                                        media = processedImageIdentity,
-                                        importedFilename = imageReceiptFilename,
-                                        noteId = null,
-                                    )
-                                }
-                                draftGeneration++
-                                dictionaryLoading = false
-                                dictionarySearchLoading = false
-                                analyzerLoading = false
-                                tokenizationLoading = false
-                                pitchLookupLoading = false
-                                ocrLoading = false
-                                analyzerProgress = 0f
-                                isSubmitting = true
-                                knownNoteId = null
-                                submitMessage = null
-                                coroutineScope.launch {
-                                    suspend fun publishFrozen(snapshot: FrozenSubmission) {
-                                        withContext(Dispatchers.Main.immediate) {
-                                            publishedFrozenSnapshot = snapshot
-                                        }
+                        submitAction = submitAction@{
+                            if (!canSend || isSubmitting || recoveryRequired || completedSubmission != null ||
+                                submitMessage?.startsWith("Blocked:") == true
+                            ) {
+                                return@submitAction
+                            }
+                            val model = selectedModel ?: return@submitAction
+                            val deck = selectedDeck ?: return@submitAction
+                            val restoredFrozen = if (frozenRetryReady) readFrozenSubmission(preferences) else null
+                            if (frozenRetryReady && (restoredFrozen == null || restoredFrozen.modelId != model.id ||
+                                    restoredFrozen.deckId != deck.id || restoredFrozen.modelFields != model.fields)
+                            ) {
+                                submitMessage = "The frozen Send destination is unavailable; resolve it before retrying."
+                                return@submitAction
+                            }
+                            val fields = restoredFrozen?.modelFields?.zip(restoredFrozen.orderedFields)?.toMap()
+                                ?: fieldsByName ?: return@submitAction
+                            val tagSet = restoredFrozen?.tags ?: AnkiFieldContract.parseTags(tags)
+                            publishedFrozenSnapshot = restoredFrozen ?: modelMapping?.takeIf { it.isValid }?.let { mapping ->
+                                FrozenSubmission(
+                                    revision = nextSubmissionRevision(
+                                        preferences.getLong(SubmissionRecoveryKeys.REVISION_SEQUENCE, 0L),
+                                        preferences.getLong(SubmissionRecoveryKeys.REVISION, 0L),
+                                    ),
+                                    modelId = model.id,
+                                    deckId = deck.id,
+                                    modelFields = model.fields,
+                                    orderedFields = mapping.values,
+                                    sentence = editor.text,
+                                    lemma = vocabulary,
+                                    vocabularyReading = vocabularyReading,
+                                    sentenceReading = sentenceReading,
+                                    definition = definition,
+                                    translation = translation,
+                                    notes = notes,
+                                    tags = tagSet,
+                                    pitchAccentText = pitchAccentText,
+                                    targetStart = target?.start ?: -1,
+                                    targetEnd = target?.end ?: -1,
+                                    media = processedImageIdentity,
+                                    importedFilename = imageReceiptFilename,
+                                    noteId = null,
+                                )
+                            }
+                            draftGeneration++
+                            dictionaryLoading = false
+                            dictionarySearchLoading = false
+                            analyzerLoading = false
+                            tokenizationLoading = false
+                            pitchLookupLoading = false
+                            ocrLoading = false
+                            analyzerProgress = 0f
+                            isSubmitting = true
+                            knownNoteId = null
+                            submitMessage = null
+                            coroutineScope.launch {
+                                suspend fun publishFrozen(snapshot: FrozenSubmission) {
+                                    withContext(Dispatchers.Main.immediate) {
+                                        publishedFrozenSnapshot = snapshot
                                     }
-                                    try {
-                                        val outcome = withContext(Dispatchers.IO) {
-                                            val gateway = AnkiDroidGateway(contentResolver, applicationContext)
-                                            val duplicateId = gateway.hasDuplicate(model, deck, fields)
-                                            if (duplicateId != null) {
-                                                preferences.edit().putString(SubmissionRecoveryKeys.STATUS, "blocked").commit()
-                                                SubmissionOutcome("duplicate", duplicateId)
-                                            } else {
-                                                val frozen = if (restoredFrozen != null) {
-                                                    check(restoredFrozen.importedFilename == null ||
-                                                        (restoredFrozen.media != null &&
-                                                            preferences.getString(IMAGE_RECEIPT_PATH, null) == restoredFrozen.media.path &&
-                                                            preferences.getLong(IMAGE_RECEIPT_SIZE, -1L) == restoredFrozen.media.size &&
-                                                            preferences.getLong(IMAGE_RECEIPT_MODIFIED, -1L) == restoredFrozen.media.modified &&
-                                                            preferences.getString(IMAGE_RECEIPT_FILENAME, null) == restoredFrozen.importedFilename &&
-                                                            (!File(restoredFrozen.media.path).exists() ||
-                                                                MediaIdentity.fromFile(File(restoredFrozen.media.path)) == restoredFrozen.media))
-                                                    ) { "The frozen media receipt is unavailable; resolve the pending Send manually." }
-                                                    restoredFrozen
-                                                } else {
-                                                    val includeImage = imageAttached && !omitImageForSend && !imageProcessing
-                                                    val receiptPath = preferences.getString(IMAGE_RECEIPT_PATH, null)
-                                                    val receiptFilename = preferences.getString(IMAGE_RECEIPT_FILENAME, null)
-                                                        ?.let(AnkiMediaImporter::sanitizeFilename)
-                                                    val processed = if (includeImage) {
-                                                        processedImagePath?.let(::File)?.takeIf(File::isFile)
-                                                    } else null
-                                                    if (includeImage) check(processed != null) {
-                                                        "The selected image is not ready for import."
-                                                    }
-                                                    val media = processed?.let(MediaIdentity::fromFile)
-                                                    val imported = if (includeImage && media != null &&
-                                                        receiptPath == media.path &&
-                                                        preferences.getLong(IMAGE_RECEIPT_SIZE, -1L) == media.size &&
-                                                        preferences.getLong(IMAGE_RECEIPT_MODIFIED, -1L) == media.modified &&
-                                                        receiptFilename != null
-                                                    ) receiptFilename else null
-                                                    val baseDraft = noteDraft.copy(imageFilename = imported)
-                                                    val baseFields = baseDraft.fieldsByName()
-                                                        ?: error("The note changed before Send could be frozen.")
-                                                    val baseMapping = AnkiFieldContract.mapToModelOrder(model.fields, baseFields)
-                                                    check(baseMapping.isValid) { baseMapping.errors.joinToString() }
-                                                    var snapshot = FrozenSubmission(
-                                                        revision = nextSubmissionRevision(
-                                                            preferences.getLong(SubmissionRecoveryKeys.REVISION_SEQUENCE, 0L),
-                                                            preferences.getLong(SubmissionRecoveryKeys.REVISION, 0L),
-                                                        ),
-                                                        modelId = model.id,
-                                                        deckId = deck.id,
-                                                        modelFields = model.fields,
-                                                        orderedFields = baseMapping.values,
-                                                        sentence = editor.text,
-                                                        lemma = vocabulary,
-                                                        vocabularyReading = vocabularyReading,
-                                                        sentenceReading = sentenceReading,
-                                                        definition = definition,
-                                                        translation = translation,
-                                                        notes = notes,
-                                                        tags = tagSet,
-                                                        pitchAccentText = pitchAccentText,
-                                                        targetStart = target?.start ?: -1,
-                                                        targetEnd = target?.end ?: -1,
-                                                        media = media,
-                                                        importedFilename = imported,
-                                                        noteId = null,
-                                                    )
-                                                    check(preferences.edit().putLong(
-                                                        SubmissionRecoveryKeys.REVISION_SEQUENCE,
-                                                        snapshot.revision,
-                                                    ).commit()) { "Could not save submission revision." }
-                                                    if (includeImage && media != null && imported == null) {
-                                                        check(preferences.edit().putFrozenSubmission(snapshot, SubmissionPhase.MEDIA_IMPORTING)
-                                                            .remove(IMAGE_RECEIPT_PATH)
-                                                            .remove(IMAGE_RECEIPT_FILENAME)
-                                                            .remove(IMAGE_RECEIPT_SIZE)
-                                                            .remove(IMAGE_RECEIPT_MODIFIED)
-                                                            .commit()) { "Could not save media import recovery state." }
-                                                        publishFrozen(snapshot)
-                                                        val actualFilename = gateway.importProcessedImage(
-                                                            processed ?: error("The selected image is not ready for import."),
-                                                        )
-                                                        check(AnkiMediaImporter.sanitizeFilename(actualFilename) != null) {
-                                                            "AnkiDroid returned an unsafe image filename."
-                                                        }
-                                                        val importedFields = noteDraft.copy(imageFilename = actualFilename).fieldsByName()
-                                                            ?: error("The frozen note fields are invalid after image import.")
-                                                        val importedMapping = AnkiFieldContract.mapToModelOrder(model.fields, importedFields)
-                                                        check(importedMapping.isValid) { importedMapping.errors.joinToString() }
-                                                        snapshot = snapshot.copy(
-                                                            orderedFields = importedMapping.values,
-                                                            importedFilename = actualFilename,
-                                                        )
-                                                        check(preferences.edit().putFrozenSubmission(snapshot, SubmissionPhase.MEDIA_IMPORTED)
-                                                            .putString(IMAGE_RECEIPT_PATH, media.path)
-                                                            .putString(IMAGE_RECEIPT_FILENAME, actualFilename)
-                                                            .putLong(IMAGE_RECEIPT_SIZE, media.size)
-                                                            .putLong(IMAGE_RECEIPT_MODIFIED, media.modified)
-                                                            .commit()) { "Could not save the imported media receipt." }
-                                                        publishFrozen(snapshot)
-                                                    } else {
-                                                        check(preferences.edit().putFrozenSubmission(
-                                                            snapshot,
-                                                            if (imported == null) SubmissionPhase.NOTE_INSERTING else SubmissionPhase.MEDIA_IMPORTED,
-                                                        ).apply {
-                                                            if (imported != null && media != null) {
-                                                                putString(IMAGE_RECEIPT_PATH, media.path)
-                                                                    .putString(IMAGE_RECEIPT_FILENAME, imported)
-                                                                    .putLong(IMAGE_RECEIPT_SIZE, media.size)
-                                                                    .putLong(IMAGE_RECEIPT_MODIFIED, media.modified)
-                                                            }
-                                                        }.commit()) { "Could not save submission recovery data." }
-                                                        publishFrozen(snapshot)
-                                                    }
-                                                    snapshot
-                                                }
-                                                val frozenFields = frozen.modelFields.zip(frozen.orderedFields).toMap()
-                                                val frozenMapping = AnkiFieldContract.mapToModelOrder(model.fields, frozenFields)
-                                                check(frozenMapping.isValid) { frozenMapping.errors.joinToString() }
-                                                check(preferences.edit().putFrozenSubmission(frozen, SubmissionPhase.NOTE_INSERTING).commit()) {
-                                                    "Could not save frozen submission data."
-                                                }
-                                                publishFrozen(frozen)
-                                                // A process death between provider insert and this commit leaves NOTE_INSERTING without an ID;
-                                                // recovery must reconcile explicitly rather than blindly inserting again.
-                                                val insertedNoteId = gateway.insertNote(model, frozenMapping.values, tagSet)
-                                                val insertedSnapshot = frozen.copy(noteId = insertedNoteId)
-                                                check(preferences.edit().putFrozenSubmission(
-                                                    insertedSnapshot,
-                                                    SubmissionPhase.NOTE_INSERTED,
-                                                ).commit()) { "Could not persist the inserted note ID before deck assignment." }
-                                                publishFrozen(insertedSnapshot)
-                                                check(gateway.ensureNoteInDeck(insertedNoteId, deck.id)) {
-                                                    "The inserted note no longer has cards; resolve the saved note ID before retrying."
-                                                }
-                                                check(preferences.edit().putFrozenSubmission(
-                                                    insertedSnapshot,
-                                                    SubmissionPhase.DESTINATION_VERIFIED,
-                                                ).commit()) { "Could not persist verified destination membership." }
-                                                check(preferences.edit().putString(SubmissionRecoveryKeys.STATUS, "done").commit())
-                                                clearPersistedDraft(preferences, File(filesDir, "draft"))
-                                                SubmissionOutcome("created", insertedNoteId)
-                                            }
-                                        }
-                                        when (outcome.status) {
-                                            "duplicate" -> {
-                                                frozenRetryReady = false
-                                                recoveryPhase = null
-                                                knownNoteId = outcome.noteId
-                                                if (restoredFrozen != null) clearPendingSubmission(preferences)
-                                                submitMessage = "Blocked: a note with this sentence and vocabulary lemma already exists."
-                                            }
-                                            "created" -> {
-                                                completedSubmission = publishedFrozenSnapshot ?: readFrozenSubmission(preferences)
-                                                clearDraftAfterUnlock = false
-                                                frozenRetryReady = false
-                                                recoveryRequired = false
-                                                recoveryPhase = null
-                                                recoveryDuplicate = false
-                                                knownNoteId = null
-                                                submitMessage = "Note sent to AnkiDroid."
-                                            }
-                                            else -> {
-                                                frozenRetryReady = false
-                                                recoveryPhase = null
-                                                submitMessage = "AnkiDroid did not add the note. You can safely review and retry."
-                                            }
-                                        }
-                                    } catch (cancelled: CancellationException) {
-                                        throw cancelled
-                                    } catch (error: AnkiProviderDefiniteInsertException) {
-                                        clearPendingSubmission(preferences)
-                                        publishedFrozenSnapshot = null
-                                        recoveryRequired = false
-                                        recoveryPhase = null
-                                        frozenRetryReady = false
-                                        knownNoteId = null
-                                        submitMessage = error.message.orEmpty() + " Retry Send to rerun duplicate checking before any new insert."
-                                    } catch (_: Exception) {
-                                        val phase = SubmissionPhase.fromPersisted(
-                                            preferences.getString(SubmissionRecoveryKeys.STATUS, null),
-                                        )
-                                        if (phase != null) {
-                                            recoveryPhase = phase
-                                            recoveryRequired = true
-                                            frozenRetryReady = false
-                                            recoveryMessage = when (phase) {
-                                                SubmissionPhase.MEDIA_IMPORTING -> "Image import may have completed, but its receipt was not saved. Do not retry without explicit acknowledgement."
-                                                SubmissionPhase.MEDIA_IMPORTED -> "Image import was recorded, but note insertion did not start. Resume only after reviewing the frozen draft."
-                                                SubmissionPhase.NOTE_INSERTING -> "Could not confirm note insertion. Checking the frozen Send revision…"
-                                                SubmissionPhase.NOTE_INSERTED -> "Note ID was saved, but deck assignment was interrupted. Recovery will move only that note's cards."
-                                                SubmissionPhase.DESTINATION_VERIFIED -> "The note's destination was verified; recovery will finalize it without inserting again."
-                                            }
-                                        } else if (imageAttached) {
-                                            submitMessage = "Could not import the selected image. The draft was kept; retry or remove the image."
+                                }
+                                try {
+                                    val outcome = withContext(Dispatchers.IO) {
+                                        val gateway = AnkiDroidGateway(contentResolver, applicationContext)
+                                        val duplicateId = gateway.hasDuplicate(model, deck, fields)
+                                        if (duplicateId != null) {
+                                            preferences.edit().putString(SubmissionRecoveryKeys.STATUS, "blocked").commit()
+                                            SubmissionOutcome("duplicate", duplicateId)
                                         } else {
-                                            submitMessage = "Could not send the note. Check AnkiDroid API access and retry."
+                                            val frozen = if (restoredFrozen != null) {
+                                                check(restoredFrozen.importedFilename == null ||
+                                                    (restoredFrozen.media != null &&
+                                                        preferences.getString(IMAGE_RECEIPT_PATH, null) == restoredFrozen.media.path &&
+                                                        preferences.getLong(IMAGE_RECEIPT_SIZE, -1L) == restoredFrozen.media.size &&
+                                                        preferences.getLong(IMAGE_RECEIPT_MODIFIED, -1L) == restoredFrozen.media.modified &&
+                                                        preferences.getString(IMAGE_RECEIPT_FILENAME, null) == restoredFrozen.importedFilename &&
+                                                        (!File(restoredFrozen.media.path).exists() ||
+                                                            MediaIdentity.fromFile(File(restoredFrozen.media.path)) == restoredFrozen.media))
+                                                ) { "The frozen media receipt is unavailable; resolve the pending Send manually." }
+                                                restoredFrozen
+                                            } else {
+                                                val includeImage = imageAttached && !omitImageForSend && !imageProcessing
+                                                val receiptPath = preferences.getString(IMAGE_RECEIPT_PATH, null)
+                                                val receiptFilename = preferences.getString(IMAGE_RECEIPT_FILENAME, null)
+                                                    ?.let(AnkiMediaImporter::sanitizeFilename)
+                                                val processed = if (includeImage) {
+                                                    processedImagePath?.let(::File)?.takeIf(File::isFile)
+                                                } else null
+                                                if (includeImage) check(processed != null) {
+                                                    "The selected image is not ready for import."
+                                                }
+                                                val media = processed?.let(MediaIdentity::fromFile)
+                                                val imported = if (includeImage && media != null &&
+                                                    receiptPath == media.path &&
+                                                    preferences.getLong(IMAGE_RECEIPT_SIZE, -1L) == media.size &&
+                                                    preferences.getLong(IMAGE_RECEIPT_MODIFIED, -1L) == media.modified &&
+                                                    receiptFilename != null
+                                                ) receiptFilename else null
+                                                val baseDraft = noteDraft.copy(imageFilename = imported)
+                                                val baseFields = baseDraft.fieldsByName()
+                                                    ?: error("The note changed before Send could be frozen.")
+                                                val baseMapping = AnkiFieldContract.mapToModelOrder(model.fields, baseFields)
+                                                check(baseMapping.isValid) { baseMapping.errors.joinToString() }
+                                                var snapshot = FrozenSubmission(
+                                                    revision = nextSubmissionRevision(
+                                                        preferences.getLong(SubmissionRecoveryKeys.REVISION_SEQUENCE, 0L),
+                                                        preferences.getLong(SubmissionRecoveryKeys.REVISION, 0L),
+                                                    ),
+                                                    modelId = model.id,
+                                                    deckId = deck.id,
+                                                    modelFields = model.fields,
+                                                    orderedFields = baseMapping.values,
+                                                    sentence = editor.text,
+                                                    lemma = vocabulary,
+                                                    vocabularyReading = vocabularyReading,
+                                                    sentenceReading = sentenceReading,
+                                                    definition = definition,
+                                                    translation = translation,
+                                                    notes = notes,
+                                                    tags = tagSet,
+                                                    pitchAccentText = pitchAccentText,
+                                                    targetStart = target?.start ?: -1,
+                                                    targetEnd = target?.end ?: -1,
+                                                    media = media,
+                                                    importedFilename = imported,
+                                                    noteId = null,
+                                                )
+                                                check(preferences.edit().putLong(
+                                                    SubmissionRecoveryKeys.REVISION_SEQUENCE,
+                                                    snapshot.revision,
+                                                ).commit()) { "Could not save submission revision." }
+                                                if (includeImage && media != null && imported == null) {
+                                                    check(preferences.edit().putFrozenSubmission(snapshot, SubmissionPhase.MEDIA_IMPORTING)
+                                                        .remove(IMAGE_RECEIPT_PATH)
+                                                        .remove(IMAGE_RECEIPT_FILENAME)
+                                                        .remove(IMAGE_RECEIPT_SIZE)
+                                                        .remove(IMAGE_RECEIPT_MODIFIED)
+                                                        .commit()) { "Could not save media import recovery state." }
+                                                    publishFrozen(snapshot)
+                                                    val actualFilename = gateway.importProcessedImage(
+                                                        processed ?: error("The selected image is not ready for import."),
+                                                    )
+                                                    check(AnkiMediaImporter.sanitizeFilename(actualFilename) != null) {
+                                                        "AnkiDroid returned an unsafe image filename."
+                                                    }
+                                                    val importedFields = noteDraft.copy(imageFilename = actualFilename).fieldsByName()
+                                                        ?: error("The frozen note fields are invalid after image import.")
+                                                    val importedMapping = AnkiFieldContract.mapToModelOrder(model.fields, importedFields)
+                                                    check(importedMapping.isValid) { importedMapping.errors.joinToString() }
+                                                    snapshot = snapshot.copy(
+                                                        orderedFields = importedMapping.values,
+                                                        importedFilename = actualFilename,
+                                                    )
+                                                    check(preferences.edit().putFrozenSubmission(snapshot, SubmissionPhase.MEDIA_IMPORTED)
+                                                        .putString(IMAGE_RECEIPT_PATH, media.path)
+                                                        .putString(IMAGE_RECEIPT_FILENAME, actualFilename)
+                                                        .putLong(IMAGE_RECEIPT_SIZE, media.size)
+                                                        .putLong(IMAGE_RECEIPT_MODIFIED, media.modified)
+                                                        .commit()) { "Could not save the imported media receipt." }
+                                                    publishFrozen(snapshot)
+                                                } else {
+                                                    check(preferences.edit().putFrozenSubmission(
+                                                        snapshot,
+                                                        if (imported == null) SubmissionPhase.NOTE_INSERTING else SubmissionPhase.MEDIA_IMPORTED,
+                                                    ).apply {
+                                                        if (imported != null && media != null) {
+                                                            putString(IMAGE_RECEIPT_PATH, media.path)
+                                                                .putString(IMAGE_RECEIPT_FILENAME, imported)
+                                                                .putLong(IMAGE_RECEIPT_SIZE, media.size)
+                                                                .putLong(IMAGE_RECEIPT_MODIFIED, media.modified)
+                                                        }
+                                                    }.commit()) { "Could not save submission recovery data." }
+                                                    publishFrozen(snapshot)
+                                                }
+                                                snapshot
+                                            }
+                                            val frozenFields = frozen.modelFields.zip(frozen.orderedFields).toMap()
+                                            val frozenMapping = AnkiFieldContract.mapToModelOrder(model.fields, frozenFields)
+                                            check(frozenMapping.isValid) { frozenMapping.errors.joinToString() }
+                                            check(preferences.edit().putFrozenSubmission(frozen, SubmissionPhase.NOTE_INSERTING).commit()) {
+                                                "Could not save frozen submission data."
+                                            }
+                                            publishFrozen(frozen)
+                                            // A process death between provider insert and this commit leaves NOTE_INSERTING without an ID;
+                                            // recovery must reconcile explicitly rather than blindly inserting again.
+                                            val insertedNoteId = gateway.insertNote(model, frozenMapping.values, tagSet)
+                                            val insertedSnapshot = frozen.copy(noteId = insertedNoteId)
+                                            check(preferences.edit().putFrozenSubmission(
+                                                insertedSnapshot,
+                                                SubmissionPhase.NOTE_INSERTED,
+                                            ).commit()) { "Could not persist the inserted note ID before deck assignment." }
+                                            publishFrozen(insertedSnapshot)
+                                            check(gateway.ensureNoteInDeck(insertedNoteId, deck.id)) {
+                                                "The inserted note no longer has cards; resolve the saved note ID before retrying."
+                                            }
+                                            check(preferences.edit().putFrozenSubmission(
+                                                insertedSnapshot,
+                                                SubmissionPhase.DESTINATION_VERIFIED,
+                                            ).commit()) { "Could not persist verified destination membership." }
+                                            check(preferences.edit().putString(SubmissionRecoveryKeys.STATUS, "done").commit())
+                                            clearPersistedDraft(preferences, File(filesDir, "draft"))
+                                            SubmissionOutcome("created", insertedNoteId)
                                         }
-                                    } finally {
-                                        isSubmitting = false
                                     }
+                                    when (outcome.status) {
+                                        "duplicate" -> {
+                                            frozenRetryReady = false
+                                            recoveryPhase = null
+                                            knownNoteId = outcome.noteId
+                                            if (restoredFrozen != null) clearPendingSubmission(preferences)
+                                            submitMessage = "Blocked: a note with this sentence and vocabulary lemma already exists."
+                                        }
+                                        "created" -> {
+                                            completedSubmission = publishedFrozenSnapshot ?: readFrozenSubmission(preferences)
+                                            clearDraftAfterUnlock = false
+                                            frozenRetryReady = false
+                                            recoveryRequired = false
+                                            recoveryPhase = null
+                                            recoveryDuplicate = false
+                                            knownNoteId = null
+                                            submitMessage = "Note sent to AnkiDroid."
+                                        }
+                                        else -> {
+                                            frozenRetryReady = false
+                                            recoveryPhase = null
+                                            submitMessage = "AnkiDroid did not add the note. You can safely review and retry."
+                                        }
+                                    }
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (error: AnkiProviderDefiniteInsertException) {
+                                    clearPendingSubmission(preferences)
+                                    publishedFrozenSnapshot = null
+                                    recoveryRequired = false
+                                    recoveryPhase = null
+                                    frozenRetryReady = false
+                                    knownNoteId = null
+                                    submitMessage = error.message.orEmpty() + " Retry Send to rerun duplicate checking before any new insert."
+                                } catch (_: Exception) {
+                                    val phase = SubmissionPhase.fromPersisted(
+                                        preferences.getString(SubmissionRecoveryKeys.STATUS, null),
+                                    )
+                                    if (phase != null) {
+                                        recoveryPhase = phase
+                                        recoveryRequired = true
+                                        frozenRetryReady = false
+                                        recoveryMessage = when (phase) {
+                                            SubmissionPhase.MEDIA_IMPORTING -> "Image import may have completed, but its receipt was not saved. Do not retry without explicit acknowledgement."
+                                            SubmissionPhase.MEDIA_IMPORTED -> "Image import was recorded, but note insertion did not start. Resume only after reviewing the frozen draft."
+                                            SubmissionPhase.NOTE_INSERTING -> "Could not confirm note insertion. Checking the frozen Send revision…"
+                                            SubmissionPhase.NOTE_INSERTED -> "Note ID was saved, but deck assignment was interrupted. Recovery will move only that note's cards."
+                                            SubmissionPhase.DESTINATION_VERIFIED -> "The note's destination was verified; recovery will finalize it without inserting again."
+                                        }
+                                    } else if (imageAttached) {
+                                        submitMessage = "Could not import the selected image. The draft was kept; retry or remove the image."
+                                    } else {
+                                        submitMessage = "Could not send the note. Check AnkiDroid API access and retry."
+                                    }
+                                } finally {
+                                    isSubmitting = false
                                 }
-                            },
+                            }
+                        }
+                        if (visibleRoute != AppRoute.Review || reviewTarget == null) Button(
+                            enabled = completedSubmission == null && submitMessage?.startsWith("Blocked:") != true && canSend,
+                            onClick = { submitAction() },
                         ) {
                             if (isSubmitting) {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
