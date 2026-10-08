@@ -35,7 +35,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -415,6 +419,7 @@ class MainActivity : ComponentActivity() {
             var cameraPermissionGranted by remember {
                 mutableStateOf(checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
             }
+            var cameraError by remember { mutableStateOf<String?>(null) }
             var showModelMenu by remember { mutableStateOf(false) }
             var showDeckMenu by remember { mutableStateOf(false) }
             var isSubmitting by remember { mutableStateOf(false) }
@@ -736,6 +741,11 @@ class MainActivity : ComponentActivity() {
             val cameraPermissionLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.RequestPermission(),
             ) { granted -> cameraPermissionGranted = granted }
+            androidx.compose.runtime.LaunchedEffect(route, captureMode) {
+                if (route == AppRoute.Capture && captureMode == "Photo" && !cameraPermissionGranted) {
+                    cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                }
+            }
             val photoPicker = rememberLauncherForActivityResult(
                 ActivityResultContracts.PickVisualMedia(),
             ) { uri ->
@@ -2054,6 +2064,9 @@ class MainActivity : ComponentActivity() {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
+                            .statusBarsPadding()
+                            .navigationBarsPadding()
+                            .imePadding()
                             .verticalScroll(rememberScrollState())
                             .padding(20.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -2187,12 +2200,8 @@ class MainActivity : ComponentActivity() {
                                             ),
                                             icon = {},
                                             onClick = {
-                                                val alreadySelected = captureMode == mode
                                                 captureMode = mode
                                                 preferences.edit().putString("capture_mode", captureMode).apply()
-                                                if (mode == "Photo" && alreadySelected) {
-                                                    photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                                                }
                                             },
                                         ) { Text(mode) }
                                     }
@@ -2238,6 +2247,23 @@ class MainActivity : ComponentActivity() {
                             Text(analyzerError!!, style = MaterialTheme.typography.bodyMedium)
                             TextButton(enabled = !submissionLocked, onClick = { dictionaryRetry++ }) { Text("Retry analyzer setup") }
                         }
+                        if (visibleRoute == AppRoute.Capture && captureMode == "Photo") {
+                            if (cameraPermissionGranted) {
+                                cameraError?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                                dev.pierre.japaneseanki.ui.CameraCaptureScreen(
+                                    modifier = Modifier.fillMaxWidth().height(420.dp),
+                                    enabled = !submissionLocked,
+                                    outputDirectory = File(filesDir, "draft").apply { mkdirs() },
+                                    onCaptured = { file -> cameraError = null; requestPhoto(file) },
+                                    onError = { message -> cameraError = message },
+                                )
+                            } else {
+                                Text("Camera access is needed to take a photo.", style = MaterialTheme.typography.bodyMedium)
+                                Button(onClick = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) }) {
+                                    Text("Grant camera access")
+                                }
+                            }
+                        } else {
                         OutlinedTextField(
                             value = if (frozenForDisplay != null) {
                                 TextFieldValue(displaySentence, selection = TextRange(displaySentence.length))
@@ -2328,6 +2354,7 @@ class MainActivity : ComponentActivity() {
                                 "Previous vocabulary and reading work was kept. Select a new target to review it.",
                                 style = MaterialTheme.typography.bodyMedium,
                             )
+                        }
                         }
                         if (displayTarget?.textIn(displaySentence) != null) {
                             if (frozenForDisplay != null) {
