@@ -68,9 +68,8 @@ internal fun rememberCameraController(): LifecycleCameraController {
 }
 
 /**
- * The live preview itself: a 4:3, corner-bracketed frame with no letterboxing beyond what the
- * caller's own sizing imposes. Callers give this exactly a 4:3-shaped box (edge-to-edge width,
- * height = width * 3/4) so the frame fills it with no internal black bars, matching mockup 06.
+ * The live preview itself: an upright 3:4, corner-bracketed frame. The caller gives it an
+ * edge-to-edge box with height = width * 4/3; any extra space is letterboxed, matching mockup 06.
  */
 @Composable
 internal fun CameraViewfinder(controller: LifecycleCameraController, modifier: Modifier = Modifier) {
