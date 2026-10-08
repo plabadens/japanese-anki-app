@@ -43,6 +43,26 @@ class ManualNoteDraftTest {
         assertEquals(AnkiFieldContract.requiredFields.toSet(), fields.keys)
     }
 
+    @Test fun analyzedTargetFuriganaDoesNotBlockSendingAndKeepsOutsideAnnotation() {
+        val sentence = "昨日は学校"
+        val target = TargetSpan(0, 2)
+        val tokens = listOf(
+            JapaneseToken(TargetSpan(0, 2), "昨日", "昨日", "きのう", "きのう", "名詞-普通名詞"),
+            JapaneseToken(TargetSpan(2, 3), "は", "は", "は", "は", "助詞-係助詞"),
+            JapaneseToken(TargetSpan(3, 5), "学校", "学校", "がっこう", "がっこう", "名詞-普通名詞"),
+        )
+        val annotations = sentenceFuriganaSpans(sentence, tokens, target)
+        val note = draft(sentenceReading = "きのう", vocabularyReading = "きのう").copy(
+            sentence = sentence,
+            target = target,
+            sentenceFurigana = annotations,
+        )
+
+        assertEquals(listOf(FuriganaSpan(TargetSpan(3, 5), "学校", "がっこう")), annotations)
+        assertTrue(note.validationErrors().isEmpty())
+        assertEquals("<b>昨日[きのう]</b>は学校[がっこう]", note.fieldsByName()!!["SentFurigana"])
+    }
+
     @Test fun nonTargetFuriganaDoesNotChangeTheTargetOccurrenceOrSentenceText() {
         val fields = draft(sentenceReading = "ねこ", vocabularyReading = "ねこ")
             .copy(sentenceFurigana = listOf(FuriganaSpan(TargetSpan(2, 4), "走る", "はしる")))

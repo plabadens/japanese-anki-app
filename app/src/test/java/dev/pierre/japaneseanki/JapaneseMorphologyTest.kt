@@ -18,7 +18,7 @@ class JapaneseMorphologyTest {
         assertEquals(AnalyzedLemma("食べる", "たべる"), resolveAnalyzedLemma(tokens, TargetSpan(0, 3)))
     }
 
-    @Test fun sentenceFuriganaSuggestionsIncludeTargetAndUseAnalyzerReadings() {
+    @Test fun sentenceFuriganaSuggestionsExcludeTargetAndUseAnalyzerReadings() {
         val sentence = "昨日は学校"
         val tokens = listOf(
             token(0, 2, "昨日", "昨日", "名詞-普通名詞", "きのう"),
@@ -26,10 +26,7 @@ class JapaneseMorphologyTest {
             token(3, 5, "学校", "学校", "名詞-普通名詞", "がっこう"),
         )
         assertEquals(
-            listOf(
-                FuriganaSpan(TargetSpan(0, 2), "昨日", "きのう"),
-                FuriganaSpan(TargetSpan(3, 5), "学校", "がっこう"),
-            ),
+            listOf(FuriganaSpan(TargetSpan(0, 2), "昨日", "きのう")),
             sentenceFuriganaSpans(sentence, tokens, TargetSpan(3, 5)),
         )
         assertEquals("きのうは", resolveSurfaceReading(sentence, tokens, TargetSpan(0, 3)))

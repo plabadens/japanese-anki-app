@@ -21,6 +21,9 @@ internal fun sentenceFuriganaSpans(
         ) {
             return@mapNotNull null
         }
+        if (target?.let { token.span.start < it.end && token.span.end > it.start } == true) {
+            return@mapNotNull null
+        }
         FuriganaSpan(token.span, token.surface, token.surfaceReading)
     }
 
