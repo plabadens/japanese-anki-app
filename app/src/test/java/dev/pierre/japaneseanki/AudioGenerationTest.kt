@@ -97,7 +97,7 @@ class AudioGenerationTest {
                 AudioProvider { _, output ->
                     calls += source.name
                     if (fails) throw IllegalStateException("unavailable")
-                    writeValidWav(output)
+                    if (source == AudioSource.RECORDED_PRONUNCIATION) writeValidOgg(output) else writeValidWav(output)
                 },
             )
             val chain = AudioSourceChain(
@@ -149,7 +149,7 @@ class AudioGenerationTest {
             var calls = 0
             val recording = AudioProviderBinding(
                 AudioSourceIdentity(AudioSource.RECORDED_PRONUNCIATION, "NHK-2016", voice = "recording", rate = 1f),
-                AudioProvider { _, output -> calls++; writeValidWav(output) },
+                AudioProvider { _, output -> calls++; writeValidOgg(output) },
             )
             val chain = AudioSourceChain(AudioSourceConfiguration(), recording, null, null)
             assertTrue(chain.generate(AudioSynthesisRequest(AudioItem.VOCABULARY, "猫", 1), root) is AudioChainResult.Failed)
@@ -220,6 +220,16 @@ class AudioGenerationTest {
             assertTrue(runCatching { cache.put(AudioCacheKey("s", "t", "v", 1f), invalid) }.isFailure)
             assertTrue(runCatching { cache.copyToActiveDraft(AudioCacheKey("s", "t", "v", 1f), File(root, "cache"), "draft.wav") }.isFailure)
         } finally { root.deleteRecursively() }
+    }
+
+    private fun writeValidOgg(file: File): File {
+        file.parentFile?.mkdirs()
+        val bytes = ByteArray(29)
+        "OggS".toByteArray().copyInto(bytes)
+        bytes[26] = 1 // one lacing value
+        bytes[27] = 1 // one-byte page body
+        file.writeBytes(bytes)
+        return file
     }
 
     private fun writeValidWav(file: File): File {

@@ -43,6 +43,49 @@ class TranslationServiceTest {
     }
 
     @Test
+    fun localModelDownloadFailureCanBeRetriedAndThenUsedOffline() {
+        var downloadAttempts = 0
+        val client = object : MlKitTranslationClient {
+            override fun downloadModel() {
+                downloadAttempts++
+                if (downloadAttempts == 1) throw IOException("offline")
+            }
+
+            override fun translate(sentence: String): String = "translated:$sentence"
+            override fun close() = Unit
+        }
+        val fallback = MlKitLocalTranslationFallback(client)
+
+        assertEquals(null, fallback.translate("日本語"))
+        assertEquals(TranslationModelStatus.ERROR, fallback.modelStatus)
+        assertTrue(fallback.retryModelDownload())
+        assertEquals(TranslationModelStatus.READY, fallback.modelStatus)
+        assertEquals("translated:日本語", fallback.translate("日本語"))
+        assertEquals(2, downloadAttempts)
+    }
+
+    @Test
+    fun translationFailureDoesNotForgetDownloadedModel() {
+        var translationFails = true
+        var downloadAttempts = 0
+        val client = object : MlKitTranslationClient {
+            override fun downloadModel() { downloadAttempts++ }
+            override fun translate(sentence: String): String {
+                if (translationFails) throw IOException("translation failed")
+                return "offline result"
+            }
+            override fun close() = Unit
+        }
+        val fallback = MlKitLocalTranslationFallback(client)
+
+        assertEquals(null, fallback.translate("日本語"))
+        assertEquals(TranslationModelStatus.READY, fallback.modelStatus)
+        translationFails = false
+        assertEquals("offline result", fallback.translate("日本語"))
+        assertEquals(1, downloadAttempts)
+    }
+
+    @Test
     fun absentLocalModelReturnsSpecificUnavailableFailure() {
         val result = TranslationService(local = UnavailableLocalTranslationFallback()).translate("文")
         assertEquals(TranslationResult.Failed("Local translation is unavailable"), result)

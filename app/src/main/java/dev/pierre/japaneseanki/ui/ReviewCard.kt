@@ -44,6 +44,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
@@ -135,8 +137,28 @@ internal fun ReviewCard(
                         update = { it.setImageURI(Uri.fromFile(File(imagePath))) },
                         modifier = Modifier.size(72.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(10.dp)),
                     )
-                    imageStatus != null -> Text(imageStatus, style = MaterialTheme.typography.bodyMedium)
-                    else -> Text("No image", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    imageStatus != null -> Box(
+                        Modifier.size(72.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(10.dp))
+                            .semantics { contentDescription = imageStatus },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (imageStatus.startsWith("Preparing", ignoreCase = true)) {
+                            CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                        } else {
+                            Text(
+                                imageStatus,
+                                modifier = Modifier.padding(4.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                textAlign = TextAlign.Center,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                    else -> Box(
+                        Modifier.size(72.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(10.dp))
+                            .semantics { contentDescription = "No image attached" },
+                    )
                 }
             }
             ReviewFieldRow("Sentence", onEdit = onEdit, editingEnabled = editingEnabled, playable = true, generating = "Sentence" in generatingFields) {
@@ -182,8 +204,13 @@ internal fun ReviewCard(
                     annotated,
                     inlineContent = inlineRuby,
                     style = MaterialTheme.typography.bodyLarge,
-                    onTextLayout = { sentenceLayout.value = it },
-                    modifier = Modifier.drawWithContent {
+                    modifier = Modifier.semantics {
+                        contentDescription = buildString {
+                            append(sentence)
+                            if (parts.any { it.unresolvedKanji }) append(". Some kanji have no available reading.")
+                        }
+                        stateDescription = "Target selected: ${target.textIn(sentence)}"
+                    }.drawWithContent {
                         drawContent()
                         val layout = sentenceLayout.value ?: return@drawWithContent
                         var textOffset = 0
@@ -209,6 +236,7 @@ internal fun ReviewCard(
                             textOffset += part.text.length
                         }
                     },
+                    onTextLayout = { sentenceLayout.value = it },
                 )
             }
             ReviewFieldRow("Vocabulary", onEdit = { editingField = "Word" }, editingEnabled = editingEnabled, playable = true, generating = "Vocabulary" in generatingFields) {
@@ -219,7 +247,7 @@ internal fun ReviewCard(
                         IconButton(onClick = onTogglePitchInfo, modifier = Modifier.size(48.dp).semantics {
                             contentDescription = if (pitchInfoExpanded) "Dismiss pitch explanation" else if (pitch == null) "Explain missing pitch pattern" else "Explain alternate pitch pattern"
                             stateDescription = if (pitchInfoExpanded) "Expanded" else "Collapsed"
-                        }) { Text("!", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        }) { Icon(MaterialSymbols.ErrorOutline, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
                     }
                 }
                 if (pitchInfoExpanded) {
@@ -281,7 +309,7 @@ internal fun ReviewCard(
                     IconButton(onClick = onToggleTranslationInfo, modifier = Modifier.size(48.dp).semantics {
                         contentDescription = if (translationInfoExpanded) "Dismiss offline translation explanation" else "Explain offline translation"
                         stateDescription = if (translationInfoExpanded) "Expanded" else "Collapsed"
-                    }) { Text("!", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    }) { Icon(MaterialSymbols.ErrorOutline, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
                 if (translationInfoExpanded) Text(
                     "This translation was produced offline.",

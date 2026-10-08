@@ -44,6 +44,12 @@ internal object MaterialSymbols {
     val Add: ImageVector by lazy {
         symbol("Add", "M440-440H200v-80h240v-240h80v240h240v80H520v240h-80v-240Z")
     }
+    val ErrorOutline: ImageVector by lazy {
+        symbol(
+            "ErrorOutline",
+            "M480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm-40-200h80v-240h-80v240Zm40 120q17 0 28.5-11.5T520-280q0-17-11.5-28.5T480-320q-17 0-28.5 11.5T440-280q0 17 11.5 28.5T480-240Zm0-240Z",
+        )
+    }
     val Settings: ImageVector by lazy {
         symbol(
             "Settings",

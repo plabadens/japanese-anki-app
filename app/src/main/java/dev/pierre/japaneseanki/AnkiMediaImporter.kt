@@ -13,6 +13,8 @@ internal object AnkiMediaImporter {
     fun importedFilename(uriString: String): String? {
         val uri = runCatching { URI(uriString) }.getOrNull() ?: return null
         if (!uri.scheme.equals("file", ignoreCase = true)) return null
+        // Imported media must be a local file URI, not a remote file authority or a decorated URI.
+        if (uri.rawAuthority != null || uri.rawQuery != null || uri.rawFragment != null) return null
         val path = uri.path?.takeIf(String::isNotEmpty) ?: return null
         if (path.split('/').any { it == "." || it == ".." }) return null
         val filename = path.substringAfterLast('/', "")

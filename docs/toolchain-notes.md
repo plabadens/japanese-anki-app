@@ -45,16 +45,33 @@ features, or when AGP 9.x is the current stable that the pinned nixpkgs provides
 nothing except the message, so it is only worth adding if the warning becomes
 noise in CI. AndroidX itself uses this pattern.
 
-## Release-APK lint artifacts missing from the Gradle lock
+## Gradle dependency cache coverage
 
-**Status:** open. `nix build .#apk` (unsigned release) fails at
-`:app:lintVitalAnalyzeRelease` because `com.android.tools.lint:lint-gradle:31.13.2`
-is not present in `nix/gradle/deps.json`; the update script only recorded what its
-own Gradle invocation requested. Options: refresh the lock with a run that
-includes the release tasks, or skip `lintVital` for the Nix release build
-(the release derivation already runs `testDebugUnitTest` as its check). This is
-the last known blocker before the two-clean-build reproducibility comparison in
-`SPEC.md` §12.3.
+**Status:** open. Direct Gradle release builds work with dependencies already
+present in the local Gradle cache, but that does not establish a sandboxed Nix
+build. The current Nix debug build stops before compilation because the locked
+Gradle cache lacks the declared ML Kit artifacts
+`com.google.mlkit:text-recognition-japanese:16.0.1` and
+`com.google.mlkit:translate:17.0.3`. The release task may also need
+`com.android.tools.lint:lint-gradle:31.13.2`, which is not in
+`nix/gradle/deps.json`. Refresh and validate the lock using
+`scripts/update-gradle-deps.sh` in an environment where the configured Maven
+repositories are reachable, with both `testDebugUnitTest assembleDebug` and
+`assembleRelease` represented in the captured configurations. Do not treat a
+successful build from a warm Gradle cache as proof of the Nix dependency lock
+or offline reproducibility. The sandbox used for this verification blocks
+outbound Maven access, so lock regeneration could not be verified here.
+
+## Nix Android AAPT2 selection
+
+The APK derivation explicitly sets
+`-Pandroid.aapt2FromMavenOverride=$ANDROID_HOME/build-tools/36.0.0/aapt2`.
+The same SDK-provided binary succeeded in a sandboxed direct Gradle debug build
+and release build, including resource processing; there is no evidence that an
+AGP/AAPT2 compatibility change is needed. Keep this override rather than
+letting AGP resolve its Maven-hosted AAPT2 binary, which is incompatible with
+the NixOS sandbox. This does not address the separate Gradle dependency-cache
+coverage above.
 
 ## Emulator as the default test target
 

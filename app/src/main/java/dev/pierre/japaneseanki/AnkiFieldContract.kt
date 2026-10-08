@@ -2,6 +2,12 @@ package dev.pierre.japaneseanki
 
 /** Required names are mapped by name; model order and extra fields are user-owned. */
 object AnkiFieldContract {
+    /** Preserve provider field positions, including empty trailing names, when validating its schema. */
+    fun parseModelFieldNames(raw: String?): List<String> =
+        raw?.takeIf(String::isNotEmpty)
+            ?.split('\u001f', ignoreCase = false, limit = Int.MAX_VALUE)
+            .orEmpty()
+
     fun parseTags(raw: String): Set<String> =
         raw.trim().split(Regex("\\s+")).filter(String::isNotBlank).toSet()
 

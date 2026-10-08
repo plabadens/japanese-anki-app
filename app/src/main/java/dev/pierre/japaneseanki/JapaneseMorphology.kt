@@ -17,8 +17,10 @@ internal fun sentenceFuriganaSpans(
     target: TargetSpan?,
 ): List<FuriganaSpan> = tokens.mapNotNull { token ->
         if (!containsKanji(token.surface) || token.span.textIn(sentence) != token.surface ||
-            target?.let { token.span.start < it.end && token.span.end > it.start } == true
-        ) return@mapNotNull null
+            token.surfaceReading.isBlank()
+        ) {
+            return@mapNotNull null
+        }
         FuriganaSpan(token.span, token.surface, token.surfaceReading)
     }
 
@@ -27,11 +29,8 @@ internal fun resolveSurfaceReading(
     tokens: List<JapaneseToken>,
     target: TargetSpan,
 ): String? {
-    val selected = tokens.filter { it.span.start >= target.start && it.span.end <= target.end }
-    if (selected.isEmpty() || selected.first().span.start != target.start ||
-        selected.last().span.end != target.end ||
-        selected.sumOf { it.span.end - it.span.start } != target.end - target.start ||
-        selected.joinToString("") { it.surface } != target.textIn(sentence) ||
+    val selected = tokensCoveringTarget(tokens, target) ?: return null
+    if (target.textIn(sentence) != selected.joinToString("") { it.surface } ||
         selected.any { it.partOfSpeech.startsWith("補助記号") }
     ) return null
     val readings = selected.map(JapaneseToken::surfaceReading)
@@ -42,10 +41,7 @@ internal fun resolveSurfaceReading(
 }
 
 internal fun resolveAnalyzedLemma(tokens: List<JapaneseToken>, target: TargetSpan): AnalyzedLemma? {
-    val selected = tokens.filter { it.span.start >= target.start && it.span.end <= target.end }
-    if (selected.isEmpty() || selected.first().span.start != target.start ||
-        selected.last().span.end != target.end || selected.joinToString("") { it.surface }.length != target.end - target.start
-    ) return null
+    val selected = tokensCoveringTarget(tokens, target) ?: return null
     if (selected.size == 1) {
         val token = selected.single()
         return AnalyzedLemma(token.lemma, token.lemmaReading)
@@ -73,6 +69,22 @@ internal fun resolveAnalyzedLemma(tokens: List<JapaneseToken>, target: TargetSpa
         return AnalyzedLemma(noun.lemma + "する", noun.lemmaReading + "する")
     }
     return AnalyzedLemma(head.lemma, head.lemmaReading)
+}
+
+private fun tokensCoveringTarget(tokens: List<JapaneseToken>, target: TargetSpan): List<JapaneseToken>? {
+    if (target.start < 0 || target.end <= target.start) return null
+    val selected = tokens.filter { it.span.start >= target.start && it.span.end <= target.end }
+    if (selected.isEmpty() || selected.first().span.start != target.start ||
+        selected.last().span.end != target.end
+    ) return null
+    var boundary = target.start
+    for (token in selected) {
+        if (token.span.start != boundary || token.span.end <= token.span.start ||
+            token.surface.length != token.span.end - token.span.start
+        ) return null
+        boundary = token.span.end
+    }
+    return selected.takeIf { boundary == target.end }
 }
 
 internal fun katakanaToHiragana(reading: String): String = buildString(reading.length) {

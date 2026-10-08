@@ -31,7 +31,7 @@ data class AudioSynthesisRequest(
     init { require(text.isNotBlank() && revision >= 0) }
 }
 
-/** Implementations must write a complete WAV file and keep text and credentials out of diagnostics. */
+/** Implementations write complete WAV or Ogg audio and keep text and credentials out of diagnostics. */
 fun interface AudioProvider {
     fun synthesize(request: AudioSynthesisRequest, output: File): File
 }
@@ -91,6 +91,50 @@ object AudioFileValidator {
         }
         return file
     }
+
+    /** Check Ogg page structure, including segment bounds, before caching or exporting recordings. */
+    @Throws(IOException::class)
+    fun requireSupported(file: File): File = when (file.extension.lowercase()) {
+        "wav" -> requireWav(file)
+        "ogg" -> requireOgg(file)
+        "" -> {
+            val isWave = file.isFile && file.length() >= 12 && java.io.RandomAccessFile(file, "r").use { input ->
+                ByteArray(4).also(input::readFully).toString(Charsets.US_ASCII) == "RIFF" &&
+                    (input.seek(8).let { ByteArray(4).also(input::readFully).toString(Charsets.US_ASCII) } == "WAVE")
+            }
+            if (isWave) requireWav(file) else throw IOException("Audio provider returned an unsupported audio format")
+        }
+        else -> throw IOException("Audio provider returned an unsupported audio format")
+    }
+
+    private fun requireOgg(file: File): File {
+        if (!file.isFile || file.length() < 28) throw IOException("Audio provider returned no usable Ogg file")
+        try {
+            java.io.RandomAccessFile(file, "r").use { input ->
+                var pages = 0
+                while (input.filePointer < file.length()) {
+                    if (file.length() - input.filePointer < 27) throw IOException("Audio provider returned invalid Ogg data")
+                    if (ByteArray(4).also(input::readFully).toString(Charsets.US_ASCII) != "OggS" || input.readUnsignedByte() != 0) {
+                        throw IOException("Audio provider returned invalid Ogg data")
+                    }
+                    input.skipBytes(1 + 8 + 4 + 4 + 4)
+                    val segments = input.readUnsignedByte()
+                    if (file.length() - input.filePointer < segments) throw IOException("Audio provider returned invalid Ogg data")
+                    var payload = 0L
+                    repeat(segments) { payload += input.readUnsignedByte() }
+                    if (file.length() - input.filePointer < payload) throw IOException("Audio provider returned invalid Ogg data")
+                    input.seek(input.filePointer + payload)
+                    pages++
+                }
+                if (pages == 0 || input.filePointer != file.length()) throw IOException("Audio provider returned invalid Ogg data")
+            }
+        } catch (error: IOException) {
+            throw error
+        } catch (_: Exception) {
+            throw IOException("Audio provider returned invalid Ogg data")
+        }
+        return file
+    }
 }
 
 /** Pure backend source-priority seam for recorded, Azure, and on-device audio. */
@@ -118,8 +162,8 @@ class AudioSourceChain(
                 entryIdentity = if (request.item == AudioItem.VOCABULARY) request.entryIdentity.orEmpty() else "",
             )
             reusableCache?.get(key)?.let { cached ->
-                if (runCatching { AudioFileValidator.requireWav(cached) }.isSuccess) {
-                    val copy = File(outputDirectory, "${request.item.name.lowercase()}-${request.revision}.wav")
+                if (runCatching { AudioFileValidator.requireSupported(cached) }.isSuccess) {
+                    val copy = File(outputDirectory, "${request.item.name.lowercase()}-${request.revision}.${cached.extension.lowercase()}")
                     try {
                         cached.copyTo(copy, overwrite = true)
                         return AudioChainResult.Ready(request, identity.source, copy)
@@ -127,10 +171,10 @@ class AudioSourceChain(
                 }
             }
             if (!runCatching(binding.available).getOrDefault(false)) continue
-            val output = File(outputDirectory, "${request.item.name.lowercase()}-${request.revision}-${identity.source.name.lowercase()}.wav")
+            val extension = if (identity.source == AudioSource.RECORDED_PRONUNCIATION) "ogg" else "wav"
+            val output = File(outputDirectory, "${request.item.name.lowercase()}-${request.revision}-${identity.source.name.lowercase()}.$extension")
             try {
-                val produced = AudioFileValidator.requireWav(binding.provider.synthesize(request, output))
-                if (!produced.extension.equals("wav", ignoreCase = true)) throw IOException("Audio filename does not match WAV content")
+                val produced = AudioFileValidator.requireSupported(binding.provider.synthesize(request, output))
                 reusableCache?.put(key, produced)
                 return AudioChainResult.Ready(request, identity.source, produced)
             } catch (_: Exception) {

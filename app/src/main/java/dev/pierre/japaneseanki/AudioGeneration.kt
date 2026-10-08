@@ -38,8 +38,7 @@ class ReusableAudioCache(
 
     @Synchronized
     fun get(key: AudioCacheKey): File? {
-        val cached = cacheFile(key)
-        if (!cached.isFile) return null
+        val cached = listOf(cacheFile(key, "wav"), cacheFile(key, "ogg")).firstOrNull(File::isFile) ?: return null
         cached.setLastModified(System.currentTimeMillis())
         return cached
     }
@@ -49,11 +48,12 @@ class ReusableAudioCache(
     @Throws(IOException::class)
     fun put(key: AudioCacheKey, completedFile: File): File? {
         require(completedFile.isFile)
-        AudioFileValidator.requireWav(completedFile)
+        AudioFileValidator.requireSupported(completedFile)
         val length = completedFile.length()
         if (length > maxBytes) return null
         if (!directory.exists() && !directory.mkdirs()) throw IOException("Could not create audio cache")
-        val destination = cacheFile(key)
+        val extension = AudioFileValidator.requireSupported(completedFile).extension.lowercase().ifBlank { "wav" }
+        val destination = cacheFile(key, extension)
         removeTemporaryFiles()
         evictForIncoming(length, destination)
         val temporary = File(directory, ".${key.filename()}.${System.nanoTime()}.tmp")
@@ -84,13 +84,16 @@ class ReusableAudioCache(
         require(name.matches(Regex("[A-Za-z0-9._-]+")))
         require(!isInsideCache(draftDirectory)) { "Active-draft media must be outside the reusable cache" }
         val source = get(key) ?: throw IOException("Audio is not cached")
-        AudioFileValidator.requireWav(source)
+        AudioFileValidator.requireSupported(source)
+        require(name.substringAfterLast('.', "").equals(source.extension, ignoreCase = true)) {
+            "Draft audio filename extension must match its content"
+        }
         if (!draftDirectory.exists() && !draftDirectory.mkdirs()) throw IOException("Could not create draft media directory")
         val destination = File(draftDirectory, name)
-        val temporary = File(draftDirectory, ".$name.${System.nanoTime()}.tmp")
+        val temporary = File(draftDirectory, ".$name.${System.nanoTime()}.tmp.${source.extension.lowercase()}")
         try {
             source.inputStream().use { input -> temporary.outputStream().use(input::copyTo) }
-            AudioFileValidator.requireWav(temporary)
+            AudioFileValidator.requireSupported(temporary)
             if (!temporary.renameTo(destination)) throw IOException("Could not commit draft audio")
         } finally {
             temporary.delete()
@@ -110,7 +113,7 @@ class ReusableAudioCache(
         directory.listFiles()?.filter { it.isFile && it.name.endsWith(".tmp") }?.forEach(File::delete)
     }
 
-    private fun cacheFile(key: AudioCacheKey) = File(directory, "${key.filename()}.wav")
+    private fun cacheFile(key: AudioCacheKey, extension: String) = File(directory, "${key.filename()}.$extension")
 
     private fun isInsideCache(target: File): Boolean {
         val root = directory.canonicalFile.toPath()
@@ -220,7 +223,7 @@ class RevisionedAudioResult {
 
     fun complete(request: AudioRequestIdentity, file: File): Boolean = synchronized(transitionLock) {
         if ((state as? AudioGenerationState.Generating)?.request != request) return false
-        if (runCatching { AudioFileValidator.requireWav(file) }.isFailure) {
+        if (runCatching { AudioFileValidator.requireSupported(file) }.isFailure) {
             state = AudioGenerationState.Failed(request, retryable = true)
             return false
         }

@@ -7,6 +7,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AnkiFieldContractTest {
+    @Test fun providerFieldNamesPreserveEmptyPositionsAndTrailingFields() {
+        assertEquals(listOf("Extra", "SentKanji", "", "VocabKanji", ""),
+            AnkiFieldContract.parseModelFieldNames("Extra\u001fSentKanji\u001f\u001fVocabKanji\u001f"))
+        assertEquals(emptyList<String>(), AnkiFieldContract.parseModelFieldNames(null))
+        assertEquals(emptyList<String>(), AnkiFieldContract.parseModelFieldNames(""))
+    }
+
     @Test fun parsesTagsWithoutBreakingHierarchy() {
         assertEquals(setOf("JLPT::N4", "japanese::mining"), AnkiFieldContract.parseTags("  JLPT::N4   japanese::mining JLPT::N4 "))
     }

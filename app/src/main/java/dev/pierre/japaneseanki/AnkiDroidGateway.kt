@@ -60,7 +60,7 @@ class AnkiDroidGateway(
                         AnkiNoteType(
                             id = cursor.getLong(idColumn),
                             name = cursor.getString(nameColumn).orEmpty(),
-                            fields = rawFields.split(FIELD_SEPARATOR).filter(String::isNotEmpty),
+                            fields = AnkiFieldContract.parseModelFieldNames(rawFields),
                         ),
                     )
                 }

@@ -18,6 +18,9 @@ class AnkiMediaImporterTest {
             AnkiMediaImporter.importedFilename("file:///data/anki/collection.media/actual-name.avif"),
         )
         assertNull(AnkiMediaImporter.importedFilename("content://provider/media/actual-name.avif"))
+        assertNull(AnkiMediaImporter.importedFilename("file://remote-host/data/collection.media/actual-name.avif"))
+        assertNull(AnkiMediaImporter.importedFilename("file:///data/collection.media/actual-name.avif?download=1"))
+        assertNull(AnkiMediaImporter.importedFilename("file:///data/collection.media/actual-name.avif#fragment"))
         assertNull(AnkiMediaImporter.importedFilename("file:///data/anki/collection.media/../secret.avif"))
         assertNull(AnkiMediaImporter.importedFilename("file:///data/anki/collection.media/../../secret.avif"))
         assertNull(AnkiMediaImporter.importedFilename("file:///data/anki/collection.media/audio.mp3"))

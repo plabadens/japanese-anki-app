@@ -18,7 +18,7 @@ class JapaneseMorphologyTest {
         assertEquals(AnalyzedLemma("食べる", "たべる"), resolveAnalyzedLemma(tokens, TargetSpan(0, 3)))
     }
 
-    @Test fun sentenceFuriganaSuggestionsExcludeTargetAndUseAnalyzerReadings() {
+    @Test fun sentenceFuriganaSuggestionsIncludeTargetAndUseAnalyzerReadings() {
         val sentence = "昨日は学校"
         val tokens = listOf(
             token(0, 2, "昨日", "昨日", "名詞-普通名詞", "きのう"),
@@ -26,7 +26,10 @@ class JapaneseMorphologyTest {
             token(3, 5, "学校", "学校", "名詞-普通名詞", "がっこう"),
         )
         assertEquals(
-            listOf(FuriganaSpan(TargetSpan(0, 2), "昨日", "きのう")),
+            listOf(
+                FuriganaSpan(TargetSpan(0, 2), "昨日", "きのう"),
+                FuriganaSpan(TargetSpan(3, 5), "学校", "がっこう"),
+            ),
             sentenceFuriganaSpans(sentence, tokens, TargetSpan(3, 5)),
         )
         assertEquals("きのうは", resolveSurfaceReading(sentence, tokens, TargetSpan(0, 3)))
@@ -40,6 +43,20 @@ class JapaneseMorphologyTest {
         )
         assertEquals("たべた", resolveSurfaceReading("食べた。", tokens, TargetSpan(0, 3)))
         assertNull(resolveSurfaceReading("食べた。", tokens, TargetSpan(0, 4)))
+    }
+
+    @Test fun gapsAndOverlapsInTokenCoverageDoNotResolveTarget() {
+        val gapped = listOf(
+            token(0, 1, "食", "食", "名詞-普通名詞", "しょく"),
+            token(2, 3, "べ", "べ", "助詞-接続助詞", "べ"),
+        )
+        val overlapping = listOf(
+            token(0, 2, "食べ", "食べる", "動詞-一般", "たべ"),
+            token(1, 3, "べた", "べる", "動詞-一般", "べた"),
+        )
+        assertNull(resolveAnalyzedLemma(gapped, TargetSpan(0, 3)))
+        assertNull(resolveSurfaceReading("食べ", gapped, TargetSpan(0, 3)))
+        assertNull(resolveAnalyzedLemma(overlapping, TargetSpan(0, 3)))
     }
 
     @Test fun sahenNounAndSuruResolveAsOneLemma() {

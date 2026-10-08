@@ -23,8 +23,13 @@ fun interface LocalTranslationFallback { fun translate(sentence: String): String
 
 enum class TranslationModelStatus { NOT_DOWNLOADED, DOWNLOADING, READY, ERROR }
 
-/** ML Kit downloads its ja→en model on demand and translates locally once that download completes. */
-class MlKitLocalTranslationFallback(@Suppress("UNUSED_PARAMETER") context: Context) : LocalTranslationFallback {
+internal interface MlKitTranslationClient {
+    fun downloadModel()
+    fun translate(sentence: String): String
+    fun close()
+}
+
+private class GoogleMlKitTranslationClient(context: Context) : MlKitTranslationClient {
     private val translator: Translator = Translation.getClient(
         TranslatorOptions.Builder()
             .setSourceLanguage(TranslateLanguage.JAPANESE)
@@ -32,26 +37,45 @@ class MlKitLocalTranslationFallback(@Suppress("UNUSED_PARAMETER") context: Conte
             .build(),
     )
 
+    override fun downloadModel() {
+        Tasks.await(translator.downloadModelIfNeeded(DownloadConditions.Builder().build()))
+    }
+
+    override fun translate(sentence: String): String = Tasks.await(translator.translate(sentence))
+    override fun close() = translator.close()
+}
+
+/** ML Kit downloads its ja→en model on demand and translates locally once that download completes. */
+class MlKitLocalTranslationFallback private constructor(
+    private val client: MlKitTranslationClient,
+    @Suppress("UNUSED_PARAMETER") marker: Unit,
+) : LocalTranslationFallback {
+    constructor(context: Context) : this(GoogleMlKitTranslationClient(context), Unit)
+
+    internal constructor(client: MlKitTranslationClient) : this(client, Unit)
+
     @Volatile var modelStatus: TranslationModelStatus = TranslationModelStatus.NOT_DOWNLOADED
         private set
 
     override fun translate(sentence: String): String? = synchronized(lock) {
-        modelStatus = TranslationModelStatus.DOWNLOADING
+        if (!ensureModelDownloaded()) return@synchronized null
         try {
-            Tasks.await(translator.downloadModelIfNeeded(DownloadConditions.Builder().build()))
-            modelStatus = TranslationModelStatus.READY
-            Tasks.await(translator.translate(sentence))
+            client.translate(sentence)
         } catch (_: Exception) {
-            modelStatus = TranslationModelStatus.ERROR
             null
         }
     }
 
     /** Retry the initial model download; subsequent calls translate offline from the downloaded model. */
-    fun retryModelDownload(): Boolean = synchronized(lock) {
+    fun retryModelDownload(): Boolean = synchronized(lock) { ensureModelDownloaded() }
+
+    fun close() = client.close()
+
+    private fun ensureModelDownloaded(): Boolean {
+        if (modelStatus == TranslationModelStatus.READY) return true
         modelStatus = TranslationModelStatus.DOWNLOADING
-        try {
-            Tasks.await(translator.downloadModelIfNeeded(DownloadConditions.Builder().build()))
+        return try {
+            client.downloadModel()
             modelStatus = TranslationModelStatus.READY
             true
         } catch (_: Exception) {
@@ -59,8 +83,6 @@ class MlKitLocalTranslationFallback(@Suppress("UNUSED_PARAMETER") context: Conte
             false
         }
     }
-
-    fun close() = translator.close()
 
     private companion object { val lock = Any() }
 }

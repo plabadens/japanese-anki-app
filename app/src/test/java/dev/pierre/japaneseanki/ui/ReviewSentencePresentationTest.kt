@@ -24,6 +24,12 @@ class ReviewSentencePresentationTest {
         assertTrue(parts.single { it.highlighted }.text == "猫")
     }
 
+    @Test fun invalidTargetThatSplitsSupplementaryCharacterLeavesSentenceIntact() {
+        val sentence = "A😀B"
+        val parts = reviewSentenceParts(sentence, TargetSpan(1, 2), "", emptyList())
+        assertEquals(listOf(ReviewSentencePart(sentence)), parts)
+    }
+
     @Test fun leavesUnresolvedKanjiMarkedAndShowsKnownReadingInline() {
         val parts = reviewSentenceParts(
             "東京へ行く",
