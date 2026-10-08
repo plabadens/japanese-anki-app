@@ -41,6 +41,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.horizontalScroll
@@ -82,6 +83,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -2250,8 +2252,15 @@ class MainActivity : ComponentActivity() {
                         if (visibleRoute == AppRoute.Capture && captureMode == "Photo") {
                             if (cameraPermissionGranted) {
                                 cameraError?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
-                                dev.pierre.japaneseanki.ui.CameraCaptureScreen(
-                                    modifier = Modifier.fillMaxWidth().height(420.dp),
+                                val cameraController = dev.pierre.japaneseanki.ui.rememberCameraController()
+                                val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+                                val viewfinderHeight = screenWidth * (4f / 3f)
+                                dev.pierre.japaneseanki.ui.CameraViewfinder(
+                                    controller = cameraController,
+                                    modifier = Modifier.requiredWidth(screenWidth).height(viewfinderHeight),
+                                )
+                                dev.pierre.japaneseanki.ui.CameraShutterRow(
+                                    controller = cameraController,
                                     enabled = !submissionLocked,
                                     outputDirectory = File(filesDir, "draft").apply { mkdirs() },
                                     onCaptured = { file -> cameraError = null; requestPhoto(file) },
@@ -2503,17 +2512,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         }
-                        if (visibleRoute != AppRoute.Review && !canSend) {
-                            val setupMessage = when {
-                                !ankiDroidInstalled -> "AnkiDroid not detected. Install it before setting up export."
-                                !apiPermissionGranted -> "Grant AnkiDroid access in Settings before sending."
-                                selectedModel == null -> "Choose a note type in Settings before sending."
-                                selectedDeck == null -> "Choose a destination deck in Settings before sending."
-                                else -> null
-                            }
-                            setupMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
-                        }
-                        if (visibleRoute != AppRoute.Review || reviewTarget == null) {
+                        if (visibleRoute == AppRoute.Review && reviewTarget == null) {
                             submitMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                             recoveryMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                             sendRecoveryContent()
@@ -2789,7 +2788,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
-                        if (visibleRoute != AppRoute.Review || reviewTarget == null) Button(
+                        if (visibleRoute == AppRoute.Review && reviewTarget == null) Button(
                             enabled = completedSubmission == null && !duplicateBlocked &&
                                 submitMessage?.startsWith("Blocked:") != true && canSend,
                             onClick = { submitAction() },
@@ -2945,6 +2944,7 @@ class MainActivity : ComponentActivity() {
 
 internal fun initialDraftTags(draftTags: String?, lastNoteTags: String?, defaultTags: String?): String =
     draftTags ?: lastNoteTags ?: defaultTags.orEmpty()
+
 
 private fun clearPersistedDraft(preferences: SharedPreferences, draftDirectory: File? = null) {
     val ownedDirectory = draftDirectory?.canonicalFile

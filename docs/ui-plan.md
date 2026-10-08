@@ -56,30 +56,37 @@ radii 16/18/26 px and pill controls; 48 px icon targets; 14–22 px spacing; a m
 eyebrow style for small uppercase labels. The mockup screen inventory runs
 01–32 (setup, share intake, capture, target, sheets, review states, settings).
 
-## Current gaps (as of `main` @ d398b0a, verified on the Nix API 35 x86_64 emulator)
+## Current gaps (as of `main` @ (uncommitted), verified on the Nix API 35 x86_64 emulator)
 
 - **Done this pass**: note type/deck/AnkiDroid-permission setup moved into the
-  Settings `AlertDialog` (§4.9, A54); the capture/target screen now shows at
-  most one short status line when `!canSend`. The "Japanese Anki" headline was
-  removed from every screen. Photo mode now shows a live CameraX viewfinder
-  (4:3 letterboxed, corner-bracketed frame per mockup 06) instead of launching
-  the system photo picker, auto-requesting camera permission on entry; the
-  shutter button feeds the existing `requestPhoto`/OCR pipeline unchanged —
-  verified end-to-end on-device (capture → JPEG written → MLKit OCR runs →
-  AVIF conversion kicks in), no crashes, dark/light both render cleanly.
+  Settings `AlertDialog` (§4.9, A54). The "Japanese Anki" headline was removed
+  from every screen. Photo mode shows a live CameraX viewfinder instead of
+  launching the system photo picker, auto-requesting camera permission on
+  entry; the shutter button feeds the existing `requestPhoto`/OCR pipeline
+  unchanged — verified end-to-end on-device (capture → JPEG written → MLKit
+  OCR runs → AVIF conversion kicks in), no crashes, dark/light both render
+  cleanly. The viewfinder is now a true edge-to-edge, tight 3:4-portrait box
+  (`CameraViewfinder`/`CameraShutterRow` split in `ui/CameraCapture.kt`,
+  sized via `requiredWidth`+exact-aspect `height` in `MainActivity.kt`) with
+  no letterbox waste and no side margin, matching SPEC.md §4.2's "edge-to-edge
+  horizontally... no side margin or corner rounding" and the user's explicit
+  "4:3 sensor shown upright is 3:4" correction — pixel-verified with the new
+  `scripts/pixel.py` tool (box spans x=1..1079 of 1080px, height≈width×4/3).
+  The capture/target screens no longer show the AnkiDroid-setup status line
+  or a Send button at all — per SPEC.md §4.5/§9.2, Send is exclusively "an
+  action from the review card"; the fallback `Button`/status block in
+  `MainActivity.kt` is now gated to `visibleRoute == Review && reviewTarget
+  == null` instead of firing on every non-Review route.
   Fixing this also surfaced and fixed a real bug: the root layout had **no**
   window-inset handling anywhere (no `statusBarsPadding`/`navigationBarsPadding`/
   `imePadding`), so content could draw under the status bar on edge-to-edge
   API 35 (§4.1, A37) — latent on every screen, not just Settings.
-- **Known gaps left by this pass**: the viewfinder sits inside the existing
-  20dp-padded scrolling column at a fixed 420dp height rather than filling
-  available space edge-to-edge (A62); Photo mode's screen-lock/counter-rotation
+- **Known gaps left by this pass**: Photo mode's screen-lock/counter-rotation
   behavior for landscape (§4.2, A60) is not implemented; no thumbnail chip next
-  to the shutter button (mockup 06); the setup status line and disabled Send
-  button still render below the viewfinder on the Photo screen, unlike the
-  mockup. The emulator's camera is synthetic/headless, so OCR-against-real-text
-  has not been exercised — only the physical phone can verify that per the
-  project's established split of testing responsibilities.
+  to the shutter button (mockup 06). The emulator's camera is synthetic/
+  headless, so OCR-against-real-text has not been exercised — only the
+  physical phone can verify that per the project's established split of
+  testing responsibilities.
 
 - **Verified on-device this pass**: capture screen (segmented Photo/Type pill,
   inlined-vector gear icon), target screen (token chips, trimmed instructional
