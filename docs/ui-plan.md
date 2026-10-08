@@ -56,7 +56,30 @@ radii 16/18/26 px and pill controls; 48 px icon targets; 14–22 px spacing; a m
 eyebrow style for small uppercase labels. The mockup screen inventory runs
 01–32 (setup, share intake, capture, target, sheets, review states, settings).
 
-## Current gaps (as of `main` @ b42abb6, verified on the Nix API 35 x86_64 emulator)
+## Current gaps (as of `main` @ d398b0a, verified on the Nix API 35 x86_64 emulator)
+
+- **Done this pass**: note type/deck/AnkiDroid-permission setup moved into the
+  Settings `AlertDialog` (§4.9, A54); the capture/target screen now shows at
+  most one short status line when `!canSend`. The "Japanese Anki" headline was
+  removed from every screen. Photo mode now shows a live CameraX viewfinder
+  (4:3 letterboxed, corner-bracketed frame per mockup 06) instead of launching
+  the system photo picker, auto-requesting camera permission on entry; the
+  shutter button feeds the existing `requestPhoto`/OCR pipeline unchanged —
+  verified end-to-end on-device (capture → JPEG written → MLKit OCR runs →
+  AVIF conversion kicks in), no crashes, dark/light both render cleanly.
+  Fixing this also surfaced and fixed a real bug: the root layout had **no**
+  window-inset handling anywhere (no `statusBarsPadding`/`navigationBarsPadding`/
+  `imePadding`), so content could draw under the status bar on edge-to-edge
+  API 35 (§4.1, A37) — latent on every screen, not just Settings.
+- **Known gaps left by this pass**: the viewfinder sits inside the existing
+  20dp-padded scrolling column at a fixed 420dp height rather than filling
+  available space edge-to-edge (A62); Photo mode's screen-lock/counter-rotation
+  behavior for landscape (§4.2, A60) is not implemented; no thumbnail chip next
+  to the shutter button (mockup 06); the setup status line and disabled Send
+  button still render below the viewfinder on the Photo screen, unlike the
+  mockup. The emulator's camera is synthetic/headless, so OCR-against-real-text
+  has not been exercised — only the physical phone can verify that per the
+  project's established split of testing responsibilities.
 
 - **Verified on-device this pass**: capture screen (segmented Photo/Type pill,
   inlined-vector gear icon), target screen (token chips, trimmed instructional
@@ -72,16 +95,10 @@ eyebrow style for small uppercase labels. The mockup screen inventory runs
   instead of a shared sheet — **sheet behavior not yet re-verified on-device
   after this round's route fixes**; the Edit word sheet's empty-token-list path
   (a draft restored without re-tokenizing) is also unverified.
-- The largest remaining "looks like a form" offender: note type, deck, and
-  AnkiDroid permission setup still render **inline on the capture/target screen**
-  rather than in Settings (§4.9, A54). The Settings `AlertDialog` has no note-type
-  or deck picker at all today — relocating is mechanically a block move (all
-  state already lives in the same composable scope) but was judged too risky to
-  land and re-verify in this pass.
-- Photo mode still opens the system picker, not a CameraX viewfinder; Settings is
-  an `AlertDialog`, not its own screen; tags come from a text field, not
-  AnkiDroid's tag list; play icons are wired to `onClick = {}` — audio generation
-  exists but is not connected to the card.
+- Settings is still an `AlertDialog`, not its own screen (§4.9 calls for
+  "Settings is its own screen"); tags come from a text field, not AnkiDroid's
+  tag list; play icons are wired to `onClick = {}` — audio generation exists
+  but is not connected to the card.
 - Audio and translation seams are implemented and reviewed but mostly **not
   wired** into the card; translation now visibly surfaces its own
   interrupted/retry state on-device, but no local-fallback flag path was
