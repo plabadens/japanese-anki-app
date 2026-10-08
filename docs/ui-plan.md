@@ -56,23 +56,43 @@ radii 16/18/26 px and pill controls; 48 px icon targets; 14–22 px spacing; a m
 eyebrow style for small uppercase labels. The mockup screen inventory runs
 01–32 (setup, share intake, capture, target, sheets, review states, settings).
 
-## Current gaps (as of `main` @ 6233f56, phone build installed)
+## Current gaps (as of `main` @ b42abb6, verified on the Nix API 35 x86_64 emulator)
 
-- Capture screen exists but is Material-styled; Photo mode still opens the system
-  picker, not a CameraX viewfinder; Settings is an `AlertDialog`, not a screen.
-- Review card exists (rows, ruby, target highlight, compact pitch, Notes, tags)
-  but **has never been seen on a device**; row edit affordances all route back to
-  the target screen instead of dedicated sheets; tags come from a text field, not
-  AnkiDroid's tag list; play icons are placeholders (`"not available yet"`).
-- Audio and translation seams are implemented and reviewed but **not wired** into
-  the card; no local-fallback translation flag yet; A57 Speech-vs-Translator check
-  not called from Settings.
+- **Verified on-device this pass**: capture screen (segmented Photo/Type pill,
+  inlined-vector gear icon), target screen (token chips, trimmed instructional
+  text), and the review card (no visible row labels, inlined vector edit/play
+  icons, correct per-theme pitch hues) all render and screenshot cleanly in both
+  light and dark. Two real bugs were found and fixed by this testing: shared text
+  and typed text both left `route` stuck at `Capture`, so the auto-advance-to-
+  review effect (gated on `route == Target`) never fired and the review card was
+  unreachable from either entry point — see commits `edc7658`/`b42abb6`.
+- Edit word now shows the sentence's tokens in its own sheet (A42) instead of
+  redirecting to the target screen; Definition lists resolved senses as
+  checkboxes plus editable text (§5.3); Notes expands inline on its own row
+  instead of a shared sheet — **sheet behavior not yet re-verified on-device
+  after this round's route fixes**; the Edit word sheet's empty-token-list path
+  (a draft restored without re-tokenizing) is also unverified.
+- The largest remaining "looks like a form" offender: note type, deck, and
+  AnkiDroid permission setup still render **inline on the capture/target screen**
+  rather than in Settings (§4.9, A54). The Settings `AlertDialog` has no note-type
+  or deck picker at all today — relocating is mechanically a block move (all
+  state already lives in the same composable scope) but was judged too risky to
+  land and re-verify in this pass.
+- Photo mode still opens the system picker, not a CameraX viewfinder; Settings is
+  an `AlertDialog`, not its own screen; tags come from a text field, not
+  AnkiDroid's tag list; play icons are wired to `onClick = {}` — audio generation
+  exists but is not connected to the card.
+- Audio and translation seams are implemented and reviewed but mostly **not
+  wired** into the card; translation now visibly surfaces its own
+  interrupted/retry state on-device, but no local-fallback flag path was
+  exercised; A57 Speech-vs-Translator check not called from Settings.
 - Submission states live in the form around the card rather than in the card's own
   bottom action area.
 - No accessibility/responsive pass yet (48 dp audit, TalkBack, 200% font,
-  landscape, insets).
-- Mockup screens 08, 11, 12, 16, 21–26 (sheets and error states) are not built;
-  27–32 (settings) are not built.
+  landscape, insets). The new `semantics(mergeDescendants = false)` row labels in
+  the review card are unverified under TalkBack.
+- Mockup screens 01–06, 08, 10–12, 16, 19–26 (sheets and most error/setup states)
+  are not built; 27–32 (settings) are not built.
 
 ## Plan for the next UI wave
 
