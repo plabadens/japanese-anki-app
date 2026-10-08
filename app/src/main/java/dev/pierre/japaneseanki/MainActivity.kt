@@ -1945,29 +1945,29 @@ class MainActivity : ComponentActivity() {
             MaterialTheme(
                 colorScheme = if (isSystemInDarkTheme()) {
                     darkColorScheme(
-                        primary = Color(0xFFD0C9B8), onPrimary = Color(0xFF25231F),
-                        secondary = Color(0xFFB8B1A3), onSecondary = Color(0xFF25231F),
-                        tertiary = Color(0xFFB8B1A3), onTertiary = Color(0xFF25231F),
-                        primaryContainer = Color(0xFF49463F), onPrimaryContainer = Color(0xFFF4F1E8),
-                        secondaryContainer = Color(0xFF393731), onSecondaryContainer = Color(0xFFE9E5DC),
-                        tertiaryContainer = Color(0xFF393731), onTertiaryContainer = Color(0xFFE9E5DC),
-                        background = Color(0xFF1D1C19), onBackground = Color(0xFFE9E5DC),
-                        surface = Color(0xFF25231F), onSurface = Color(0xFFE9E5DC),
-                        surfaceVariant = Color(0xFF393731), onSurfaceVariant = Color(0xFFD0CABE),
-                        outline = Color(0xFF888276),
+                        primary = Color(0xFFE4DAC5), onPrimary = Color(0xFF16181B),
+                        secondary = Color(0xFFE4DAC5), onSecondary = Color(0xFF16181B),
+                        tertiary = Color(0xFFE4DAC5), onTertiary = Color(0xFF16181B),
+                        primaryContainer = Color(0xFF35383C), onPrimaryContainer = Color(0xFFECE8DF),
+                        secondaryContainer = Color(0xFF35383C), onSecondaryContainer = Color(0xFFECE8DF),
+                        tertiaryContainer = Color(0xFF35383C), onTertiaryContainer = Color(0xFFECE8DF),
+                        background = Color(0xFF16181B), onBackground = Color(0xFFECE8DF),
+                        surface = Color(0xFF1D2024), onSurface = Color(0xFFECE8DF),
+                        surfaceVariant = Color(0xFF22262B), onSurfaceVariant = Color(0xFFB8B2A6),
+                        outline = Color(0xFF6C7176),
                     )
                 } else {
                     lightColorScheme(
-                        primary = Color(0xFF49463F), onPrimary = Color(0xFFFFFFFF),
-                        secondary = Color(0xFF625E55), onSecondary = Color(0xFFFFFFFF),
-                        tertiary = Color(0xFF625E55), onTertiary = Color(0xFFFFFFFF),
-                        primaryContainer = Color(0xFFE1DDD2), onPrimaryContainer = Color(0xFF25231F),
-                        secondaryContainer = Color(0xFFE9E5DC), onSecondaryContainer = Color(0xFF25231F),
-                        tertiaryContainer = Color(0xFFE9E5DC), onTertiaryContainer = Color(0xFF25231F),
-                        background = Color(0xFFF4F1E8), onBackground = Color(0xFF25231F),
-                        surface = Color(0xFFFAF8F2), onSurface = Color(0xFF25231F),
-                        surfaceVariant = Color(0xFFE9E5DC), onSurfaceVariant = Color(0xFF49463F),
-                        outline = Color(0xFF777166),
+                        primary = Color(0xFF201F1D), onPrimary = Color(0xFFF6F3EC),
+                        secondary = Color(0xFF201F1D), onSecondary = Color(0xFFF6F3EC),
+                        tertiary = Color(0xFF201F1D), onTertiary = Color(0xFFF6F3EC),
+                        primaryContainer = Color(0xFFE5E1D8), onPrimaryContainer = Color(0xFF201F1D),
+                        secondaryContainer = Color(0xFFE5E1D8), onSecondaryContainer = Color(0xFF201F1D),
+                        tertiaryContainer = Color(0xFFE5E1D8), onTertiaryContainer = Color(0xFF201F1D),
+                        background = Color(0xFFF6F3EC), onBackground = Color(0xFF201F1D),
+                        surface = Color(0xFFFFFFFF), onSurface = Color(0xFF201F1D),
+                        surfaceVariant = Color(0xFFFBFAF6), onSurfaceVariant = Color(0xFF6B6558),
+                        outline = Color(0xFFDAD4C6),
                     )
                 },
             ) {
@@ -2035,6 +2035,27 @@ class MainActivity : ComponentActivity() {
                                 onTogglePitchInfo = { pitchInfoExpanded = !pitchInfoExpanded },
                                 onEdit = { if (!submissionLocked) { autoOpenReview = false; route = AppRoute.Target } },
                                 onAddTag = { if (!submissionLocked) { autoOpenReview = false; route = AppRoute.Target } },
+                                onChooseImage = { if (!submissionLocked) noteImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                                onRemoveImage = { if (!submissionLocked) removeDraftImage() },
+                                onDefinitionChange = { text -> if (!submissionLocked) { definition = text; definitionManuallyEdited = true; definitionProvenanceKnown = true; selectedSenseIndices = emptySet() } },
+                                onNotesChange = { text -> if (!submissionLocked) notes = text },
+                                tokens = japaneseTokens,
+                                onSelectToken = { span -> if (!submissionLocked) selectTarget(span) },
+                                definitionSenses = selectedDictionaryEntry?.senses ?: emptyList(),
+                                selectedSenseIndices = selectedSenseIndices,
+                                onToggleSense = { index, checked ->
+                                    if (!submissionLocked) {
+                                        val newSelection = if (checked) selectedSenseIndices + index else selectedSenseIndices - index
+                                        selectedSenseIndices = newSelection
+                                        selectedDictionaryEntry?.let { entry ->
+                                            definition = newSelection.sorted().mapNotNull { index2 ->
+                                                entry.senses.getOrNull(index2)?.glosses?.joinToString("; ")
+                                            }.joinToString("\n")
+                                        }
+                                        definitionManuallyEdited = false
+                                        definitionProvenanceKnown = true
+                                    }
+                                },
                                 sendPresentation = when {
                                     isSubmitting -> ReviewSendPresentation.Sending
                                     completedSubmission != null -> ReviewSendPresentation.Status(

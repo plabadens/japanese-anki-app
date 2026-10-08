@@ -3,6 +3,7 @@ package dev.pierre.japaneseanki.ui
 import android.net.Uri
 import android.widget.ImageView
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,13 +23,19 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -48,7 +56,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import dev.pierre.japaneseanki.DictionarySense
 import dev.pierre.japaneseanki.FuriganaSpan
+import dev.pierre.japaneseanki.JapaneseToken
 import dev.pierre.japaneseanki.PitchAccent
 import dev.pierre.japaneseanki.PitchDiagramScale
 import dev.pierre.japaneseanki.PitchPatternDiagram
@@ -61,6 +71,7 @@ internal sealed interface ReviewSendPresentation {
     data class Status(val message: String, val actionLabel: String? = null) : ReviewSendPresentation
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ReviewCard(
     sentence: String,
@@ -81,6 +92,15 @@ internal fun ReviewCard(
     onTogglePitchInfo: () -> Unit,
     onEdit: () -> Unit,
     onAddTag: () -> Unit,
+    onChooseImage: () -> Unit = {},
+    onRemoveImage: () -> Unit = {},
+    onDefinitionChange: (String) -> Unit = {},
+    onNotesChange: (String) -> Unit = {},
+    tokens: List<JapaneseToken> = emptyList(),
+    onSelectToken: (TargetSpan) -> Unit = {},
+    definitionSenses: List<DictionarySense> = emptyList(),
+    selectedSenseIndices: Set<Int> = emptySet(),
+    onToggleSense: (Int, Boolean) -> Unit = { _, _ -> },
     generatingFields: Set<String> = emptySet(),
     translationUsesFallback: Boolean = false,
     translationInfoExpanded: Boolean = false,
@@ -99,13 +119,15 @@ internal fun ReviewCard(
     onSendStatusAction: (() -> Unit)? = null,
     sendStatusContent: @androidx.compose.runtime.Composable () -> Unit = {},
 ) {
+    var editingField by remember { mutableStateOf<String?>(null) }
+    var notesExpanded by remember { mutableStateOf(false) }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            ReviewFieldRow("Image", onEdit = onEdit, editingEnabled = editingEnabled) {
+            ReviewFieldRow("Image", onEdit = { editingField = "Image" }, editingEnabled = editingEnabled) {
                 when {
                     imagePath != null && File(imagePath).isFile -> AndroidView(
                         factory = { context -> ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_CROP } },
@@ -188,7 +210,7 @@ internal fun ReviewCard(
                     },
                 )
             }
-            ReviewFieldRow("Vocabulary", onEdit = onEdit, editingEnabled = editingEnabled, playable = true, generating = "Vocabulary" in generatingFields) {
+            ReviewFieldRow("Vocabulary", onEdit = { editingField = "Word" }, editingEnabled = editingEnabled, playable = true, generating = "Vocabulary" in generatingFields) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     RubyText(vocabulary, vocabularyReading)
                     pitch?.let { PitchPatternDiagram(it, PitchDiagramScale.Compact) }
@@ -208,7 +230,7 @@ internal fun ReviewCard(
                     )
                 }
             }
-            ReviewFieldRow("Definition", onEdit = onEdit, editingEnabled = editingEnabled, generating = "Definition" in generatingFields) { Text(definition.ifBlank { "Add a definition" }, style = MaterialTheme.typography.bodyLarge) }
+            ReviewFieldRow("Definition", onEdit = { editingField = "Definition" }, editingEnabled = editingEnabled, generating = "Definition" in generatingFields) { Text(definition.ifBlank { "Add a definition" }, style = MaterialTheme.typography.bodyLarge) }
             ReviewFieldRow("Translation", onEdit = onEdit, editingEnabled = editingEnabled) {
                 val translationPending = "Translation" in generatingFields
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -267,7 +289,22 @@ internal fun ReviewCard(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            ReviewFieldRow("Notes", onEdit = onEdit, editingEnabled = editingEnabled) { Text(notes.ifBlank { "No notes" }, style = MaterialTheme.typography.bodyLarge) }
+            ReviewFieldRow("Notes", onEdit = { notesExpanded = !notesExpanded }, editingEnabled = editingEnabled) {
+                if (notesExpanded) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = notes,
+                            onValueChange = onNotesChange,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Notes") },
+                            minLines = 3,
+                        )
+                        TextButton(onClick = { notesExpanded = false }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Done") }
+                    }
+                } else {
+                    Text(notes.ifBlank { "No notes" }, style = MaterialTheme.typography.bodyLarge)
+                }
+            }
             ReviewFieldRow("Tags", onEdit = onAddTag, editingEnabled = editingEnabled) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     tags.filter(String::isNotBlank).forEach { tag ->
@@ -297,6 +334,69 @@ internal fun ReviewCard(
                             onClick = { onSendStatusAction?.invoke() }, enabled = onSendStatusAction != null,
                             modifier = Modifier.heightIn(min = 48.dp),
                         ) { Text(presentation.actionLabel) }
+                    }
+                }
+            }
+        }
+    }
+    editingField?.let { field ->
+        ModalBottomSheet(onDismissRequest = { editingField = null }) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                when (field) {
+                    "Image" -> {
+                        Text("Edit image", style = MaterialTheme.typography.titleLarge)
+                        Text("Choose a different image or remove the current one.", style = MaterialTheme.typography.bodyMedium)
+                        TextButton(onClick = { editingField = null; onChooseImage() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Choose image") }
+                        TextButton(onClick = { editingField = null; onRemoveImage() }, enabled = imagePath != null, modifier = Modifier.heightIn(min = 48.dp)) { Text("Remove image") }
+                    }
+                    "Word" -> {
+                        Text("Edit word", style = MaterialTheme.typography.titleLarge)
+                        Text("Tap a token to change the target.", style = MaterialTheme.typography.bodyMedium)
+                        Row(
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            tokens.forEach { token ->
+                                val selected = token.span == target
+                                val onSelect = { onSelectToken(token.span); editingField = null }
+                                if (selected) {
+                                    Button(onClick = onSelect, modifier = Modifier.heightIn(min = 48.dp)) { Text(token.surface) }
+                                } else {
+                                    OutlinedButton(onClick = onSelect, modifier = Modifier.heightIn(min = 48.dp)) { Text(token.surface) }
+                                }
+                            }
+                        }
+                        TextButton(onClick = { editingField = null; onEdit() }, modifier = Modifier.heightIn(min = 48.dp)) {
+                            Text("Select a multi-word phrase instead")
+                        }
+                    }
+                    "Definition" -> {
+                        Text("Edit definition", style = MaterialTheme.typography.titleLarge)
+                        if (definitionSenses.isNotEmpty()) {
+                            Text("Select the applicable senses:", style = MaterialTheme.typography.titleSmall)
+                            definitionSenses.forEachIndexed { index, sense ->
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Checkbox(
+                                        checked = index in selectedSenseIndices,
+                                        onCheckedChange = { checked -> onToggleSense(index, checked) },
+                                    )
+                                    Column {
+                                        Text(sense.glosses.joinToString("; "))
+                                        if (sense.partsOfSpeech.isNotEmpty()) {
+                                            Text(sense.partsOfSpeech.joinToString(", "), style = MaterialTheme.typography.bodySmall)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        OutlinedTextField(
+                            value = definition,
+                            onValueChange = onDefinitionChange,
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 2,
+                            label = { Text("Definition") },
+                        )
+                        Button(onClick = { editingField = null }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Done") }
                     }
                 }
             }
