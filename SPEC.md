@@ -633,7 +633,6 @@ Provide a separate documented local signing/install procedure. Signing material 
 - Review relevant linguistic fixtures when updating data; source ordering and readings may change.
 - Include a persistent About/Sources/Licenses screen and required bundled notices.
 - Satisfy JMdict/EDRDG attribution and update requirements and the selected UniDic/Kanjium conditions.
-- Do not assume an upstream software license automatically covers every incorporated dataset or recording.
 
 ## 13. Performance and resource behavior
 

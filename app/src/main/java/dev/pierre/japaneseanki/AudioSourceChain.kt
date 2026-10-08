@@ -3,11 +3,7 @@ package dev.pierre.japaneseanki
 import java.io.File
 import java.io.IOException
 
-/** Recording access remains disabled until the NHK-2016 rights gate is approved. */
 data class AudioSourceConfiguration(
-    val recordedPronunciationEnabled: Boolean = false,
-    val recordedSourceIdentityVerified: Boolean = false,
-    val recordedRightsVerified: Boolean = false,
     val azureConfigured: Boolean = false,
 )
 
@@ -97,7 +93,7 @@ object AudioFileValidator {
     }
 }
 
-/** Pure backend source-priority seam; recording is opt-in only after the rights gate is approved. */
+/** Pure backend source-priority seam for recorded, Azure, and on-device audio. */
 class AudioSourceChain(
     private val configuration: AudioSourceConfiguration,
     private val recorded: AudioProviderBinding?,
@@ -107,12 +103,7 @@ class AudioSourceChain(
 ) {
     fun generate(request: AudioSynthesisRequest, outputDirectory: File): AudioChainResult {
         val candidates = buildList {
-            if (request.item == AudioItem.VOCABULARY &&
-                request.entryIdentity != null &&
-                configuration.recordedPronunciationEnabled &&
-                configuration.recordedSourceIdentityVerified &&
-                configuration.recordedRightsVerified
-            ) recorded?.let(::add)
+            if (request.item == AudioItem.VOCABULARY && request.entryIdentity != null) recorded?.let(::add)
             if (configuration.azureConfigured) azure?.let(::add)
             androidOffline?.let(::add)
         }

@@ -23,8 +23,10 @@ The card-and-sheets structure, restrained neutral palette, pitch-focused color, 
 | Japanese OCR | [ML Kit’s Android Japanese text recognition docs](https://developers.google.com/ml-kit/vision/text-recognition/v2/android) offer a **bundled** Japanese model in addition to the unbundled Play Services option. This is a candidate, not a chosen dependency. | Verify offline first launch, privacy/data-collection terms against §11, package/API support, actual photo quality, and build reproducibility. Alternative engines may be compared. |
 | Local ja→en translation | [OPUS-MT ja→en](https://huggingface.co/Helsinki-NLP/opus-mt-ja-en) is an Apache-2.0 model-card candidate, **not** an Android runtime or validated translator. | Choose/pin a runtime and tokenizer, licenses for *all* artifacts, both ABI support, memory/latency/APK size, real short mined-sentence quality, fully offline cold start. TTS cannot translate. |
 | AVIF | A supported encoder/backend has not been selected. Android image decoding or an `.avif` sample does not prove encoding support. | Pin encoder, verify both ABIs, metadata stripping, legible small text, and display in installed AnkiDroid. |
-| Audio | Word-recording rights and Android offline file-synthesis support remain open; no source guarantees a matching accent pattern. | Prove recording authorization; audition voice/provider, validate offline engine availability and audio formats, represent unverifiable pitch honestly. |
-| Reproducible build | SDK/API 35–37 and the Nix build are configured; implementation status reports the Gradle artifact lock and independent rebuild check pending. | Run clean locked builds twice and compare unsigned APKs; test target Android versions and both ABIs. |
+| Reproducible build | SDK/API 35–37 and the Nix build are configured; 
+| implementation status reports the Gradle artifact lock and independent 
+| rebuild check pending. | Run clean locked builds twice and compare unsigned 
+| APKs; test target Android versions and both ABIs. |
 
 [Azure Translator authentication](https://learn.microsoft.com/en-us/azure/ai-services/translator/text-translation/reference/authentication) distinguishes regional/global/multi-service resources; its headers and region must be validated separately from Speech. See `SPEC.md` §15 for the authoritative release gates. None of the candidates above is silently approved for shipping.
 

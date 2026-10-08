@@ -101,12 +101,7 @@ class AudioGenerationTest {
                 },
             )
             val chain = AudioSourceChain(
-                AudioSourceConfiguration(
-                    recordedPronunciationEnabled = true,
-                    recordedSourceIdentityVerified = true,
-                    recordedRightsVerified = true,
-                    azureConfigured = true,
-                ),
+                AudioSourceConfiguration(azureConfigured = true),
                 binding(AudioSource.RECORDED_PRONUNCIATION, true),
                 binding(AudioSource.AZURE, false),
                 binding(AudioSource.ANDROID_OFFLINE, false),
@@ -143,36 +138,23 @@ class AudioGenerationTest {
         } finally { root.deleteRecursively() }
     }
 
-    @Test fun recordingsAreDisabledByDefaultAndCacheSeparatesEngine() {
-        assertFalse(AudioSourceConfiguration().recordedPronunciationEnabled)
+    @Test fun cacheSeparatesEngine() {
         val base = AudioCacheKey("provider", "text", "voice", 1f, engine = "engine-one")
         assertNotEquals(base, base.copy(engine = "engine-two"))
     }
 
-    @Test fun recordingIsIneligibleWithoutVerifiedSourceRightsAndResolvedEntry() {
-        val root = Files.createTempDirectory(java.nio.file.Path.of("build"), "audio-recording-gate").toFile()
+    @Test fun recordingRequiresResolvedVocabularyEntry() {
+        val root = Files.createTempDirectory(java.nio.file.Path.of("build"), "audio-recording-entry").toFile()
         try {
             var calls = 0
             val recording = AudioProviderBinding(
                 AudioSourceIdentity(AudioSource.RECORDED_PRONUNCIATION, "NHK-2016", voice = "recording", rate = 1f),
                 AudioProvider { _, output -> calls++; writeValidWav(output) },
             )
-            val unverified = AudioSourceChain(
-                AudioSourceConfiguration(recordedPronunciationEnabled = true, azureConfigured = false),
-                recording, null, null,
-            )
-            assertTrue(unverified.generate(AudioSynthesisRequest(AudioItem.VOCABULARY, "猫", 1, "entry"), root).let { it is AudioChainResult.Failed })
-            val verified = AudioSourceChain(
-                AudioSourceConfiguration(
-                    recordedPronunciationEnabled = true,
-                    recordedSourceIdentityVerified = true,
-                    recordedRightsVerified = true,
-                ),
-                recording, null, null,
-            )
-            assertTrue(verified.generate(AudioSynthesisRequest(AudioItem.VOCABULARY, "猫", 2), root).let { it is AudioChainResult.Failed })
+            val chain = AudioSourceChain(AudioSourceConfiguration(), recording, null, null)
+            assertTrue(chain.generate(AudioSynthesisRequest(AudioItem.VOCABULARY, "猫", 1), root) is AudioChainResult.Failed)
             assertEquals(0, calls)
-            assertTrue(verified.generate(AudioSynthesisRequest(AudioItem.VOCABULARY, "猫", 3, "entry"), root) is AudioChainResult.Ready)
+            assertTrue(chain.generate(AudioSynthesisRequest(AudioItem.VOCABULARY, "猫", 2, "entry"), root) is AudioChainResult.Ready)
             assertEquals(1, calls)
         } finally { root.deleteRecursively() }
     }
@@ -214,11 +196,7 @@ class AudioGenerationTest {
             cache.put(key, writeValidWav(File(root, "seed.wav")))
             var called = false
             val chain = AudioSourceChain(
-                AudioSourceConfiguration(
-                    recordedPronunciationEnabled = true,
-                    recordedSourceIdentityVerified = true,
-                    recordedRightsVerified = true,
-                ),
+                AudioSourceConfiguration(),
                 AudioProviderBinding(identity, AudioProvider { _, _ -> called = true; error("must use cache") }, available = { false }), null, null, cache,
             )
             val result = chain.generate(AudioSynthesisRequest(AudioItem.VOCABULARY, "猫", 0, "entry-1"), File(root, "draft"))
