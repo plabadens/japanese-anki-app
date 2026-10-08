@@ -23,8 +23,14 @@ Usage:
   emulator.sh start
   emulator.sh stop|status
   emulator.sh install <apk>
+  emulator.sh reinstall <apk>      # install -r, grant camera, force-stop, launch, settle
   emulator.sh launch
+  emulator.sh restart              # force-stop + launch, no reinstall
+  emulator.sh grant <permission>   # defaults to android.permission.CAMERA
+  emulator.sh tap <x> <y>
+  emulator.sh theme light|dark
   emulator.sh screenshot <file>
+  emulator.sh dump <file.xml>      # uiautomator UI hierarchy dump, pulled locally
   emulator.sh share-text <text>
   emulator.sh share-image <file>
   emulator.sh logcat [args...]
@@ -32,6 +38,8 @@ Usage:
 USAGE
   exit 2
 }
+
+PKG=dev.pierre.japaneseanki
 
 start_emulator() {
   if adb_devices | grep -q "^${SERIAL}[[:space:]]*device"; then
@@ -123,13 +131,45 @@ case "$1" in
   install)
     [[ $# == 2 && -f $2 ]] || usage
     adb install -r "$2" ;;
+  reinstall)
+    [[ $# == 2 && -f $2 ]] || usage
+    adb install -r "$2"
+    adb shell pm grant "$PKG" android.permission.CAMERA 2>/dev/null || true
+    adb shell am force-stop "$PKG"
+    adb shell am start -n "$PKG/.MainActivity"
+    sleep 4
+    echo "Reinstalled, granted camera, relaunched: $2" ;;
   launch)
-    adb shell am start -n dev.pierre.japaneseanki/.MainActivity ;;
+    adb shell am start -n "$PKG/.MainActivity" ;;
+  restart)
+    adb shell am force-stop "$PKG"
+    adb shell am start -n "$PKG/.MainActivity"
+    sleep 3 ;;
+  grant)
+    perm="${2:-android.permission.CAMERA}"
+    adb shell pm grant "$PKG" "$perm" ;;
+  tap)
+    [[ $# == 3 ]] || usage
+    adb shell input tap "$2" "$3" ;;
+  theme)
+    [[ $# == 2 ]] || usage
+    case "$2" in
+      light) adb shell cmd uimode night no ;;
+      dark) adb shell cmd uimode night yes ;;
+      *) usage ;;
+    esac
+    sleep 2 ;;
   screenshot)
     [[ $# == 2 ]] || usage
     mkdir -p "$(dirname "$2")"
     adb exec-out screencap -p > "$2"
     echo "Screenshot saved: $2" ;;
+  dump)
+    [[ $# == 2 ]] || usage
+    mkdir -p "$(dirname "$2")"
+    adb shell uiautomator dump /sdcard/_dump.xml >/dev/null
+    adb pull /sdcard/_dump.xml "$2" >/dev/null
+    echo "UI dump saved: $2" ;;
   share-text)
     [[ $# == 2 ]] || usage
     adb shell am start -a android.intent.action.SEND -t text/plain --es android.intent.extra.TEXT "$2" ;;

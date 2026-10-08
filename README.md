@@ -49,13 +49,21 @@ It creates a Pixel 7 profile, boots headlessly, waits up to 60 seconds for ADB a
 nix run .#emulator-wrapper -- start
 nix run .#emulator-wrapper -- status
 nix run .#emulator-wrapper -- install app/build/outputs/apk/debug/app-debug.apk
+nix run .#emulator-wrapper -- reinstall app/build/outputs/apk/debug/app-debug.apk  # install -r + grant camera + relaunch
 nix run .#emulator-wrapper -- launch
+nix run .#emulator-wrapper -- restart          # force-stop + launch, no reinstall
+nix run .#emulator-wrapper -- grant [permission]  # defaults to android.permission.CAMERA
+nix run .#emulator-wrapper -- tap <x> <y>
+nix run .#emulator-wrapper -- theme light|dark
 nix run .#emulator-wrapper -- screenshot .tmp-nix/screenshots/current.png
+nix run .#emulator-wrapper -- dump .tmp-nix/ui.xml   # uiautomator hierarchy dump, pulled locally
 nix run .#emulator-wrapper -- share-text 'Japanese sentence to import'
 nix run .#emulator-wrapper -- share-image /path/to/image.png
 nix run .#emulator-wrapper -- logcat -d
 nix run .#emulator-wrapper -- stop
 ```
+
+For iterating on UI code, `scripts/rebuild.sh [test|build-only]` builds the debug APK (via `nix develop`, reusing the incremental Gradle cache) and reinstalls+relaunches it in one command. `scripts/pixel.py <png> at|row|col ...` inspects screenshot pixels precisely (exact edge/letterbox bounds) instead of eyeballing a downscaled render.
 
 Install AnkiDroid only in this emulator by downloading its APK from the official AnkiDroid release/Play distribution and running the wrapper's `install` command with that APK. Never uninstall apps or clear data on the attached physical phone.
 
