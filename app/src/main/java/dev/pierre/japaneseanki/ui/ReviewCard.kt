@@ -25,6 +25,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -417,9 +418,7 @@ private fun ReviewFieldRow(
         modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.size(4.dp))
+        Column(Modifier.weight(1f).semantics(mergeDescendants = false) { contentDescription = label }) {
             content()
         }
         if (playable) {
@@ -429,11 +428,11 @@ private fun ReviewFieldRow(
             }, contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
             } else IconButton(onClick = {}, modifier = Modifier.size(48.dp).semantics { contentDescription = "Play $label audio (not available yet)" }) {
-                Text("▶", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(MaterialSymbols.Play, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         IconButton(enabled = editingEnabled, onClick = onEdit, modifier = Modifier.size(48.dp).semantics { contentDescription = "Edit $label" }) {
-            Text("✎", fontSize = 17.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(MaterialSymbols.Edit, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

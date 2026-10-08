@@ -49,6 +49,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -56,10 +57,15 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import dev.pierre.japaneseanki.ui.ReviewCard
 import dev.pierre.japaneseanki.ui.ReviewSendPresentation
 import androidx.compose.runtime.DisposableEffect
@@ -1094,7 +1100,7 @@ class MainActivity : ComponentActivity() {
                 if (incoming != null) {
                     if (editor.text.isBlank()) {
                         captureMode = "Type"
-                        route = AppRoute.Capture
+                        route = AppRoute.Target
                         replaceEditorText(incoming, true)
                         selectTarget(null)
                         japaneseTokens = emptyList()
@@ -2097,39 +2103,36 @@ class MainActivity : ComponentActivity() {
                         if (visibleRoute == AppRoute.Capture) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                if (captureMode == "Photo") {
-                                    Button(enabled = !submissionLocked, onClick = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
-                                        Text("Photo")
+                                SingleChoiceSegmentedButtonRow {
+                                    listOf("Photo", "Type").forEachIndexed { index, mode ->
+                                        SegmentedButton(
+                                            selected = captureMode == mode,
+                                            enabled = !submissionLocked,
+                                            shape = SegmentedButtonDefaults.itemShape(index, 2),
+                                            icon = {},
+                                            onClick = {
+                                                val alreadySelected = captureMode == mode
+                                                captureMode = mode
+                                                preferences.edit().putString("capture_mode", captureMode).apply()
+                                                if (mode == "Photo" && alreadySelected) {
+                                                    photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                                }
+                                            },
+                                        ) { Text(mode) }
                                     }
-                                    OutlinedButton(enabled = !submissionLocked, onClick = {
-                                        captureMode = "Type"
-                                        preferences.edit().putString("capture_mode", captureMode).apply()
-                                    }) { Text("Type") }
-                                } else {
-                                    OutlinedButton(enabled = !submissionLocked, onClick = {
-                                        captureMode = "Photo"
-                                        preferences.edit().putString("capture_mode", captureMode).apply()
-                                    }) { Text("Photo") }
-                                    Button(enabled = !submissionLocked, onClick = {
-                                        captureMode = "Type"
-                                        preferences.edit().putString("capture_mode", captureMode).apply()
-                                    }) { Text("Type") }
-                                    OutlinedButton(enabled = !submissionLocked, onClick = {
-                                        noteImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                                    }) { Text(if (noteImagePath == null) "Add image" else "Change image") }
                                 }
-                                TextButton(
+                                IconButton(
                                     enabled = !submissionLocked,
-                                    modifier = Modifier.weight(1f),
                                     onClick = {
                                         settingsLoading = true
                                         showSettings = true
                                         if (!textToSpeechReady.value && textToSpeech == null) initializeTextToSpeech()
                                     },
-                                ) { Text("Settings") }
+                                    modifier = Modifier.semantics { contentDescription = "Settings" },
+                                ) { Icon(dev.pierre.japaneseanki.ui.MaterialSymbols.Settings, contentDescription = null) }
                             }
                         } else if (visibleRoute == AppRoute.Target) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -2176,6 +2179,7 @@ class MainActivity : ComponentActivity() {
                                     japaneseTokens = emptyList()
                                     tokenizationError = null
                                     tokenizationLoading = analyzerReady
+                                    if (updated.text.isNotBlank()) route = AppRoute.Target
                                 }
                                 editor = updated
                             },
@@ -2183,6 +2187,13 @@ class MainActivity : ComponentActivity() {
                             label = { Text("Japanese sentence") },
                             minLines = 3,
                         )
+                        if (captureMode == "Type" && visibleRoute == AppRoute.Capture) {
+                            OutlinedButton(
+                                enabled = !submissionLocked,
+                                onClick = { noteImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text(if (noteImagePath == null) "Add photo (optional)" else "Change photo") }
+                        }
                         ocrError?.let { message ->
                             Text(message, style = MaterialTheme.typography.bodyMedium)
                             TextButton(enabled = !submissionLocked, onClick = {
@@ -2196,7 +2207,7 @@ class MainActivity : ComponentActivity() {
                             }) { Text("Edit sentence") }
                         }
                         if (analyzerReady) {
-                            Text("Analyzed tokens — tap one to select it as the target")
+                            Text("Tap a word to mine.", style = MaterialTheme.typography.bodyMedium)
                             Row(
                                 modifier = Modifier.horizontalScroll(rememberScrollState()),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -2235,7 +2246,7 @@ class MainActivity : ComponentActivity() {
                         val targetText = displayTarget?.textIn(displaySentence)
                         val lemmaLabel = displayVocabulary.takeIf(String::isNotBlank)?.let { " → $it" }.orEmpty()
                         Text(
-                            targetText?.let { "Target: $it$lemmaLabel" }
+                            targetText?.let { "Selected: $it$lemmaLabel" }
                                 ?: "Select text in the sentence to choose a target.",
                             style = MaterialTheme.typography.bodyLarge,
                         )
@@ -2246,7 +2257,6 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         if (displayTarget?.textIn(displaySentence) != null) {
-                            Text("Offline dictionary match", style = MaterialTheme.typography.titleMedium)
                             if (frozenForDisplay != null) {
                                 Text("$displayVocabulary · $displayVocabularyReading", style = MaterialTheme.typography.titleSmall)
                             }
@@ -2256,7 +2266,6 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             if (frozenForDisplay == null) {
-                                analyzedTarget?.let { Text("Also searching analyzed lemma: ${it.expression}") }
                                 when {
                                     !dictionaryReady && dictionaryLoading -> Text("Dictionary is being prepared…")
                                     !dictionaryReady -> Text("Dictionary unavailable; an entry is required before Send.")
@@ -2465,10 +2474,6 @@ class MainActivity : ComponentActivity() {
                             recoveryMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                             sendRecoveryContent()
                         }
-                        if (visibleRoute != AppRoute.Review) Text(
-                            "Draft saved on this device.",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
                         submitAction = submitAction@{
                             if (!canSend || isSubmitting || recoveryRequired || duplicateBlocked || completedSubmission != null ||
                                 submitMessage?.startsWith("Blocked:") == true
