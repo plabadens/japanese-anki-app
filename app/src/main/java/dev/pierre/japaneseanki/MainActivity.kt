@@ -1164,6 +1164,76 @@ class MainActivity : ComponentActivity() {
                                 .verticalScroll(rememberScrollState()),
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
+                            Text("AnkiDroid", style = MaterialTheme.typography.titleMedium)
+                            when {
+                                !ankiDroidInstalled -> Text(
+                                    "AnkiDroid not detected. Install it before setting up export.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                                !apiPermissionGranted -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("AnkiDroid detected. Grant API permission to continue setup.")
+                                    Button(enabled = !isSubmitting, onClick = {
+                                        apiPermissionLauncher.launch(ANKIDROID_READ_WRITE_PERMISSION)
+                                    }) { Text("Grant AnkiDroid API permission") }
+                                }
+                                else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    if (setupLoading) Text("Loading note types and decks…")
+                                    setupError?.let {
+                                        Text(it)
+                                        TextButton(onClick = { setupReload++ }) { Text("Retry") }
+                                    }
+                                    Text("Note type", style = MaterialTheme.typography.titleSmall)
+                                    Box {
+                                        OutlinedButton(
+                                            onClick = { showModelMenu = true },
+                                            enabled = !settingsLoading && !settingsSaving && noteTypes.isNotEmpty(),
+                                        ) {
+                                            Text(selectedModel?.name ?: if (selectedModelId == null) "Choose note type" else "Previously selected note type unavailable")
+                                        }
+                                        DropdownMenu(
+                                            expanded = showModelMenu,
+                                            onDismissRequest = { showModelMenu = false },
+                                        ) {
+                                            noteTypes.forEach { model ->
+                                                DropdownMenuItem(
+                                                    text = { Text(model.name) },
+                                                    onClick = { selectedModelId = model.id; showModelMenu = false },
+                                                )
+                                            }
+                                        }
+                                    }
+                                    selectedModel?.let { model ->
+                                        AnkiFieldContract.mapToModelOrder(model.fields, emptyMap()).errors
+                                            .forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+                                    }
+                                    Text("Destination deck", style = MaterialTheme.typography.titleSmall)
+                                    Box {
+                                        OutlinedButton(
+                                            onClick = { showDeckMenu = true },
+                                            enabled = !settingsLoading && !settingsSaving && decks.isNotEmpty(),
+                                        ) {
+                                            Text(selectedDeck?.name ?: if (selectedDeckId == null) "Choose destination deck" else "Previously selected deck unavailable")
+                                        }
+                                        DropdownMenu(
+                                            expanded = showDeckMenu,
+                                            onDismissRequest = { showDeckMenu = false },
+                                        ) {
+                                            decks.forEach { deck ->
+                                                DropdownMenuItem(
+                                                    text = { Text(deck.name) },
+                                                    onClick = { selectedDeckId = deck.id; showDeckMenu = false },
+                                                )
+                                            }
+                                        }
+                                    }
+                                    if (!setupLoading && setupError == null && noteTypes.isEmpty()) {
+                                        Text("No note types available in AnkiDroid.")
+                                    }
+                                    if (!setupLoading && setupError == null && decks.isEmpty()) {
+                                        Text("No existing decks available in AnkiDroid.")
+                                    }
+                                }
+                            }
                             Text("New-note defaults", style = MaterialTheme.typography.titleMedium)
                             TextButton(onClick = { showSettings = false; showSources = true }) {
                                 Text("Sources & licenses")
@@ -2084,7 +2154,6 @@ class MainActivity : ComponentActivity() {
                                 sendStatusContent = sendRecoveryContent,
                             )
                         } else {
-                        Text("Japanese Anki", style = MaterialTheme.typography.headlineMedium)
                         if (!frozenRetryReady && imagePending && !omitImageForSend) {
                             Text("Image is still processing; Send will omit it if you continue.", style = MaterialTheme.typography.bodyMedium)
                         }
@@ -2407,71 +2476,15 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         }
-                        if (visibleRoute != AppRoute.Review) when {
-                            !ankiDroidInstalled -> Text(
-                                "AnkiDroid not detected. Install it before setting up export.",
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                            apiPermissionGranted -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text("AnkiDroid API permission granted.", style = MaterialTheme.typography.bodyMedium)
-                                if (setupLoading) Text("Loading note types and decks…")
-                                setupError?.let {
-                                    Text(it)
-                                    TextButton(onClick = { setupReload++ }) { Text("Retry") }
-                                }
-                                Text("Note type", style = MaterialTheme.typography.titleMedium)
-                                Button(
-                                    onClick = { showModelMenu = true },
-                                    enabled = !submissionLocked && noteTypes.isNotEmpty(),
-                                ) {
-                                    Text(selectedModel?.name ?: if (selectedModelId == null) "Choose note type" else "Previously selected note type unavailable")
-                                }
-                                DropdownMenu(
-                                    expanded = showModelMenu,
-                                    onDismissRequest = { showModelMenu = false },
-                                ) {
-                                    noteTypes.forEach { model ->
-                                        DropdownMenuItem(
-                                            text = { Text(model.name) },
-                                            onClick = { if (!submissionLocked) { selectedModelId = model.id; showModelMenu = false } },
-                                        )
-                                    }
-                                }
-                                selectedModel?.let { model ->
-                                    AnkiFieldContract.mapToModelOrder(model.fields, emptyMap()).errors
-                                        .forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
-                                }
-                                Text("Destination deck", style = MaterialTheme.typography.titleMedium)
-                                Button(
-                                    onClick = { showDeckMenu = true },
-                                    enabled = !submissionLocked && decks.isNotEmpty(),
-                                ) {
-                                    Text(selectedDeck?.name ?: if (selectedDeckId == null) "Choose destination deck" else "Previously selected deck unavailable")
-                                }
-                                DropdownMenu(
-                                    expanded = showDeckMenu,
-                                    onDismissRequest = { showDeckMenu = false },
-                                ) {
-                                    decks.forEach { deck ->
-                                        DropdownMenuItem(
-                                            text = { Text(deck.name) },
-                                            onClick = { if (!submissionLocked) { selectedDeckId = deck.id; showDeckMenu = false } },
-                                        )
-                                    }
-                                }
-                                if (!setupLoading && setupError == null && noteTypes.isEmpty()) {
-                                    Text("No note types available in AnkiDroid.")
-                                }
-                                if (!setupLoading && setupError == null && decks.isEmpty()) {
-                                    Text("No existing decks available in AnkiDroid.")
-                                }
+                        if (visibleRoute != AppRoute.Review && !canSend) {
+                            val setupMessage = when {
+                                !ankiDroidInstalled -> "AnkiDroid not detected. Install it before setting up export."
+                                !apiPermissionGranted -> "Grant AnkiDroid access in Settings before sending."
+                                selectedModel == null -> "Choose a note type in Settings before sending."
+                                selectedDeck == null -> "Choose a destination deck in Settings before sending."
+                                else -> null
                             }
-                            else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text("AnkiDroid detected. Grant API permission to continue setup.")
-                                Button(enabled = !isSubmitting, onClick = {
-                                    apiPermissionLauncher.launch(ANKIDROID_READ_WRITE_PERMISSION)
-                                }) { Text("Grant AnkiDroid API permission") }
-                            }
+                            setupMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                         }
                         if (visibleRoute != AppRoute.Review || reviewTarget == null) {
                             submitMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
