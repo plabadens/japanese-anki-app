@@ -1,5 +1,7 @@
 package dev.pierre.japaneseanki.ui
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.unit.dp
@@ -21,6 +23,7 @@ private fun symbol(name: String, path: String): ImageVector = ImageVector.Builde
     addGroup(name = "$name-group", translationY = 960f)
     addPath(
         pathData = PathParser().parsePathString(path).toNodes(),
+        fill = SolidColor(Color.Black),
         fillAlpha = 1f,
     )
     clearGroup()

@@ -2112,6 +2112,10 @@ class MainActivity : ComponentActivity() {
                                             selected = captureMode == mode,
                                             enabled = !submissionLocked,
                                             shape = SegmentedButtonDefaults.itemShape(index, 2),
+                                            colors = SegmentedButtonDefaults.colors(
+                                                activeContainerColor = MaterialTheme.colorScheme.primary,
+                                                activeContentColor = MaterialTheme.colorScheme.onPrimary,
+                                            ),
                                             icon = {},
                                             onClick = {
                                                 val alreadySelected = captureMode == mode
@@ -2206,7 +2210,7 @@ class MainActivity : ComponentActivity() {
                                 route = AppRoute.Target
                             }) { Text("Edit sentence") }
                         }
-                        if (analyzerReady) {
+                        if (analyzerReady && japaneseTokens.isNotEmpty()) {
                             Text("Tap a word to mine.", style = MaterialTheme.typography.bodyMedium)
                             Row(
                                 modifier = Modifier.horizontalScroll(rememberScrollState()),
