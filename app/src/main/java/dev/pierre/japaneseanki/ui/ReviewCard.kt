@@ -76,6 +76,7 @@ internal sealed interface ReviewSendPresentation {
 
 /** Presentation-only state supplied by the owner of sentence and vocabulary audio requests. */
 internal sealed interface ReviewAudioPresentation {
+    data object Unavailable : ReviewAudioPresentation
     data object Ready : ReviewAudioPresentation
     data object Playing : ReviewAudioPresentation
     data object Generating : ReviewAudioPresentation
@@ -83,6 +84,7 @@ internal sealed interface ReviewAudioPresentation {
 }
 
 internal fun reviewAudioControlLabel(field: String, audio: ReviewAudioPresentation): String = when (audio) {
+    ReviewAudioPresentation.Unavailable -> "$field audio unavailable"
     ReviewAudioPresentation.Ready -> "Play $field audio"
     ReviewAudioPresentation.Playing -> "Pause $field audio"
     ReviewAudioPresentation.Generating -> "Generating $field audio"
@@ -120,12 +122,12 @@ internal fun ReviewCard(
     selectedSenseIndices: Set<Int> = emptySet(),
     onToggleSense: (Int, Boolean) -> Unit = { _, _ -> },
     generatingFields: Set<String> = emptySet(),
-    sentenceAudio: ReviewAudioPresentation = ReviewAudioPresentation.Ready,
-    vocabularyAudio: ReviewAudioPresentation = ReviewAudioPresentation.Ready,
-    onToggleSentenceAudio: () -> Unit = {},
-    onRetrySentenceAudio: () -> Unit = {},
-    onToggleVocabularyAudio: () -> Unit = {},
-    onRetryVocabularyAudio: () -> Unit = {},
+    sentenceAudio: ReviewAudioPresentation = ReviewAudioPresentation.Unavailable,
+    vocabularyAudio: ReviewAudioPresentation = ReviewAudioPresentation.Unavailable,
+    onToggleSentenceAudio: (() -> Unit)? = null,
+    onRetrySentenceAudio: (() -> Unit)? = null,
+    onToggleVocabularyAudio: (() -> Unit)? = null,
+    onRetryVocabularyAudio: (() -> Unit)? = null,
     translationUsesFallback: Boolean = false,
     translationInfoExpanded: Boolean = false,
     translationError: String? = null,
@@ -465,8 +467,8 @@ private fun ReviewFieldRow(
     label: String,
     onEdit: () -> Unit,
     audio: ReviewAudioPresentation? = null,
-    onToggleAudio: () -> Unit = {},
-    onRetryAudio: () -> Unit = {},
+    onToggleAudio: (() -> Unit)? = null,
+    onRetryAudio: (() -> Unit)? = null,
     generating: Boolean = false,
     editingEnabled: Boolean = true,
     content: @Composable () -> Unit,
@@ -497,12 +499,29 @@ private fun ReviewFieldRow(
 private fun ReviewAudioControl(
     field: String,
     audio: ReviewAudioPresentation,
-    onToggle: () -> Unit,
-    onRetry: () -> Unit,
+    onToggle: (() -> Unit)?,
+    onRetry: (() -> Unit)?,
 ) {
     var failureExpanded by remember(audio) { mutableStateOf(false) }
     when (audio) {
-        ReviewAudioPresentation.Ready, ReviewAudioPresentation.Playing -> IconButton(
+        ReviewAudioPresentation.Unavailable -> Box(
+            Modifier.size(48.dp).semantics {
+                contentDescription = reviewAudioControlLabel(field, audio)
+                stateDescription = "Unavailable"
+            },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(MaterialSymbols.ErrorOutline, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        ReviewAudioPresentation.Ready, ReviewAudioPresentation.Playing -> if (onToggle == null) Box(
+            Modifier.size(48.dp).semantics {
+                contentDescription = reviewAudioControlLabel(field, ReviewAudioPresentation.Unavailable)
+                stateDescription = "Unavailable"
+            },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(MaterialSymbols.ErrorOutline, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else IconButton(
             onClick = onToggle,
             modifier = Modifier.size(48.dp).semantics {
                 contentDescription = reviewAudioControlLabel(field, audio)
@@ -542,7 +561,9 @@ private fun ReviewAudioControl(
             }
             if (failureExpanded) {
                 Text(audio.message, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
-                TextButton(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) { Text("Retry") }
+                onRetry?.let { retry ->
+                    TextButton(onClick = retry, modifier = Modifier.heightIn(min = 48.dp)) { Text("Retry") }
+                }
             }
         }
     }

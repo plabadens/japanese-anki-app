@@ -5,6 +5,7 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 import org.junit.Assert.assertThrows
 import android.content.SharedPreferences
+import java.io.File
 
 class SubmissionRecoveryTest {
     @Test
@@ -134,6 +135,57 @@ class SubmissionRecoveryTest {
         assertEquals(snapshot.wordAudio, restored?.wordAudio)
         assertEquals(snapshot.media, restored?.media)
         assertEquals(snapshot.importedFilename, restored?.importedFilename)
+    }
+
+    @Test
+    fun importedAudioRequiresCompleteIdentityWhenPersisted() {
+        val preferences = MemoryPreferences()
+        val snapshot = FrozenSubmission(
+            revision = 1L, modelId = 3L, deckId = 4L, modelFields = listOf("Sentence"),
+            orderedFields = listOf("日本語"), sentence = "日本語", lemma = "日本語",
+            vocabularyReading = "", sentenceReading = "", definition = "", translation = "",
+            notes = "", tags = emptySet(), pitchAccentText = "", targetStart = 0, targetEnd = 3,
+            media = null, importedFilename = null, noteId = null,
+            sentenceAudio = FrozenAudioItem(null, "sentence.wav"),
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            preferences.edit().putFrozenSubmission(snapshot, SubmissionPhase.MEDIA_IMPORTED)
+        }
+    }
+
+    @Test
+    fun restoredMalformedAudioReceiptsAreRejectedForReuse() {
+        val preferences = MemoryPreferences()
+        val snapshot = FrozenSubmission(
+            revision = 1L, modelId = 3L, deckId = 4L, modelFields = listOf("Sentence"),
+            orderedFields = listOf("日本語"), sentence = "日本語", lemma = "日本語",
+            vocabularyReading = "", sentenceReading = "", definition = "", translation = "",
+            notes = "", tags = emptySet(), pitchAccentText = "", targetStart = 0, targetEnd = 3,
+            media = null, importedFilename = null, noteId = null,
+        )
+        preferences.edit().putFrozenSubmission(snapshot, SubmissionPhase.MEDIA_IMPORTED)
+            .putString(SubmissionRecoveryKeys.SENTENCE_AUDIO_IMPORTED_FILENAME, "sentence.wav")
+            .putString(SubmissionRecoveryKeys.SENTENCE_AUDIO_PATH, "/tmp/source.wav")
+            .putLong(SubmissionRecoveryKeys.SENTENCE_AUDIO_SIZE, -1L)
+            .putLong(SubmissionRecoveryKeys.SENTENCE_AUDIO_MODIFIED, 1L).commit()
+        val receipt = readFrozenSubmission(preferences)!!.sentenceAudio
+        assertEquals(AudioReceiptValidation.INVALID_RECEIPT, validateAudioReceipt(receipt, File("/tmp/source.wav")))
+    }
+
+    @Test
+    fun audioReceiptValidationRejectsMissingAndChangedSourcesAndAcceptsExactRoundTrip() {
+        val directory = createTempDir(prefix = "audio-receipt-")
+        try {
+            val source = File(directory, "source.wav").apply { writeBytes(byteArrayOf(1, 2, 3)) }
+            val identity = MediaIdentity.fromFile(source)
+            val validReceipt = FrozenAudioItem(identity, "source.wav")
+            assertEquals(AudioReceiptValidation.VALID, validateAudioReceipt(validReceipt, source))
+            assertEquals(AudioReceiptValidation.SOURCE_MISSING, validateAudioReceipt(validReceipt, File(directory, "missing.wav")))
+            source.writeBytes(byteArrayOf(1, 2, 3, 4))
+            assertEquals(AudioReceiptValidation.SOURCE_CHANGED, validateAudioReceipt(validReceipt, source))
+        } finally {
+            directory.deleteRecursively()
+        }
     }
 
     @Test

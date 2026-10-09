@@ -4,6 +4,11 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class ReviewAudioPresentationTest {
+    @Test fun defaultAudioPresentationIsUnavailableAndDoesNotClaimPlayback() {
+        assertEquals("Sentence audio unavailable", reviewAudioControlLabel("Sentence", ReviewAudioPresentation.Unavailable))
+        assertEquals("Vocabulary audio unavailable", reviewAudioControlLabel("Vocabulary", ReviewAudioPresentation.Unavailable))
+    }
+
     @Test fun labelsExposeReadyPlayingGeneratingAndFailedStates() {
         assertEquals("Play Sentence audio", reviewAudioControlLabel("Sentence", ReviewAudioPresentation.Ready))
         assertEquals("Pause Vocabulary audio", reviewAudioControlLabel("Vocabulary", ReviewAudioPresentation.Playing))

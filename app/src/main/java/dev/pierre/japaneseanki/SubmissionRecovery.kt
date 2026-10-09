@@ -125,18 +125,45 @@ private fun readFrozenAudioItem(preferences: SharedPreferences, keys: FrozenAudi
         MediaIdentity(it, preferences.getLong(keys.size, -1L), preferences.getLong(keys.modified, -1L))
     }
     val filename = preferences.getString(keys.importedFilename, null)
-        ?.takeIf { AnkiMediaImporter.sanitizeAudioFilename(it) != null }
     return FrozenAudioItem(identity, filename, preferences.getBoolean(keys.omitted, false))
 }
 
 private fun SharedPreferences.Editor.putFrozenAudioItem(item: FrozenAudioItem, keys: FrozenAudioKeys) {
+    if (item.importedFilename != null) {
+        require(validMediaIdentity(item.identity)) { "Imported audio requires a complete source identity" }
+        require(AnkiMediaImporter.sanitizeAudioFilename(item.importedFilename) == item.importedFilename) {
+            "Unsafe imported audio filename"
+        }
+    }
     if (item.identity == null) remove(keys.path).remove(keys.size).remove(keys.modified)
     else putString(keys.path, item.identity.path).putLong(keys.size, item.identity.size)
         .putLong(keys.modified, item.identity.modified)
     if (item.importedFilename == null) remove(keys.importedFilename)
-    else putString(keys.importedFilename, AnkiMediaImporter.sanitizeAudioFilename(item.importedFilename)
-        ?: throw IllegalArgumentException("Unsafe imported audio filename"))
+    else putString(keys.importedFilename, item.importedFilename)
     putBoolean(keys.omitted, item.omitted)
+}
+
+private fun validMediaIdentity(identity: MediaIdentity?): Boolean = identity != null &&
+    identity.path.isNotBlank() && identity.size >= 0L && identity.modified >= 0L
+
+internal enum class AudioReceiptValidation {
+    NO_RECEIPT,
+    VALID,
+    INVALID_RECEIPT,
+    SOURCE_MISSING,
+    SOURCE_CHANGED,
+}
+
+/** Validate before reusing an imported filename; every non-VALID receipt requires explicit recovery. */
+internal fun validateAudioReceipt(item: FrozenAudioItem, source: File): AudioReceiptValidation {
+    val filename = item.importedFilename ?: return AudioReceiptValidation.NO_RECEIPT
+    if (AnkiMediaImporter.sanitizeAudioFilename(filename) != filename || !validMediaIdentity(item.identity)) {
+        return AudioReceiptValidation.INVALID_RECEIPT
+    }
+    if (!source.exists()) return AudioReceiptValidation.SOURCE_MISSING
+    val current = runCatching { MediaIdentity.fromFile(source) }.getOrNull()
+        ?: return AudioReceiptValidation.SOURCE_CHANGED
+    return if (current == item.identity) AudioReceiptValidation.VALID else AudioReceiptValidation.SOURCE_CHANGED
 }
 
 internal enum class NoteInsertedRecoveryDecision { MOVE, COMPLETE, RESOLVE, FAIL }
