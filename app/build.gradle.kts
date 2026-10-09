@@ -67,6 +67,13 @@ android {
 tasks.named("preBuild").configure { dependsOn(packageUniDic) }
 
 if (System.getenv("IN_GRADLE_UPDATE_DEPS") == "1") {
+    // AGP resolves this only when release lint executes, after the recorder scans configurations.
+    configurations.create("releaseLintForLock") {
+        isCanBeResolved = true
+        isCanBeConsumed = false
+    }
+    dependencies.add("releaseLintForLock", "com.android.tools.lint:lint-gradle:31.13.2") // AGP 8.13.2
+
     afterEvaluate {
         configurations.filter { it.isCanBeResolved }.forEach { configuration ->
             // The dependency recorder resolves configurations directly, bypassing AGP's
