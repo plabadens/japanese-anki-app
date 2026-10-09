@@ -74,6 +74,21 @@ internal sealed interface ReviewSendPresentation {
     data class Status(val message: String, val actionLabel: String? = null) : ReviewSendPresentation
 }
 
+/** Presentation-only state supplied by the owner of sentence and vocabulary audio requests. */
+internal sealed interface ReviewAudioPresentation {
+    data object Ready : ReviewAudioPresentation
+    data object Playing : ReviewAudioPresentation
+    data object Generating : ReviewAudioPresentation
+    data class Failed(val message: String) : ReviewAudioPresentation
+}
+
+internal fun reviewAudioControlLabel(field: String, audio: ReviewAudioPresentation): String = when (audio) {
+    ReviewAudioPresentation.Ready -> "Play $field audio"
+    ReviewAudioPresentation.Playing -> "Pause $field audio"
+    ReviewAudioPresentation.Generating -> "Generating $field audio"
+    is ReviewAudioPresentation.Failed -> "Explain unavailable $field audio"
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ReviewCard(
@@ -105,6 +120,12 @@ internal fun ReviewCard(
     selectedSenseIndices: Set<Int> = emptySet(),
     onToggleSense: (Int, Boolean) -> Unit = { _, _ -> },
     generatingFields: Set<String> = emptySet(),
+    sentenceAudio: ReviewAudioPresentation = ReviewAudioPresentation.Ready,
+    vocabularyAudio: ReviewAudioPresentation = ReviewAudioPresentation.Ready,
+    onToggleSentenceAudio: () -> Unit = {},
+    onRetrySentenceAudio: () -> Unit = {},
+    onToggleVocabularyAudio: () -> Unit = {},
+    onRetryVocabularyAudio: () -> Unit = {},
     translationUsesFallback: Boolean = false,
     translationInfoExpanded: Boolean = false,
     translationError: String? = null,
@@ -161,7 +182,10 @@ internal fun ReviewCard(
                     )
                 }
             }
-            ReviewFieldRow("Sentence", onEdit = onEdit, editingEnabled = editingEnabled, playable = true, generating = "Sentence" in generatingFields) {
+            ReviewFieldRow(
+                "Sentence", onEdit = onEdit, editingEnabled = editingEnabled,
+                audio = sentenceAudio, onToggleAudio = onToggleSentenceAudio, onRetryAudio = onRetrySentenceAudio,
+            ) {
                 val parts = reviewSentenceParts(sentence, target, sentenceReading, furigana)
                 val sentenceLayout = remember(sentence, target, sentenceReading, furigana) { mutableStateOf<TextLayoutResult?>(null) }
                 val unresolvedColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -239,7 +263,10 @@ internal fun ReviewCard(
                     onTextLayout = { sentenceLayout.value = it },
                 )
             }
-            ReviewFieldRow("Vocabulary", onEdit = { editingField = "Word" }, editingEnabled = editingEnabled, playable = true, generating = "Vocabulary" in generatingFields) {
+            ReviewFieldRow(
+                "Vocabulary", onEdit = { editingField = "Word" }, editingEnabled = editingEnabled,
+                audio = vocabularyAudio, onToggleAudio = onToggleVocabularyAudio, onRetryAudio = onRetryVocabularyAudio,
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     RubyText(vocabulary, vocabularyReading)
                     pitch?.let { PitchPatternDiagram(it, PitchDiagramScale.Compact) }
@@ -437,7 +464,9 @@ internal fun ReviewCard(
 private fun ReviewFieldRow(
     label: String,
     onEdit: () -> Unit,
-    playable: Boolean = false,
+    audio: ReviewAudioPresentation? = null,
+    onToggleAudio: () -> Unit = {},
+    onRetryAudio: () -> Unit = {},
     generating: Boolean = false,
     editingEnabled: Boolean = true,
     content: @Composable () -> Unit,
@@ -449,18 +478,72 @@ private fun ReviewFieldRow(
         Column(Modifier.weight(1f).semantics(mergeDescendants = false) { contentDescription = label }) {
             content()
         }
-        if (playable) {
-            if (generating) Box(Modifier.size(48.dp).semantics {
-                contentDescription = "Generating $label"
-                stateDescription = "In progress"
-            }, contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-            } else IconButton(onClick = {}, modifier = Modifier.size(48.dp).semantics { contentDescription = "Play $label audio (not available yet)" }) {
-                Icon(MaterialSymbols.Play, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+        audio?.let { state ->
+            ReviewAudioControl(label, state, onToggleAudio, onRetryAudio)
+        }
+        if (generating) Box(Modifier.size(48.dp).semantics {
+            contentDescription = "Generating $label"
+            stateDescription = "In progress"
+        }, contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
         }
         IconButton(enabled = editingEnabled, onClick = onEdit, modifier = Modifier.size(48.dp).semantics { contentDescription = "Edit $label" }) {
             Icon(MaterialSymbols.Edit, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun ReviewAudioControl(
+    field: String,
+    audio: ReviewAudioPresentation,
+    onToggle: () -> Unit,
+    onRetry: () -> Unit,
+) {
+    var failureExpanded by remember(audio) { mutableStateOf(false) }
+    when (audio) {
+        ReviewAudioPresentation.Ready, ReviewAudioPresentation.Playing -> IconButton(
+            onClick = onToggle,
+            modifier = Modifier.size(48.dp).semantics {
+                contentDescription = reviewAudioControlLabel(field, audio)
+                stateDescription = if (audio == ReviewAudioPresentation.Playing) "Playing" else "Ready"
+            },
+        ) {
+            Icon(
+                if (audio == ReviewAudioPresentation.Playing) MaterialSymbols.Pause else MaterialSymbols.Play,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        ReviewAudioPresentation.Generating -> Box(
+            Modifier.size(48.dp).semantics {
+                contentDescription = reviewAudioControlLabel(field, audio)
+                stateDescription = "In progress"
+            },
+            contentAlignment = Alignment.Center,
+        ) {
+            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+        }
+        is ReviewAudioPresentation.Failed -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            IconButton(
+                onClick = { failureExpanded = !failureExpanded },
+                modifier = Modifier.size(48.dp).semantics {
+                    contentDescription = reviewAudioControlLabel(field, audio)
+                    stateDescription = if (failureExpanded) "Expanded" else "Collapsed"
+                },
+            ) {
+                Icon(
+                    MaterialSymbols.ErrorOutline,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (failureExpanded) {
+                Text(audio.message, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                TextButton(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) { Text("Retry") }
+            }
         }
     }
 }

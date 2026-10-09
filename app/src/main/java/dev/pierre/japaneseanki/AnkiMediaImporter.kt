@@ -10,7 +10,17 @@ internal object AnkiMediaImporter {
         return filename
     }
 
-    fun importedFilename(uriString: String): String? {
+    fun sanitizeAudioFilename(filename: String): String? {
+        if (!SAFE_FILENAME.matches(filename) || filename.startsWith('.')) return null
+        if (!filename.endsWith(".wav", ignoreCase = true) && !filename.endsWith(".ogg", ignoreCase = true)) return null
+        return filename
+    }
+
+    fun importedFilename(uriString: String): String? = filenameFromFileUri(uriString, ::sanitizeFilename)
+
+    fun importedAudioFilename(uriString: String): String? = filenameFromFileUri(uriString, ::sanitizeAudioFilename)
+
+    private fun filenameFromFileUri(uriString: String, sanitize: (String) -> String?): String? {
         val uri = runCatching { URI(uriString) }.getOrNull() ?: return null
         if (!uri.scheme.equals("file", ignoreCase = true)) return null
         // Imported media must be a local file URI, not a remote file authority or a decorated URI.
@@ -18,7 +28,7 @@ internal object AnkiMediaImporter {
         val path = uri.path?.takeIf(String::isNotEmpty) ?: return null
         if (path.split('/').any { it == "." || it == ".." }) return null
         val filename = path.substringAfterLast('/', "")
-        return sanitizeFilename(filename)
+        return sanitize(filename)
     }
 
     private val SAFE_FILENAME = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")

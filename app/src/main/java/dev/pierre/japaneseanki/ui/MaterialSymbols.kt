@@ -41,6 +41,9 @@ internal object MaterialSymbols {
     val Play: ImageVector by lazy {
         symbol("Play", "M320-200v-560l440 280-440 280Zm80-280Zm0 134 210-134-210-134v268Z")
     }
+    val Pause: ImageVector by lazy {
+        symbol("Pause", "M320-200h120v-560H320v560Zm200-560v560h120v-560H520Z")
+    }
     val Add: ImageVector by lazy {
         symbol("Add", "M440-440H200v-80h240v-240h80v240h240v80H520v240h-80v-240Z")
     }

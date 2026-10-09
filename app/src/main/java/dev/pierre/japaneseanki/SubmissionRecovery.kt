@@ -30,6 +30,12 @@ internal data class MediaIdentity(
     }
 }
 
+internal data class FrozenAudioItem(
+    val identity: MediaIdentity?,
+    val importedFilename: String? = null,
+    val omitted: Boolean = false,
+)
+
 internal data class FrozenSubmission(
     val revision: Long,
     val modelId: Long,
@@ -50,6 +56,8 @@ internal data class FrozenSubmission(
     val media: MediaIdentity?,
     val importedFilename: String?,
     val noteId: Long?,
+    val sentenceAudio: FrozenAudioItem = FrozenAudioItem(null),
+    val wordAudio: FrozenAudioItem = FrozenAudioItem(null),
 )
 
 internal object SubmissionRecoveryKeys {
@@ -76,6 +84,59 @@ internal object SubmissionRecoveryKeys {
     const val MEDIA_MODIFIED = "pending_media_modified"
     const val IMPORTED_FILENAME = "pending_imported_filename"
     const val NOTE_ID = "pending_note_id"
+    const val SENTENCE_AUDIO_PATH = "pending_sentence_audio_path"
+    const val SENTENCE_AUDIO_SIZE = "pending_sentence_audio_size"
+    const val SENTENCE_AUDIO_MODIFIED = "pending_sentence_audio_modified"
+    const val SENTENCE_AUDIO_IMPORTED_FILENAME = "pending_sentence_audio_imported_filename"
+    const val SENTENCE_AUDIO_OMITTED = "pending_sentence_audio_omitted"
+    const val WORD_AUDIO_PATH = "pending_word_audio_path"
+    const val WORD_AUDIO_SIZE = "pending_word_audio_size"
+    const val WORD_AUDIO_MODIFIED = "pending_word_audio_modified"
+    const val WORD_AUDIO_IMPORTED_FILENAME = "pending_word_audio_imported_filename"
+    const val WORD_AUDIO_OMITTED = "pending_word_audio_omitted"
+}
+
+private data class FrozenAudioKeys(
+    val path: String,
+    val size: String,
+    val modified: String,
+    val importedFilename: String,
+    val omitted: String,
+)
+
+private val sentenceAudioKeys = FrozenAudioKeys(
+    SubmissionRecoveryKeys.SENTENCE_AUDIO_PATH,
+    SubmissionRecoveryKeys.SENTENCE_AUDIO_SIZE,
+    SubmissionRecoveryKeys.SENTENCE_AUDIO_MODIFIED,
+    SubmissionRecoveryKeys.SENTENCE_AUDIO_IMPORTED_FILENAME,
+    SubmissionRecoveryKeys.SENTENCE_AUDIO_OMITTED,
+)
+private val wordAudioKeys = FrozenAudioKeys(
+    SubmissionRecoveryKeys.WORD_AUDIO_PATH,
+    SubmissionRecoveryKeys.WORD_AUDIO_SIZE,
+    SubmissionRecoveryKeys.WORD_AUDIO_MODIFIED,
+    SubmissionRecoveryKeys.WORD_AUDIO_IMPORTED_FILENAME,
+    SubmissionRecoveryKeys.WORD_AUDIO_OMITTED,
+)
+
+private fun readFrozenAudioItem(preferences: SharedPreferences, keys: FrozenAudioKeys): FrozenAudioItem {
+    val path = preferences.getString(keys.path, null)
+    val identity = path?.let {
+        MediaIdentity(it, preferences.getLong(keys.size, -1L), preferences.getLong(keys.modified, -1L))
+    }
+    val filename = preferences.getString(keys.importedFilename, null)
+        ?.takeIf { AnkiMediaImporter.sanitizeAudioFilename(it) != null }
+    return FrozenAudioItem(identity, filename, preferences.getBoolean(keys.omitted, false))
+}
+
+private fun SharedPreferences.Editor.putFrozenAudioItem(item: FrozenAudioItem, keys: FrozenAudioKeys) {
+    if (item.identity == null) remove(keys.path).remove(keys.size).remove(keys.modified)
+    else putString(keys.path, item.identity.path).putLong(keys.size, item.identity.size)
+        .putLong(keys.modified, item.identity.modified)
+    if (item.importedFilename == null) remove(keys.importedFilename)
+    else putString(keys.importedFilename, AnkiMediaImporter.sanitizeAudioFilename(item.importedFilename)
+        ?: throw IllegalArgumentException("Unsafe imported audio filename"))
+    putBoolean(keys.omitted, item.omitted)
 }
 
 internal enum class NoteInsertedRecoveryDecision { MOVE, COMPLETE, RESOLVE, FAIL }
@@ -150,6 +211,8 @@ internal fun readFrozenSubmission(preferences: SharedPreferences): FrozenSubmiss
         media = media,
         importedFilename = preferences.getString(SubmissionRecoveryKeys.IMPORTED_FILENAME, null),
         noteId = preferences.getLong(SubmissionRecoveryKeys.NOTE_ID, -1L).takeIf { it > 0 },
+        sentenceAudio = readFrozenAudioItem(preferences, sentenceAudioKeys),
+        wordAudio = readFrozenAudioItem(preferences, wordAudioKeys),
     )
 }
 
@@ -187,6 +250,8 @@ internal fun SharedPreferences.Editor.putFrozenSubmission(
     else putString(SubmissionRecoveryKeys.IMPORTED_FILENAME, snapshot.importedFilename)
     if (snapshot.noteId == null) remove(SubmissionRecoveryKeys.NOTE_ID)
     else putLong(SubmissionRecoveryKeys.NOTE_ID, snapshot.noteId)
+    putFrozenAudioItem(snapshot.sentenceAudio, sentenceAudioKeys)
+    putFrozenAudioItem(snapshot.wordAudio, wordAudioKeys)
     return this
 }
 
@@ -214,5 +279,15 @@ internal fun clearFrozenSubmission(preferences: SharedPreferences) {
         .remove(SubmissionRecoveryKeys.MEDIA_MODIFIED)
         .remove(SubmissionRecoveryKeys.IMPORTED_FILENAME)
         .remove(SubmissionRecoveryKeys.NOTE_ID)
+        .remove(SubmissionRecoveryKeys.SENTENCE_AUDIO_PATH)
+        .remove(SubmissionRecoveryKeys.SENTENCE_AUDIO_SIZE)
+        .remove(SubmissionRecoveryKeys.SENTENCE_AUDIO_MODIFIED)
+        .remove(SubmissionRecoveryKeys.SENTENCE_AUDIO_IMPORTED_FILENAME)
+        .remove(SubmissionRecoveryKeys.SENTENCE_AUDIO_OMITTED)
+        .remove(SubmissionRecoveryKeys.WORD_AUDIO_PATH)
+        .remove(SubmissionRecoveryKeys.WORD_AUDIO_SIZE)
+        .remove(SubmissionRecoveryKeys.WORD_AUDIO_MODIFIED)
+        .remove(SubmissionRecoveryKeys.WORD_AUDIO_IMPORTED_FILENAME)
+        .remove(SubmissionRecoveryKeys.WORD_AUDIO_OMITTED)
         .commit()
 }
