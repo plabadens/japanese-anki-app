@@ -4,7 +4,7 @@
 
 **Distribution:** Personal, sideloaded Android application.
 
-**Implementation status (existing implementation, not proof of conformance to the revised UI below):** The Compose editor, durable manual draft fields, target-span validation/selection, Android text-entry intents, AnkiDroid setup, controlled field serialization, duplicate blocking, manual pitch editing, and stale-value protection are implemented. Pinned JMdict/Kanjium data is indexed in SQLite for offline candidate/sense and pitch lookup. UniDic CWJ 3.1.1 and MeCab 0.996 are pinned and packaged; the editor wires token selection, orthographic-lemma lookup for supported inflections, editable target/vocabulary reading suggestions, and best-effort full-sentence furigana with per-token corrections. Settings now cover default tags, optional Azure configuration with Android Keystore encryption, Android TTS engine/installed offline Japanese voice discovery, and speech rates; speech generation and audio-cache controls are not yet connected. NDK CMake builds succeeded for `arm64-v8a` and `x86_64`, and a host JNI smoke test verified native feature output. The debug APK builds and has been smoke-tested on a Pixel 7/API 37: first-launch UniDic extraction, MeCab tokenization, and offline SQLite dictionary lookup work. The native library and APK pass 16 KB alignment checks. The Nix flake exposes core-test, unsigned APK, and debug APK targets with a Gradle dependency-lock bootstrap; the Gradle artifact lock is not yet populated, so Nix APK output and reproducible offline build verification remain pending. Audio generation, media workflows, remaining settings, and acceptance testing remain pending. AnkiDroid integration is wired against the v2.24.0 source contract (commit `ebcf8e0e34921628b9b8a496c66ffd4adbb3705f`, the release available on Google Play) but untested on-device; provider behavior with trailing empty fields remains a release gate.
+Implementation status and historical verification notes are maintained separately in [docs/implementation-status.md](docs/implementation-status.md); they are not requirements or proof of conformance.
 
 ## 1. Purpose
 
@@ -26,6 +26,8 @@ Optimize for short, repeated creation sessions. Keep required interaction small,
 - **Release gate:** a condition that must be resolved and evidenced before release; not permission to silently remove or substitute a requirement.
 
 Low-level implementation choices not fixed here may be decided during development. Changes to approved user-facing behavior, dependency families, or scope require approval.
+
+Detailed feature sections are authoritative; scope and workflow summaries reference them. Section 14 defines verification scenarios, not alternative behavior. Section 17 indexes decisions rather than restating requirements. If a mockup or historical status note conflicts with this specification, follow this specification and report the mismatch.
 
 ## 2. Platform and delivery
 
@@ -62,7 +64,7 @@ Application-specific linguistic engines and datasets must be bundled except for 
 - Recorded word pronunciation (NHK-2016) fetched on demand, preferred over synthesized audio.
 - Azure TTS and Azure Translator, each with an on-device fallback.
 - Automatic sentence translation, editable, marked when produced by the offline fallback rather than Azure.
-- One optional image from the photo picker or camera, with cropping.
+- One optional full-frame image from the photo picker or camera, processed without cropping (§7.1).
 - Optional plain-text notes and tags; tags default to the previous note's tags and can be added from AnkiDroid's existing tag list.
 - One autosaved draft.
 - Creation of new notes through the AnkiDroid API.
@@ -76,7 +78,9 @@ Application-specific linguistic engines and datasets must be bundled except for 
 - Multiple saved drafts or a draft library.
 - Background clipboard monitoring.
 - Microphone recording of sentence or vocabulary audio, and any related record/replay/replace controls.
-- Manual audio source selection or freehand pitch-position editing; both are picked automatically, with alternatives (when they exist) chosen from a list, never drawn or typed.
+- Manual audio-source selection or recording-alternatives pickers (§6.1–§6.2).
+- Freehand pitch-position editing; only source-listed pitch alternatives may be selected from a picker (§5.5).
+- Image cropping; square display thumbnails do not alter the exported image (§7.1).
 - Audio-file import, trimming, waveform editing, noise reduction, or normalization controls.
 - Known/new-word classification or vocabulary-knowledge tracking.
 - Runtime dictionary downloads or a dictionary marketplace.
@@ -88,7 +92,7 @@ Application-specific linguistic engines and datasets must be bundled except for 
 
 ### 4.1 Interaction model
 
-The application is not a single scrolling form. A compact **review card** — laid out like the eventual Anki note, one row per field — is the constant home screen once a sentence has a target; everything else is either automatic, a small icon on that card, or one **sheet** raised from the bottom for a specific, bounded decision. There is no general **Generate** button and no card preview.
+The application is not a single scrolling form. A compact **review card** — laid out like the eventual Anki note, one row per field — becomes the home screen after the selected target's dictionary entry resolves. Field decisions use small icons and bounded bottom sheets; explicit navigation follows §4.11. There is no general **Generate** button and no card preview.
 
 The interface must:
 
@@ -108,7 +112,7 @@ The interface must:
 
 Automatic choice sheets are raised only for OCR-region or dictionary-entry ambiguity. A single match resolves silently. User-requested editing sheets, draft-replacement confirmation, and error recovery are separate, explicit cases; they do not violate this rule. Pitch alternatives appear only when the user opens Edit word, never as an automatic interruption.
 
-Once a target has resolved, the review card (§4.5) is the ground truth for the rest of the session: every subsequent screen — dictionary/pitch/definition sheets, the sending state, success, duplicate blocking, uncertain-outcome recovery, and draft-preserving error handling (§4.10) — is that same card, frozen where noted, with a sheet or a small status change layered on top of it. Nothing replaces it with an unrelated full-screen layout.
+After initial dictionary-entry resolution, Review remains the underlying screen for field-edit sheets, dictionary ambiguity or misses caused by Edit word reselection, and submission outcomes. Reselection applies immediately: show vocabulary-dependent values as unresolved rather than displaying old values as current, and disable Send until the new entry resolves. Preserve sentence, image, notes, tags, and protected manual text under §10.2. Sentence editing explicitly returns to Target; Back may return to Capture and Settings remains reachable there (§4.11). These navigation exceptions do not permit replacing submission outcomes with unrelated full-screen layouts. Submission values remain frozen under §9.4–§9.5.
 
 Reference mockups for every screen described in this section are in `mockup/screens/` (see `mockup/mockup.html` for the annotated walkthrough); `mockup/screens/00-pitch-component.png` is the canonical reference for the pitch diagram used throughout (§5.5).
 
@@ -125,13 +129,13 @@ The photo and the sentence text are independent pieces of state even when Photo 
 
 Android text sharing, selected-text (`PROCESS_TEXT`) actions, and image sharing remain further entry points (§4.8): shared text populates the sentence field directly, in Type-mode form; a shared image is treated exactly as a just-captured Photo, running the same on-device OCR and ambiguity handling as §4.2's Photo mode.
 
-Both capture modes show the sole Settings entry point (§4.9) in the application row, to the right of the Photo/Type control and outside the OS status bar, so note type, deck, and Azure can be configured before a first sentence exists. The review card has no Settings entry point.
+Settings placement in both capture modes follows §4.1; the review card has no Settings entry point.
 
 ### 4.3 Target and dictionary resolution
 
 Tokenization runs automatically and without blocking typing. The sentence text and its tokens appear on one screen: tapping a token selects it as the target; the sentence text itself is directly editable on this same screen, so a misread from OCR is fixed exactly where it is noticed, not on a separate confirmation screen first. Editing the text re-tokenizes it.
 
-If dictionary lookup for the target's surface form or analyzed lemma returns more than one matching entry, a sheet overlays the complete target screen (mockup 09), retaining its sentence, image, tokens, and selection beneath the dimming. The sheet requires confirming the entry before treating the vocabulary as resolved; a single match resolves silently.
+During initial resolution or explicit Sentence editing, if dictionary lookup for the target's surface form or analyzed lemma returns more than one matching entry, a sheet overlays the complete Target screen (mockup 09), retaining its sentence, image, tokens, and selection beneath the dimming. The sheet requires confirming the entry before treating the vocabulary as resolved; a single match resolves silently. Ambiguity caused by Edit word reselection instead retains Review underneath (§4.1); only one decision sheet is active at a time.
 
 ### 4.4 Target semantics
 
@@ -157,7 +161,7 @@ Editing behavior per row:
 - **Sentence**: its edit icon returns to the capture/target screen described in §4.3.
 - **Vocabulary**: its edit icon opens the **Edit word** sheet — the sentence's tokens again, to reselect which span is the target (there is no free-text lemma or reading field; the resolved entry can also be changed from this sheet) — followed by the pitch pattern picker described in §5.5 when more than one pattern is listed.
 - **Definition**: its edit icon opens a sheet listing the resolved entry's senses as selectable checkboxes, with the combined result also directly editable as text.
-- **Translation**: directly editable in place; saving an edit clears the local-fallback mark if the new text no longer needs it.
+- **Translation**: directly editable in place; ownership, fallback marking, and replacement suggestions follow §7.2 and §10.2.
 - **Notes**: an optional value with an always-present row, empty by default, expanding to a plain text field on tap.
 - **Tags**: shown as chips seeded from whatever tags the previous note used; a trailing "+" opens a sheet listing tags loaded from AnkiDroid plus a field to create a new one.
 
@@ -167,7 +171,7 @@ A field's explanatory popover (§4.1) is non-modal and associated with the tappe
 
 ### 4.6 Audio
 
-Word and sentence audio generate automatically once their inputs resolve, following the source priority in §6.1, and are played from the review card's neutral play icons. There is no manual **Regenerate**, **Record**, or source-selection control: saving an edit to the sentence text or to the selected target (via the Edit word sheet) is itself what invalidates and silently regenerates the affected audio. A failed or still-generating item shows its neutral state icon in place of the play icon rather than blocking the row.
+The review card's neutral play icons play attached word and sentence audio. Source priority, automatic generation, input invalidation, completed-audio restrictions, and explicit failure/interruption retry are defined in §6.1–§6.7 and §10.2. A failed or still-generating item shows its neutral state icon in place of the play icon rather than blocking the row.
 
 ### 4.7 Normal creation
 
@@ -217,7 +221,7 @@ The Azure key is entered here, at runtime, and encrypted at rest (§11) — it i
 
 ### 4.10 Dictionary misses and error recovery
 
-- **No usable dictionary entry for the selected span.** Preserve the sentence, image, selection, and other draft data. A short sheet says “No dictionary match for this selection” and offers **Edit or reselect**, returning to the target screen. The user may fix OCR/text or choose another contiguous span. Do not silently select an adjacent word, declare the whole sentence non-Japanese, or invent a manual vocabulary entry. Export waits for a resolved dictionary entry.
+- **No usable dictionary entry for the selected span.** Preserve the sentence, image, selection, and other draft data. A short sheet says “No dictionary match for this selection” and offers **Edit or reselect**. Initial misses retain Target underneath; misses caused by Edit word reselection retain Review and return to Edit word for reselection (§4.1). Explicit sentence editing returns to Target. The user may fix OCR/text or choose another contiguous span. Do not silently select an adjacent word, declare the whole sentence non-Japanese, or invent a manual vocabulary entry. Export waits for a resolved dictionary entry.
 - **Unexpected error.** Preserve the last durably saved draft. Explain that work was kept and offer **Return to draft**; offer Retry only when the failed operation is safe to repeat. Specifically defined permission, optional-enrichment, image-encoding, duplicate, and uncertain-submission errors retain their own handling. Never retry a possibly completed insertion through a generic error action.
 - Error-sheet dismissal does not discard work. Starting over requires an explicit discard action and confirmation for a nonempty draft (§10.1).
 
@@ -280,6 +284,7 @@ Attempt readings for all kanji-containing spans in the sentence and resolved voc
 - Show resolved spans as inline ruby. Show an unresolved kanji span with a dotted underline and no ruby, including when it is the target or vocabulary. Kana-only text is plain. A contextual accessibility description explains missing readings; the underline is not an edit control.
 - Missing, failed, or pending furigana never blocks Send. Export unresolved spans as their original text without fabricated annotations. The vocabulary dictionary entry and definition must still resolve (§9.2).
 - Correct underlying text, target, or dictionary-entry selection through the normal editors; those changes rerun automatic analysis. Do not expose a separate reading-override path.
+- This restriction also applies when an automatic reading is incorrect despite correct underlying text and entry selection: there is no per-annotation correction or removal control. Such errors may remain in the exported note; automatic readings are not guaranteed correct.
 - Serialize resolved spans to Anki bracket-furigana notation, including required separators, without altering the intended rendered sentence. Snapshot only available readings on Send; late readings cannot modify the exported note.
 
 ### 5.5 Pitch metadata
@@ -320,10 +325,10 @@ If all eligible sources fail, retain the other note data, show that item's small
 
 ### 6.2 Recorded word pronunciation
 
-The selected candidate is AJATT's **NHK-2016 pronunciation index**.
+Use AJATT's **NHK-2016 pronunciation index** at repository-pinned commit `b0207d240f0f28cdc2dd491dd83343c3a5630119`, as referenced by `Nhk2016PronunciationSource.SOURCE_VERSION`. The index repository is identified as GPL-3.0; rights to the linked recordings remain unverified. For this personal application, recording-rights verification is not a release gate; this decision is not a claim that permission has been established. Technical integration remains subject to §15 `recorded-pronunciation`.
 
 - Integrate a known source/index; download recordings on demand rather than bundling the complete collection.
-- Pin the source integration/index version where practicable and document source identity.
+- Retain the specified index/recording revision and document source identity; source updates require an explicit pin change.
 - Cache completed downloads for reuse.
 - Filter candidates using available spelling/reading information.
 - Automatically choose the first matching recording; there is no alternatives list or manual replacement control.
@@ -378,6 +383,7 @@ For this personal application, configuring the online sources authorizes their a
 - Do not let late responses overwrite a newer selection or modify an exported note.
 - Do not silently retry potentially billable requests after process restart.
 - Preserve completed results. A failed or interrupted optional item exposes Retry through its neutral status explanation; Retry restarts only that item's source-priority chain and is user-initiated after process restart. There is no manual regeneration of a valid completed result. Never export or play an old result as if it matched changed inputs.
+- Completed audio cannot be independently removed or regenerated merely because its pronunciation is wrong. Relevant input changes still invalidate it under §10.2. This restriction does not remove the explicit media-import-failure recovery exception in §9.2.
 - Pending optional audio may finish while editing; sending a note excludes any optional result not ready in the frozen submission and does not wait for it.
 - Background completion guarantees and persistent background audio jobs are not required.
 
@@ -385,12 +391,12 @@ For this personal application, configuring the online sources authorizes their a
 
 ### 7.1 Image
 
-Support one optional image through the Android system photo picker or camera, followed by optional cropping.
+Support one optional image through the Android system photo picker or camera. Export the full orientation-corrected source frame, including the full camera capture described in §4.2; no user crop or automatic content crop is permitted. A square thumbnail is display-only and does not change export bounds.
 
 Processing requirements:
 
 1. Respect image orientation.
-2. Apply the chosen crop.
+2. Preserve the full source frame; do not crop.
 3. Limit the longest edge to **2048 pixels**, preserving aspect ratio and never upscaling.
 4. Remove location and EXIF metadata.
 5. Encode a static **AVIF** using a balanced fixed lossy preset.
@@ -409,9 +415,9 @@ An encoding failure must preserve the draft and permit retry or removal of the o
 1. Azure Translator, if configured and available.
 2. ML Kit on-device ja→en Translation, with its initial model download permitted. Translation is unavailable offline until the download completes and works offline thereafter; it is independent of Android TTS engine/voice selection.
 
-The result is always directly editable in place. When the local fallback produced the current text, the translation row carries the same small neutral mark used for pitch uncertainty (§4.1, §5.5); saving an edit clears it regardless of which source produced the original text. Saving an edit to the sentence text invalidates its translation. Automatically replace machine-owned text; preserve manually edited text for the explicit keep/replace decision in §10.2. There is no manual regeneration of valid completed text.
+The result is directly editable in place while editing is enabled (§4.11). When the local fallback produced the current text, the translation row carries the small neutral source mark described in §4.1. Any saved manual edit makes that text manual-owned and clears the fallback-source mark, regardless of the original source; this does not certify translation quality. Sentence changes and replacement suggestions follow §10.2. There is no manual regeneration of valid completed text.
 
-**Release gate:** verify ML Kit's model download lifecycle, download failure and retry behavior, offline availability after download, translation quality against real mined-sentence text (short, often context-free fragments such as signs, menus, and subtitles, not clean textbook Japanese), privacy behavior, and model/app size before release; see §15. Azure Translator requires its own service authorization even when the same multi-service resource key is used for TTS (§4.9). If both translation providers fail, leave the optional value empty with Retry in its status explanation; the note remains sendable.
+Model lifecycle, offline use, failure/retry, quality, privacy, and size verification are defined by §15 `local-translation` and `sdk-privacy`. Azure Translator requires its own service authorization even when the same multi-service resource key is used for TTS (§4.9). If both translation providers fail, leave a machine-owned optional value empty with Retry in its status explanation; preserve protected manual text under §10.2. The note remains sendable when optional translation is unavailable or omitted.
 
 ### 7.3 Notes
 
@@ -485,9 +491,11 @@ Known integration limitations to retain in test/release documentation:
 
 Use AnkiDroid's supported Android API/content-provider integration, not desktop AnkiConnect or direct collection-database access.
 
-Allowed collection access is limited to what creation needs: model/deck inspection, duplicate checking, media import, and new-note creation. Input-only scope does not prohibit those reads.
+Allowed collection access is limited to what creation needs: model/deck inspection, read-only inspection of existing tags, duplicate checking and submission reconciliation, media import, and new-note creation with initial destination assignment. Input-only scope does not prohibit those reads.
 
 Do not create decks, change note types, update preexisting notes, delete collection content, or trigger synchronization.
+
+During uninterrupted creation, destination assignment may move only cards of the newly inserted note whose returned ID belongs to that submission, then verify their destination. During recovery, card moves are prohibited even for a durably identified note created by this app (§9.5).
 
 The provider constants and insert/query behavior currently reference AnkiDroid **v2.24.0** source commit `ebcf8e0e34921628b9b8a496c66ffd4adbb3705f`, the release available on Google Play. The note/media provider source, `FlashCardsContract`, the browser intent's manifest declaration, and its browser search parsing are byte-identical at this tag and at the previously referenced v2.24.1 commit `9f579c10bb151146728220729c510acbbd8faba7`, verified by direct file comparison. This source reference is not proof of runtime compatibility; the exact supported AnkiDroid release must be pinned and validated on-device before release. Do not claim support for every historical AnkiDroid version based only on an API specification number. In this source version, `Utils.splitFields()` drops trailing empty strings; verify how provider insertion handles the required empty trailing fields in the reference schema. Never pad an extra/user-owned field to work around this without approval.
 
@@ -541,6 +549,8 @@ Media import, note insertion, and destination assignment are not assumed to be o
 - Distinguish definite failure, confirmed success, and uncertain outcome.
 - Do not promise exactly-once creation if the external API cannot establish it.
 - If reconciliation cannot determine the outcome, ask for explicit user resolution rather than blind retry.
+- Recovery is read-only with respect to existing notes/cards: never move cards during recovery, including cards of a durably identified newly created note. If insertion succeeded but destination assignment is incomplete, preserve the submission and report the known note ID and intended deck for manual handling in AnkiDroid. Do not label it confirmed successful export or offer another insertion; recheck destination membership after manual handling.
+- User confirmation that a matching note exists resolves the pending insertion without inserting again. It does not authorize moving or changing that note and does not by itself establish correct destination membership. Keep manual confirmation distinct from app-verified successful export; update last-sent tags and reset automatically only on confirmed completion (§9.4).
 - Do not delete collection media or existing notes as an automatic rollback strategy.
 - Do not update an exported note when late audio or lookup results arrive.
 
@@ -568,13 +578,15 @@ The implementation must track enough provenance to distinguish generated values 
 | Target span or dictionary entry (reselected via Edit word, §4.5) | Entry candidates, vocabulary data, sentence highlight, pitch, word audio |
 | Selected pitch | Pitch serialization and recorded-audio pitch-verification status; no guaranteed pitch-controlled synthesis |
 | Audio voice, rate, or service settings | Invalidate affected generated audio; regenerate during the active session, never silently after process restart |
-| Image selection/crop | Processed image |
+| Image selection | Processed full-frame image |
 
 Rules:
 
 - Automatically refresh affected untouched generated values; unresolved automatic readings anywhere never block export.
 - Preserve manual corrections and mark affected values stale.
-- Automatically restart affected audio after relevant edits/settings changes. Restart translation after sentence changes only when the translation is still machine-owned (§6.7, §7.2). Preserve a manually edited translation or definition as stale when its inputs change; its explanation offers Keep my text or Use new suggestion before export, or explicit omission for optional translation. Never silently replace protected manual text. Stale audio is unavailable while its replacement is pending, not a playable old attachment.
+- Automatically restart affected audio after relevant edits/settings changes (§6.7). Stale audio is unavailable while its replacement is pending, not a playable old attachment.
+- On a sentence change during the active session, automatically request a translation for the new sentence. Replace machine-owned text; for manual-owned text, preserve it as stale and store the new result as a separate suggestion. Offer **Keep my text**, **Use new suggestion** only when a current suggestion is ready, or explicit omission of the optional stale translation. Never apply a suggestion without the user's choice. Suggestion failure preserves manual text and offers Retry. Interrupted translation or suggestion requests require explicit Retry after process restart; do not automatically repeat cloud work.
+- Preserve a manually edited definition as stale when its inputs change and obtain a separate dictionary-based suggestion. Offer **Keep my text** or **Use new suggestion** before export. Never silently replace protected manual text.
 - Resolve stale required fields before export; optional stale results can be omitted from the frozen submission.
 - Missing optional results may remain empty; protected stale content must not silently be presented as freshly verified.
 - Ignore or cancel results from obsolete revisions.
@@ -584,14 +596,14 @@ The exact state-management architecture is not prescribed. Correctness and durab
 
 ## 11. Privacy, permissions, and security
 
-- No analytics, telemetry, advertising, or background clipboard access.
+- No app-added analytics or telemetry, advertising, or background clipboard access. Documented SDK-default telemetry is permitted, but diagnostic payloads must contain no sentence text, private notes, private media, or credentials. Document the selected SDK versions and their default diagnostic behavior; verify compliance before release (§15 `sdk-privacy`).
 - Store drafts and settings locally.
 - Exclude drafts, media, and credentials from Android backup/cloud restore.
 - Protect stored API secrets with Android Keystore-backed protection.
 - Keep secrets out of source control, Nix inputs/store paths, APK resources, logs, crash messages, and exported fields.
 - Do not log sentence content, private notes, or private media.
 - OCR text recognition runs entirely on-device; a captured photo is never uploaded for recognition. Verify the bundled ML Kit model's terms and privacy behavior before release.
-- Online pronunciation lookups, cloud synthesis, and cloud translation necessarily disclose their request text/lookup terms to configured services; no additional unrelated network processing is allowed. The explicitly selected ML Kit translation model may be downloaded on demand; translation text is processed on-device after download.
+- Online pronunciation lookups, cloud synthesis, and cloud translation necessarily disclose their request text/lookup terms to configured services. The explicitly selected ML Kit translation model may be downloaded on demand; translation text is processed on-device after download. Apart from documented SDK-default telemetry permitted above, no additional unrelated network processing is allowed. SDK diagnostics must not include user content or credentials, even when service requests legitimately contain them.
 - Use secure transport and validate downloaded media before use.
 - Request camera and AnkiDroid access only through supported permission mechanisms and handle denial gracefully.
 - Use the system photo picker rather than requiring unnecessary broad library access.
@@ -650,14 +662,16 @@ The first version has no approved numeric latency target or APK-size cap. It mus
 
 Automate linguistic, serialization, state, and build tests where practical. Use real-device/emulator checks for Android permissions, camera, TTS engines, and AnkiDroid rendering/API behavior.
 
+The release matrix requires Android APIs **35, 36, and 37 on each of `arm64-v8a` and `x86_64`** for startup/native loading, offline enrichment, and image encoding. Use physical hardware for camera and installed-TTS checks; emulator checks do not establish those hardware behaviors. Missing infrastructure leaves the applicable gate open, rather than silently reducing the matrix.
+
 | ID | Scenario | Required result |
 |---|---|---|
-| A01 | Install on Android 15 ARM64 phone and Android 16/17 x86_64 emulators | Application starts, bundled native dependencies load, local enrichment works across the supported releases and both ABIs |
+| A01 | Install on every API/ABI combination in the §14 release matrix | Application starts, bundled native dependencies load, and local enrichment works on APIs 35, 36, and 37 for both ARM64 and x86_64 |
 | A02 | Run without network after installation | Tokenization, JMdict lookup, furigana, and pitch lookup remain available; bundled OCR works from first launch; translation remains unavailable until its initial ML Kit model download completes, then works offline |
 | A03 | Select an inflected word | Sentence preserves surface form; vocabulary uses the resolved dictionary lemma, changed by reselection rather than free-text editing |
 | A04 | Select a repeated word occurrence | Only the chosen occurrence is highlighted in both sentence fields |
 | A05 | Adjust selection across tokens | Contiguous phrase is preserved; lookup failure preserves the draft and offers text editing or reselection, not manual vocabulary entry |
-| A06 | Several dictionary entries match | The ambiguity sheet overlays the complete Target screen (mockup 09), with sentence, image, tokens, and selection retained beneath the dimming; user confirms the entry before resolved vocabulary-dependent population |
+| A06 | Several dictionary entries match initially or after Edit word reselection | Initial ambiguity overlays complete Target (mockup 09); Edit word ambiguity retains Review underneath (§4.1). Preserve draft/selection, mark reselected vocabulary unresolved, and disable Send until entry confirmation |
 | A07 | Select several senses or enter a manual definition | Export preserves the selected meaning content safely |
 | A08 | Unknown or pending kanji reading in target, vocabulary, or elsewhere | Automatic unresolved spans have no fabricated ruby and are visibly marked; no manual correction/omission step; otherwise valid note remains sendable |
 | A09 | Kana-only sentence/vocabulary | No unnecessary annotation is required; furigana completion is valid |
@@ -672,10 +686,10 @@ Automate linguistic, serialization, state, and build tests where practical. Use 
 | A18 | All audio sources unavailable | The row's small neutral state icon replaces its play control; other data preserved; export allowed without audio |
 | A19 | Edit the sentence text or reselect the target after initial audio generation | Saving the edit automatically restarts the affected audio's source-priority chain; card text is unaffected; no manual control is involved |
 | A20 | *(retired)* — recording removed from scope (§3.2, §6.5) | — |
-| A21 | Pick/capture and crop an image on API 35–37 and both supported ABIs | Correct orientation, at most 2048 px longest edge, no upscaling, AVIF output, metadata removal; test platform encoder first and use pinned bundled encoder only if platform requirements are not met |
+| A21 | Pick/capture an image on every API/ABI combination in the §14 release matrix | Correct orientation, full source frame, no cropping controls or content crop, at most 2048 px longest edge, no upscaling, AVIF output, metadata removal; thumbnails do not affect export; encoder selection follows §7.1 |
 | A22 | Screenshot with small text on the selected AVIF encoder | Fixed preset retains acceptable readability and actual AnkiDroid displays it; record whether the tested encoder is platform or pinned bundled fallback |
 | A23 | Change target while requests run | Obsolete results cannot overwrite the new target |
-| A24 | Change text after a manual definition/translation correction | Protected text remains and is marked stale; Keep my text / Use new suggestion resolves it without silently overwriting work |
+| A24 | Change inputs after a manual definition/translation correction | Preserve protected text as stale; automatically obtain a separate current suggestion during the active session (§10.2). Keep my text / Use new suggestion resolves it without silent replacement; optional stale translation may be omitted; interrupted cloud suggestions require explicit Retry after restart |
 | A25 | Close/rotate/kill app with a draft or interrupted optional request | Saved work and durable media restore; billable work does not silently retry; the interrupted item offers explicit Retry without regenerating completed items |
 | A26 | AnkiDroid missing, permission denied, selected model missing required fields, or model removed | Clear actionable error; no collection modification or draft loss |
 | A27 | Same sentence and lemma in selected model/destination deck, regardless of reading | Export blocked without override; a failed duplicate check also blocks with retry |
@@ -686,7 +700,7 @@ Automate linguistic, serialization, state, and build tests where practical. Use 
 | A32 | Confirmed successful export | Correct note/deck/media/tags; blank editor with last deck, last capture mode, and the just-sent note's tags as the new starting chips |
 | A33 | Inspect exported fields in AnkiDroid | Required names receive valid furigana/highlight/pitch/media references; all `fm_*` values and any extra model fields are empty |
 | A34 | Clear/reach audio cache limit | Reusable cache bounded; active draft and exported Anki media unaffected |
-| A35 | Secrets/backup review | No credentials/content in logs or build outputs; private data excluded from Android backup |
+| A35 | Secrets/backup and SDK-diagnostics review | No credentials/content in logs, diagnostic payloads, or build outputs; private data excluded from Android backup; no app-added analytics/telemetry; permitted SDK-default telemetry documented and verified under §11 |
 | A36 | Two clean builds with identical pinned inputs | Unsigned universal APKs are byte-identical |
 | A37 | 200% fonts, TalkBack, dark mode, keyboard, portrait and landscape | 48dp non-overlapping touch targets, labelled states, legible contrast, scrollable card/sheets, and reachable editing actions without losing work |
 | A38 | Share selected Japanese text or plain text from another Android app | Editor receives sentence without guessing target or sending; an existing draft is not silently replaced |
@@ -699,7 +713,7 @@ Automate linguistic, serialization, state, and build tests where practical. Use 
 | A45 | Sending a note, then starting a new one | The new note's tags default to the just-sent note's tags, not the Settings seed value; the seed applies only on a fresh install with no prior note |
 | A46 | Switching between Photo and Type capture across sessions | The next session's capture screen opens in whichever mode was last used |
 | A47 | Share a single image from another app | Treated as a just-captured photo: on-device OCR runs, text-region ambiguity is handled the same as Photo-mode capture, the image is linked by default |
-| A48 | Dictionary lookup returns no candidate for the selected span | Preserve sentence/image/selection; offer Edit or reselect; no silent adjacent-span selection or manual vocabulary entry |
+| A48 | Dictionary lookup returns no candidate initially or after Edit word reselection | Preserve sentence/image/selection; offer Edit or reselect under §4.10. Initial misses retain Target; Edit word misses retain Review with unresolved vocabulary and Send disabled; no silent adjacent-span selection or manual vocabulary entry |
 | A49 | An unexpected failure occurs outside specifically handled paths | Preserve the saved draft and offer Return to draft; safe operations may retry; uncertain insertion never blindly retries or discards |
 | A50 | Tap Settings from either capture mode before any sentence exists | Settings sits in the application row to the right of Photo/Type, outside the OS status bar; note type, deck, and Azure configuration are reachable; no Settings entry exists on the review card |
 | A51 | Sending, success confirmation, a blocked duplicate, and an uncertain outcome | The submitted review card remains visible and unchanged, including Notes whether empty or populated; only the bottom action area's status changes, until confirmed success resets to blank capture |
@@ -710,13 +724,15 @@ Automate linguistic, serialization, state, and build tests where practical. Use 
 | A56 | Open Edit word/image/definition/tags or edit Notes | Complete current card persists behind the edit; discrete choices autosave, text edits offer Done, and Back preserves the draft |
 | A57 | Configure Azure or change offline voice | Validate Speech and Translator separately for the shared multi-service key; offline translation is independent of TTS voice availability |
 | A58 | Long pitch reading, grayscale, and TalkBack | All morae remain accessible without shrinking kana indefinitely; neutral selected-state cue and final-drop contour distinguish alternatives without color alone |
-| A59 | A word with a nasal-marked mora, once a nasal-annotated pitch source is pinned (§15 gate 14) | That mora's dot renders hollow at its already-correct high/low position; every other mora stays filled; no diagram anywhere is read as high/low from fill |
+| A59 | A word with a nasal-marked mora, once a nasal-annotated pitch source is pinned (§15 `phonetic-pitch-source`) | That mora's dot renders hollow at its already-correct high/low position; every other mora stays filled; no diagram anywhere is read as high/low from fill |
 | A60 | Rotate the phone while in Photo mode | Layout does not reflow or relocate any control; the Photo/Type label text and the Settings icon counter-rotate 90° to stay upright; the 4:3 frame, shutter, and thumbnail are unchanged |
 | A61 | Inspect interface icons under TalkBack and 200% font scale | Icons are Material Symbols vector glyphs sized from their control's font-size, not a fetched icon font; labels remain on the icon's container, not the glyph itself |
 | A62 | Inspect the Photo-mode camera preview in either orientation | The live preview is flush with the screen's left/right edges — no side margin, no side corner rounding; only its top and bottom are bounded by the mode-switch and shutter rows |
-| A63 | Capture realistic Japanese text with no network on a fresh installation | Bundled ML Kit Japanese OCR recognizes signs, menus, book pages, and screenshots on-device; record accuracy, app/model size, license/terms, privacy behavior, and confirm no model download or network call is needed |
+| A63 | Capture realistic Japanese text with no network on a fresh installation | Bundled ML Kit Japanese OCR recognizes signs, menus, book pages, and screenshots on-device; record accuracy, app/model size, license/terms, and privacy behavior under §11; confirm no model download or network call is needed for recognition |
 | A64 | Use ML Kit ja→en translation before and after its initial model download | Before download, show unavailable/failure with Retry and preserve the draft; after successful download, translate offline; verify translation quality, model lifecycle/failure/retry, privacy, size, and independence from Android TTS voice |
 | A65 | Resolve required Material3 Expressive components against pinned dependencies | Use stable APIs where available; if stable APIs lack required features, explicitly accept and validate the experimental APIs rather than silently dropping required design behavior |
+| A66 | Automatic reading or completed audio is incorrect despite correct inputs | Restrictions in §5.4 and §6.7 remain explicit: no independent reading correction/removal or completed-audio removal/regeneration; relevant input edits still invalidate results, and media-import failure retains §9.2 recovery |
+| A67 | Recover after note insertion with incomplete destination assignment | No card moves during recovery; retain submission and report note/deck for manual handling. No second insertion; read-only recheck can confirm completion after manual handling (§9.5) |
 
 Template defects must be distinguished from application serialization defects. Accents of 10 or more and unusual mora sequences should be included in compatibility reporting even when an external template limitation prevents perfect display.
 
@@ -724,22 +740,24 @@ Template defects must be distinguished from application serialization defects. A
 
 Product behavior is approved. Feasible candidate designs are not validated integrations. ML Kit Japanese OCR and on-device ja→en Translation, and AVIF encoding, still require verification of applicable licenses/terms, model and runtime behavior, privacy, size, measured memory/latency/quality, and applicable ABI/API compatibility. OCR must run on-device; translation permits its initial model download and then works offline. They cannot be omitted or replaced by a network-only service without approval. The following external facts must be verified during implementation before release:
 
-1. **SDK/toolchain:** pin working Android 15/API 35 minimum and Android 17/API 37 target SDK/toolchain, JDK, Gradle/Android plugin, NDK, and Nix inputs; verify native loading and platform compatibility on Android 15–17 and both ABIs.
-2. **Linguistic stack:** UniDic CWJ 3.1.1 source is pinned and the BSD license selected in `datasets/unidic/`; complete and verify MeCab Android binaries/JNI, full-dictionary loading, licensing, coverage, memory use, reading alignment, and reproducible packaging.
-3. **JMdict/Kanjium:** pin snapshots; verify notices, transformations, lookup correctness, and source-backed phonetic capabilities.
-5. **Azure:** approve TTS voice quality/price and Translator quality/price, 
-   verify region/key configuration for both, downloadable TTS output, rate 
-control, and safe credential storage.
-6. **On-device TTS:** verify voice discovery, offline capability, file synthesis, and usable output with the selected test engine.
-7. **AnkiDroid:** pin a tested release/API version; verify field-name mapping for reordered/extra fields, permissions, media transfer, destination-deck duplicate blocking (including permitting same sentence with a different lemma despite the first-field helper), and uncertain-outcome handling.
-8. **AVIF:** first test the Android platform AVIF encoder on API 35–37 and both supported ABIs for required output, quality, and reliability. Use a pinned bundled encoder only if the platform encoder cannot satisfy those requirements; verify its license/native packaging, fixed preset, acceptable processing behavior, and actual AnkiDroid rendering. Do not assume either encoder path works without testing.
-9. **Reproducibility:** demonstrate clean-build equality, not just dependency pinning or successful builds inside a shell.
-10. **Template compatibility:** test generated notes with the supplied template in AnkiDroid and document external rendering limitations separately.
-11. **Bundled ML Kit Japanese OCR:** verify Japanese recognition accuracy on realistic photographed text (signs, menus, book pages, screenshots), applicable terms/licensing, bundled model packaging size, privacy behavior, offline availability from first launch, and on-device recognition without network access; do not assume accuracy.
-12. **ML Kit on-device ja→en Translation:** verify initial model download lifecycle, offline use after download, failure/retry behavior, translation quality against real mined-sentence text (short, often context-free fragments, not clean textbook Japanese), applicable terms/licensing, privacy behavior, and model/app size. Confirm independence from Android TTS engine/voice; do not assume model availability or quality.
-13. **AnkiDroid note deep-link:** validate the source-supported browser `search=nid:<noteId>` route from this third-party app against the pinned installed version (§9.3), including handler absence and return-to-draft behavior. Source evidence is not a device test.
-14. **Nasal/devoiced pitch source:** the pinned `datasets/kanjium/accents.txt` supplies pitch positions only, confirmed by inspection (no nasal or devoicing field). Select and pin a source that does, or accept the pitch diagram rendering all-filled indefinitely (§5.5); do not fabricate nasal/devoicing marks from position data alone.
-15. **Material3 Expressive availability:** confirm the resolved `androidx.compose.material3:material3` version and availability/stability of required Expressive APIs. Use stable APIs when they provide the required components; if required APIs are not available in the stable version, explicitly allow and validate the experimental Material3 Expressive APIs rather than treating their use as prohibited.
+Gate identifiers below are stable; refer to them by identifier rather than list position.
+
+- **`sdk-toolchain` — SDK/toolchain:** pin working Android 15/API 35 minimum and Android 17/API 37 target SDK/toolchain, JDK, Gradle/Android plugin, NDK, and Nix inputs; verify native loading and platform compatibility using the full §14 release matrix.
+- **`linguistic-stack` — Linguistic stack:** UniDic CWJ 3.1.1 source is pinned and the BSD license selected in `datasets/unidic/`; complete and verify MeCab Android binaries/JNI, full-dictionary loading, licensing, coverage, memory use, reading alignment, and reproducible packaging.
+- **`dictionary-data` — JMdict/Kanjium:** pin snapshots; verify notices, transformations, lookup correctness, and source-backed phonetic capabilities.
+- **`recorded-pronunciation` — NHK-2016 integration:** verify the existing pinned source in §6.2, recording host behavior, available spelling/reading matching information, source identity, download bounds and media validation, cache reuse, availability failures, and fallback. Document metadata limitations without claiming unsupported reading/pitch matches. Recording rights remain unverified and are not a release gate for this personal application (§6.2).
+- **`azure-services` — Azure:** approve TTS voice quality/price and Translator quality/price; verify region/key configuration for both, downloadable TTS output, rate control, and safe credential storage.
+- **`offline-tts` — On-device TTS:** verify voice discovery, offline capability, file synthesis, and usable output with the selected test engine on physical hardware.
+- **`ankidroid-provider` — AnkiDroid:** pin a tested release/API version; verify field-name mapping for reordered/extra fields, permissions, read-only tag inspection, media transfer, destination-deck duplicate blocking (including permitting same sentence with a different lemma despite the first-field helper), initial destination assignment, and uncertain-outcome handling with no recovery card moves (§9.5).
+- **`avif-encoding` — AVIF:** verify the full-frame processing contract and platform-first encoder selection in §7.1 across the §14 release matrix, including fixed preset, quality, reliability, processing behavior, actual AnkiDroid rendering, and any bundled fallback's license/native packaging. Do not assume either encoder path works without testing.
+- **`reproducible-apk` — Reproducibility:** demonstrate clean-build equality under §12.3, not just dependency pinning or successful builds inside a shell.
+- **`template-compatibility` — Template compatibility:** test generated notes with the supplied template in AnkiDroid and document external rendering limitations separately (§8.3).
+- **`bundled-japanese-ocr` — Bundled ML Kit Japanese OCR:** verify Japanese recognition accuracy on realistic photographed text (signs, menus, book pages, screenshots), applicable terms/licensing, bundled model packaging size, privacy behavior under §11, offline availability from first launch, and on-device recognition without network access; do not assume accuracy.
+- **`local-translation` — ML Kit on-device ja→en Translation:** verify initial model download lifecycle, offline use after download, failure/retry behavior, translation quality against real mined-sentence text (short, often context-free fragments, not clean textbook Japanese), applicable terms/licensing, privacy behavior under §11, and model/app size. Confirm independence from Android TTS engine/voice; do not assume model availability or quality.
+- **`ankidroid-browser-link` — AnkiDroid note deep-link:** validate the source-supported browser `search=nid:<noteId>` route from this third-party app against the pinned installed version (§9.3), including handler absence and return-to-draft behavior. Source evidence is not a device test.
+- **`phonetic-pitch-source` — Nasal/devoiced pitch source:** the pinned `datasets/kanjium/accents.txt` supplies pitch positions only, confirmed by inspection (no nasal or devoicing field). Select and pin a source that does, or accept the pitch diagram rendering all-filled indefinitely (§5.5); do not fabricate nasal/devoicing marks from position data alone.
+- **`material3-expressive` — Material3 Expressive availability:** confirm the resolved `androidx.compose.material3:material3` version and availability/stability of required Expressive APIs. Use stable APIs when they provide the required components; if required APIs are not available in the stable version, explicitly allow and validate the experimental APIs rather than treating their use as prohibited.
+- **`sdk-privacy` — SDK diagnostics:** document pinned SDKs' default telemetry and verify the §11 prohibition on user content or credentials in diagnostic payloads, while distinguishing diagnostics from authorized service requests. No app-added analytics/telemetry is permitted. On-device processing alone is not evidence of compliant diagnostic behavior; unresolved behavior leaves this gate open.
 
 If a gate cannot be satisfied, return for an explicit decision. Do not silently substitute a provider, change image format, weaken reproducibility, require a network for linguistic enrichment, or omit the preferred recorded-word source.
 
@@ -777,36 +795,26 @@ These references inform the design; implementations must pin appropriate version
 - [Material Design 3](https://m3.material.io/) — color roles, type scale, shape scale, and component anatomy the mockups and app UI are built against (§4.1).
 - [Material Symbols/Icons](https://github.com/google/material-design-icons) — Apache-2.0 outlined icon glyphs, inlined as vector assets rather than fetched as a font (§4.1).
 
-## 17. Decision precedence
+## 17. Decision index and precedence
 
-This specification consolidates the approved interview outcomes. Later decisions supersede earlier suggestions:
+The authoritative sections below supersede older interview proposals, implementation status, and conflicting mockups. This index is not a second copy of the requirements; change the authoritative section and its acceptance scenarios together.
 
-- No preview, despite its inclusion in the initial workflow.
-- Android text sharing, single-image sharing, and selected-text actions are included; no background clipboard access.
-- The review card is the ground truth for the whole session once a target resolves; sending, success, duplicate blocking, and uncertain-outcome recovery are states of that same card's bottom action area, never separate full-screen layouts.
-- Dictionary misses preserve the draft and allow text editing or target reselection, never manual vocabulary entry. Unexpected errors preserve saved work; discarding is explicit and confirmed. These supersede the earlier discard-and-restart error policy.
-- A field's small neutral mark (§4.1) explains itself on tap; it is never that field's edit control. The two are always separate icons.
-- The Azure key is configured at runtime in Settings, not embedded at build time — reconsidered and reaffirmed given this is a personally-sideloaded application (§4.9).
-- Settings has exactly one entry point, on the capture screen; the review card does not redisplay or link to the configured note type or deck (supersedes the earlier dual-entry-point model).
-- A blocked duplicate's recovery action opens the existing note in AnkiDroid itself, subject to the platform gate in §15 — this application does not build its own note-comparison view.
-- No general Generate button or regeneration of completed results. Initial enrichment is automatic; edits refresh machine-owned results while protecting manual text. Failed/interrupted optional items offer explicit Retry without retrying possibly completed note insertion.
-- Dictionary ambiguity requires entry confirmation; pitch-pattern ambiguity does not — the app picks silently and exposes alternatives only inside the word-edit sheet.
-- All readings are automatic and optional, including target/vocabulary furigana; there are no reading-correction or explicit-omission controls. Missing readings and pitch never block export. This supersedes the earlier required-target-reading policy.
-- Word audio prefers NHK-2016 recordings over both Azure and on-device TTS; recordings are not bundled in full. There is no microphone recording, no manual audio source selection, and no alternates-list UI (supersedes the earlier microphone-recording scope).
-- Sentence translation is automatic, not manual, following the same Azure-preferred/local-fallback shape as audio; a local-fallback result is marked with a small neutral icon, an Azure result is not (supersedes the earlier "no translation API" exclusion).
-- "Editing a word" means reselecting its span or dictionary entry via Edit word, never typing a replacement lemma or reading directly.
-- One photo may serve as both the on-device OCR source and the note's image by default, splittable into two independent choices in one tap; typing remains a fully independent entry path with its own optional image.
-- A new note's starting tags default to the previous note's tags, not a fixed Settings default; the Settings value only seeds the first note on a fresh install (supersedes the earlier fixed-default-tags model).
-- The interface uses one neutral ink tone for every control; the only saturated color anywhere is the four-way pitch-pattern coding, reused from the reference template's own palette.
-- Online service configuration permits automatic requests without repeated consent dialogs.
-- Successful export starts a blank note instead of retaining the sentence for another target.
-- Matching sentence **and** lemma in the selected model/destination deck blocks export without override; either value differing permits export.
-- Images export as AVIF, not an unspecified general-purpose format.
-- Android 15/API 35 is the minimum; Android 17/API 37 is the target.
-- A reproducible unsigned APK build is required, not merely a Nix development shell.
-- The interface is built on Material Design 3 with a custom color scheme (sumi as `primary`; pitch hues kept outside the scheme) and inlined Material Symbols icons — supersedes the earlier unstyled/generic-glyph mockup pass. M3 component conventions (snackbar, top app bar, FAB, nav bar) do not override interaction decisions fixed elsewhere in this document.
-- A floating Send FAB was tried and reverted to the full-width docked button (§4.5): a FAB fits starting something new, not submitting something already reviewed, and the "no FAB" rule above is intentional, not a leftover.
-- A pitch mora's dot fill encodes nasalization (filled = normal, hollow = nasal), not high/low; high/low is carried by the dot's vertical position and the contour line alone. Supersedes the earlier fill-encodes-high/low convention. Release-gated on a verified, pinned nasal/devoicing source (§15 gate 14); absent such a source, render every pitch dot filled indefinitely.
-- The camera captures at 4:3 with a letterboxed, corner-bracketed preview frame, running edge-to-edge horizontally with no side margin or rounding — supersedes both the earlier undifferentiated-aspect viewfinder and this document's own earlier draft of an inset, rounded-card viewfinder. Rotating the phone counter-rotates only the Photo/Type label and Settings icon glyphs, like a standard camera app; it does not reflow the layout or relocate the shutter/thumbnail/frame (supersedes this document's own earlier draft of a reflowed, rail-based landscape layout).
-- The interface targets Material Design 3 **Expressive** specifically, not an unversioned "M3" — its type/shape updates are adopted, its richer-palette and decorative-shape themes are declined as conflicting with this app's single-neutral-plus-pitch-color rule (supersedes the earlier undated M3 adoption). Stable APIs are preferred; required Expressive APIs may use explicitly accepted experimental APIs if stable APIs lack them.
-- Japanese OCR uses bundled on-device ML Kit; ja→en translation uses on-device ML Kit with its initial model download permitted, works offline afterward, and does not depend on Android TTS voice. AVIF encoding tests the platform encoder on API 35–37/both ABIs first and uses a pinned bundled encoder only if platform capability cannot satisfy requirements.
+| Decision area | Authoritative sections |
+|---|---|
+| Input-only scope; no preview/reviewer; supported sharing and no clipboard monitoring | §1, §3, §4.8, §11 |
+| Review entry, reselection sheets, explicit navigation exceptions, and frozen submission presentation | §4.1, §4.3, §4.5, §4.10–§4.11 |
+| Sole Settings entry, row explanations separate from editing, neutral controls, M3 Expressive, vector symbols, no top app bar/nav bar/FAB/snackbar on Review | §4.1, §4.5, §4.9 |
+| Screen-locked edge-to-edge camera, counter-rotating glyphs, full-frame images, independent OCR/image roles, and no cropping | §4.2, §7.1 |
+| Target occurrence/lemma reselection; dictionary confirmation and misses; no manual vocabulary fallback | §4.3–§4.4, §4.10, §5.3 |
+| Automatic optional readings, including explicit limitations for wrong readings | §5.4, §9.2 |
+| Source-listed pitch alternatives, contour/dot semantics, source-backed phonetic marks | §5.5; §15 `phonetic-pitch-source` |
+| Existing pinned NHK source, automatic audio priority, no microphone/source picker, completed-audio restrictions, explicit interrupted-work retry | §3.2, §6.1–§6.7; §15 `recorded-pronunciation` |
+| Editable automatic translation, manual ownership, fallback mark, and protected-text suggestions | §7.2, §10.2 |
+| Previous-note tags rather than recurring Settings defaults; blank reset on success | §4.7, §7.4, §9.4 |
+| Runtime encrypted Azure configuration and authorized automatic service use | §4.9, §6.7, §11 |
+| Field-name mapping, template ownership, and external template defects | §8 |
+| Deck/model-scoped sentence-and-lemma duplicates and external browser link | §9.3; §15 `ankidroid-browser-link` |
+| Draft preservation, insertion uncertainty, and manual destination repair with no recovery card moves | §9.4–§9.5, §10.1 |
+| Local bundled linguistic processing, OCR, and independently downloaded offline translation model | §2, §5.1–§5.2, §7.2; §15 `bundled-japanese-ocr`, `local-translation` |
+| No app-added telemetry; documented SDK-default telemetry without user content/credentials | §11; §15 `sdk-privacy` |
+| Platform/API/ABI requirements, full release matrix, reproducible unsigned APK, separate signing | §2, §12, §14; §15 `sdk-toolchain`, `reproducible-apk` |
