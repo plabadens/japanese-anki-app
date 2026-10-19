@@ -37,8 +37,8 @@ Detailed feature sections are authoritative; scope and workflow summaries refere
 | Native user interface | Jetpack Compose with Material 3 |
 | Android support | Android 15 minimum; Android 17 target |
 | SDK configuration | `minSdk = 35`, `targetSdk = 37`, `compileSdk = 37` |
-| Device ABI | `arm64-v8a` for physical phones |
-| Emulator ABI | `x86_64` |
+| Supported runtime ABIs | `arm64-v8a` and `x86_64`; validate both using Android emulators |
+| Physical-device testing | Optional only; never a release blocker |
 | APK delivery | One universal APK containing support for both ABIs |
 | Build host | x86_64 NixOS |
 | Build definition | `flake.nix`, pinned dependencies, sandboxed build |
@@ -497,7 +497,7 @@ Do not create decks, change note types, update preexisting notes, delete collect
 
 During uninterrupted creation, destination assignment may move only cards of the newly inserted note whose returned ID belongs to that submission, then verify their destination. During recovery, card moves are prohibited even for a durably identified note created by this app (§9.5).
 
-The provider constants and insert/query behavior currently reference AnkiDroid **v2.24.0** source commit `ebcf8e0e34921628b9b8a496c66ffd4adbb3705f`, the release available on Google Play. The note/media provider source, `FlashCardsContract`, the browser intent's manifest declaration, and its browser search parsing are byte-identical at this tag and at the previously referenced v2.24.1 commit `9f579c10bb151146728220729c510acbbd8faba7`, verified by direct file comparison. This source reference is not proof of runtime compatibility; the exact supported AnkiDroid release must be pinned and validated on-device before release. Do not claim support for every historical AnkiDroid version based only on an API specification number. In this source version, `Utils.splitFields()` drops trailing empty strings; verify how provider insertion handles the required empty trailing fields in the reference schema. Never pad an extra/user-owned field to work around this without approval.
+The provider constants and insert/query behavior currently reference AnkiDroid **v2.24.0** source commit `ebcf8e0e34921628b9b8a496c66ffd4adbb3705f`, the release available on Google Play. The note/media provider source, `FlashCardsContract`, the browser intent's manifest declaration, and its browser search parsing are byte-identical at this tag and at the previously referenced v2.24.1 commit `9f579c10bb151146728220729c510acbbd8faba7`, verified by direct file comparison. This source reference is not proof of runtime compatibility; the exact supported AnkiDroid release must be pinned and validated in the Android emulator before release. Do not claim support for every historical AnkiDroid version based only on an API specification number. In this source version, `Utils.splitFields()` drops trailing empty strings; verify how provider insertion handles the required empty trailing fields in the reference schema. Never pad an extra/user-owned field to work around this without approval.
 
 ### 9.2 Export eligibility
 
@@ -596,12 +596,12 @@ The exact state-management architecture is not prescribed. Correctness and durab
 
 ## 11. Privacy, permissions, and security
 
-- No app-added analytics or telemetry, advertising, or background clipboard access. Documented SDK-default telemetry is permitted, but diagnostic payloads must contain no sentence text, private notes, private media, or credentials. Document the selected SDK versions and their default diagnostic behavior; verify compliance before release (§15 `sdk-privacy`).
+- No app-added analytics or telemetry, advertising, or background clipboard access. Documented SDK-default telemetry is permitted only when its transmitted diagnostic payloads contain no user content (including sentence text, private notes, or private media) or credentials. Distinguish transmitted diagnostics from the explicitly authorized configured-service requests described below; document the selected SDK versions and their default diagnostic behavior and verify compliance before release (§15 `sdk-privacy`).
 - Store drafts and settings locally.
 - Exclude drafts, media, and credentials from Android backup/cloud restore.
 - Protect stored API secrets with Android Keystore-backed protection.
 - Keep secrets out of source control, Nix inputs/store paths, APK resources, logs, crash messages, and exported fields.
-- Do not log sentence content, private notes, or private media.
+- Local application text logs, including ML Kit native/local logcat output, may contain ordinary user text (source/sentence, vocabulary, translation, private notes, and other text fields). Local text in logs alone is permitted and does not establish remote transmission. Do not log credentials/secrets or raw private media; this permission does not authorize uploading logs or private content, including through CCT or Google Cloud Logging.
 - OCR text recognition runs entirely on-device; a captured photo is never uploaded for recognition. Verify the bundled ML Kit model's terms and privacy behavior before release.
 - Online pronunciation lookups, cloud synthesis, and cloud translation necessarily disclose their request text/lookup terms to configured services. The explicitly selected ML Kit translation model may be downloaded on demand; translation text is processed on-device after download. Apart from documented SDK-default telemetry permitted above, no additional unrelated network processing is allowed. SDK diagnostics must not include user content or credentials, even when service requests legitimately contain them.
 - Use secure transport and validate downloaded media before use.
@@ -609,7 +609,7 @@ The exact state-management architecture is not prescribed. Correctness and durab
 - Use the system photo picker rather than requiring unnecessary broad library access.
 - Do not embed credentials in publicly readable media references or filenames.
 
-Ordinary diagnostics may identify operation types, source versions, and sanitized error codes without exposing user content.
+Operational diagnostics may identify operation types, source versions, and sanitized error codes. This does not narrow the permission for ordinary text in local application logs above or permit user content in transmitted diagnostics.
 
 ## 12. Build, data provenance, and reproducibility
 
@@ -660,9 +660,9 @@ The first version has no approved numeric latency target or APK-size cap. It mus
 
 ## 14. Acceptance tests
 
-Automate linguistic, serialization, state, and build tests where practical. Use real-device/emulator checks for Android permissions, camera, TTS engines, and AnkiDroid rendering/API behavior.
+Automate linguistic, serialization, state, and build tests where practical. Use Android emulators for Android permissions, camera-input flows, TTS engines, Compose accessibility, and AnkiDroid rendering/API behavior. Physical-device testing is optional and must not block release.
 
-The release matrix requires Android APIs **35, 36, and 37 on each of `arm64-v8a` and `x86_64`** for startup/native loading, offline enrichment, and image encoding. Use physical hardware for camera and installed-TTS checks; emulator checks do not establish those hardware behaviors. Missing infrastructure leaves the applicable gate open, rather than silently reducing the matrix.
+The release matrix requires Android APIs **35, 36, and 37 on each of `arm64-v8a` and `x86_64`** for startup/native loading, offline enrichment, and image encoding. Run all six combinations on Android emulators using pinned system images; emulator coverage is sufficient for release acceptance. If an emulator-specific capability (for example, camera or installed TTS) is unavailable, use deterministic emulator fixtures or a test engine and record the limitation; do not require an attached phone. Report emulator-only limitations separately from release-blocking failures.
 
 | ID | Scenario | Required result |
 |---|---|---|
@@ -700,7 +700,7 @@ The release matrix requires Android APIs **35, 36, and 37 on each of `arm64-v8a`
 | A32 | Confirmed successful export | Correct note/deck/media/tags; blank editor with last deck, last capture mode, and the just-sent note's tags as the new starting chips |
 | A33 | Inspect exported fields in AnkiDroid | Required names receive valid furigana/highlight/pitch/media references; all `fm_*` values and any extra model fields are empty |
 | A34 | Clear/reach audio cache limit | Reusable cache bounded; active draft and exported Anki media unaffected |
-| A35 | Secrets/backup and SDK-diagnostics review | No credentials/content in logs, diagnostic payloads, or build outputs; private data excluded from Android backup; no app-added analytics/telemetry; permitted SDK-default telemetry documented and verified under §11 |
+| A35 | Secrets/backup and SDK-diagnostics review | Local logs may contain ordinary text; no credentials/secrets in logs or build outputs, no raw private media in logs, no log/private-content uploads (including through CCT or Google Cloud Logging), and no user content or credentials in outbound diagnostic payloads; private data excluded from Android backup; no app-added analytics/telemetry; permitted SDK-default telemetry documented and verified under §11 |
 | A36 | Two clean builds with identical pinned inputs | Unsigned universal APKs are byte-identical |
 | A37 | 200% fonts, TalkBack, dark mode, keyboard, portrait and landscape | 48dp non-overlapping touch targets, labelled states, legible contrast, scrollable card/sheets, and reachable editing actions without losing work |
 | A38 | Share selected Japanese text or plain text from another Android app | Editor receives sentence without guessing target or sending; an existing draft is not silently replaced |
@@ -725,10 +725,10 @@ The release matrix requires Android APIs **35, 36, and 37 on each of `arm64-v8a`
 | A57 | Configure Azure or change offline voice | Validate Speech and Translator separately for the shared multi-service key; offline translation is independent of TTS voice availability |
 | A58 | Long pitch reading, grayscale, and TalkBack | All morae remain accessible without shrinking kana indefinitely; neutral selected-state cue and final-drop contour distinguish alternatives without color alone |
 | A59 | A word with a nasal-marked mora, once a nasal-annotated pitch source is pinned (§15 `phonetic-pitch-source`) | That mora's dot renders hollow at its already-correct high/low position; every other mora stays filled; no diagram anywhere is read as high/low from fill |
-| A60 | Rotate the phone while in Photo mode | Layout does not reflow or relocate any control; the Photo/Type label text and the Settings icon counter-rotate 90° to stay upright; the 4:3 frame, shutter, and thumbnail are unchanged |
+| A60 | Rotate the emulated device while in Photo mode | Layout does not reflow or relocate any control; the Photo/Type label text and the Settings icon counter-rotate 90° to stay upright; the 4:3 frame, shutter, and thumbnail are unchanged. Use emulator rotation controls; attached-device testing is optional. |
 | A61 | Inspect interface icons under TalkBack and 200% font scale | Icons are Material Symbols vector glyphs sized from their control's font-size, not a fetched icon font; labels remain on the icon's container, not the glyph itself |
 | A62 | Inspect the Photo-mode camera preview in either orientation | The live preview is flush with the screen's left/right edges — no side margin, no side corner rounding; only its top and bottom are bounded by the mode-switch and shutter rows |
-| A63 | Capture realistic Japanese text with no network on a fresh installation | Bundled ML Kit Japanese OCR recognizes signs, menus, book pages, and screenshots on-device; record accuracy, app/model size, license/terms, and privacy behavior under §11; confirm no model download or network call is needed for recognition |
+| A63 | Run realistic Japanese text fixtures through the emulator's camera/image input with no network on a fresh installation | Bundled ML Kit Japanese OCR recognizes signs, menus, book pages, and screenshots on-device; record accuracy, app/model size, license/terms, and privacy behavior under §11; confirm no model download or network call is needed for recognition. Use emulator-injected fixtures; real-camera validation is optional. |
 | A64 | Use ML Kit ja→en translation before and after its initial model download | Before download, show unavailable/failure with Retry and preserve the draft; after successful download, translate offline; verify translation quality, model lifecycle/failure/retry, privacy, size, and independence from Android TTS voice |
 | A65 | Resolve required Material3 Expressive components against pinned dependencies | Use stable APIs where available; if stable APIs lack required features, explicitly accept and validate the experimental APIs rather than silently dropping required design behavior |
 | A66 | Automatic reading or completed audio is incorrect despite correct inputs | Restrictions in §5.4 and §6.7 remain explicit: no independent reading correction/removal or completed-audio removal/regeneration; relevant input edits still invalidate results, and media-import failure retains §9.2 recovery |
@@ -747,7 +747,7 @@ Gate identifiers below are stable; refer to them by identifier rather than list 
 - **`dictionary-data` — JMdict/Kanjium:** pin snapshots; verify notices, transformations, lookup correctness, and source-backed phonetic capabilities.
 - **`recorded-pronunciation` — NHK-2016 integration:** verify the existing pinned source in §6.2, recording host behavior, available spelling/reading matching information, source identity, download bounds and media validation, cache reuse, availability failures, and fallback. Document metadata limitations without claiming unsupported reading/pitch matches. Recording rights remain unverified and are not a release gate for this personal application (§6.2).
 - **`azure-services` — Azure:** approve TTS voice quality/price and Translator quality/price; verify region/key configuration for both, downloadable TTS output, rate control, and safe credential storage.
-- **`offline-tts` — On-device TTS:** verify voice discovery, offline capability, file synthesis, and usable output with the selected test engine on physical hardware.
+- **`offline-tts` — On-device TTS:** verify voice discovery, offline capability, file synthesis, and usable output with an installed emulator test engine/voice. Physical-hardware validation is optional, not a release gate.
 - **`ankidroid-provider` — AnkiDroid:** pin a tested release/API version; verify field-name mapping for reordered/extra fields, permissions, read-only tag inspection, media transfer, destination-deck duplicate blocking (including permitting same sentence with a different lemma despite the first-field helper), initial destination assignment, and uncertain-outcome handling with no recovery card moves (§9.5).
 - **`avif-encoding` — AVIF:** verify the full-frame processing contract and platform-first encoder selection in §7.1 across the §14 release matrix, including fixed preset, quality, reliability, processing behavior, actual AnkiDroid rendering, and any bundled fallback's license/native packaging. Do not assume either encoder path works without testing.
 - **`reproducible-apk` — Reproducibility:** demonstrate clean-build equality under §12.3, not just dependency pinning or successful builds inside a shell.
@@ -757,7 +757,7 @@ Gate identifiers below are stable; refer to them by identifier rather than list 
 - **`ankidroid-browser-link` — AnkiDroid note deep-link:** validate the source-supported browser `search=nid:<noteId>` route from this third-party app against the pinned installed version (§9.3), including handler absence and return-to-draft behavior. Source evidence is not a device test.
 - **`phonetic-pitch-source` — Nasal/devoiced pitch source:** the pinned `datasets/kanjium/accents.txt` supplies pitch positions only, confirmed by inspection (no nasal or devoicing field). Select and pin a source that does, or accept the pitch diagram rendering all-filled indefinitely (§5.5); do not fabricate nasal/devoicing marks from position data alone.
 - **`material3-expressive` — Material3 Expressive availability:** confirm the resolved `androidx.compose.material3:material3` version and availability/stability of required Expressive APIs. Use stable APIs when they provide the required components; if required APIs are not available in the stable version, explicitly allow and validate the experimental APIs rather than treating their use as prohibited.
-- **`sdk-privacy` — SDK diagnostics:** document pinned SDKs' default telemetry and verify the §11 prohibition on user content or credentials in diagnostic payloads, while distinguishing diagnostics from authorized service requests. No app-added analytics/telemetry is permitted. On-device processing alone is not evidence of compliant diagnostic behavior; unresolved behavior leaves this gate open.
+- **`sdk-privacy` — SDK diagnostics:** document pinned SDKs' default telemetry; verify that transmitted diagnostic payloads contain no user content or credentials and that logs/private content are not uploaded, including through CCT or Google Cloud Logging (§11), separately from authorized configured-service requests. Ordinary local text logs, including ML Kit native/local logcat output, are permitted; their presence alone is not evidence of transmission or a violation. Verify that logs contain no credentials/secrets or raw private media. No app-added analytics/telemetry is permitted. On-device processing alone is not evidence of compliant diagnostic behavior; unresolved behavior leaves this gate open.
 
 If a gate cannot be satisfied, return for an explicit decision. Do not silently substitute a provider, change image format, weaken reproducibility, require a network for linguistic enrichment, or omit the preferred recorded-word source.
 
@@ -816,5 +816,6 @@ The authoritative sections below supersede older interview proposals, implementa
 | Deck/model-scoped sentence-and-lemma duplicates and external browser link | §9.3; §15 `ankidroid-browser-link` |
 | Draft preservation, insertion uncertainty, and manual destination repair with no recovery card moves | §9.4–§9.5, §10.1 |
 | Local bundled linguistic processing, OCR, and independently downloaded offline translation model | §2, §5.1–§5.2, §7.2; §15 `bundled-japanese-ocr`, `local-translation` |
-| No app-added telemetry; documented SDK-default telemetry without user content/credentials | §11; §15 `sdk-privacy` |
+| Local text logs permitted; no credentials/secrets or raw private media in logs; no log/private-content uploads; transmitted diagnostics exclude user content/credentials; no app-added telemetry | §11; §15 `sdk-privacy` |
 | Platform/API/ABI requirements, full release matrix, reproducible unsigned APK, separate signing | §2, §12, §14; §15 `sdk-toolchain`, `reproducible-apk` |
+| Emulator-only release testing; physical-device testing optional and non-blocking | §2, §14; docs/acceptance-test-matrix.md |

@@ -65,9 +65,9 @@ nix run .#emulator-wrapper -- stop
 
 For iterating on UI code, `scripts/rebuild.sh [test|build-only]` builds the debug APK (via `nix develop`, reusing the incremental Gradle cache) and reinstalls+relaunches it in one command. `scripts/pixel.py <png> at|row|col ...` inspects screenshot pixels precisely (exact edge/letterbox bounds) instead of eyeballing a downscaled render.
 
-Install AnkiDroid only in this emulator by downloading its APK from the official AnkiDroid release/Play distribution and running the wrapper's `install` command with that APK. Never uninstall apps or clear data on the attached physical phone.
+Install AnkiDroid only in this emulator by downloading its APK from the official AnkiDroid release/Play distribution and running the wrapper's `install` command with that APK. Keep all test data disposable and isolated to the emulator; do not touch any attached phone.
 
-Use the emulator for repeatable UI-state, light/dark theme, Android share-intent, AnkiDroid provider-flow, and screenshot-based checks. Keep camera behavior, real installed TTS voice quality, Audible/audio-quality, and Azure audition checks on the physical phone. This AVD is x86_64 and exercises the x86_64 native ABI, not the physical phone's arm64-v8a ABI. The pinned nixpkgs manifest provides Google APIs x86_64 images for API 35, 36, and 36.1, but not API 37; API 35 (Android 15) is the packaged default. Emulator tooling is dev/test-only and does not change the APK reproducibility boundary (`.#apk` / `.#debugApk`).
+Use emulators for repeatable UI-state, light/dark theme, Android share-intent, AnkiDroid provider-flow, screenshot, camera-input, TTS, and accessibility checks. Inject known image fixtures for OCR and install a test offline TTS engine/voice for synthesis checks. The packaged AVD is x86_64; provision pinned emulator images for all API/ABI combinations required by SPEC §14, including ARM64, rather than substituting attached hardware. Physical-device validation is optional and never blocks release. Emulator-only limitations should be recorded separately from failures.
 
 ## Current implementation
 

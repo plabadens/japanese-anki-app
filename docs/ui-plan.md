@@ -81,12 +81,7 @@ eyebrow style for small uppercase labels. The mockup screen inventory runs
   window-inset handling anywhere (no `statusBarsPadding`/`navigationBarsPadding`/
   `imePadding`), so content could draw under the status bar on edge-to-edge
   API 35 (§4.1, A37) — latent on every screen, not just Settings.
-- **Known gaps left by this pass**: Photo mode's screen-lock/counter-rotation
-  behavior for landscape (§4.2, A60) is not implemented; no thumbnail chip next
-  to the shutter button (mockup 06). The emulator's camera is synthetic/
-  headless, so OCR-against-real-text has not been exercised — only the
-  physical phone can verify that per the project's established split of
-  testing responsibilities.
+- **Known gaps left by this pass**: Photo mode's screen-lock/counter-rotation behavior for landscape (§4.2, A60) is not implemented; no thumbnail chip next to the shutter button (mockup 06). The emulator's camera is synthetic/headless, so OCR against realistic Japanese text still needs emulator-injected image fixtures. Physical-phone testing is optional and is not a release gate; this supersedes the earlier testing split recorded in this note.
 
 - **Verified on-device this pass**: capture screen (segmented Photo/Type pill,
   inlined-vector gear icon), target screen (token chips, trimmed instructional
