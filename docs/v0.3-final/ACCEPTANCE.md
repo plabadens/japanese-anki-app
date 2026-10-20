@@ -65,9 +65,9 @@ the APK built from `285ccef`. Emulator: `ro.build.version.sdk=37`, `release=17`,
 | R04 | **NOT RUN** | Landscape *capture* → portrait continuation needs a camera capture, which the headless AVD cannot produce. Draft survives rotation (R21). |
 | R05 | **PASS** | Photo picker → bundled ML Kit Japanese OCR produced `店のコーヒーはとてもおいしかった。` and, for the full fixture, 7 readable excerpts (`5:23`, `▲10.0.2.2:8765/fixture.htm`, `昨日は友達と新`, `しい喫茶店に行`, `った。`, …) in the "Choose the text region" sheet. `screens/final/photo-ocr-region.png`, `photo-ocr-multi-region-excerpts.png`. Photos stayed local. |
 | R06 | **PARTIAL** | Plain-text `ACTION_SEND` opened Type preparation with the sentence and did not guess a target (PASS). Photo attach on a non-empty draft raised **"Replace current draft?"** with Keep draft / Replace (PASS). **Image `ACTION_SEND` NOT VERIFIED:** `am start --eu android.intent.extra.STREAM content://media/external/images/media/28 --grant-read-uri-permission` reaches the app (it switches to Photo), but the app then gets `SecurityException: dev.pierre.japaneseanki has no access to content://media/external/images/media/28` — the adb-injected URI grant is not delivered by the platform, so no image is read and the draft is kept. That is a harness limitation, not proof that a real gallery share fails, and not proof that it works. Typed input with a Japanese IME was not exercised. |
-| R07 | **NOT RUN** | Device pass used a dictionary-form target only; inflection/duplicate/Unicode-boundary behaviour is covered by `JapaneseMorphologyTest`/`TargetSpanTest` unit tests, which are not a substitute. |
-| R08 | **NOT RUN** | Entry/sense ambiguity was not re-run on this revision; unit tests cover the resolver. Previous candidate frames are retained under `screens/candidate-superseded/`. |
-| R09 | **NOT RUN** | Local dataset miss (e.g. 喫茶 has no AJT pitch record) was not re-run this pass. |
+| R07 | **PASS** | Text share `昨日は友だちと喫茶店でケーキを食べた。` → token 食べ selected → `Selected: 食べ → 食べる`, vocabulary `食べる · たべる`, sense "to eat / Ichidan verb, transitive verb", pitch diagram present, Continue enabled. Inflected surface stays in the sentence while the lemma resolves; no adjacent-word guess. `screens/final/inflected-target-resolves-lemma.png`. Duplicate-occurrence and Unicode-boundary cases remain unit-test only. |
+| R08 | **PASS** | Tapping 喫茶 on the same revision opened **"Choose dictionary entry"** with `喫茶 · きっさ` and `喫茶 · きっちゃ`, both glossed, before any generation; the first sense of the chosen entry is checked by default. `screens/final/entry-ambiguity-chooser.png`. |
+| R09 | **PASS** | Choosing 喫茶/きっさ shows `No AJT pitch record matches this entry/reading, so the note cannot be mined.`, keeps the selection, and **Continue to generate** is gated on `pitch != null && selectedDictionaryEntry != null` (so it cannot start generation or a paid request for that word). `screens/final/pitch-miss-blocks-word.png`. |
 | R10 | **PARTIAL** | Sentence ruby renders correctly for きのう/ともだち/あたらしい/きっさ/てん/いっ with the target highlighted after the fix (screens). Kana-only spans are unannotated. Targeted reading correction NOT RUN on device. |
 | R11 | **PARTIAL** | `PitchAccentTest` golden fixture (悪逆/アクギャク, accent 0, nasal キ) passes; `docs/v0.3-reference-template/parser-test.mjs` → 5/5 (nasal handakuten kept as annotation, devoicing inherited, contracted kana, accent ≥ 10, odaka vs nakadaka). Final rendering inside AnkiDroid NOT RUN (no export). |
 | R12 | **PASS** | Real NHK-2016 index fetched; recording for 新しい/あたらしい downloaded, validated and played (logcat: `AudioTrack: stop(16): called with 44808 frames delivered`). No synthesized-word fallback exists in the build. |
@@ -91,10 +91,27 @@ the APK built from `285ccef`. Emulator: `ro.build.version.sdk=37`, `release=17`,
 
 ## Summary
 
-PASS: R01, R05, R12, R15, R16, R18, R22, R29.
+PASS: R01, R05, R07, R08, R09, R12, R15, R16, R18, R22, R29.
 PARTIAL: R02, R06, R10, R11, R17, R20, R21, R26, R27, R28.
 NOT RUN (credential-gated): R13, R14, R24, R25, R28-live.
-NOT RUN (not exercised in this pass): R03, R04, R07, R08, R09, R19, R23.
+NOT RUN (not exercised in this pass): R03, R04, R19, R23.
+
+## Known defects not fixed in this pass
+
+1. **Stale vocabulary display after an unresolved entry choice.** Tap a target whose word has several
+   dictionary entries (喫茶 → きっさ/きっちゃ), then dismiss the "Choose dictionary entry" sheet: the
+   screen keeps showing `Selected: 喫茶 → 食べる` with the previous word's definition and pitch until an
+   entry is chosen. Generation is still blocked (`selectedDictionaryEntry == null` gates
+   "Continue to generate"), so no wrong note can be exported, but the display is misleading.
+   `screens/final/pitch-miss-blocks-word.png` shows the clean path; the stale case was observed on the
+   same device and is reproducible with the steps above.
+2. **Settings is one scrollable dialog**, not a settings screen; Google/OpenRouter/cache controls sit
+   below the fold.
+3. **First NHK index fetch (37 MB) has no progress indicator.**
+4. **After process death** the sentence-audio failure reason is behind the info icon rather than
+   restored verbatim.
+5. `flake.nix` composes only an `android-35` emulator image; the API-37 AVD was provisioned by hand
+   (`evidence/emulator-provisioning.md`).
 
 The app is delivered as an installable APK with the local half of the journey verified on a real
 API-37 x86_64 emulator. It is **not** a verified end-to-end mining-to-AnkiDroid release: no note has
