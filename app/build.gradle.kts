@@ -25,10 +25,10 @@ android {
 
     defaultConfig {
         applicationId = "dev.pierre.japaneseanki"
-        minSdk = 35
+        minSdk = 37
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         externalNativeBuild {
@@ -89,11 +89,9 @@ if (System.getenv("IN_GRADLE_UPDATE_DEPS") == "1") {
 
 dependencies {
     implementation("com.google.mlkit:text-recognition-japanese:16.0.1")
-    implementation("com.google.mlkit:translate:17.0.3")
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
-    implementation(libs.androidx.heifwriter)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.ui)

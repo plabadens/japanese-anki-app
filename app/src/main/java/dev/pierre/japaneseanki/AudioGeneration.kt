@@ -12,6 +12,8 @@ data class AudioCacheKey(
     val rate: Float,
     val engine: String = "",
     val entryIdentity: String = "",
+    /** Canonical phonetic-hint fragment for sentence speech; empty for other audio. */
+    val hintIdentity: String = "",
 ) {
     init {
         require(source.isNotBlank())
@@ -21,7 +23,8 @@ data class AudioCacheKey(
     }
 
     internal fun filename(): String {
-        val identity = listOf(source, text, entryIdentity, engine, voice, java.lang.Float.toString(rate)).joinToString("\u0000")
+        val identity = listOf(source, text, entryIdentity, engine, voice, java.lang.Float.toString(rate), hintIdentity)
+            .joinToString("\u0000")
         val digest = MessageDigest.getInstance("SHA-256").digest(identity.toByteArray(Charsets.UTF_8))
         return digest.joinToString("") { "%02x".format(it) }
     }
@@ -145,8 +148,6 @@ class ReusableAudioCache(
         const val DEFAULT_MAX_BYTES: Long = 250L * 1024 * 1024
     }
 }
-
-enum class AudioItem { SENTENCE, VOCABULARY }
 
 data class AudioRequestIdentity(val item: AudioItem, val revision: Long, val text: String, val entryIdentity: String? = null) {
     init {

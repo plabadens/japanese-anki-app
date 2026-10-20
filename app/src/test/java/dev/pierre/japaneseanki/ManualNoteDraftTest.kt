@@ -19,17 +19,14 @@ class ManualNoteDraftTest {
         dictionaryEntryResolved = true,
         vocabularyReading = vocabularyReading,
         definition = "cat",
+        translation = "The cat runs.",
+        pitch = vocabularyReading.takeIf(String::isNotBlank)?.let { PitchAccent.create(it, 0) },
     )
 
-    @Test fun unresolvedKanjiTargetAndVocabularyAreSendableAsOriginalText() {
+    @Test fun unresolvedKanjiTargetWithoutPitchBlocksExport() {
         val unresolved = draft()
-        assertTrue(unresolved.validationErrors().isEmpty())
-
-        val fields = unresolved.fieldsByName()
-        assertNotNull(fields)
-        assertEquals("<b>猫</b>が走る", fields!!["SentKanji"])
-        assertEquals("<b>猫</b>が走る", fields["SentFurigana"])
-        assertEquals("猫", fields["VocabFurigana"])
+        assertTrue(unresolved.validationErrors().any { it.contains("pitch pattern") })
+        assertNull(unresolved.fieldsByName())
     }
 
     @Test fun serializesManualFieldsWithControlledTargetMarkup() {
@@ -92,21 +89,22 @@ class ManualNoteDraftTest {
     }
 
     @Test fun kanaOnlyContentDoesNotRequireManualReadingConfirmation() {
-        val kana = draft().copy(sentence = "ねこがはしる", target = TargetSpan(0, 2), vocabulary = "ねこ")
+        val kana = draft(vocabularyReading = "ねこ")
+            .copy(sentence = "ねこがはしる", target = TargetSpan(0, 2), vocabulary = "ねこ")
         assertTrue(kana.validationErrors().isEmpty())
         assertNotNull(kana.fieldsByName())
     }
 
-    @Test fun unknownPitchIsEmptyAndStalePitchDoesNotBlockOrSerialize() {
+    @Test fun missingAndStalePitchBlockExport() {
         val unknown = draft().fieldsByName()
-        assertNotNull(unknown)
-        assertEquals("", unknown!!["VocabPitch"])
+        assertNull(unknown)
+        assertTrue(draft().validationErrors().any { it.contains("pitch pattern") })
 
         val stalePitch = PitchAccent.create("ねこ", 0)!!
         val stale = draft(vocabularyReading = "ねこ")
             .copy(vocabularyReading = "いぬ", pitch = stalePitch)
-        assertTrue(stale.validationErrors().isEmpty())
-        assertEquals("", stale.fieldsByName()!!["VocabPitch"])
+        assertTrue(stale.validationErrors().any { it.contains("Pitch does not match") })
+        assertNull(stale.fieldsByName())
     }
 
     @Test fun typedVocabularyWithoutDictionaryEntryCannotSendOrExportPitch() {
@@ -119,16 +117,15 @@ class ManualNoteDraftTest {
         assertNull(unresolved.fieldsByName())
     }
 
-    @Test fun optionalReadingsAndUnknownPitchDoNotRequireReview() {
+    @Test fun missingPitchIsRequiredEvenWhenReadingsAreOptional() {
         val optional = draft().copy(
             sentenceReading = "",
             vocabularyReading = "",
             pitch = null,
             dependentFieldsStale = false,
         )
-        assertTrue(optional.validationErrors().isEmpty())
-        assertEquals("猫", optional.fieldsByName()!!["VocabFurigana"])
-        assertEquals("", optional.fieldsByName()!!["VocabPitch"])
+        assertTrue(optional.validationErrors().any { it.contains("pitch pattern") })
+        assertNull(optional.fieldsByName())
     }
 
     @Test fun validPitchSerializesAndRequiredNoteFieldsStillValidate() {
@@ -144,5 +141,7 @@ class ManualNoteDraftTest {
         assertFalse(draft().copy(sentence = "").validationErrors().isEmpty())
         assertFalse(draft().copy(target = TargetSpan(10, 12)).validationErrors().isEmpty())
         assertFalse(draft().copy(vocabulary = "").validationErrors().isEmpty())
+        assertFalse(draft().copy(translation = "   ").validationErrors().isEmpty())
+        assertNull(draft().copy(translation = "").fieldsByName())
     }
 }

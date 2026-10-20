@@ -6,13 +6,16 @@ import java.net.URI
 internal object AnkiMediaImporter {
     fun sanitizeFilename(filename: String): String? {
         if (!SAFE_FILENAME.matches(filename) || filename.startsWith('.')) return null
-        if (!filename.endsWith(".avif", ignoreCase = true)) return null
+        if (!filename.endsWith(".webp", ignoreCase = true)) return null
         return filename
     }
 
     fun sanitizeAudioFilename(filename: String): String? {
         if (!SAFE_FILENAME.matches(filename) || filename.startsWith('.')) return null
-        if (!filename.endsWith(".wav", ignoreCase = true) && !filename.endsWith(".ogg", ignoreCase = true)) return null
+        if (!filename.endsWith(".wav", ignoreCase = true) &&
+            !filename.endsWith(".ogg", ignoreCase = true) &&
+            !filename.endsWith(".mp3", ignoreCase = true)
+        ) return null
         return filename
     }
 

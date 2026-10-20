@@ -114,6 +114,7 @@ internal fun ReviewCard(
     onAddTag: () -> Unit,
     onChooseImage: () -> Unit = {},
     onRemoveImage: () -> Unit = {},
+    imageRemovable: Boolean = true,
     onDefinitionChange: (String) -> Unit = {},
     onNotesChange: (String) -> Unit = {},
     tokens: List<JapaneseToken> = emptyList(),
@@ -153,23 +154,24 @@ internal fun ReviewCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            ReviewFieldRow("Image", onEdit = { editingField = "Image" }, editingEnabled = editingEnabled) {
+            if (imagePath != null || imageStatus != null) {
+                ReviewFieldRow("Image", onEdit = { editingField = "Image" }, editingEnabled = editingEnabled) {
                 when {
                     imagePath != null && File(imagePath).isFile -> AndroidView(
                         factory = { context -> ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_CROP } },
                         update = { it.setImageURI(Uri.fromFile(File(imagePath))) },
                         modifier = Modifier.size(72.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(10.dp)),
                     )
-                    imageStatus != null -> Box(
+                    else -> Box(
                         Modifier.size(72.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(10.dp))
-                            .semantics { contentDescription = imageStatus },
+                            .semantics { contentDescription = imageStatus.orEmpty() },
                         contentAlignment = Alignment.Center,
                     ) {
-                        if (imageStatus.startsWith("Preparing", ignoreCase = true)) {
+                        if (imageStatus?.startsWith("Preparing", ignoreCase = true) == true) {
                             CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
                         } else {
                             Text(
-                                imageStatus,
+                                imageStatus.orEmpty(),
                                 modifier = Modifier.padding(4.dp),
                                 style = MaterialTheme.typography.labelSmall,
                                 textAlign = TextAlign.Center,
@@ -178,10 +180,7 @@ internal fun ReviewCard(
                             )
                         }
                     }
-                    else -> Box(
-                        Modifier.size(72.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(10.dp))
-                            .semantics { contentDescription = "No image attached" },
-                    )
+                }
                 }
             }
             ReviewFieldRow(
@@ -300,7 +299,7 @@ internal fun ReviewCard(
                         label = {
                             Text(
                                 if (translationPending && translation.isBlank()) "Translating sentence…"
-                                else "Sentence translation (optional)",
+                                else "Sentence translation (required)",
                             )
                         },
                         minLines = 2,
@@ -405,7 +404,10 @@ internal fun ReviewCard(
                         Text("Edit image", style = MaterialTheme.typography.titleLarge)
                         Text("Choose a different image or remove the current one.", style = MaterialTheme.typography.bodyMedium)
                         TextButton(onClick = { editingField = null; onChooseImage() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Choose image") }
-                        TextButton(onClick = { editingField = null; onRemoveImage() }, enabled = imagePath != null, modifier = Modifier.heightIn(min = 48.dp)) { Text("Remove image") }
+                        TextButton(onClick = { editingField = null; onRemoveImage() }, enabled = imagePath != null && imageRemovable, modifier = Modifier.heightIn(min = 48.dp)) { Text("Remove image") }
+                        if (!imageRemovable) {
+                            Text("This draft came from a photo, so it keeps an image.", style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                     "Word" -> {
                         Text("Edit word", style = MaterialTheme.typography.titleLarge)

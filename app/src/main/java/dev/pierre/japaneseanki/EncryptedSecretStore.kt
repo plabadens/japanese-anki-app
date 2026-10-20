@@ -13,7 +13,7 @@ import javax.crypto.spec.GCMParameterSpec
 
 /** Encrypts optional user credentials with a non-exportable Android Keystore key. */
 internal object EncryptedSecretStore {
-    private const val KEY_ALIAS = "japanese-anki.azure-tts"
+    private const val KEY_ALIAS = "japanese-anki.credentials"
     private const val TRANSFORMATION = "AES/GCM/NoPadding"
     private const val IV_SIZE = 12
 

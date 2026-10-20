@@ -13,19 +13,28 @@ class AnkiDroidGateway(
     private val resolver: ContentResolver,
     private val context: Context? = null,
 ) {
-    /** Imports a completed durable AVIF through AnkiDroid's v2.24.0 media provider. */
-    fun importProcessedImage(file: File): String {
+    /** Imports a completed durable WebP through AnkiDroid's v2.24.0 media provider. */
+    fun importProcessedImage(file: File): String = importMedia(file, ::sanitizeImageName)
+
+    /** Imports a completed draft MP3/Ogg recording through the same media provider. */
+    fun importAudio(file: File): String = importMedia(file, ::sanitizeAudioName)
+
+    private fun sanitizeImageName(name: String): String? = AnkiMediaImporter.sanitizeFilename(name)
+
+    private fun sanitizeAudioName(name: String): String? = AnkiMediaImporter.sanitizeAudioFilename(name)
+
+    private fun importMedia(file: File, sanitize: (String) -> String?): String {
         val appContext = requireNotNull(context) {
-            "A Context is required to grant AnkiDroid temporary access to image media."
+            "A Context is required to grant AnkiDroid temporary access to media."
         }.applicationContext
-        require(file.isFile) { "Processed image file does not exist." }
+        require(file.isFile) { "Media file does not exist." }
         val approvedDirectory = File(appContext.filesDir, MEDIA_DIRECTORY).canonicalFile
         val canonicalFile = file.canonicalFile
         require(canonicalFile.parentFile == approvedDirectory) {
-            "Processed image must be stored in the durable draft media directory."
+            "Media must be stored in the durable draft media directory."
         }
-        val preferredName = AnkiMediaImporter.sanitizeFilename(canonicalFile.name)
-        require(canonicalFile.name == preferredName) { "Processed image filename is unsafe." }
+        val preferredName = sanitize(canonicalFile.name)
+        require(canonicalFile.name == preferredName) { "Media filename is unsafe." }
 
         val fileUri = FileProvider.getUriForFile(appContext, MEDIA_FILE_PROVIDER_AUTHORITY, canonicalFile)
         appContext.grantUriPermission(ANKI_PACKAGE, fileUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)

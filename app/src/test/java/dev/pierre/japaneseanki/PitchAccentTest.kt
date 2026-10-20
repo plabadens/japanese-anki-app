@@ -7,6 +7,36 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PitchAccentTest {
+    private val akugyakuHtml = "<span class=\"low_rise\">ア</span><span class=\"high\">ク" +
+        "<span class=\"nasal\">キ<span class=\"handakuten\">&#176;</span></span>ャク</span>"
+
+    @Test fun sourceHtmlIsExportedVerbatimWithPitchNumber() {
+        val pitch = PitchAccent.create("アクギャク", 0, akugyakuHtml)!!
+        assertEquals("$akugyakuHtml <span class=\"pitch_number\">0</span>", pitch.fieldMarkup)
+        assertEquals(4, pitch.morae.size)
+    }
+
+    @Test fun nestedNasalMarkIsParsedOntoItsOwnMora() {
+        val pitch = PitchAccent.create("アクギャク", 0, akugyakuHtml)!!
+        assertEquals(setOf(2), pitch.marks.nasalMorae)
+        assertTrue(pitch.marks.devoicedMorae.isEmpty())
+    }
+
+    @Test fun handakutenMarkIsNotAMora() {
+        val pitch = PitchAccent.create("アクギャク", 0, akugyakuHtml)!!
+        assertEquals(listOf("ア", "ク", "ギャ", "ク"), pitch.morae)
+    }
+
+    @Test fun devoicedMarkIsPreserved() {
+        val html = "<span class=\"high_drop\">オ</span><span class=\"low\"><span class=\"devoiced\">ク</span>セ</span>"
+        val pitch = PitchAccent.create("オクセ", 1, html)!!
+        assertEquals(setOf(1), pitch.marks.devoicedMorae)
+    }
+
+    @Test fun htmlForADifferentReadingIsRejected() {
+        assertNull(PitchAccent.create("アクギャク", 0, "<span class=\"high\">サクラ</span>"))
+    }
+
     @Test fun contractedKanaAndMoraCharactersAreCountedCorrectly() {
         assertEquals(listOf("しゅ", "っ", "ちょ", "う"), PitchAccent.create("しゅっちょう", 0)?.morae)
         assertEquals(listOf("ガ", "ッ", "コ", "ー"), PitchAccent.create("ガッコー", 0)?.morae)
@@ -52,7 +82,7 @@ class PitchAccentTest {
         assertFalse(PitchAccent.create("かな", 1)!!.fieldMarkup.contains("<script"))
     }
 
-    @Test fun stalePitchDoesNotBlockExportAndIsOmitted() {
+    @Test fun stalePitchBlocksExport() {
         val pitch = PitchAccent.create("ねこ", 0)!!
         val draft = ManualNoteDraft(
             sentence = "猫",
@@ -61,6 +91,7 @@ class PitchAccentTest {
             vocabulary = "猫",
             vocabularyReading = "ねこ",
             definition = "cat",
+            translation = "A cat.",
             dictionaryEntryResolved = true,
             pitch = pitch,
         )
@@ -68,8 +99,8 @@ class PitchAccentTest {
         assertEquals(pitch.fieldMarkup, draft.fieldsByName()?.get("VocabPitch"))
 
         val mismatchedPitch = draft.copy(vocabularyReading = "びょう")
-        assertTrue(mismatchedPitch.validationErrors().isEmpty())
-        assertEquals("", mismatchedPitch.fieldsByName()?.get("VocabPitch"))
+        assertTrue(mismatchedPitch.validationErrors().any { it.contains("Pitch does not match") })
+        assertNull(mismatchedPitch.fieldsByName())
     }
 
     private fun classes(reading: String, accent: Int): List<String> =

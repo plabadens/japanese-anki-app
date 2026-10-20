@@ -10,10 +10,10 @@ import java.io.File
 class SubmissionRecoveryTest {
     @Test
     fun restoredDraftTagsPreferLastSentTagsBeforeSettingsDefaults() {
-        assertEquals("last note", initialDraftTags(null, "last note", "settings default"))
-        assertEquals("saved draft", initialDraftTags("saved draft", "last note", "settings default"))
-        assertEquals("", initialDraftTags("", "last note", "settings default"))
-        assertEquals("settings default", initialDraftTags(null, null, "settings default"))
+        assertEquals("last note", initialDraftTags(null, "last note"))
+        assertEquals("saved draft", initialDraftTags("saved draft", "last note"))
+        assertEquals("", initialDraftTags("", "last note"))
+        assertEquals("", initialDraftTags(null, null))
     }
 
     @Test
@@ -31,7 +31,7 @@ class SubmissionRecoveryTest {
     fun tagsAndMediaIdentityRemainStableForFrozenRetries() {
         val tags = setOf("JLPT::N4", "mine")
         assertEquals(tags, decodeSubmissionValues(encodeSubmissionValues(tags.toList().sorted()))?.toSet())
-        val identity = MediaIdentity("/tmp/draft/image.avif", 42L, 7L)
+        val identity = MediaIdentity("/tmp/draft/image.webp", 42L, 7L)
         assertEquals(identity, identity.copy())
     }
 
@@ -124,8 +124,8 @@ class SubmissionRecoveryTest {
             orderedFields = listOf("日本語"), sentence = "日本語", lemma = "日本語",
             vocabularyReading = "にほんご", sentenceReading = "にほんご", definition = "Japanese",
             translation = "Japanese", notes = "", tags = emptySet(), pitchAccentText = "",
-            targetStart = 0, targetEnd = 3, media = MediaIdentity("/tmp/image.avif", 10L, 11L),
-            importedFilename = "image.avif", noteId = null,
+            targetStart = 0, targetEnd = 3, media = MediaIdentity("/tmp/image.webp", 10L, 11L),
+            importedFilename = "image.webp", noteId = null,
             sentenceAudio = FrozenAudioItem(MediaIdentity("/draft/sentence.wav", 20L, 21L), "sentence.wav"),
             wordAudio = FrozenAudioItem(MediaIdentity("/draft/word.ogg", 30L, 31L), omitted = true),
         )
@@ -196,12 +196,12 @@ class SubmissionRecoveryTest {
             orderedFields = listOf("日本語"), sentence = "日本語", lemma = "日本語",
             vocabularyReading = "", sentenceReading = "", definition = "", translation = "",
             notes = "", tags = emptySet(), pitchAccentText = "", targetStart = 0, targetEnd = 3,
-            media = MediaIdentity("/tmp/image.avif", 10L, 11L), importedFilename = "image.avif", noteId = null,
+            media = MediaIdentity("/tmp/image.webp", 10L, 11L), importedFilename = "image.webp", noteId = null,
         )
         preferences.edit().putFrozenSubmission(legacy, SubmissionPhase.MEDIA_IMPORTED).commit()
         val restored = readFrozenSubmission(preferences)!!
         assertEquals(legacy.media, restored.media)
-        assertEquals("image.avif", restored.importedFilename)
+        assertEquals("image.webp", restored.importedFilename)
         assertEquals(FrozenAudioItem(null), restored.sentenceAudio)
         assertEquals(FrozenAudioItem(null), restored.wordAudio)
     }

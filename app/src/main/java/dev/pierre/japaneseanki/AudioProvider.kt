@@ -3,47 +3,29 @@ package dev.pierre.japaneseanki
 import java.io.File
 import java.io.IOException
 
-data class AudioSourceConfiguration(
-    val azureConfigured: Boolean = false,
-)
+enum class AudioItem { SENTENCE, VOCABULARY }
 
-enum class AudioSource { RECORDED_PRONUNCIATION, AZURE, ANDROID_OFFLINE }
-
-data class AudioSourceIdentity(
-    val source: AudioSource,
-    val providerIdentity: String,
-    val engine: String? = null,
-    val voice: String,
-    val rate: Float,
-) {
-    init {
-        require(providerIdentity.isNotBlank() && voice.isNotBlank())
-        require(rate.isFinite() && rate > 0f)
-    }
-}
-
+/** One recording or synthesis request. Text and credentials stay out of diagnostics. */
 data class AudioSynthesisRequest(
     val item: AudioItem,
     val text: String,
     val revision: Long,
     val entryIdentity: String? = null,
 ) {
-    init { require(text.isNotBlank() && revision >= 0) }
+    init {
+        require(text.isNotBlank() && revision >= 0)
+    }
 }
 
-/** Implementations write complete WAV or Ogg audio and keep text and credentials out of diagnostics. */
+/** Implementations write complete WAV, Ogg, or MP3 audio into [output] and return it. */
 fun interface AudioProvider {
     fun synthesize(request: AudioSynthesisRequest, output: File): File
 }
 
-data class AudioProviderBinding(
-    val identity: AudioSourceIdentity,
-    val provider: AudioProvider,
-    val available: () -> Boolean = { true },
-)
-
-/** Simple structural WAV check applied to both provider output and reusable cache entries. */
+/** Structural checks applied to provider output, draft copies, and reusable cache entries. */
 object AudioFileValidator {
+    const val MAX_BYTES: Long = 20L * 1024 * 1024
+
     @Throws(IOException::class)
     fun requireWav(file: File): File {
         if (!file.isFile || file.length() < 44) throw IOException("Audio provider returned no usable WAV file")
@@ -92,18 +74,12 @@ object AudioFileValidator {
         return file
     }
 
-    /** Check Ogg page structure, including segment bounds, before caching or exporting recordings. */
+    /** Check container structure before caching, drafting, or exporting. */
     @Throws(IOException::class)
     fun requireSupported(file: File): File = when (file.extension.lowercase()) {
         "wav" -> requireWav(file)
         "ogg" -> requireOgg(file)
-        "" -> {
-            val isWave = file.isFile && file.length() >= 12 && java.io.RandomAccessFile(file, "r").use { input ->
-                ByteArray(4).also(input::readFully).toString(Charsets.US_ASCII) == "RIFF" &&
-                    (input.seek(8).let { ByteArray(4).also(input::readFully).toString(Charsets.US_ASCII) } == "WAVE")
-            }
-            if (isWave) requireWav(file) else throw IOException("Audio provider returned an unsupported audio format")
-        }
+        "mp3" -> requireMp3Structure(file)
         else -> throw IOException("Audio provider returned an unsupported audio format")
     }
 
@@ -135,58 +111,18 @@ object AudioFileValidator {
         }
         return file
     }
-}
 
-/** Pure backend source-priority seam for recorded, Azure, and on-device audio. */
-class AudioSourceChain(
-    private val configuration: AudioSourceConfiguration,
-    private val recorded: AudioProviderBinding?,
-    private val azure: AudioProviderBinding?,
-    private val androidOffline: AudioProviderBinding?,
-    private val reusableCache: ReusableAudioCache? = null,
-) {
-    fun generate(request: AudioSynthesisRequest, outputDirectory: File): AudioChainResult {
-        val candidates = buildList {
-            if (request.item == AudioItem.VOCABULARY && request.entryIdentity != null) recorded?.let(::add)
-            if (configuration.azureConfigured) azure?.let(::add)
-            androidOffline?.let(::add)
+    /** ID3v2 tag or MPEG frame sync; Google returns MP3 for the fixed delivery configuration. */
+    private fun requireMp3Structure(file: File): File {
+        if (!file.isFile || file.length() < 256 || file.length() > MAX_BYTES) {
+            throw IOException("Audio provider returned no usable MP3 file")
         }
-        if (!outputDirectory.exists() && !outputDirectory.mkdirs()) {
-            return AudioChainResult.Failed(request, "Audio output is unavailable")
-        }
-        for (binding in candidates) {
-            val identity = binding.identity
-            val key = AudioCacheKey(
-                source = "${identity.source}:${identity.providerIdentity}", text = request.text,
-                voice = identity.voice, rate = identity.rate, engine = identity.engine.orEmpty(),
-                entryIdentity = if (request.item == AudioItem.VOCABULARY) request.entryIdentity.orEmpty() else "",
-            )
-            reusableCache?.get(key)?.let { cached ->
-                if (runCatching { AudioFileValidator.requireSupported(cached) }.isSuccess) {
-                    val copy = File(outputDirectory, "${request.item.name.lowercase()}-${request.revision}.${cached.extension.lowercase()}")
-                    try {
-                        cached.copyTo(copy, overwrite = true)
-                        return AudioChainResult.Ready(request, identity.source, copy)
-                    } catch (_: Exception) { copy.delete() }
-                }
-            }
-            if (!runCatching(binding.available).getOrDefault(false)) continue
-            val extension = if (identity.source == AudioSource.RECORDED_PRONUNCIATION) "ogg" else "wav"
-            val output = File(outputDirectory, "${request.item.name.lowercase()}-${request.revision}-${identity.source.name.lowercase()}.$extension")
-            try {
-                val produced = AudioFileValidator.requireSupported(binding.provider.synthesize(request, output))
-                reusableCache?.put(key, produced)
-                return AudioChainResult.Ready(request, identity.source, produced)
-            } catch (_: Exception) {
-                output.delete()
-            }
-        }
-        return AudioChainResult.Failed(request, "No audio source is currently available")
+        val header = ByteArray(4)
+        val read = file.inputStream().use { it.read(header) }
+        if (read < 4) throw IOException("Audio provider returned no usable MP3 file")
+        val id3 = header[0].toInt() == 0x49 && header[1].toInt() == 0x44 && header[2].toInt() == 0x33
+        val frameSync = (header[0].toInt() and 0xff) == 0xff && (header[1].toInt() and 0xe0) == 0xe0
+        if (!id3 && !frameSync) throw IOException("Audio provider returned no usable MP3 file")
+        return file
     }
-}
-
-sealed interface AudioChainResult {
-    val request: AudioSynthesisRequest
-    data class Ready(override val request: AudioSynthesisRequest, val source: AudioSource, val file: File) : AudioChainResult
-    data class Failed(override val request: AudioSynthesisRequest, val explanation: String) : AudioChainResult
 }

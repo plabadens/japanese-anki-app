@@ -24,6 +24,10 @@ java -cp "$gradle_lib/*" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler \
   app/src/main/java/dev/pierre/japaneseanki/AnkiFieldSerializer.kt \
   app/src/main/java/dev/pierre/japaneseanki/ManualNoteDraft.kt \
   app/src/main/java/dev/pierre/japaneseanki/PitchAccent.kt \
+  app/src/main/java/dev/pierre/japaneseanki/AjtPitchHtml.kt \
+  app/src/main/java/dev/pierre/japaneseanki/speech/MiniJson.kt \
+  app/src/main/java/dev/pierre/japaneseanki/speech/SentenceSpeech.kt \
+  app/src/main/java/dev/pierre/japaneseanki/speech/GoogleSpeech.kt \
   app/src/main/java/dev/pierre/japaneseanki/JapaneseMorphology.kt \
   app/src/main/java/dev/pierre/japaneseanki/OcrCandidateSelection.kt \
   app/src/test/java/dev/pierre/japaneseanki/TargetSpanTest.kt \
@@ -31,6 +35,7 @@ java -cp "$gradle_lib/*" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler \
   app/src/test/java/dev/pierre/japaneseanki/AnkiFieldSerializerTest.kt \
   app/src/test/java/dev/pierre/japaneseanki/ManualNoteDraftTest.kt \
   app/src/test/java/dev/pierre/japaneseanki/PitchAccentTest.kt \
+  app/src/test/java/dev/pierre/japaneseanki/speech/SpeechTest.kt \
   app/src/test/java/dev/pierre/japaneseanki/JapaneseMorphologyTest.kt \
   app/src/test/java/dev/pierre/japaneseanki/OcrCandidateSelectionTest.kt
 
@@ -40,5 +45,7 @@ java -cp "$classes:$runtime_cp" org.junit.runner.JUnitCore \
   dev.pierre.japaneseanki.AnkiFieldSerializerTest \
   dev.pierre.japaneseanki.ManualNoteDraftTest \
   dev.pierre.japaneseanki.PitchAccentTest \
+  dev.pierre.japaneseanki.speech.SpeechHintBuilderTest \
+  dev.pierre.japaneseanki.speech.GoogleSpeechProviderTest \
   dev.pierre.japaneseanki.JapaneseMorphologyTest \
   dev.pierre.japaneseanki.OcrCandidateSelectionTest

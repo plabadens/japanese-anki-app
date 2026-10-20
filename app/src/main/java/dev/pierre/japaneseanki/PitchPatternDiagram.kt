@@ -97,8 +97,24 @@ internal fun PitchPatternDiagram(
             }
             centers.forEachIndexed { index, center ->
                 drawCircle(pitchColor, radius = dotRadius.toPx(), center = center)
-                if (pitchDotIsHollow(isSourceBackedNasalMora = false)) {
+                if (pitchDotIsHollow(isSourceBackedNasalMora = index in pitch.marks.nasalMorae)) {
                     drawCircle(surface, radius = (dotRadius - 0.9.dp).toPx(), center = center)
+                }
+                if (index in pitch.marks.devoicedMorae) {
+                    // Devoiced is a separate source fact from nasalization: a small cross, not a hollow dot.
+                    val arm = dotRadius.toPx() * 0.8f
+                    drawLine(
+                        pitchColor,
+                        Offset(center.x - arm, center.y),
+                        Offset(center.x + arm, center.y),
+                        strokeWidth = lineWidth.toPx(),
+                    )
+                    drawLine(
+                        pitchColor,
+                        Offset(center.x, center.y - arm),
+                        Offset(center.x, center.y + arm),
+                        strokeWidth = lineWidth.toPx(),
+                    )
                 }
             }
         }
@@ -139,5 +155,15 @@ private fun PitchAccent.accessibilityDescription(): String {
         accentPosition == morae.size -> "drops after the final mora"
         else -> "drops after mora $accentPosition"
     }
-    return "${morae.joinToString(" ")}, reading $reading, pitch $drop"
+    val markText = marksNarration().let { if (it.isEmpty()) "" else ", $it" }
+    return "${morae.joinToString(" ")}$markText, reading $reading, pitch $drop"
 }
+
+private fun PitchAccent.marksNarration(): String = buildList {
+    if (marks.nasalMorae.isNotEmpty()) {
+        add("nasal " + marks.nasalMorae.sorted().joinToString(" ") { morae[it] })
+    }
+    if (marks.devoicedMorae.isNotEmpty()) {
+        add("devoiced " + marks.devoicedMorae.sorted().joinToString(" ") { morae[it] })
+    }
+}.joinToString(", ")

@@ -55,6 +55,25 @@
         includeSystemImages = true;
         includeNDK = false;
       };
+      emulatorSdk37 = androidEnv.composeAndroidPackages {
+        platformVersions = [ "37" ];
+        systemImageTypes = [ "google_apis" ];
+        abiVersions = [ "x86_64" ];
+        includeEmulator = true;
+        includeSystemImages = true;
+        includeNDK = false;
+      };
+      emulatorPackage37 = androidEnv.emulateApp {
+        name = "japanese-anki-emulator-api37";
+        platformVersion = "37";
+        abiVersion = "x86_64";
+        systemImageType = "google_apis";
+        sdkExtraArgs = {
+          includeEmulator = true;
+          includeSystemImages = true;
+          includeNDK = false;
+        };
+      };
       sdkRoot = "${android.androidsdk}/libexec/android-sdk";
       emulatorSdkRoot = "${emulatorSdk.androidsdk}/libexec/android-sdk";
       emulatorPackage = androidEnv.emulateApp {
@@ -153,6 +172,7 @@
         apk = releaseApk;
         debugApk = debugApk;
         emulator = emulatorPackage;
+        emulator-api37 = emulatorPackage37;
         emulator-wrapper = emulatorWrapper;
       };
 

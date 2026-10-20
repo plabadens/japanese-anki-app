@@ -10,8 +10,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import android.speech.tts.TextToSpeech
-import android.speech.tts.Voice
+import android.media.MediaPlayer
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -73,6 +72,18 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import dev.pierre.japaneseanki.ui.ReviewCard
 import dev.pierre.japaneseanki.ui.ReviewSendPresentation
+import dev.pierre.japaneseanki.ui.ReviewAudioPresentation
+import dev.pierre.japaneseanki.speech.CloudVoice
+import dev.pierre.japaneseanki.speech.GoogleChirpSpeechProvider
+import dev.pierre.japaneseanki.speech.HintResult
+import dev.pierre.japaneseanki.speech.ReadingHint
+import dev.pierre.japaneseanki.speech.ReadingHintBuilder
+import dev.pierre.japaneseanki.speech.ReadingHintSpan
+import dev.pierre.japaneseanki.speech.SentenceSpeechProvider
+import dev.pierre.japaneseanki.speech.SentenceSpeechRequest
+import dev.pierre.japaneseanki.speech.SpeechException
+import dev.pierre.japaneseanki.speech.decodeVoices
+import dev.pierre.japaneseanki.speech.encodeVoices
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -84,9 +95,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.io.File
@@ -101,6 +114,50 @@ private const val IMAGE_RECEIPT_PATH = "image_import_receipt_path"
 private const val IMAGE_RECEIPT_FILENAME = "image_import_receipt_filename"
 private const val IMAGE_RECEIPT_SIZE = "image_import_receipt_size"
 private const val IMAGE_RECEIPT_MODIFIED = "image_import_receipt_modified"
+private const val GOOGLE_KEY_PREF = "google_tts_key_encrypted"
+private const val VOICE_CACHE_PREF = "google_voice_cache"
+private const val SENTENCE_AUDIO_RECEIPT_PATH = "sentence_audio_receipt_path"
+private const val SENTENCE_AUDIO_RECEIPT_FILENAME = "sentence_audio_receipt_filename"
+private const val SENTENCE_AUDIO_RECEIPT_SIZE = "sentence_audio_receipt_size"
+private const val SENTENCE_AUDIO_RECEIPT_MODIFIED = "sentence_audio_receipt_modified"
+private const val WORD_AUDIO_RECEIPT_PATH = "word_audio_receipt_path"
+private const val WORD_AUDIO_RECEIPT_FILENAME = "word_audio_receipt_filename"
+private const val WORD_AUDIO_RECEIPT_SIZE = "word_audio_receipt_size"
+private const val WORD_AUDIO_RECEIPT_MODIFIED = "word_audio_receipt_modified"
+
+/** Filename of a previously imported, still-identical media item, or null. */
+private fun importedReceipt(
+    preferences: SharedPreferences,
+    pathKey: String,
+    filenameKey: String,
+    sizeKey: String,
+    modifiedKey: String,
+    file: File?,
+    sanitize: (String) -> String?,
+): String? {
+    if (file == null || !file.isFile) return null
+    val stat = runCatching { MediaIdentity.fromFile(file) }.getOrNull() ?: return null
+    if (preferences.getString(pathKey, null) != stat.path ||
+        preferences.getLong(sizeKey, -1L) != stat.size ||
+        preferences.getLong(modifiedKey, -1L) != stat.modified
+    ) return null
+    return preferences.getString(filenameKey, null)?.let(sanitize)
+}
+
+/** Per-item audio state for the current draft revision. */
+internal data class DraftAudio(
+    val path: String? = null,
+    val generating: Boolean = false,
+    val error: String? = null,
+    val identity: String = "",
+) {
+    fun presentation(): ReviewAudioPresentation = when {
+        generating -> ReviewAudioPresentation.Generating
+        path != null -> ReviewAudioPresentation.Ready
+        error != null -> ReviewAudioPresentation.Failed(error)
+        else -> ReviewAudioPresentation.Unavailable
+    }
+}
 
 enum class AppRoute { Capture, Target, Review }
 
@@ -146,50 +203,19 @@ class MainActivity : ComponentActivity() {
     private lateinit var offlineDictionary: OfflineDictionary
     private lateinit var offlineAnalyzer: OfflineJapaneseAnalyzer
     private lateinit var japaneseOcr: JapaneseOcr
-    private var textToSpeech: TextToSpeech? = null
-    private val offlineJapaneseVoices = mutableStateOf<List<Voice>>(emptyList())
-    private val textToSpeechEngine = mutableStateOf<String?>(null)
-    private val textToSpeechReady = mutableStateOf(false)
-    private val textToSpeechError = mutableStateOf(false)
+    private var ajtPitchIndex: AjtPitchIndex? = null
+    private var audioPlayer: MediaPlayer? = null
 
-    private fun initializeTextToSpeech() {
-        textToSpeech?.shutdown()
-        textToSpeech = null
-        textToSpeechReady.value = false
-        textToSpeechError.value = false
-        offlineJapaneseVoices.value = emptyList()
-        textToSpeechEngine.value = null
-        val handler = Handler(Looper.getMainLooper())
-        var created: TextToSpeech? = null
-        try {
-            created = TextToSpeech(applicationContext) { status ->
-                handler.post {
-                    val service = created ?: return@post
-                    if (textToSpeech !== service) return@post
-                    if (status == TextToSpeech.SUCCESS) {
-                        textToSpeechEngine.value = service.defaultEngine
-                        offlineJapaneseVoices.value = service.voices.orEmpty()
-                            .filter {
-                                it.locale.language == "ja" && !it.isNetworkConnectionRequired &&
-                                    "notInstalled" !in it.features
-                            }
-                            .sortedBy { it.name }
-                    } else {
-                        textToSpeechError.value = true
-                    }
-                    textToSpeechReady.value = true
-                }
-            }
-            textToSpeech = created
-        } catch (_: Exception) {
-            textToSpeechError.value = true
-            textToSpeechReady.value = true
+    private fun stopAudioPlayback() {
+        audioPlayer?.runCatching {
+            if (isPlaying) stop()
+            release()
         }
+        audioPlayer = null
     }
 
     override fun onDestroy() {
-        textToSpeech?.shutdown()
-        textToSpeech = null
+        stopAudioPlayback()
         super.onDestroy()
     }
 
@@ -211,9 +237,6 @@ class MainActivity : ComponentActivity() {
             val apiPermissionLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.RequestPermission(),
             ) { granted -> apiPermissionGranted = granted }
-            val ttsVoiceDataLauncher = rememberLauncherForActivityResult(
-                ActivityResultContracts.StartActivityForResult(),
-            ) { initializeTextToSpeech() }
             var editor by remember {
                 mutableStateOf(
                     TextFieldValue(
@@ -234,13 +257,17 @@ class MainActivity : ComponentActivity() {
                 )
             }
             var vocabulary by remember { mutableStateOf(preferences.getString("vocabulary", "").orEmpty()) }
-            var vocabularyReading by remember { mutableStateOf("") }
-            var pitchAccentText by remember { mutableStateOf("") }
-            val pitch = pitchAccentText.toIntOrNull()?.let { PitchAccent.create(vocabularyReading, it) }
+            var vocabularyReading by remember { mutableStateOf(preferences.getString("vocabulary_reading", "").orEmpty()) }
+            var pitchAccentText by remember { mutableStateOf(preferences.getString("pitch_accent", "").orEmpty()) }
+            var pitchHtmlText by remember { mutableStateOf(preferences.getString("pitch_html", null)) }
+            var pitchIndexError by remember { mutableStateOf<String?>(null) }
+            val pitch = pitchAccentText.toIntOrNull()?.let {
+                PitchAccent.create(vocabularyReading, it, pitchHtmlText)
+            }
             var definition by remember { mutableStateOf(preferences.getString("definition", "").orEmpty()) }
             var definitionManuallyEdited by remember { mutableStateOf(preferences.getBoolean("definition_manual", false)) }
             var definitionProvenanceKnown by remember { mutableStateOf(preferences.contains("definition_manual")) }
-            var sentenceReading by remember { mutableStateOf("") }
+            var sentenceReading by remember { mutableStateOf(preferences.getString("sentence_reading", "").orEmpty()) }
             var dependentFieldsStale by remember {
                 mutableStateOf(preferences.getBoolean("definition_manual_stale", false) &&
                     preferences.getBoolean("definition_manual", false))
@@ -313,19 +340,13 @@ class MainActivity : ComponentActivity() {
                     translationDraft.suggestion ?: TranslationResult.Pending
                 } else translationDraft.result
             }
-            val localTranslationFallback = remember { MlKitLocalTranslationFallback(applicationContext) }
-            DisposableEffect(localTranslationFallback) {
-                onDispose { localTranslationFallback.close() }
-            }
             var translationInfoExpanded by remember { mutableStateOf(false) }
             var notes by remember { mutableStateOf(preferences.getString("notes", "").orEmpty()) }
-            var defaultTags by remember { mutableStateOf(settings.getString("default_tags", "").orEmpty()) }
             var tags by remember {
                 mutableStateOf(
                     initialDraftTags(
                         preferences.getString("tags", null),
                         settings.getString("last_note_tags", null),
-                        defaultTags,
                     ),
                 )
             }
@@ -334,18 +355,23 @@ class MainActivity : ComponentActivity() {
             var showReplace by remember { mutableStateOf(restoredPendingPhoto != null) }
             var showSources by remember { mutableStateOf(false) }
             var showSettings by remember { mutableStateOf(false) }
-            var settingsDefaultTags by remember { mutableStateOf("") }
-            var azureKey by remember { mutableStateOf("") }
-            var azureKeyVisible by remember { mutableStateOf(false) }
-            var azureRegion by remember { mutableStateOf("") }
-            var azureVoice by remember { mutableStateOf("") }
-            var azureRate by remember { mutableStateOf(1f) }
-            var androidTtsVoiceName by remember { mutableStateOf("") }
-            var androidTtsRate by remember { mutableStateOf(1f) }
+            var audioCacheBytes by remember { mutableStateOf(0L) }
+            var audioCacheBusy by remember { mutableStateOf(false) }
+            var audioCacheMessage by remember { mutableStateOf<String?>(null) }
+            var googleKey by remember { mutableStateOf("") }
+            var googleKeyVisible by remember { mutableStateOf(false) }
+            var openRouterKey by remember { mutableStateOf("") }
+            var openRouterKeyVisible by remember { mutableStateOf(false) }
+            var selectedVoiceName by remember { mutableStateOf("") }
+            var cloudVoices by remember { mutableStateOf(emptyList<CloudVoice>()) }
+            var cloudVoicesCached by remember { mutableStateOf(false) }
+            var cloudVoicesLoading by remember { mutableStateOf(false) }
+            var cloudVoicesError by remember { mutableStateOf<String?>(null) }
+            var voiceRefresh by remember { mutableStateOf(0) }
+            var showVoiceMenu by remember { mutableStateOf(false) }
             var settingsLoading by remember { mutableStateOf(false) }
             var settingsSaving by remember { mutableStateOf(false) }
             var settingsError by remember { mutableStateOf<String?>(null) }
-            var showAndroidVoiceMenu by remember { mutableStateOf(false) }
             var dictionaryRetry by remember { mutableStateOf(0) }
             var dictionaryReady by remember { mutableStateOf(false) }
             var dictionaryLoading by remember { mutableStateOf(false) }
@@ -374,7 +400,7 @@ class MainActivity : ComponentActivity() {
                         ?.mapNotNull(String::toIntOrNull)?.toSet() ?: setOf(0),
                 )
             }
-            var pitchCandidates by remember { mutableStateOf<List<DictionaryPitch>>(emptyList()) }
+            var pitchCandidates by remember { mutableStateOf<List<AjtPitchRecord>>(emptyList()) }
             var pitchLookupLoading by remember { mutableStateOf(false) }
             var noteTypes by remember { mutableStateOf<List<AnkiNoteType>>(emptyList()) }
             var decks by remember { mutableStateOf<List<AnkiDeck>>(emptyList()) }
@@ -389,6 +415,23 @@ class MainActivity : ComponentActivity() {
                 mutableStateOf(preferences.getLong("deck_id", -1).takeIf { it > 0 })
             }
             var captureMode by remember { mutableStateOf(preferences.getString("capture_mode", "Photo") ?: "Photo") }
+            var generationStarted by remember { mutableStateOf(false) }
+            var sentenceAudio by remember {
+                mutableStateOf(
+                    DraftAudio(
+                        path = preferences.getString("sentence_audio_path", null)?.takeIf { File(it).isFile },
+                    ),
+                )
+            }
+            var wordAudio by remember {
+                mutableStateOf(
+                    DraftAudio(
+                        path = preferences.getString("word_audio_path", null)?.takeIf { File(it).isFile },
+                    ),
+                )
+            }
+            var audioRetry by remember { mutableStateOf(0) }
+            var playingAudio by remember { mutableStateOf<AudioItem?>(null) }
             var route by remember {
                 mutableStateOf(
                     AppRoute.entries.firstOrNull { it.name == preferences.getString("route", null) }
@@ -408,6 +451,9 @@ class MainActivity : ComponentActivity() {
             }
             var processedImagePath by remember {
                 mutableStateOf(preferences.getString("processed_image_path", null)?.takeIf { File(it).isFile })
+            }
+            var draftOrigin by remember {
+                mutableStateOf(preferences.getString("draft_origin", "Type") ?: "Type")
             }
             var imageProcessing by remember { mutableStateOf(false) }
             var imageProcessingRevision by remember { mutableStateOf(0L) }
@@ -454,7 +500,6 @@ class MainActivity : ComponentActivity() {
             var draftGeneration by remember { mutableStateOf(0L) }
             var editorInputRevision by remember { mutableStateOf(0L) }
             var setupGeneration by remember { mutableStateOf(0L) }
-            var omitImageForSend by remember { mutableStateOf(false) }
             val selectedModel = noteTypes.firstOrNull { it.id == selectedModelId }
             val selectedDeck = decks.firstOrNull { it.id == selectedDeckId }
             val incoming = sharedText.value
@@ -497,7 +542,6 @@ class MainActivity : ComponentActivity() {
                 recoveryPhase = null
                 recoveryDuplicate = false
                 knownNoteId = null
-                omitImageForSend = false
                 imageProcessingRevision++
                 imageProcessing = false
                 imageError = null
@@ -531,10 +575,27 @@ class MainActivity : ComponentActivity() {
                 lastHandledTranslationRetry = 0
                 translationRequestRevision++
                 notes = ""
-                tags = settings.getString("last_note_tags", defaultTags).orEmpty()
+                tags = settings.getString("last_note_tags", "").orEmpty()
                 selectedDictionaryEntry = null
                 selectedDictionaryEntryId = null
                 selectedSenseIndices = emptySet()
+                generationStarted = false
+                sentenceAudio = DraftAudio()
+                wordAudio = DraftAudio()
+                playingAudio = null
+                stopAudioPlayback()
+                preferences.edit()
+                    .remove(SENTENCE_AUDIO_RECEIPT_PATH)
+                    .remove(SENTENCE_AUDIO_RECEIPT_FILENAME)
+                    .remove(SENTENCE_AUDIO_RECEIPT_SIZE)
+                    .remove(SENTENCE_AUDIO_RECEIPT_MODIFIED)
+                    .remove(WORD_AUDIO_RECEIPT_PATH)
+                    .remove(WORD_AUDIO_RECEIPT_FILENAME)
+                    .remove(WORD_AUDIO_RECEIPT_SIZE)
+                    .remove(WORD_AUDIO_RECEIPT_MODIFIED)
+                    .remove("sentence_audio_path")
+                    .remove("word_audio_path")
+                    .apply()
             }
             val replaceEditorText: (String, Boolean) -> Unit = { text, invalidateDraftGeneration ->
                 editorInputRevision++
@@ -603,6 +664,12 @@ class MainActivity : ComponentActivity() {
                 ocrError = null
                 route = AppRoute.Target
             }
+            val setDraftOrigin: (String) -> Unit = { origin ->
+                if (draftOrigin != origin) {
+                    draftOrigin = origin
+                    preferences.edit().putString("draft_origin", origin).apply()
+                }
+            }
             val processImage: (File, Boolean) -> Unit = processImage@{ file, runOcr ->
                 if (currentSubmissionLocked.value) return@processImage
                 val callbackGeneration = draftGeneration
@@ -611,6 +678,9 @@ class MainActivity : ComponentActivity() {
                     .distinct().filter { it != file.absolutePath }
                 if (!runOcr && photoSourcePath == noteImagePath) photoSourcePath = null
                 if (runOcr) photoSourcePath = file.absolutePath
+                if (runOcr) {
+                    draftOrigin = "Photo"
+                }
                 noteImagePath = file.absolutePath
                 processedImagePath = null
                 check(
@@ -621,14 +691,14 @@ class MainActivity : ComponentActivity() {
                         .remove(IMAGE_RECEIPT_MODIFIED)
                         .putString("photo_source_path", photoSourcePath)
                         .putString("note_image_path", noteImagePath)
+                        .putString("draft_origin", draftOrigin)
                         .remove("processed_image_path")
                         .commit(),
                 ) { "Could not save the draft image source." }
                 imageError = null
-                omitImageForSend = false
                 imageProcessing = true
                 val processingRevision = ++imageProcessingRevision
-                val destination = File(filesDir, "draft/${java.util.UUID.randomUUID()}.avif")
+                val destination = File(filesDir, "draft/${java.util.UUID.randomUUID()}.webp")
                 coroutineScope.launch {
                     try {
                         val processed = ImageMediaProcessor.process(file, destination)
@@ -700,6 +770,9 @@ class MainActivity : ComponentActivity() {
                 }
             }
             val removeDraftImage = {
+                if (draftOrigin == "Photo") {
+                    imageError = "This draft came from a photo, so it needs its image. Replace the image instead."
+                } else {
                 listOfNotNull(photoSourcePath, noteImagePath, processedImagePath).distinct().forEach { path ->
                     File(path).delete()
                 }
@@ -711,7 +784,6 @@ class MainActivity : ComponentActivity() {
                 imageProcessing = false
                 ocrLoading = false
                 imageError = null
-                omitImageForSend = false
                 preferences.edit()
                     .remove("photo_source_path")
                     .remove("note_image_path")
@@ -721,6 +793,7 @@ class MainActivity : ComponentActivity() {
                     .remove(IMAGE_RECEIPT_SIZE)
                     .remove(IMAGE_RECEIPT_MODIFIED)
                     .commit()
+                }
                 Unit
             }
             val stagePhotoReplacement: (File) -> Unit = stagePhotoReplacement@{ file ->
@@ -810,6 +883,10 @@ class MainActivity : ComponentActivity() {
                     val preparedDictionary = withContext(Dispatchers.IO) { offlineDictionary.prepare() }
                     if (!asyncSetupIsCurrent(callbackGeneration)) return@LaunchedEffect
                     dictionaryInfo = preparedDictionary
+                    ajtPitchIndex = withContext(Dispatchers.IO) { AjtPitchIndex.open(applicationContext) }
+                    if (ajtPitchIndex == null) {
+                        pitchIndexError = "The AJT pitch index could not be opened; pitch-dependent notes cannot be mined."
+                    }
                     dictionaryReady = true
                 } catch (cancelled: CancellationException) {
                     throw cancelled
@@ -852,9 +929,11 @@ class MainActivity : ComponentActivity() {
 
             androidx.compose.runtime.LaunchedEffect(
                 editor.text, translationRequestRevision, translationRetry, translationAutoAllowed, submissionLocked,
+                generationStarted,
             ) {
                 val sentence = editor.text
-                if (sentence.isBlank() || submissionLocked) return@LaunchedEffect
+                // Network work starts only after the deliberate Continue, never on typing or token taps.
+                if (sentence.isBlank() || submissionLocked || !generationStarted) return@LaunchedEffect
 
                 var requestDraft = translationDraft
                 if (requestDraft.sentence != sentence) {
@@ -907,7 +986,7 @@ class MainActivity : ComponentActivity() {
 
                 val result = try {
                     withContext(Dispatchers.IO) {
-                        TranslationService.fromSettings(settings, local = localTranslationFallback).translate(sentence)
+                        TranslationService.fromSettings(settings).translate(sentence)
                     }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
@@ -978,18 +1057,240 @@ class MainActivity : ComponentActivity() {
                 )?.takeIf(String::isNotBlank) ?: return@LaunchedEffect
             }
 
+            val speechProvider: SentenceSpeechProvider = remember {
+                GoogleChirpSpeechProvider(
+                    credential = {
+                        runCatching {
+                            EncryptedSecretStore.decrypt(settings.getString(GOOGLE_KEY_PREF, null))
+                        }.getOrNull()
+                    },
+                )
+            }
+            val recordedWordSource = remember { Nhk2016PronunciationSource(File(filesDir, "nhk-recordings")) }
+            val reusableAudioCache = remember { ReusableAudioCache(File(cacheDir, "audio")) }
+            val draftAudioDirectory = remember { File(filesDir, "draft").apply { mkdirs() } }
+            val currentWordIdentity = rememberUpdatedState(
+                listOf(
+                    editor.text,
+                    target?.start ?: -1,
+                    target?.end ?: -1,
+                    vocabulary,
+                    vocabularyReading,
+                    sentenceReading,
+                    sentenceFurigana.joinToString(";") { "${it.span.start}:${it.span.end}:${it.reading}" },
+                ).joinToString("\u0000"),
+            )
+            // A voice change invalidates the sentence recording only; the word recording is unaffected.
+            val currentSentenceIdentity = rememberUpdatedState(
+                currentWordIdentity.value + "\u0000" + selectedVoiceName,
+            )
+
+            fun playAudio(item: AudioItem, path: String) {
+                stopAudioPlayback()
+                val player = MediaPlayer()
+                try {
+                    player.setDataSource(path)
+                    player.setOnCompletionListener {
+                        playingAudio = null
+                        stopAudioPlayback()
+                    }
+                    player.prepare()
+                    player.start()
+                    audioPlayer = player
+                    playingAudio = item
+                } catch (_: Exception) {
+                    player.release()
+                    playingAudio = null
+                    if (item == AudioItem.SENTENCE) {
+                        sentenceAudio = sentenceAudio.copy(path = null, error = "This sentence audio could not be played.")
+                    } else {
+                        wordAudio = wordAudio.copy(path = null, error = "This word recording could not be played.")
+                    }
+                }
+            }
+
             androidx.compose.runtime.LaunchedEffect(
-                route, autoOpenReview, target, editor.text, selectedDictionaryEntry, selectedDictionaryEntryId,
-                vocabulary, vocabularyReading, dictionarySearchLoading, submissionLocked,
+                generationStarted, route, submissionLocked, audioRetry,
+                currentSentenceIdentity.value, currentWordIdentity.value,
             ) {
-                if (submissionLocked) return@LaunchedEffect
-                val entry = selectedDictionaryEntry
-                if (route == AppRoute.Target && autoOpenReview && target?.textIn(editor.text) != null &&
-                    entry != null && entry.id == selectedDictionaryEntryId && entry.expression == vocabulary &&
-                    entry.reading == vocabularyReading && !dictionarySearchLoading
-                ) {
-                    route = AppRoute.Review
-                    autoOpenReview = false
+                if (!generationStarted || submissionLocked) return@LaunchedEffect
+                val identity = currentSentenceIdentity.value
+                val wordIdentity = currentWordIdentity.value
+                val needSentence = sentenceAudio.identity != identity ||
+                    sentenceAudio.path?.let(::File)?.isFile != true
+                val needWord = wordAudio.identity != wordIdentity ||
+                    wordAudio.path?.let(::File)?.isFile != true
+                if (!needSentence && !needWord) return@LaunchedEffect
+                if ((needSentence && sentenceAudio.generating) || (needWord && wordAudio.generating)) {
+                    return@LaunchedEffect
+                }
+
+                val sentenceText = editor.text.trim()
+                val selectedTarget = target ?: return@LaunchedEffect
+                val targetSurface = selectedTarget.textIn(editor.text) ?: return@LaunchedEffect
+                val entryId = selectedDictionaryEntryId
+                val entry = selectedDictionaryEntry?.takeIf {
+                    it.id == entryId && it.expression == vocabulary && it.reading == vocabularyReading
+                }
+                val cachedVoices = decodeVoices(settings.getString(VOICE_CACHE_PREF, null))
+                val voice = cachedVoices.firstOrNull { it.name == selectedVoiceName }
+                    ?: selectedVoiceName.takeIf(String::isNotBlank)?.let {
+                        CloudVoice(it, it.substringAfterLast('-'), listOf("ja-JP"), null)
+                    }
+
+                val hintSpans = buildList {
+                    sentenceFurigana.forEach { span ->
+                        add(ReadingHintSpan(span.span.start, span.span.end, span.surface, span.reading))
+                    }
+                    if (containsKanji(targetSurface)) {
+                        add(ReadingHintSpan(selectedTarget.start, selectedTarget.end, targetSurface, sentenceReading))
+                    }
+                }
+                val hintResult = ReadingHintBuilder.build(sentenceText, hintSpans)
+
+                if (needSentence) sentenceAudio = sentenceAudio.copy(generating = true, error = null)
+                if (needWord) wordAudio = wordAudio.copy(generating = true, error = null)
+
+                if (!needSentence) {
+                    // The current sentence recording and voice already match the prepared inputs.
+                } else if (voice == null) {
+                    sentenceAudio = sentenceAudio.copy(
+                        generating = false, path = null, identity = identity,
+                        error = if (!settings.contains(GOOGLE_KEY_PREF)) {
+                            "Add your Google Cloud API key and choose a sentence voice in Settings."
+                        } else {
+                            "Choose a sentence voice in Settings."
+                        },
+                    )
+                } else if (hintResult is HintResult.Impossible) {
+                    sentenceAudio = sentenceAudio.copy(generating = false, path = null, identity = identity,
+                        error = hintResult.reason)
+                } else {
+                    val hints = (hintResult as HintResult.Ready).hints
+                    val request = SentenceSpeechRequest(
+                        text = sentenceText,
+                        voice = voice,
+                        hints = hints,
+                    )
+                    val key = AudioCacheKey(
+                        source = "google-chirp3-hd",
+                        text = sentenceText,
+                        voice = voice.name,
+                        rate = request.speakingRate.toFloat(),
+                        hintIdentity = ReadingHintBuilder.cacheFragment(hints),
+                    )
+                    coroutineScope.launch {
+                        try {
+                            val completed = withContext(Dispatchers.IO) {
+                                val cached = reusableAudioCache.get(key)
+                                if (cached != null && runCatching { AudioFileValidator.requireSupported(cached) }.isSuccess) {
+                                    cached
+                                } else {
+                                    val produced = speechProvider.synthesize(
+                                        request,
+                                        File(draftAudioDirectory, "sentence-${System.currentTimeMillis()}.mp3"),
+                                    )
+                                    AudioFileValidator.requireSupported(produced)
+                                    reusableAudioCache.put(key, produced)
+                                    produced
+                                }
+                            }
+                            val draftCopy = withContext(Dispatchers.IO) {
+                                val destination = File(
+                                    draftAudioDirectory,
+                                    "sentence-${java.util.UUID.randomUUID()}.mp3",
+                                )
+                                reusableAudioCache.copyToActiveDraft(
+                                    key, draftAudioDirectory, destination.name,
+                                ).also {
+                                    val completed = File(draftAudioDirectory, destination.name)
+                                    preferences.edit().putString("sentence_audio_path", completed.absolutePath).apply()
+                                }
+                            }
+                            if (currentSentenceIdentity.value == identity) {
+                                sentenceAudio = DraftAudio(path = draftCopy.absolutePath, identity = identity)
+                            } else {
+                                draftCopy.delete()
+                            }
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (error: SpeechException) {
+                            if (currentSentenceIdentity.value == identity) {
+                                sentenceAudio = DraftAudio(
+                                    error = error.message ?: "Sentence speech failed.",
+                                    identity = identity,
+                                )
+                            }
+                        } catch (_: Exception) {
+                            if (currentSentenceIdentity.value == identity) {
+                                sentenceAudio = DraftAudio(
+                                    error = "Sentence speech failed. Tap Retry to try the same voice again.",
+                                    identity = identity,
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (!needWord) {
+                    // The current recorded word already matches the resolved entry and reading.
+                } else if (entry == null) {
+                    wordAudio = DraftAudio(
+                        error = "Select a dictionary entry before generating word audio.",
+                        identity = wordIdentity,
+                    )
+                } else {
+                    coroutineScope.launch {
+                        try {
+                            val recorded = withContext(Dispatchers.IO) {
+                                val wordKey = AudioCacheKey(
+                                    source = "nhk-2016",
+                                    text = vocabulary,
+                                    voice = "NHK-2016",
+                                    rate = 1f,
+                                    entryIdentity = "$entryId|${entry.expression}|${entry.reading}",
+                                )
+                                val cached = reusableAudioCache.get(wordKey)
+                                if (cached != null && runCatching { AudioFileValidator.requireSupported(cached) }.isSuccess) {
+                                    cached
+                                } else {
+                                    val produced = recordedWordSource.synthesize(
+                                        AudioSynthesisRequest(
+                                            item = AudioItem.VOCABULARY,
+                                            text = vocabulary,
+                                            revision = 0,
+                                            entryIdentity = "$entryId|${entry.expression}|${entry.reading}",
+                                        ),
+                                        File(draftAudioDirectory, "word-${System.currentTimeMillis()}.ogg"),
+                                    )
+                                    AudioFileValidator.requireSupported(produced)
+                                    reusableAudioCache.put(wordKey, produced)
+                                    produced
+                                }
+                            }
+                            val extension = recorded.extension.lowercase().ifBlank { "ogg" }
+                            val destination = File(draftAudioDirectory, "word-${java.util.UUID.randomUUID()}.$extension")
+                            withContext(Dispatchers.IO) {
+                                recorded.copyTo(destination, overwrite = true)
+                                AudioFileValidator.requireSupported(destination)
+                            }
+                            preferences.edit().putString("word_audio_path", destination.absolutePath).apply()
+                            if (currentWordIdentity.value == wordIdentity) {
+                                wordAudio = DraftAudio(path = destination.absolutePath, identity = wordIdentity)
+                            } else {
+                                destination.delete()
+                            }
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) {
+                            if (currentWordIdentity.value == wordIdentity) {
+                                wordAudio = DraftAudio(
+                                    error = "No matching NHK recording is available for this word.",
+                                    identity = wordIdentity,
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -1074,20 +1375,31 @@ class MainActivity : ComponentActivity() {
                 if (!dictionaryReady || entry == null || vocabulary.isBlank() || vocabularyReading.isBlank()) {
                     pitchCandidates = emptyList()
                     pitchAccentText = ""
+                    pitchHtmlText = null
                     pitchLookupLoading = false
                     return@LaunchedEffect
                 }
                 pitchAccentText = ""
+                pitchHtmlText = null
                 pitchCandidates = emptyList()
                 pitchLookupLoading = true
                 try {
+                    val index = ajtPitchIndex
+                    if (index == null) {
+                        pitchIndexError = "The AJT pitch index is unavailable; this word cannot be mined."
+                        return@LaunchedEffect
+                    }
                     val candidates = withContext(Dispatchers.IO) {
-                        offlineDictionary.pitch(entry.expression, entry.reading)
-                    }.filter { PitchAccent.create(entry.reading, it.accent) != null }
+                        index.pitch(entry.expression, entry.reading)
+                    }.filter { PitchAccent.create(entry.reading, it.accent, it.html) != null }
                     if (!asyncDraftIsCurrent(callbackGeneration)) return@LaunchedEffect
                     pitchCandidates = candidates
+                    pitchIndexError = if (candidates.isEmpty()) {
+                        "No AJT pitch record matches this entry/reading, so the note cannot be mined."
+                    } else null
                     if (candidates.isNotEmpty()) {
                         pitchAccentText = candidates.first().accent.toString()
+                        pitchHtmlText = candidates.first().html
                     }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
@@ -1113,6 +1425,7 @@ class MainActivity : ComponentActivity() {
                     if (editor.text.isBlank()) {
                         captureMode = "Type"
                         route = AppRoute.Target
+                        if (photoSourcePath == null) setDraftOrigin("Type")
                         replaceEditorText(incoming, true)
                         selectTarget(null)
                         japaneseTokens = emptyList()
@@ -1246,21 +1559,16 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
-                            Text("New-note defaults", style = MaterialTheme.typography.titleMedium)
+                            Text("Sources", style = MaterialTheme.typography.titleMedium)
                             TextButton(onClick = { showSettings = false; showSources = true }) {
                                 Text("Sources & licenses")
                             }
-                            OutlinedTextField(
-                                value = settingsDefaultTags,
-                                onValueChange = { settingsDefaultTags = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Default tags") },
-                                supportingText = { Text("Hierarchical tags such as JLPT::N4 are supported.") },
-                                singleLine = true,
-                                enabled = !settingsLoading && !settingsSaving,
+                            Text("Google Cloud speech", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "Your Google Cloud API key with Text-to-Speech access. It is encrypted with " +
+                                    "Android Keystore, stays on this device, and is never shared with OpenRouter.",
+                                style = MaterialTheme.typography.bodySmall,
                             )
-                            Text("Cloud speech", style = MaterialTheme.typography.titleMedium)
-                            Text("Optional Azure settings. The key is encrypted with Android Keystore and stays on this device.")
                             if (settingsLoading) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
@@ -1268,106 +1576,140 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             OutlinedTextField(
-                                value = azureKey,
-                                onValueChange = { azureKey = it },
+                                value = googleKey,
+                                onValueChange = { googleKey = it },
                                 modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Azure subscription key") },
-                                visualTransformation = if (azureKeyVisible) VisualTransformation.None
+                                label = { Text("Google Cloud API key") },
+                                visualTransformation = if (googleKeyVisible) VisualTransformation.None
                                     else PasswordVisualTransformation(),
                                 singleLine = true,
                                 enabled = !settingsLoading && !settingsSaving,
                             )
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Checkbox(
-                                    checked = azureKeyVisible,
-                                    onCheckedChange = { azureKeyVisible = it },
+                                    checked = googleKeyVisible,
+                                    onCheckedChange = { googleKeyVisible = it },
                                     enabled = !settingsLoading && !settingsSaving,
                                 )
                                 Text("Show key")
                             }
-                            OutlinedTextField(
-                                value = azureRegion,
-                                onValueChange = { azureRegion = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Azure region") },
-                                singleLine = true,
-                                enabled = !settingsLoading && !settingsSaving,
-                            )
-                            OutlinedTextField(
-                                value = azureVoice,
-                                onValueChange = { azureVoice = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Japanese Azure voice name") },
-                                singleLine = true,
-                                enabled = !settingsLoading && !settingsSaving,
-                            )
-                            Text("Azure speech rate: ${"%.2f".format(azureRate)}×")
-                            Slider(
-                                value = azureRate,
-                                onValueChange = { azureRate = it },
-                                valueRange = 0.5f..2f,
-                                steps = 29,
-                                enabled = !settingsLoading && !settingsSaving,
-                            )
-                            Text("On-device speech", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                when {
-                                    !textToSpeechReady.value -> "Checking installed text-to-speech voices…"
-                                    textToSpeechError.value -> "Android could not initialize a text-to-speech engine."
-                                    textToSpeechEngine.value != null -> "System engine: ${textToSpeechEngine.value}"
-                                    else -> "No system text-to-speech engine was reported."
-                                },
-                            )
-                            TextButton(onClick = {
-                                runCatching {
-                                    ttsVoiceDataLauncher.launch(Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA))
-                                }.onFailure { settingsError = "Could not open Android text-to-speech settings." }
-                            }) { Text("Manage installed voice data") }
-                            if (textToSpeechError.value) {
-                                TextButton(onClick = { initializeTextToSpeech() }) { Text("Retry voice discovery") }
+                            Text("Sentence voice", style = MaterialTheme.typography.titleSmall)
+                            when {
+                                cloudVoicesLoading -> Row(verticalAlignment = Alignment.CenterVertically) {
+                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                    Text("  Listing Japanese Chirp 3 HD voices…")
+                                }
+                                cloudVoicesError != null -> Text(
+                                    buildString {
+                                        append(cloudVoicesError)
+                                        if (cloudVoicesCached && cloudVoices.isNotEmpty()) {
+                                            append(" Showing the cached list, which is not fresh verification.")
+                                        }
+                                    },
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                cloudVoices.isEmpty() && settings.contains(GOOGLE_KEY_PREF) ->
+                                    Text("No Japanese Chirp 3 HD voices were returned.", style = MaterialTheme.typography.bodySmall)
                             }
-                            if (offlineJapaneseVoices.value.isNotEmpty()) {
-                                Box {
-                                    OutlinedButton(
-                                        onClick = { showAndroidVoiceMenu = true },
-                                        enabled = !settingsLoading && !settingsSaving,
-                                    ) {
-                                        val selectedVoice = offlineJapaneseVoices.value.firstOrNull {
-                                            it.name == androidTtsVoiceName
-                                        }
-                                        Text(selectedVoice?.let { "${it.locale.displayName} · ${it.name}" }
-                                            ?: "Choose installed offline Japanese voice")
-                                    }
-                                    DropdownMenu(
-                                        expanded = showAndroidVoiceMenu,
-                                        onDismissRequest = { showAndroidVoiceMenu = false },
-                                    ) {
-                                        offlineJapaneseVoices.value.forEach { voice ->
-                                            DropdownMenuItem(
-                                                text = { Text("${voice.locale.displayName} · ${voice.name}") },
-                                                onClick = {
-                                                    androidTtsVoiceName = voice.name
-                                                    showAndroidVoiceMenu = false
-                                                },
-                                            )
-                                        }
+                            Box {
+                                OutlinedButton(
+                                    onClick = { showVoiceMenu = true },
+                                    enabled = !settingsLoading && !settingsSaving && cloudVoices.isNotEmpty(),
+                                ) {
+                                    val voice = cloudVoices.firstOrNull { it.name == selectedVoiceName }
+                                    Text(voice?.let { "${it.displayName} · ${it.name}" }
+                                        ?: if (selectedVoiceName.isBlank()) "Choose sentence voice"
+                                        else "Saved voice not in this list")
+                                }
+                                DropdownMenu(
+                                    expanded = showVoiceMenu,
+                                    onDismissRequest = { showVoiceMenu = false },
+                                    modifier = Modifier.heightIn(max = 320.dp),
+                                ) {
+                                    cloudVoices.forEach { voice ->
+                                        DropdownMenuItem(
+                                            text = { Text("${voice.displayName} · ${voice.name}") },
+                                            onClick = {
+                                                selectedVoiceName = voice.name
+                                                showVoiceMenu = false
+                                            },
+                                        )
                                     }
                                 }
-                                if (androidTtsVoiceName.isNotBlank() &&
-                                    offlineJapaneseVoices.value.none { it.name == androidTtsVoiceName }
-                                ) Text("Saved voice is no longer installed or offline-capable.")
-                            } else if (textToSpeechReady.value) {
-                                Text("No installed offline Japanese voice was found. Add one in Android settings.")
                             }
-                            Text("Android speech rate: ${"%.2f".format(androidTtsRate)}×")
-                            Slider(
-                                value = androidTtsRate,
-                                onValueChange = { androidTtsRate = it },
-                                valueRange = 0.5f..2f,
-                                steps = 29,
+                            if (selectedVoiceName.isNotBlank() && cloudVoices.isNotEmpty() &&
+                                cloudVoices.none { it.name == selectedVoiceName }
+                            ) {
+                                Text(
+                                    "The saved voice is no longer listed. Choose another voice before generating sentence audio.",
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                            TextButton(
+                                enabled = !cloudVoicesLoading && !settingsSaving && settings.contains(GOOGLE_KEY_PREF),
+                                onClick = { voiceRefresh++ },
+                            ) { Text("Refresh voices") }
+                            if (!settings.contains(GOOGLE_KEY_PREF) && googleKey.isNotBlank()) {
+                                Text("Save the key, then refresh voices.", style = MaterialTheme.typography.bodySmall)
+                            }
+                            Text(
+                                "Changing the voice invalidates sentence audio only. Voice listing does not " +
+                                    "synthesize or bill any speech.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            Text("Audio cache", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "Reusable sentence and word audio: ${formatCacheSize(audioCacheBytes)}. " +
+                                    "The current draft's audio is kept outside this cache.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            TextButton(
+                                enabled = !audioCacheBusy && !settingsSaving,
+                                onClick = {
+                                    audioCacheBusy = true
+                                    audioCacheMessage = null
+                                    coroutineScope.launch {
+                                        try {
+                                            val remaining = withContext(Dispatchers.IO) {
+                                                reusableAudioCache.clear()
+                                                reusableAudioCache.sizeBytes()
+                                            }
+                                            audioCacheBytes = remaining
+                                            audioCacheMessage = "Audio cache cleared. Draft audio is unaffected."
+                                        } catch (_: Exception) {
+                                            audioCacheMessage = "The audio cache could not be cleared."
+                                        } finally {
+                                            audioCacheBusy = false
+                                        }
+                                    }
+                                },
+                            ) { Text(if (audioCacheBusy) "Clearing…" else "Clear audio cache") }
+                            audioCacheMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                            Text("OpenRouter translation", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "Separate credential for translation only. Model: ${OpenRouterTranslator.MODEL} (fixed).",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            OutlinedTextField(
+                                value = openRouterKey,
+                                onValueChange = { openRouterKey = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("OpenRouter API key") },
+                                visualTransformation = if (openRouterKeyVisible) VisualTransformation.None
+                                    else PasswordVisualTransformation(),
+                                singleLine = true,
                                 enabled = !settingsLoading && !settingsSaving,
                             )
-                            Text("Speech generation is not active yet; these preferences are saved for the audio layer.")
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Checkbox(
+                                    checked = openRouterKeyVisible,
+                                    onCheckedChange = { openRouterKeyVisible = it },
+                                    enabled = !settingsLoading && !settingsSaving,
+                                )
+                                Text("Show key")
+                            }
                             settingsError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                         }
                     },
@@ -1375,44 +1717,40 @@ class MainActivity : ComponentActivity() {
                         TextButton(
                             enabled = !settingsLoading && !settingsSaving,
                             onClick = {
-                                val key = azureKey.trim()
-                                val region = azureRegion.trim()
-                                val voice = azureVoice.trim()
-                                when {
-                                    key.isNotEmpty() && (region.isEmpty() || voice.isEmpty()) ->
-                                        settingsError = "Enter an Azure region and voice when a key is configured."
-                                    region.isNotEmpty() && !region.matches(Regex("[A-Za-z0-9-]+")) ->
-                                        settingsError = "Enter a valid Azure region name."
-                                    else -> {
-                                        settingsSaving = true
-                                        settingsError = null
-                                        coroutineScope.launch {
-                                            try {
-                                                withContext(Dispatchers.IO) {
-                                                    val edit = settings.edit()
-                                                        .putString("default_tags", settingsDefaultTags)
-                                                        .putString("azure_region", region)
-                                                        .putString("azure_voice", voice)
-                                                        .putFloat("azure_rate", azureRate)
-                                                        .putString("android_tts_voice", androidTtsVoiceName)
-                                                        .putFloat("android_tts_rate", androidTtsRate)
-                                                    if (key.isBlank()) {
-                                                        edit.remove("azure_key_encrypted")
-                                                    } else {
-                                                        edit.putString("azure_key_encrypted", EncryptedSecretStore.encrypt(key))
-                                                    }
-                                                    check(edit.commit()) { "Could not persist settings." }
-                                                    if (key.isBlank()) runCatching { EncryptedSecretStore.removeKey() }
+                                val google = googleKey.trim()
+                                val openRouter = openRouterKey.trim()
+                                if (google.isNotEmpty() && google.any { it.isWhitespace() }) {
+                                    settingsError = "The Google Cloud key contains whitespace."
+                                } else if (openRouter.isNotEmpty() && openRouter.any { it.isWhitespace() }) {
+                                    settingsError = "The OpenRouter key contains whitespace."
+                                } else {
+                                    settingsSaving = true
+                                    settingsError = null
+                                    coroutineScope.launch {
+                                        try {
+                                            withContext(Dispatchers.IO) {
+                                                val edit = settings.edit()
+                                                    .remove("default_tags")
+                                                    .putString("google_tts_voice", selectedVoiceName)
+                                                if (google.isBlank()) edit.remove(GOOGLE_KEY_PREF)
+                                                else edit.putString(GOOGLE_KEY_PREF, EncryptedSecretStore.encrypt(google))
+                                                if (openRouter.isBlank()) edit.remove(TranslationService.OPENROUTER_KEY_PREF)
+                                                else edit.putString(
+                                                    TranslationService.OPENROUTER_KEY_PREF,
+                                                    EncryptedSecretStore.encrypt(openRouter),
+                                                )
+                                                check(edit.commit()) { "Could not persist settings." }
+                                                if (google.isBlank() && openRouter.isBlank()) {
+                                                    runCatching { EncryptedSecretStore.removeKey() }
                                                 }
-                                                defaultTags = settingsDefaultTags
-                                                showSettings = false
-                                            } catch (cancelled: CancellationException) {
-                                                throw cancelled
-                                            } catch (_: Exception) {
-                                                settingsError = "Settings could not be saved. The Azure key was not stored in plain text."
-                                            } finally {
-                                                settingsSaving = false
                                             }
+                                            showSettings = false
+                                        } catch (cancelled: CancellationException) {
+                                            throw cancelled
+                                        } catch (_: Exception) {
+                                            settingsError = "Settings could not be saved. Keys were not stored in plain text."
+                                        } finally {
+                                            settingsSaving = false
                                         }
                                     }
                                 }
@@ -1567,10 +1905,34 @@ class MainActivity : ComponentActivity() {
                     ?.let(AnkiMediaImporter::sanitizeFilename)
             } else null
             val imageAttached = noteImagePath != null
-            val imagePending = imageAttached && imageProcessing
-            val imageReady = !imageAttached || omitImageForSend || imagePending || (
-                imageError == null && processedImagePath?.let(::File)?.isFile == true
+            val sentenceAudioReceipt = importedReceipt(
+                preferences,
+                SENTENCE_AUDIO_RECEIPT_PATH,
+                SENTENCE_AUDIO_RECEIPT_FILENAME,
+                SENTENCE_AUDIO_RECEIPT_SIZE,
+                SENTENCE_AUDIO_RECEIPT_MODIFIED,
+                sentenceAudio.path?.let(::File),
+                AnkiMediaImporter::sanitizeAudioFilename,
             )
+            val wordAudioReceipt = importedReceipt(
+                preferences,
+                WORD_AUDIO_RECEIPT_PATH,
+                WORD_AUDIO_RECEIPT_FILENAME,
+                WORD_AUDIO_RECEIPT_SIZE,
+                WORD_AUDIO_RECEIPT_MODIFIED,
+                wordAudio.path?.let(::File),
+                AnkiMediaImporter::sanitizeAudioFilename,
+            )
+            val sentenceAudioReady = sentenceAudio.path?.let(::File)?.isFile == true &&
+                sentenceAudio.identity == currentSentenceIdentity.value && !sentenceAudio.generating
+            val wordAudioReady = wordAudio.path?.let(::File)?.isFile == true &&
+                wordAudio.identity == currentWordIdentity.value && !wordAudio.generating
+            val imagePending = imageAttached && imageProcessing
+            val imageReady = if (imageAttached) {
+                !imagePending && imageError == null && processedImagePath?.let(::File)?.isFile == true
+            } else {
+                draftOrigin != "Photo"
+            }
             val noteDraft = ManualNoteDraft(
                 sentence = editor.text,
                 target = target,
@@ -1587,6 +1949,8 @@ class MainActivity : ComponentActivity() {
                 imageFilename = imageReceiptFilename,
                 notes = notes,
                 sentenceFurigana = sentenceFurigana,
+                sentenceAudioFilename = sentenceAudioReceipt,
+                vocabularyAudioFilename = wordAudioReceipt,
             )
             val validationErrors = noteDraft.validationErrors()
             val fieldsByName = noteDraft.fieldsByName()
@@ -1609,7 +1973,7 @@ class MainActivity : ComponentActivity() {
             val displayNotes = frozenForDisplay?.notes ?: notes
             val displayTags = frozenForDisplay?.tags?.joinToString(" ") ?: tags
             val displayPitch = frozenForDisplay?.pitchAccentText?.toIntOrNull()
-                ?.let { PitchAccent.create(displayVocabularyReading, it) } ?: pitch
+                ?.let { PitchAccent.create(displayVocabularyReading, it, pitchHtmlText) } ?: pitch
             val visibleRoute = if (frozenForDisplay != null) AppRoute.Review else route
             val frozenDestinationReady = !frozenRetryReady || (
                 restoredFrozenForUi != null && selectedModel?.id == restoredFrozenForUi.modelId &&
@@ -1634,6 +1998,9 @@ class MainActivity : ComponentActivity() {
             val canSend = apiPermissionGranted && selectedModel != null && selectedDeck != null &&
                 (if (frozenRetryReady) effectiveFrozenFields != null else fieldsByName != null && validationErrors.isEmpty()) &&
                 effectiveMapping?.isValid == true && sendImageReady && frozenDestinationReady &&
+                (frozenRetryReady || pitch != null) &&
+                (frozenRetryReady || (sentenceAudioReady && wordAudioReady &&
+                    sentenceAudio.error == null && wordAudio.error == null)) &&
                 (frozenRetryReady || (!dictionaryLoading && !dictionarySearchLoading)) &&
                 setupLoadedSuccessfully && !setupLoading && setupError == null && !recoveryRequired &&
                 !isSubmitting && !duplicateBlocked
@@ -1810,36 +2177,69 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            androidx.compose.runtime.LaunchedEffect(defaultTags) {
-                settings.edit().putString("default_tags", defaultTags).apply()
-            }
-
             androidx.compose.runtime.LaunchedEffect(showSettings) {
                 if (!showSettings) return@LaunchedEffect
                 settingsLoading = true
                 settingsSaving = false
                 settingsError = null
-                azureKeyVisible = false
+                googleKeyVisible = false
+                openRouterKeyVisible = false
                 try {
-                    val key = withContext(Dispatchers.IO) {
+                    val google = withContext(Dispatchers.IO) {
+                        runCatching { EncryptedSecretStore.decrypt(settings.getString(GOOGLE_KEY_PREF, null)) }
+                    }
+                    val openRouter = withContext(Dispatchers.IO) {
                         runCatching {
-                            EncryptedSecretStore.decrypt(settings.getString("azure_key_encrypted", null))
+                            EncryptedSecretStore.decrypt(
+                                settings.getString(TranslationService.OPENROUTER_KEY_PREF, null),
+                            )
                         }
                     }
-                    azureKey = key.getOrElse { "" }
-                    if (key.isFailure) settingsError = "The saved Azure key could not be opened. Enter it again."
-                    azureRegion = settings.getString("azure_region", "").orEmpty()
-                    azureVoice = settings.getString("azure_voice", "").orEmpty()
-                    azureRate = settings.getFloat("azure_rate", 1f).coerceIn(0.5f, 2f)
-                    androidTtsVoiceName = settings.getString("android_tts_voice", "").orEmpty()
-                    androidTtsRate = settings.getFloat("android_tts_rate", 1f).coerceIn(0.5f, 2f)
-                    settingsDefaultTags = defaultTags
+                    googleKey = google.getOrElse { "" }
+                    openRouterKey = openRouter.getOrElse { "" }
+                    if (google.isFailure) settingsError = "The saved Google Cloud key could not be opened. Enter it again."
+                    if (openRouter.isFailure) settingsError = "The saved OpenRouter key could not be opened. Enter it again."
+                    selectedVoiceName = settings.getString("google_tts_voice", "").orEmpty()
+                    cloudVoices = decodeVoices(settings.getString(VOICE_CACHE_PREF, null))
+                    cloudVoicesCached = cloudVoices.isNotEmpty()
+                    audioCacheBytes = withContext(Dispatchers.IO) { reusableAudioCache.sizeBytes() }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
                     settingsError = "Could not load saved speech settings."
                 } finally {
                     settingsLoading = false
+                }
+            }
+
+            androidx.compose.runtime.LaunchedEffect(showSettings, voiceRefresh) {
+                if (!showSettings || !settings.contains(GOOGLE_KEY_PREF)) return@LaunchedEffect
+                if (voiceRefresh == 0 && cloudVoices.isNotEmpty()) return@LaunchedEffect
+                cloudVoicesLoading = true
+                cloudVoicesError = null
+                try {
+                    val provider = GoogleChirpSpeechProvider(
+                        credential = {
+                            runCatching {
+                                EncryptedSecretStore.decrypt(settings.getString(GOOGLE_KEY_PREF, null))
+                            }.getOrNull()
+                        },
+                    )
+                    val voices = withContext(Dispatchers.IO) { provider.listVoices() }
+                    cloudVoices = voices
+                    cloudVoicesCached = false
+                    settings.edit().putString(VOICE_CACHE_PREF, encodeVoices(voices)).apply()
+                    if (selectedVoiceName.isNotBlank() && voices.none { it.name == selectedVoiceName }) {
+                        cloudVoicesError = "The saved voice is not in Google's current Chirp 3 HD list."
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: SpeechException) {
+                    cloudVoicesError = error.message ?: "Voice listing failed."
+                } catch (_: Exception) {
+                    cloudVoicesError = "Voice listing failed."
+                } finally {
+                    cloudVoicesLoading = false
                 }
             }
 
@@ -1852,7 +2252,7 @@ class MainActivity : ComponentActivity() {
             }
 
             androidx.compose.runtime.LaunchedEffect(
-                editor.text, editor.selection, target, vocabulary, vocabularyReading, pitchAccentText, definition,
+                editor.text, editor.selection, target, vocabulary, vocabularyReading, pitchAccentText, pitchHtmlText, definition,
                 sentenceReading, definitionManuallyEdited, dependentFieldsStale, translationDraft, translationAttemptedSentence,
                 notes, tags, selectedModelId, selectedDeckId, selectedDictionaryEntryId, selectedSenseIndices, completedSubmission,
             ) {
@@ -1864,13 +2264,14 @@ class MainActivity : ComponentActivity() {
                     .putInt("target_start", target?.start ?: -1)
                     .putInt("target_end", target?.end ?: -1)
                     .putString("vocabulary", vocabulary)
-                    .remove("vocabulary_reading")
-                    .remove("pitch_accent")
+                    .putString("vocabulary_reading", vocabularyReading)
+                    .putString("pitch_accent", pitchAccentText)
+                    .putString("pitch_html", pitchHtmlText)
                     .putString("definition", definition)
                     .putBoolean("definition_manual", definitionManuallyEdited)
                     .putBoolean("definition_manual_stale", dependentFieldsStale && definitionManuallyEdited)
                     .remove("dependent_fields_stale")
-                    .remove("sentence_reading")
+                    .putString("sentence_reading", sentenceReading)
                     .remove("leave_sentence_target_unannotated")
                     .remove("leave_vocabulary_unannotated")
                     .putString("translation", translation)
@@ -2021,17 +2422,35 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            androidx.activity.compose.BackHandler(enabled = submissionLocked) {
+            androidx.activity.compose.BackHandler(
+                enabled = !submissionLocked && (
+                    showSettings || showSources || showDictionarySheet || showOcrSheet ||
+                        route != AppRoute.Capture
+                    ),
+            ) {
                 when {
-                    showSettings -> showSettings = false
+                    showSettings -> if (!settingsSaving) showSettings = false
                     showSources -> showSources = false
                     showDictionarySheet -> showDictionarySheet = false
                     showOcrSheet -> showOcrSheet = false
-                    else -> Unit
+                    route == AppRoute.Review -> {
+                        generationStarted = false
+                        route = AppRoute.Target
+                    }
+                    route == AppRoute.Target -> route = AppRoute.Capture
+                }
+            }
+            val darkTheme = isSystemInDarkTheme()
+            val view = LocalView.current
+            androidx.compose.runtime.LaunchedEffect(darkTheme) {
+                val window = (view.context as? android.app.Activity)?.window ?: return@LaunchedEffect
+                WindowCompat.getInsetsController(window, view).apply {
+                    isAppearanceLightStatusBars = !darkTheme
+                    isAppearanceLightNavigationBars = !darkTheme
                 }
             }
             MaterialTheme(
-                colorScheme = if (isSystemInDarkTheme()) {
+                colorScheme = if (darkTheme) {
                     darkColorScheme(
                         primary = Color(0xFFE4DAC5), onPrimary = Color(0xFF16181B),
                         secondary = Color(0xFFE4DAC5), onSecondary = Color(0xFF16181B),
@@ -2086,7 +2505,7 @@ class MainActivity : ComponentActivity() {
                                 pitch = displayPitch,
                                 definition = displayDefinition,
                                 translation = displayTranslation,
-                                translationUsesFallback = translationSource == TranslationSource.LOCAL && !translationDraft.manuallyEdited,
+                                translationUsesFallback = false,
                                 translationInfoExpanded = translationInfoExpanded,
                                 generatingFields = if (activeTranslationResult() is TranslationResult.Pending) setOf("Translation") else emptySet(),
                                 translationError = (activeTranslationResult() as? TranslationResult.Failed)?.message,
@@ -2112,6 +2531,32 @@ class MainActivity : ComponentActivity() {
                                     translationDraft = translationDraft.useSuggestion()
                                 },
                                 onToggleTranslationInfo = { translationInfoExpanded = !translationInfoExpanded },
+                                sentenceAudio = sentenceAudio.presentation(),
+                                vocabularyAudio = wordAudio.presentation(),
+                                onToggleSentenceAudio = {
+                                    if (playingAudio == AudioItem.SENTENCE) {
+                                        stopAudioPlayback()
+                                        playingAudio = null
+                                    } else {
+                                        sentenceAudio.path?.let { playAudio(AudioItem.SENTENCE, it) }
+                                    }
+                                },
+                                onRetrySentenceAudio = {
+                                    sentenceAudio = DraftAudio()
+                                    audioRetry++
+                                },
+                                onToggleVocabularyAudio = {
+                                    if (playingAudio == AudioItem.VOCABULARY) {
+                                        stopAudioPlayback()
+                                        playingAudio = null
+                                    } else {
+                                        wordAudio.path?.let { playAudio(AudioItem.VOCABULARY, it) }
+                                    }
+                                },
+                                onRetryVocabularyAudio = {
+                                    wordAudio = DraftAudio()
+                                    audioRetry++
+                                },
                                 notes = displayNotes,
                                 tags = displayTags.split(Regex("\\s+")).filter(String::isNotBlank),
                                 imagePath = frozenForDisplay?.media?.path ?: noteImagePath,
@@ -2124,10 +2569,11 @@ class MainActivity : ComponentActivity() {
                                 pitchHasAlternatives = pitchCandidates.size > 1,
                                 pitchInfoExpanded = pitchInfoExpanded,
                                 onTogglePitchInfo = { pitchInfoExpanded = !pitchInfoExpanded },
-                                onEdit = { if (!submissionLocked) { autoOpenReview = false; route = AppRoute.Target } },
-                                onAddTag = { if (!submissionLocked) { autoOpenReview = false; route = AppRoute.Target } },
+                                onEdit = { if (!submissionLocked) { autoOpenReview = false; generationStarted = false; route = AppRoute.Target } },
+                                onAddTag = { if (!submissionLocked) { autoOpenReview = false; generationStarted = false; route = AppRoute.Target } },
                                 onChooseImage = { if (!submissionLocked) noteImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                                 onRemoveImage = { if (!submissionLocked) removeDraftImage() },
+                                imageRemovable = draftOrigin != "Photo",
                                 onDefinitionChange = { text -> if (!submissionLocked) { definition = text; definitionManuallyEdited = true; definitionProvenanceKnown = true; selectedSenseIndices = emptySet() } },
                                 onNotesChange = { text -> if (!submissionLocked) notes = text },
                                 tokens = japaneseTokens,
@@ -2169,8 +2615,8 @@ class MainActivity : ComponentActivity() {
                                 sendStatusContent = sendRecoveryContent,
                             )
                         } else {
-                        if (!frozenRetryReady && imagePending && !omitImageForSend) {
-                            Text("Image is still processing; Send will omit it if you continue.", style = MaterialTheme.typography.bodyMedium)
+                        if (!frozenRetryReady && imagePending) {
+                            Text("The image is still being prepared. Send becomes available when it is ready.", style = MaterialTheme.typography.bodyMedium)
                         }
                         if (imageAttached && !imageProcessing && imageError == null && !imageReady) {
                             Text("The selected image is not ready to send.", style = MaterialTheme.typography.bodyMedium)
@@ -2182,7 +2628,10 @@ class MainActivity : ComponentActivity() {
                                 if (source?.isFile == true) attachImage(source)
                                 else noteImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                             }) { Text("Retry image") }
-                            TextButton(enabled = !submissionLocked, onClick = removeDraftImage) { Text("Remove image") }
+                            TextButton(
+                                enabled = !submissionLocked && draftOrigin != "Photo",
+                                onClick = removeDraftImage,
+                            ) { Text("Remove image") }
                         }
                         if (visibleRoute == AppRoute.Capture) {
                             Row(
@@ -2213,7 +2662,6 @@ class MainActivity : ComponentActivity() {
                                     onClick = {
                                         settingsLoading = true
                                         showSettings = true
-                                        if (!textToSpeechReady.value && textToSpeech == null) initializeTextToSpeech()
                                     },
                                     modifier = Modifier.semantics { contentDescription = "Settings" },
                                 ) { Icon(dev.pierre.japaneseanki.ui.MaterialSymbols.Settings, contentDescription = null) }
@@ -2225,6 +2673,15 @@ class MainActivity : ComponentActivity() {
                                     TextButton(enabled = !submissionLocked, onClick = { route = AppRoute.Review }) { Text("Back to review") }
                                 }
                             }
+                            Button(
+                                enabled = !submissionLocked && displayTarget != null && selectedDictionaryEntry != null &&
+                                    vocabulary.isNotBlank() && definition.isNotBlank() && pitch != null,
+                                onClick = {
+                                    generationStarted = true
+                                    route = AppRoute.Review
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text("Continue to generate") }
                         }
                         if (visibleRoute == AppRoute.Review) {
                             Text("Review card", style = MaterialTheme.typography.titleLarge)
@@ -2266,6 +2723,15 @@ class MainActivity : ComponentActivity() {
                                     onCaptured = { file -> cameraError = null; requestPhoto(file) },
                                     onError = { message -> cameraError = message },
                                 )
+                                OutlinedButton(
+                                    enabled = !submissionLocked,
+                                    onClick = {
+                                        photoPicker.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                        )
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) { Text("Use a photo from this device") }
                             } else {
                                 Text("Camera access is needed to take a photo.", style = MaterialTheme.typography.bodyMedium)
                                 Button(onClick = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) }) {
@@ -2280,6 +2746,7 @@ class MainActivity : ComponentActivity() {
                             readOnly = submissionLocked,
                             onValueChange = { updated ->
                                 if (updated.text != editor.text) {
+                                    if (photoSourcePath == null) setDraftOrigin("Type")
                                     draftGeneration++
                                     updateTranslationSentence(updated.text)
                                     if (hasManualDefinition) dependentFieldsStale = true
@@ -2301,6 +2768,11 @@ class MainActivity : ComponentActivity() {
                                 onClick = { noteImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                                 modifier = Modifier.fillMaxWidth(),
                             ) { Text(if (noteImagePath == null) "Add photo (optional)" else "Change photo") }
+                            Button(
+                                enabled = !submissionLocked && editor.text.isNotBlank(),
+                                onClick = { route = AppRoute.Target },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text("Continue to prepare") }
                         }
                         ocrError?.let { message ->
                             Text(message, style = MaterialTheme.typography.bodyMedium)
@@ -2447,6 +2919,31 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             if (displayPitch != null) PitchPatternDiagram(displayPitch, PitchDiagramScale.Compact)
+                            pitchIndexError?.let { message ->
+                                Text(message, style = MaterialTheme.typography.bodyMedium)
+                            }
+                            if (pitchCandidates.size > 1) {
+                                Text(
+                                    "Source-listed pitch patterns for this reading:",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                Row(
+                                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    pitchCandidates.forEach { record ->
+                                        OutlinedButton(
+                                            enabled = !submissionLocked,
+                                            onClick = {
+                                                pitchAccentText = record.accent.toString()
+                                                pitchHtmlText = record.html
+                                            },
+                                        ) {
+                                            Text("Accent ${record.accent}")
+                                        }
+                                    }
+                                }
+                            }
                             OutlinedTextField(
                                 value = displayDefinition,
                                 readOnly = submissionLocked,
@@ -2470,7 +2967,7 @@ class MainActivity : ComponentActivity() {
                                     translationDraft = translationDraft.saveManualEdit(it)
                                 },
                                 modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Sentence translation (optional)") },
+                                label = { Text("Sentence translation (required)") },
                                 minLines = 2,
                             )
                             OutlinedTextField(
@@ -2605,7 +3102,7 @@ class MainActivity : ComponentActivity() {
                                                 ) { "The frozen media receipt is unavailable; resolve the pending Send manually." }
                                                 restoredFrozen
                                             } else {
-                                                val includeImage = imageAttached && !omitImageForSend && !imageProcessing
+                                                val includeImage = imageAttached && !imageProcessing
                                                 val receiptPath = preferences.getString(IMAGE_RECEIPT_PATH, null)
                                                 val receiptFilename = preferences.getString(IMAGE_RECEIPT_FILENAME, null)
                                                     ?.let(AnkiMediaImporter::sanitizeFilename)
@@ -2622,7 +3119,41 @@ class MainActivity : ComponentActivity() {
                                                     preferences.getLong(IMAGE_RECEIPT_MODIFIED, -1L) == media.modified &&
                                                     receiptFilename != null
                                                 ) receiptFilename else null
-                                                val baseDraft = noteDraft.copy(imageFilename = imported)
+                                                val sentenceFile = sentenceAudio.path?.let(::File)?.takeIf(File::isFile)
+                                                    ?: error("Sentence audio is not ready for import.")
+                                                val wordFile = wordAudio.path?.let(::File)?.takeIf(File::isFile)
+                                                    ?: error("Word audio is not ready for import.")
+                                                val sentenceImported = importedReceipt(
+                                                    preferences, SENTENCE_AUDIO_RECEIPT_PATH, SENTENCE_AUDIO_RECEIPT_FILENAME,
+                                                    SENTENCE_AUDIO_RECEIPT_SIZE, SENTENCE_AUDIO_RECEIPT_MODIFIED,
+                                                    sentenceFile, AnkiMediaImporter::sanitizeAudioFilename,
+                                                ) ?: gateway.importAudio(sentenceFile).also { filename ->
+                                                    val stat = MediaIdentity.fromFile(sentenceFile)
+                                                    preferences.edit()
+                                                        .putString(SENTENCE_AUDIO_RECEIPT_PATH, stat.path)
+                                                        .putString(SENTENCE_AUDIO_RECEIPT_FILENAME, filename)
+                                                        .putLong(SENTENCE_AUDIO_RECEIPT_SIZE, stat.size)
+                                                        .putLong(SENTENCE_AUDIO_RECEIPT_MODIFIED, stat.modified)
+                                                        .commit()
+                                                }
+                                                val wordImported = importedReceipt(
+                                                    preferences, WORD_AUDIO_RECEIPT_PATH, WORD_AUDIO_RECEIPT_FILENAME,
+                                                    WORD_AUDIO_RECEIPT_SIZE, WORD_AUDIO_RECEIPT_MODIFIED,
+                                                    wordFile, AnkiMediaImporter::sanitizeAudioFilename,
+                                                ) ?: gateway.importAudio(wordFile).also { filename ->
+                                                    val stat = MediaIdentity.fromFile(wordFile)
+                                                    preferences.edit()
+                                                        .putString(WORD_AUDIO_RECEIPT_PATH, stat.path)
+                                                        .putString(WORD_AUDIO_RECEIPT_FILENAME, filename)
+                                                        .putLong(WORD_AUDIO_RECEIPT_SIZE, stat.size)
+                                                        .putLong(WORD_AUDIO_RECEIPT_MODIFIED, stat.modified)
+                                                        .commit()
+                                                }
+                                                val baseDraft = noteDraft.copy(
+                                                    imageFilename = imported,
+                                                    sentenceAudioFilename = sentenceImported,
+                                                    vocabularyAudioFilename = wordImported,
+                                                )
                                                 val baseFields = baseDraft.fieldsByName()
                                                     ?: error("The note changed before Send could be frozen.")
                                                 val baseMapping = AnkiFieldContract.mapToModelOrder(model.fields, baseFields)
@@ -2650,6 +3181,12 @@ class MainActivity : ComponentActivity() {
                                                     media = media,
                                                     importedFilename = imported,
                                                     noteId = null,
+                                                    sentenceAudio = FrozenAudioItem(
+                                                        MediaIdentity.fromFile(sentenceFile), sentenceImported,
+                                                    ),
+                                                    wordAudio = FrozenAudioItem(
+                                                        MediaIdentity.fromFile(wordFile), wordImported,
+                                                    ),
                                                 )
                                                 check(preferences.edit().putLong(
                                                     SubmissionRecoveryKeys.REVISION_SEQUENCE,
@@ -2669,7 +3206,11 @@ class MainActivity : ComponentActivity() {
                                                     check(AnkiMediaImporter.sanitizeFilename(actualFilename) != null) {
                                                         "AnkiDroid returned an unsafe image filename."
                                                     }
-                                                    val importedFields = noteDraft.copy(imageFilename = actualFilename).fieldsByName()
+                                                    val importedFields = noteDraft.copy(
+                                                        imageFilename = actualFilename,
+                                                        sentenceAudioFilename = sentenceImported,
+                                                        vocabularyAudioFilename = wordImported,
+                                                    ).fieldsByName()
                                                         ?: error("The frozen note fields are invalid after image import.")
                                                     val importedMapping = AnkiFieldContract.mapToModelOrder(model.fields, importedFields)
                                                     check(importedMapping.isValid) { importedMapping.errors.joinToString() }
@@ -2805,7 +3346,7 @@ class MainActivity : ComponentActivity() {
                                         submitMessage?.startsWith("Blocked:") == true -> "Already in AnkiDroid"
                                         recoveryRequired -> "Pending Send needs review"
                                         submitMessage != null -> "Retry Send"
-                                        !frozenRetryReady && imagePending && !omitImageForSend -> "Send without image"
+                                        !frozenRetryReady && imagePending -> "Preparing image…"
                                         else -> "Send to AnkiDroid"
                                     },
                                 )
@@ -2942,8 +3483,14 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-internal fun initialDraftTags(draftTags: String?, lastNoteTags: String?, defaultTags: String?): String =
-    draftTags ?: lastNoteTags ?: defaultTags.orEmpty()
+internal fun initialDraftTags(draftTags: String?, lastNoteTags: String?): String =
+    draftTags ?: lastNoteTags ?: ""
+
+internal fun formatCacheSize(bytes: Long): String = when {
+    bytes < 1024 -> "$bytes B"
+    bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+    else -> String.format(java.util.Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
+}
 
 
 private fun clearPersistedDraft(preferences: SharedPreferences, draftDirectory: File? = null) {
@@ -2970,6 +3517,7 @@ private fun clearPersistedDraft(preferences: SharedPreferences, draftDirectory: 
         "sentence_furigana_corrections", "photo_source_path", "note_image_path", "processed_image_path",
         IMAGE_RECEIPT_PATH, IMAGE_RECEIPT_FILENAME, IMAGE_RECEIPT_SIZE, IMAGE_RECEIPT_MODIFIED,
         "pending_replacement_image_path",
+        "draft_origin",
         SubmissionRecoveryKeys.REVISION, SubmissionRecoveryKeys.MODEL_FIELDS,
         SubmissionRecoveryKeys.ORDERED_FIELDS, SubmissionRecoveryKeys.VOCABULARY_READING,
         SubmissionRecoveryKeys.SENTENCE_READING, SubmissionRecoveryKeys.DEFINITION,

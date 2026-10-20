@@ -1,0 +1,400 @@
+<!-- Fonts: start fetching before the CSS is parsed, so the first paint has
+     the real metrics instead of reflowing from a fallback face. Fonts are
+     always fetched in CORS mode, hence crossorigin on a same-origin URL. -->
+<link rel="preload" href="_NotoSerifJP-VF_wght.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="_NotoSerif-VF_wdth,wght.woff2" as="font" type="font/woff2" crossorigin>
+
+<!-- Card metadata for the script below -->
+
+<script id="card-data" type="text/json">
+	{
+		"kana": "{{text:kana:VocabFurigana}}",
+		"pitch": "{{text:VocabPitch}}",
+		"tags": "{{text:Tags}}"
+	}
+</script>
+
+<!-- Stage: screenshot + subtitle. Identical on both sides of the card. -->
+
+<figure id="stage">
+	{{#Image}}<div id="image">{{Image}}</div>{{/Image}}
+	<figcaption id="sentence" lang="ja"><span class="sentence-plain pitch-hl">{{furigana:SentKanji}}</span><span class="sentence-ruby pitch-hl">{{furigana:SentFurigana}}</span></figcaption>
+</figure>
+
+<!-- Plaque: what the back adds underneath the stage. One element carries
+     the background, so the reserved-but-hidden space on the front paints
+     nothing and Anki's own backdrop shows through. -->
+
+<div id="plaque" class="back">
+<section id="answer">
+	<div id="head">
+		<div class="vocab" lang="ja">{{kanji:VocabKanji}}</div>
+		<!-- back.html's replay buttons are moved in here by the script -->
+		<div id="controls">
+			<button type="button" id="readings-toggle" class="pill" lang="ja" title="Toggle furigana">隠す</button>
+		</div>
+	</div>
+
+	{{#VocabPitch}}<div class="pitch" lang="ja">{{VocabPitch}}</div>{{/VocabPitch}}
+	{{^VocabPitch}}<div class="pitch" lang="ja">{{kana:VocabFurigana}}</div>{{/VocabPitch}}
+
+	<div id="meaning" lang="en">{{VocabDef}}</div>
+
+	{{#SentEng}}<div id="translation" lang="en">{{hint:SentEng}}</div>{{/SentEng}}
+
+	{{#Notes}}<div id="notes" lang="en">{{furigana:Notes}}</div>{{/Notes}}
+</section>
+
+<footer>
+	<div class="links dotlist" lang="en"><a href="https://jisho.org/search/{{text:kanji:SentFurigana}}">Jisho</a><a
+			href="https://www.google.com/search?udm=2&q={{text:kanji:VocabFurigana}}">Images</a><a
+			href="https://www.google.com/search?q={{text:kanji:VocabFurigana}}">Search</a></div>
+	<div id="tags" class="dotlist" lang="en">{{#Tags}}<span class="tag original">{{Tags}}</span>{{/Tags}}</div>
+</footer>
+</div>
+
+<!-- Scripts -->
+<script type="text/javascript">
+	(function () {
+		'use strict';
+
+		const EXCLUDED_TAGS = ['duplicate', 'imageonfront', 'tolearn', 'marked'];
+
+		/* ゃゅょゎ and their katakana forms merge into the preceding mora */
+		const SMALL_KANA = new Set([...'ゃゅょゎャュョヮ']);
+
+		/* Pitch diagram geometry, in SVG units */
+		const PITCH = { col: 24, padY: 7, rowGap: 20, r: 3.5, strokeWidth: 1.5 };
+
+		let keydownHandler = null;
+
+		/* Load the hidden card metadata from JSON */
+		function getCardData() {
+			try {
+				const jsonContainer = document.getElementById("card-data");
+				if (!jsonContainer) {
+					console.error("Card has no embedded metadata, check the card template!");
+					return {};
+				}
+				return JSON.parse(jsonContainer.textContent);
+			} catch (error) {
+				console.error('Error parsing card data:', error);
+				return {};
+			}
+		}
+
+		/* Detect whether we are on the front or back of a card */
+		function getCardSide() {
+			return document.getElementById("back-visible") ? "back" : "front";
+		}
+
+		/* ---------- Pitch accent ---------- */
+
+		/* Name the pattern from the accent number:
+		 * 0 平板 heiban, 1 頭高 atamadaka, n 中高 nakadaka, n == morae 尾高 odaka
+		 */
+		/* @test-begin pattern */
+		function pitchPattern(cardData) {
+			// Accent numbers can be ten or more (e.g. 10, 11); read the whole number.
+			const pitchMatch = (cardData.pitch || '').match(/\d+/);
+			if (!pitchMatch) return "unknown";
+
+			const pitchNumber = Number(pitchMatch[0]);
+			if (pitchNumber === 0) return "heiban";
+			if (pitchNumber === 1) return "atamadaka";
+
+			// small っ is one mora; ゃゅょ are parts of a single mora
+			const nMorae = (cardData.kana || '').replace(/[ャュョゃゅょ]/g, "").length;
+			return nMorae === pitchNumber ? "odaka" : "nakadaka";
+		}
+		/* @test-end pattern */
+
+		/* Colour the focus words in the sentence and the reading under the
+		 * headword with the same pattern colour. */
+		function applyPitchPattern(pattern) {
+			document.querySelectorAll(".pitch-hl b").forEach(word => {
+				const span = document.createElement("span");
+				span.append(...word.childNodes);
+				span.className = "pitch-word";
+				span.setAttribute("pitch-pattern", pattern);
+				word.replaceWith(span);
+			});
+
+			document.querySelectorAll(".pitch").forEach(elem => {
+				elem.setAttribute("pitch-pattern", pattern);
+			});
+		}
+
+		/* Read VocabPitch's per-mora spans into [{text, level, mark}].
+		 * The field marks each kana high/low/high_drop/low_rise, but a mora
+		 * can span two characters (りょ), so characters are merged after.
+		 *
+		 * Phonetic marks are *nested*: 悪逆 ships
+		 * <span class="high">ク<span class="nasal">キ<span class="handakuten">°</span></span>ャク</span>
+		 * so the marks are inherited from enclosing spans instead of being read
+		 * off the level span alone. A handakuten degree symbol (U+00B0) and the
+		 * combining marks U+309A/U+309B are annotations, not morae: they are
+		 * dropped rather than drawn as an extra column.
+		 *
+		 * A word can carry several accepted readings, comma-separated, each
+		 * closed by its own .pitch_number — 丈夫 ships three. Only the first
+		 * is drawn, so the scan stops at .pitch_number.
+		 */
+		/* @test-begin tokenizer */
+		const SMALL_KANA_SET = new Set('ぁぃぅぇぉゃゅょゎァィゥェォャュョヮヵヶ');
+		const ANNOTATION_CHARS = new Set(['\u00B0', '\u309A', '\u309B']);
+
+		function tokenizeMoraeHtml(html) {
+			const chars = [];
+			const stack = [];
+			const push = (ch, level, mark) => {
+				if (ANNOTATION_CHARS.has(ch) || /\s/.test(ch)) return;
+				chars.push({ ch, level, mark });
+			};
+
+			for (const raw of String(html).split(/(<[^>]*>)/)) {
+				if (!raw) continue;
+				if (raw.startsWith('<')) {
+					if (/^<\//.test(raw)) { stack.pop(); continue; }
+					if (/\/>$/.test(raw)) continue;
+					const classes = (raw.match(/class="([^"]*)"/) || [])[1];
+					stack.push(classes ? classes.split(/\s+/)[0] : '');
+					continue;
+				}
+				if (stack.includes('pitch_number')) break;
+				const level = stack.includes('low') || stack.includes('low_rise') ? 'low' : 'high';
+				const mark = stack.includes('devoiced') ? 'devoiced'
+					: (stack.includes('nasal') || stack.includes('handakuten') ? 'nasal' : '');
+				for (const entity of raw.match(/&#x?[0-9a-fA-F]+;|[^]/g) || []) {
+					let ch = entity;
+					const numeric = entity.match(/^&#(x?)([0-9a-fA-F]+);$/);
+					if (numeric) ch = String.fromCodePoint(parseInt(numeric[2], numeric[1] ? 16 : 10));
+					push(ch, level, mark);
+				}
+			}
+
+			const morae = [];
+			for (const { ch, level, mark } of chars) {
+				if (SMALL_KANA_SET.has(ch) && morae.length) morae[morae.length - 1].text += ch;
+				else morae.push({ text: ch, level, mark });
+			}
+			return morae;
+		}
+		/* @test-end tokenizer */
+
+		function tokenizeMorae(pitchElem) {
+			return tokenizeMoraeHtml(pitchElem.innerHTML);
+		}
+
+		/* One dot per mora on a two-level step line, OJAD style, with the
+		 * kana under their own dots. padX only keeps the outer dots' stroke
+		 * off the viewBox edge — the label row has to repeat it as padding
+		 * or the labels sit padX to the left of their dots. */
+		function buildPitchDiagram(morae) {
+			const { col, padY, rowGap, r, strokeWidth } = PITCH;
+			const padX = Math.ceil(r + strokeWidth);
+			const width = morae.length * col + padX * 2;
+			const height = padY * 2 + rowGap;
+
+			const points = morae.map((mora, i) => ({
+				x: padX + i * col + col / 2,
+				y: mora.level === "low" ? padY + rowGap : padY
+			}));
+
+			const path = points.map((p, i) => (i ? "L" : "M") + p.x + "," + p.y).join(" ");
+			const dots = points.map((p, i) =>
+				`<circle class="${morae[i].mark}" cx="${p.x}" cy="${p.y}" r="${r}"></circle>`).join("");
+			const labels = morae.map(mora =>
+				`<span class="${mora.mark}" style="width:${col}px${mora.text.length > 1 ? ';font-size:.85em' : ''}">${mora.text}</span>`).join("");
+
+			return `<svg class="pitch__svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" aria-hidden="true">`
+				+ `<path d="${path}" fill="none" stroke-width="${strokeWidth}" stroke-linecap="square" stroke-linejoin="round"></path>`
+				+ `${dots}</svg>`
+				+ `<div class="pitch__labels" style="padding-left:${padX}px">${labels}</div>`;
+		}
+
+		/* Swap VocabPitch's spans for the diagram. Cards whose VocabPitch is
+		 * empty fall back to plain kana in the template and are left alone. */
+		function drawPitchDiagrams() {
+			document.querySelectorAll(".pitch").forEach(elem => {
+				const morae = tokenizeMorae(elem);
+				if (!morae.length) return;
+
+				elem.innerHTML = buildPitchDiagram(morae);
+				elem.dataset.diagram = "";
+			});
+		}
+
+		/* ---------- Back-side content ---------- */
+
+		/* Anki's replay buttons are rendered at the end of back.html so the
+		 * front never carries a sound tag — lift them into the head row and
+		 * label them in place, so the whole pill is the clickable anchor.
+		 * (Never write a literal sound tag anywhere in a template, comments
+		 * included: Anki scans the rendered HTML and would queue it.) */
+		function hoistAudioButtons() {
+			const controls = document.getElementById('controls');
+			const backSide = document.getElementById('back-visible');
+			if (!controls || !backSide) return;
+
+			const buttons = [];
+			backSide.querySelectorAll('.audio-btn').forEach(wrapper => {
+				const button = wrapper.querySelector('a.replay-button');
+				if (!button) return;   // empty audio field
+
+				const label = document.createElement('span');
+				label.className = 'replay-button__label';
+				label.lang = 'ja';
+				label.textContent = wrapper.dataset.label;
+				button.prepend(label);
+				buttons.push(button);
+			});
+
+			controls.prepend(...buttons);
+		}
+
+		/* "Source: Sousou_no_Frieren EP17 (06m46s573ms)" reads like a log
+		 * line. Split it into segments — title, episode, timestamp — and let
+		 * the CSS dot-separate them like the links and tags. Anything that
+		 * isn't a Source: line, or that carries markup (furigana), is left
+		 * exactly as written. */
+		function prettifySource() {
+			const notes = document.getElementById('notes');
+			if (!notes || notes.children.length) return;
+
+			const source = notes.textContent.trim().match(/^Source:\s*(.+)$/);
+			if (!source) return;
+
+			let rest = source[1].replace(/_/g, ' ').trim();
+			const segments = [];
+
+			// trailing parenthetical, usually the subs2srs timestamp
+			const parenthetical = rest.match(/\s*\(([^()]*)\)\s*$/);
+			if (parenthetical) {
+				rest = rest.slice(0, parenthetical.index).trim();
+				segments.unshift(parenthetical[1].replace(
+					/^(\d+)m(\d+)s(?:(\d+)ms)?$/,
+					(_, m, s, ms) => `${Number(m)}:${s}${ms ? '.' + ms : ''}`));
+			}
+
+			// trailing episode marker, e.g. "EP17"
+			const episode = rest.match(/\s+(ep?\s*\d+)$/i);
+			if (episode) {
+				rest = rest.slice(0, episode.index).trim();
+				segments.unshift(episode[1].replace(/\s+/, '').toUpperCase());
+			}
+
+			if (rest) segments.unshift(rest);
+
+			notes.replaceChildren(...segments.map(text => {
+				const span = document.createElement('span');
+				span.textContent = text;
+				return span;
+			}));
+			notes.classList.add('dotlist');
+		}
+
+		/* Split the single Anki tag string into one span per tag */
+		function splitAnkiTags(tags) {
+			const tagContainer = document.getElementById('tags');
+			const oldTags = tagContainer && tagContainer.querySelector('.tag.original');
+			if (!oldTags) return;
+
+			const newTags = document.createDocumentFragment();
+			tags.forEach(tag => {
+				if (!tag || EXCLUDED_TAGS.includes(tag)) return;
+				const newTag = document.createElement('span');
+				newTag.textContent = tag;
+				newTag.className = 'tag';
+				newTags.append(newTag);
+			});
+
+			tagContainer.replaceChild(newTags, oldTags);
+		}
+
+		/* Anki labels a hint link with the field name — say what it reveals */
+		function setHintText() {
+			document.querySelectorAll("#translation a.hint").forEach(hint => {
+				hint.textContent = "Show translation";
+			});
+		}
+
+		/* N reveals the translation; 隠す/読み swaps the sentence between the
+		 * furigana version and the plain one shown on the front. */
+		function registerControls() {
+			const toggle = document.getElementById('readings-toggle');
+			const qa = document.getElementById('qa');
+			if (toggle && qa) {
+				toggle.addEventListener('click', () => {
+					const hidden = qa.dataset.readings === 'off';
+					qa.dataset.readings = hidden ? 'on' : 'off';
+					toggle.textContent = hidden ? '隠す' : '読み';   // label = next action
+				});
+			}
+
+			if (keydownHandler) document.removeEventListener("keydown", keydownHandler);
+			keydownHandler = function (event) {
+				if (event.code === "KeyN") {
+					event.preventDefault();
+					document.querySelectorAll("#translation a.hint").forEach(elem => elem.click());
+				}
+			};
+			document.addEventListener("keydown", keydownHandler);
+		}
+
+		/* ---------- Setup ---------- */
+
+		/* Decode the screenshot before the first paint rather than after it.
+		 * The reserved 16/9 box in the CSS absorbs the rest of the shift. */
+		function prioritiseImage() {
+			const img = document.querySelector('#image img');
+			if (!img) return;
+			img.decoding = 'sync';
+			img.fetchPriority = 'high';
+		}
+
+		/* Anki's furigana filter leaves stray whitespace between ruby runs */
+		function trimTextNodes(element) {
+			element.childNodes.forEach(node => {
+				if (node.nodeType === Node.TEXT_NODE) {
+					node.textContent = node.textContent.trim();
+				} else if (node.nodeType === Node.ELEMENT_NODE) {
+					trimTextNodes(node);
+				}
+			});
+		}
+
+		function setupJapanese() {
+			try {
+				const cardData = getCardData();
+
+				prioritiseImage();
+				applyPitchPattern(pitchPattern(cardData));
+				document.querySelectorAll("#sentence > span").forEach(trimTextNodes);
+
+				// The answer is laid out on the front too, hidden, to reserve
+				// its height — so it has to be shaped on both sides or the
+				// reservation is wrong and the flip nudges the card.
+				drawPitchDiagrams();
+				prettifySource();
+				setHintText();
+				splitAnkiTags(cardData.tags?.split(' ') || []);
+
+				// Genuinely back-only: the replay buttons do not exist on the
+				// front, and nothing hidden needs listeners.
+				if (getCardSide() === 'back') {
+					hoistAudioButtons();
+					registerControls();
+				}
+			} catch (error) {
+				console.error('Setup failed:', error);
+			}
+		}
+
+		if (document.readyState === 'loading') {
+			document.addEventListener('DOMContentLoaded', setupJapanese);
+		} else {
+			setupJapanese();
+		}
+	})();
+</script>

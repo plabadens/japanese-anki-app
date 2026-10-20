@@ -11,3 +11,4 @@ __pycache__/
 *.py[cod]
 *.aab
 .DS_Store
+.tmp-*

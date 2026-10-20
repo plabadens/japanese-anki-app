@@ -52,6 +52,6 @@ class AnkiFieldSerializerTest {
         assertEquals("[sound:word.ogg]", AnkiFieldSerializer.audioReference("word.ogg"))
         assertNull(AnkiFieldSerializer.audioReference("../word.ogg"))
         assertNull(AnkiFieldSerializer.audioReference("word].ogg"))
-        assertEquals("<img src=\"a&amp;b.avif\">", AnkiFieldSerializer.imageReference("a&b.avif"))
+        assertEquals("<img src=\"a&amp;b.webp\">", AnkiFieldSerializer.imageReference("a&b.webp"))
     }
 }
