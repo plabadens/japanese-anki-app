@@ -42,14 +42,14 @@ Frontend decision: keep Kotlin/Compose; no Tauri, Dioxus, Flutter, or HTML front
 ## Expanded rewrite mandate
 
 - Standard orientation-aware camera; landscape capture then portrait continuation must work. Remove custom screen-lock/counter-rotation choreography.
-- One path per operation. The user will supply an OpenRouter key for high-quality sentence voice; do not request secrets in chat or build a fallback chain.
+- One path per operation. Sentence TTS is Google Cloud Chirp 3 HD with required phonetic hints; OpenRouter remains translation-only. Google voices are fetched from the cloud and selectable in Settings. Keep a small injectable provider boundary, not multiple production adapters or a fallback chain. Do not request secrets in chat.
 - Choose AVIF or WebP based on implementation simplicity and actual compression tests. Maximum long edge is 1080 px, not 1920×1080; keep photos local.
 - Nasalization remains required. Mirror AJT Japanese HTML pitch output and relevant furigana/word-audio behavior, verified against upstream code/data.
 - API 37 only: ARM64 device, x86_64 emulator. No broad API/ABI matrix.
 - Buildable in Nix is sufficient; byte-identical APKs are not a goal.
 - Further simplification is authorized. SPEC selects one platform WebP encoder, removes first-install tag seeds and fixed UI placement rules, and uses a deliberate rebuild with confirmation instead of competing stale/manual/suggestion branches.
 
-Remaining technical selections and evidence are tracked only in SPEC §15: AJT annotated source/recording consistency, OpenRouter model/voice audition, image preset validation, and actual API-37 end-to-end acceptance. This is not approval to implement several providers while deciding.
+Remaining technical selections and evidence are tracked only in SPEC §15: AJT annotated source/recording consistency, Google hinted-speech/voice-list validation and OpenRouter translation-model selection, image preset validation, and actual API-37 end-to-end acceptance. This is not approval to implement several providers while deciding.
 
 ## Quality boundary
 

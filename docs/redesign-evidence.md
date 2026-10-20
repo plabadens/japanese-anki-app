@@ -88,4 +88,4 @@ Reuse those behavioral fixtures, not the desktop source-manager architecture. Un
 
 ## 6. Still unverified
 
-OpenRouter model/voice audition, Android Q75 output, API-37 app execution, modified-template rendering, actual recorded-audio playback/alignment, licensing compliance, and SDK privacy behavior are not established by this documentation work. SPEC §15 keeps these explicit rather than converting researched capabilities into false passes.
+Google Chirp 3 HD hinted-speech audition and cloud voice listing, OpenRouter translation-model validation, Android Q75 output, API-37 app execution, modified-template rendering, actual recorded-audio playback/alignment, licensing compliance, and SDK privacy behavior are not established by this documentation work. SPEC §15 keeps these explicit rather than converting researched capabilities into false passes.

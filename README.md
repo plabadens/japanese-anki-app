@@ -4,7 +4,7 @@ See `docs/toolchain-notes.md` for deferred toolchain work: the AGP 9.x upgrade (
 
 Native Android app for creating Japanese sentence-mining notes in AnkiDroid. See [SPEC.md](SPEC.md) for approved behavior and release gates.
 
-**Redesign in progress:** `SPEC.md` now defines the API-37-only Compose workflow, local preparation, single-path OpenRouter generation, required complete notes, annotated AJT-compatible pitch, and 1080 px WebP images. The implementation/build observations below predate that rewrite; they are not claims that the redesign is implemented. The API-35 AVD and old acceptance matrix are historical tooling, not the new release target. Nix development builds remain required; byte-identical/sandboxed APK builds do not.
+**Redesign in progress:** `SPEC.md` now defines the API-37-only Compose workflow, local preparation, Google Chirp 3 HD sentence speech with reading hints and cloud-listed voices, OpenRouter translation, required complete notes, annotated AJT-compatible pitch, and 1080 px WebP images. The implementation/build observations below predate that rewrite; they are not claims that the redesign is implemented. The API-35 AVD and old acceptance matrix are historical tooling, not the new release target. Nix development builds remain required; byte-identical/sandboxed APK builds do not.
 
 ## Build environment (NixOS x86_64)
 

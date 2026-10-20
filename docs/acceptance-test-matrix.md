@@ -1,6 +1,6 @@
 # v0.2 acceptance-test matrix and Android emulator runbook
 
-**Historical / superseded:** this is the pre-redesign v0.2 runbook and A01–A67 matrix, preserved as implementation evidence only. Use **SPEC.md §14 R01–R27** for current acceptance. The new scope is API 37, ARM64 device packaging and x86_64 emulator, local preparation followed by OpenRouter generation, complete-or-block export, WebP at 1080 px, and a Nix development build without byte-equality gates. Old fallback, optional-enrichment, custom camera, mockup-conformance, API-35/36 matrix, and reproducibility instructions below must not drive new implementation. Commands describe the old checkout and need revalidation on the API-37 runner. Nothing here is a conformance report.
+**Historical / superseded:** this is the pre-redesign v0.2 runbook and A01–A67 matrix, preserved as implementation evidence only. Use **SPEC.md §14 R01–R29** for current acceptance. The new scope is API 37, ARM64 device packaging and x86_64 emulator, local preparation followed by Google Chirp 3 HD speech and OpenRouter translation, complete-or-block export, WebP at 1080 px, and a Nix development build without byte-equality gates. Old fallback, optional-enrichment, custom camera, mockup-conformance, API-35/36 matrix, and reproducibility instructions below must not drive new implementation. Commands describe the old checkout and need revalidation on the API-37 runner. Nothing here is a conformance report.
 
 ## 1. Toolchain and emulator
 
