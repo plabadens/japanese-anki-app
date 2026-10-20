@@ -1,7 +1,7 @@
 # v0.3 final acceptance — independent verification
 
 Candidate/integrated revision: `e9554d6` on `main` (parent `0cc4794` + acceptance commits `285ccef`,
-`e9554d6`; `c318783`/`810af63` are documentation only). Built from a **fresh clone** of that revision
+`e9554d6`; `c318783`/`810af63` are documentation only). Built in the **fresh clone** of `main` advanced to `e9554d6`
 at `/srv/hermes/.hermes/profiles/sysadmin/cache/scratch/v03-clone` (working tree clean before the build).
 
 Environment: NixOS, `nix develop` (JDK 17.0.20.1, Gradle 8.14.4, Android SDK build-tools 36.0.0,
