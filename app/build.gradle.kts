@@ -40,7 +40,8 @@ android {
         applicationId = "dev.pierre.japaneseanki"
         minSdk = 37
         targetSdk = 37
-        versionCode = 2
+        // 0.2.0 shipped as versionCode 2; the update must be strictly newer.
+        versionCode = 3
         versionName = "0.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
