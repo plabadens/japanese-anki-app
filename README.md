@@ -4,6 +4,8 @@ See `docs/toolchain-notes.md` for deferred toolchain work: the AGP 9.x upgrade (
 
 Native Android app for creating Japanese sentence-mining notes in AnkiDroid. See [SPEC.md](SPEC.md) for approved behavior and release gates.
 
+**Redesign in progress:** `SPEC.md` now defines the API-37-only Compose workflow, local preparation, single-path OpenRouter generation, required complete notes, annotated AJT-compatible pitch, and 1080 px WebP images. The implementation/build observations below predate that rewrite; they are not claims that the redesign is implemented. The API-35 AVD and old acceptance matrix are historical tooling, not the new release target. Nix development builds remain required; byte-identical/sandboxed APK builds do not.
+
 ## Build environment (NixOS x86_64)
 
 ```sh
@@ -67,7 +69,7 @@ For iterating on UI code, `scripts/rebuild.sh [test|build-only]` builds the debu
 
 Install AnkiDroid only in this emulator by downloading its APK from the official AnkiDroid release/Play distribution and running the wrapper's `install` command with that APK. Keep all test data disposable and isolated to the emulator; do not touch any attached phone.
 
-Use emulators for repeatable UI-state, light/dark theme, Android share-intent, AnkiDroid provider-flow, screenshot, camera-input, TTS, and accessibility checks. Inject known image fixtures for OCR and install a test offline TTS engine/voice for synthesis checks. The packaged AVD is x86_64; provision pinned emulator images for all API/ABI combinations required by SPEC §14, including ARM64, rather than substituting attached hardware. Physical-device validation is optional and never blocks release. Emulator-only limitations should be recorded separately from failures.
+For the redesign, provision an API-37 x86_64 emulator and follow the R-series checklist in SPEC §14. Inject local image fixtures and use the chosen OpenRouter models for actual quality checks, with controlled responses for failure tests. No offline TTS engine or ARM64 emulator matrix is required. Verify ARM64 packaging separately; physical-device validation remains optional. Record emulator-only limitations honestly.
 
 ## Current implementation
 

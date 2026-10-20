@@ -1,5 +1,7 @@
 # Implementation status — 2026-10-14
 
+**Pre-redesign evidence:** the revised `SPEC.md` changes platform, providers, pitch data, media format, UI, and export eligibility. This report does not establish implementation or acceptance of that redesign; removed fallbacks and byte-identical builds are no longer work to complete.
+
 Non-normative status snapshot for baseline commit `88c52525f9264afaaaab55d8100f47493c97fa76`. Requirements live in [../SPEC.md](../SPEC.md). This document records evidence and historical claims, not feature acceptance.
 
 ## Checks performed on this checkout

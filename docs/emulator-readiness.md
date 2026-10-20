@@ -1,5 +1,7 @@
 # Emulator readiness and audit handoff
 
+**Historical runner evidence:** this API-35 environment predates the redesign. Current acceptance targets API 37 on the x86_64 emulator (SPEC §2 and §14); do not count the old runner or ARM64-emulator discussion below as current acceptance. Recheck live processes, paths, and artifacts before using any commands.
+
 Verified at `2026-10-14T14:23:17+02:00` (host clock). This is runner-readiness evidence, not a complete application acceptance report.
 
 ## Working runner

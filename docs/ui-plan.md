@@ -1,5 +1,7 @@
 # UI plan and outstanding visual work
 
+**Historical / superseded:** this plan describes the earlier row-per-field UI and HTML mockups. The Compose/Material 3 Expressive redesign in `SPEC.md` §4 replaces its interaction checklist and next-wave plan. Do not implement the old monochrome restrictions, custom camera rotation, fixed Settings placement, optional-enrichment states, or mandatory empty rows below. Preserve the bug/wiring reports as historical lessons, not proof of current behavior.
+
 Recorded after reviewing the built UI against `mockup/screens/*` and `mockup/shared.css`.
 
 ## Decision (user, this session)
