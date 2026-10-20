@@ -1,9 +1,8 @@
 # v0.3 final acceptance — independent verification
 
-Candidate/integrated revision: `285ccef` on `main` (parent `0cc4794` + acceptance code commit
-`285ccef`). The only commits after it are documentation (`c318783`, this report), which contain no
-source, resource, or build inputs. Built from a **fresh clone** of `285ccef` at
-`/srv/hermes/.hermes/profiles/sysadmin/cache/scratch/v03-clone` (working tree clean before the build).
+Candidate/integrated revision: `e9554d6` on `main` (parent `0cc4794` + acceptance commits `285ccef`,
+`e9554d6`; `c318783`/`810af63` are documentation only). Built from a **fresh clone** of that revision
+at `/srv/hermes/.hermes/profiles/sysadmin/cache/scratch/v03-clone` (working tree clean before the build).
 
 Environment: NixOS, `nix develop` (JDK 17.0.20.1, Gradle 8.14.4, Android SDK build-tools 36.0.0,
 platform 37.0), API-37.0 `google_apis` **x86_64** AVD (`japanese-anki-pixel7-api37`, headless,
@@ -30,6 +29,10 @@ acceptance pass by itself.
    an installed v0.2 build. `app/build.gradle.kts` now takes `JAPANESE_ANKI_DEBUG_KEYSTORE`, and the
    delivered APK is signed with the same certificate as the delivered v0.2 APK
    (`1446fc8e…635d`, keystore `/srv/hermes/.android/debug.keystore`, outside the repository).
+3. **versionCode was not monotonic (defect fixed).** The delivered v0.2 APK is `versionCode 2`, and
+   the candidate v0.3 was also `versionCode 2` — an in-place update would carry an equal, not newer,
+   code. `versionCode` is now `3` for `versionName 0.3`; the in-place update from the installed
+   `versionCode 2` build was executed on the emulator (`lastUpdateTime` advanced, draft preserved).
 
 ## Independent finding about the previous candidate
 
@@ -51,7 +54,7 @@ the APK built from `285ccef`. Emulator: `ro.build.version.sdk=37`, `release=17`,
 
 | ID | Result | Evidence |
 |---|---|---|
-| R01 | **PASS** | Fresh clone of `285ccef`: `nix develop --command ./scripts/test-core.sh` → `OK (62 tests)`; `gradle :app:testDebugUnitTest` → 110 tests, 0 failures, 0 errors; `gradle :app:assembleDebug` → BUILD SUCCESSFUL. APK badging: `versionCode=2 versionName=0.3 minSdk=37 targetSdk=37 compileSdk=37`, `native-code: arm64-v8a x86_64`; `lib/arm64-v8a/*.so` ELF `e_machine=b7` (AArch64), `lib/x86_64/*.so` `e_machine=3e`. `evidence/apk-verification.txt`, `evidence/unit-tests.txt`, `evidence/core-tests.txt`. Note: the flake's `nix build .#apk` derivation was **not** exercised (its fixed-output Gradle dependency cache is not populated for this change set); the documented clean-checkout path is Gradle inside `nix develop`. |
+| R01 | **PASS** | Fresh clone of `e9554d6`: `nix develop --command ./scripts/test-core.sh` → `OK (62 tests)`; `gradle :app:testDebugUnitTest` → 110 tests, 0 failures, 0 errors; `gradle :app:assembleDebug` → BUILD SUCCESSFUL. APK badging: `versionCode=3 versionName=0.3 minSdk=37 targetSdk=37 compileSdk=37`, `native-code: arm64-v8a x86_64`; `lib/arm64-v8a/*.so` ELF `e_machine=b7` (AArch64), `lib/x86_64/*.so` `e_machine=3e`. `evidence/apk-verification.txt`, `evidence/unit-tests.txt`, `evidence/core-tests.txt`. Note: the flake's `nix build .#apk` derivation was **not** exercised (its fixed-output Gradle dependency cache is not populated for this change set); the documented clean-checkout path is Gradle inside `nix develop`. |
 | R02 | **PARTIAL** | On the API-37 x86_64 AVD the delivered APK installs, starts, unpacks UniDic (725 MB, progress shown), opens the dictionary + AJT pitch index, tokenizes 昨日は友だちと新しい喫茶店に行った。, resolves JMdict senses, downloads and plays the NHK recording, OCRs a fixture photo (7 regions → excerpt sheet), renders Review, survives rotation / process death / in-place APK update, and runs in both themes at 100 % and 200 % font. **NOT RUN:** camera capture (headless AVD has no usable camera surface) and any ARM64 runtime claim. |
 
 ## Workflow
@@ -127,4 +130,4 @@ adb -s emulator-5556 shell am start -n dev.pierre.japaneseanki/.MainActivity
 ```
 
 Artifact: `japanese-anki-0.3-debug.apk`, 546 904 852 bytes,
-sha256 `71bbf0d493a9eeafcf4c23c376f75e6d04bde00d55949c43fd8a15f04cdac6f6` (`SHA256SUMS.txt`).
+sha256 `2cc3c053003af15de44050f350a3758d0c25155910b31a83ff0d6beedf37a15e` (`SHA256SUMS.txt`).
