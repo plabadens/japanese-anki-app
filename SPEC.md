@@ -1,8 +1,8 @@
 # Japanese Anki Card Creator — Specification
 
-**Status:** Core-workflow redesign. This document supersedes the previous specification and its A01–A67 acceptance matrix. It specifies intended behavior, not implementation completion. The remaining technical decisions in §15 must be resolved with evidence, not additional fallback paths.
+**Target:** v0.3. This document defines the required product behavior, technical constraints, and acceptance criteria.
 
-**Product:** A personal, sideloaded Android app. Kotlin and Jetpack Compose remain the application stack.
+**Product:** A personal, sideloaded Android app built with Kotlin and Jetpack Compose.
 
 ## 1. Purpose and quality contract
 
@@ -36,17 +36,17 @@ Completeness is testable; universal linguistic correctness is not. Do not invent
 
 | Area | Decision |
 |---|---|
-| Language/UI | Kotlin, Jetpack Compose Material 3 Expressive; no web frontend or framework migration |
-| Android | Android 17 / API 37 only for this release; `minSdk = 37`, `targetSdk = 37`, `compileSdk = 37` |
+| Language/UI | Kotlin, Jetpack Compose Material 3 Expressive |
+| Android | Android 17 / API 37; `minSdk = 37`, `targetSdk = 37`, `compileSdk = 37` |
 | Device ABI | `arm64-v8a` |
 | Emulator ABI | `x86_64` on API 37 |
-| Delivery | Personal sideloaded APK; both ABIs may remain in one APK to reuse existing packaging |
+| Delivery | Personal sideloaded APK supporting both ABIs |
 | Build environment | Pinned Nix development environment on x86_64 NixOS |
 | Signing | Local signing outside the repository and Nix store; preserve update identity |
 
-No API 35/36 matrix, ARM64 emulator matrix, Play Store distribution, or byte-identical APK requirement. Physical-device testing is useful but optional, not a release blocker. Verify ARM64 packaging/native linkage and exercise runtime workflows on the API-37 x86_64 emulator; do not misreport that as ARM64 runtime testing.
+Physical-device testing is optional and does not block delivery. Verify ARM64 packaging/native linkage and exercise runtime workflows on the API-37 x86_64 emulator. Report packaging checks separately from runtime tests.
 
-A clean checkout must build and run its tests using documented commands inside `nix develop`. Normal dependency fetching is allowed. A fully sandboxed/offline APK derivation is not required. Existing Nix build targets may stay if useful; do not spend UI-delivery effort proving byte equality.
+A clean checkout must build and run its tests using documented commands inside `nix develop`. Dependency fetching is allowed.
 
 ## 3. Scope and one-path architecture
 
@@ -57,16 +57,16 @@ A clean checkout must build and run its tests using documented commands inside `
 | OCR | Bundled ML Kit Japanese recognition, entirely on-device |
 | Tokenization and initial readings | Bundled MeCab/UniDic; adapt AJT behavior where relevant (§5) |
 | English dictionary/meaning selection | Bundled JMdict Japanese/English data |
-| Pitch and phonetic marks | AJT Japanese's pinned bundled pitch data, locally indexed with original annotations (§5); replaces the standalone Kanjium-only path |
+| Pitch and phonetic marks | AJT Japanese's pinned bundled pitch data, locally indexed with original annotations (§5) |
 | Word recording | Pinned NHK-2016 index and its recordings (§6) |
 | Sentence TTS | Google Cloud Chirp 3 HD, with phonetic hints and a cloud-listed Japanese voice selected in Settings (§6) |
 | Translation | OpenRouter, one selected text model and fixed translation prompt (§7) |
 | Image export | Android platform lossy WebP, at most 1080 px on the long edge (§7) |
 | Export | Supported AnkiDroid Android API/content provider |
 
-A valid cached result from the same path is reuse, not a fallback. There are no Azure/Android-TTS chains, offline translation model, runtime provider discovery, source marketplace, or per-note provider choice. Sentence speech uses Google Cloud Chirp 3 HD; translation uses one deployment-selected OpenRouter text model. Settings discovers voices within the selected Google family, not alternative providers/models. Unavailable services fail visibly without selecting another provider or model.
+Use one provider path per operation, with reuse of valid cached results. Settings discovers voices within Google Chirp 3 HD. Translation uses one deployment-selected OpenRouter text model. An unavailable service fails visibly and preserves the draft.
 
-Keep local dictionaries and indexes available after installation without network access. Retain existing full UniDic/JMdict coverage rather than introducing a linguistic-stack migration solely for smaller packaging. Initial local unpacking may show progress but must not freeze the UI.
+Bundle full UniDic and Japanese/English JMdict coverage with searchable local indexes. These resources must work after installation without network access. Initial local unpacking may show progress but must not freeze the UI.
 
 ### Included
 
@@ -79,7 +79,7 @@ Keep local dictionaries and indexes available after installation without network
 
 Batch mining, draft libraries, background clipboard monitoring, generated mnemonic stories/images, vocabulary-knowledge tracking, review/sync/editing existing notes, deck/template installation, arbitrary field mapping, microphone/audio import/editing, image crop tools, freehand pitch editing, provider fallbacks, background generation queues, and automatic retry after restart.
 
-No separate Anki-template preview engine. The Compose Review screen is a visual confirmation of content, not a WebView renderer or promise of pixel-identical Anki cards.
+Review is a native Compose presentation of the note content. The app does not render the Anki template or attempt pixel-identical card previews.
 
 ## 4. Workflow and native UI
 
@@ -87,15 +87,15 @@ No separate Anki-template preview engine. The Compose Review screen is a visual 
 
 Use actual Compose Material 3 Expressive components, typography, color roles, shapes, state layers, and restrained transitions. Use a coherent light/dark theme; normal Material accent/error colors and appropriate motion are welcome. Pitch colors must remain distinguishable and must not be changed accidentally by theme tinting.
 
-Use conventional top app bars, Back navigation, settings lists, bottom sheets, chips, progress, and brief success feedback where appropriate. Do not recreate them in bespoke controls. No mandated monochrome palette, prohibition on snackbars, ornamental settings cards, per-field icon quota, or fixed Settings placement.
+Use conventional top app bars, Back navigation, settings lists, bottom sheets, chips, progress, and brief success feedback where appropriate. Use native component behavior and Material color roles consistently.
 
-English UI, system light/dark mode, portrait/landscape, 200% font scaling, TalkBack labels/states, at least 48 dp non-overlapping touch targets, 4.5:1 normal-text contrast and 3:1 actionable-icon contrast remain required. Respect system-bar/keyboard insets; long content scrolls. Support reduced/disabled animation settings and do not use color alone to communicate state.
+Support English UI, system light/dark mode, portrait/landscape, 200% font scaling, TalkBack labels/states, at least 48 dp non-overlapping touch targets, 4.5:1 normal-text contrast and 3:1 actionable-icon contrast. Respect system-bar/keyboard insets; long content scrolls. Support reduced/disabled animation settings and do not use color alone to communicate state.
 
-Design and approve a small interactive **Compose prototype using production components**, then reuse those components. The old `mockup/` HTML/screenshots and `docs/ui-plan.md` are historical references, not acceptance targets. Validate the whole journey, not just attractive isolated screens.
+Use a small interactive **Compose prototype built from production components** to validate the design, then reuse those components. Validate the complete journey, including interaction and accessibility.
 
 ### 4.2 Capture
 
-Offer **Photo** (initial default) and **Type**, remembering the last used mode. CameraX may reuse the existing native capture path. Use standard 4:3 capture with normal orientation-aware portrait/landscape layout; no custom counter-rotating labels, locked camera choreography, or mandated decorative frame. Preview must not misrepresent the captured bounds or stretch the image.
+Offer **Photo** (initial default) and **Type**, remembering the last used mode. Use CameraX with standard 4:3 capture and orientation-aware portrait/landscape layout. Preview must accurately represent the captured bounds without stretching the image.
 
 The usual sequence—rotate to landscape, capture, rotate back to portrait, continue—must preserve the photo and draft. Store orientation-corrected media. Request camera permission through the normal Android flow; denial preserves work and leaves Type/image-picker entry usable.
 
@@ -145,7 +145,7 @@ Blocked or uncertain submission retains the same content with actionable recover
 
 ### 4.7 Setup and incoming content
 
-Settings contains existing note type/deck selection, separate Google Cloud TTS and OpenRouter translation credential entry/validation, a **Sentence voice** selector, cache clearing, and Sources/Licenses. The translation model is shown read-only; the sentence voice is user-selectable within Chirp 3 HD. First-note tags start empty; subsequent notes start with last-sent tags. There is no separate first-install seed setting.
+Settings contains existing note type/deck selection, separate Google Cloud TTS and OpenRouter translation credential entry/validation, a **Sentence voice** selector, cache clearing, and Sources/Licenses. The translation model is shown read-only; the sentence voice is user-selectable within Chirp 3 HD. First-note tags start empty; subsequent notes start with last-sent tags.
 
 Fetch voices from Google Cloud `GET /v1/voices?languageCode=ja-JP`, then filter to Japanese-capable Chirp 3 HD voices. Populate a native Material selector from returned names/IDs; do not hardcode a voice catalogue or include other TTS families. Show friendly names plus useful returned metadata, retain the exact voice ID, and save the explicit selection. Expose loading, empty, authentication, and retry states with a Refresh action. Retain the last fetched list for offline display, clearly marked as cached when refresh fails; do not present it as fresh verification. A first-time fetch failure with no cached list leaves selection unavailable.
 
@@ -159,11 +159,11 @@ Text shares enter Type preparation; a single shared image follows Photo preparat
 
 ### 5.1 Sources and matching
 
-Mirror the relevant behavior of [AJT Japanese](https://github.com/Ajatt-Tools/Japanese), not its entire desktop add-on, bulk-edit features, or source-fallback configuration. Pin the upstream revision and derived-data sources, preserve notices, and document transformations. Keep dictionary, morphological analysis, pitch, and audio identities separate.
+Use [AJT Japanese](https://github.com/Ajatt-Tools/Japanese) as the behavioral reference for furigana and pitch output. Pin the upstream revision and derived-data sources, preserve notices, and document transformations. Keep dictionary, morphological analysis, pitch, and audio identities separate.
 
 Use bundled MeCab/UniDic for tokenization/lemma analysis and JMdict for definitions. Match entries using surface, lemma, and reading. Preserve entry/sense boundaries; no manual vocabulary fallback. Test actual mining examples, not only textbook-perfect strings.
 
-**Pitch source:** pin AJT Japanese at `5729b8c080823eadaa121c76e0f23c55d6a81935` and use its bundled formatted pitch records as one local dataset. Upstream merges NHK and Kanjium content; this is not an app-level fallback chain. Preserve supplied nasal/devoicing markup when building the local index. The merged bundle does not reliably identify NHK-versus-Kanjium provenance per row: an unmarked record means no mark was supplied, not verified absence of nasalization. Do not build a new unified dictionary or infer missing phonetics to conceal this limitation. The existing Kanjium-only path is replaced, not retained as a fallback. Source evidence and a concrete fixture are in [docs/redesign-evidence.md](docs/redesign-evidence.md).
+**Pitch source:** pin AJT Japanese at `5729b8c080823eadaa121c76e0f23c55d6a81935` and use its bundled formatted pitch records as one local dataset. Preserve supplied nasal/devoicing markup when building the local index. The bundle does not identify per-row provenance: an unmarked record means no mark was supplied, not verified absence of nasalization. Do not infer missing phonetics.
 
 ### 5.2 Furigana
 
@@ -173,7 +173,7 @@ Kana-only text is already complete. Every kanji-containing span needs a supporte
 
 ### 5.3 Pitch, nasalization, and HTML output
 
-`VocabPitch` uses AJT **`html_and_number` with `HTMLPitchPatternStyle.none`**: class-based spans (`high`, `low`, `high_drop`, `low_rise`), nested `nasal`/`handakuten`/`devoiced` spans where supplied, and a trailing `pitch_number` span. In AJT, `none` means CSS classes, not disabled output. Preserve nested structure and source phonetic distinctions. This replaces the custom hollow-dot nasalization contract. Golden fixtures include 悪逆 / アクギャク / accent 0, whose source marks the nasal キ and degree symbol inside a high span; the mark is not an extra mora.
+`VocabPitch` uses AJT **`html_and_number` with `HTMLPitchPatternStyle.none`**, which emits class-based spans: (`high`, `low`, `high_drop`, `low_rise`), nested `nasal`/`handakuten`/`devoiced` spans where supplied, and a trailing `pitch_number` span. Preserve nested structure and source phonetic distinctions. Golden fixtures include 悪逆 / アクギャク / accent 0, whose source marks the nasal キ and degree symbol inside a high span; the mark is not an extra mora.
 
 Select one matching pattern for the chosen spelling/reading. The first source-listed pattern is the deterministic default, not a frequency or correctness ranking. Other matching patterns are available through Edit. Missing pitch blocks export. Zero is valid heiban, never a missing sentinel.
 
@@ -187,19 +187,19 @@ The recording must match the selected vocabulary reading and numeric accent usin
 
 ### 6.1 Recorded vocabulary
 
-Use the existing NHK-2016 pronunciation index at `b0207d240f0f28cdc2dd491dd83343c3a5630119` as the sole recorded-word path unless the source audit establishes an explicitly approved replacement. Download recordings on demand; cache valid files. Select deterministically among matches for the resolved spelling/reading. No synthesized word fallback or audio-source picker.
+Use the NHK-2016 pronunciation index at `b0207d240f0f28cdc2dd491dd83343c3a5630119` as the sole recorded-word path. Download recordings on demand; cache valid files. Select deterministically among matches for the resolved spelling/reading. No synthesized word fallback or audio-source picker.
 
-Verify actual matching information, bounded downloads, response type, and playable output. Missing/unusable audio blocks export and retains the draft. A source update is a pin change. The index's GPL-3.0 identification does not establish rights to linked recordings; those rights remain unverified, as previously accepted for this personal application. Keep notices and do not claim permission has been established.
+Verify actual matching information, bounded downloads, response type, and playable output. Missing/unusable audio blocks export and retains the draft. A source update is a pin change. Keep source notices and distinguish the index license from recording rights. Personal use is not evidence of recording permission; do not make unsupported licensing claims.
 
 ### 6.2 Sentence TTS
 
-Use **Google Cloud Text-to-Speech Chirp 3 HD directly**, with the Japanese voice explicitly selected in Settings (§4.7). Use synchronous file synthesis via `POST /v1/text:synthesize`, `languageCode = ja-JP`, the exact selected voice name, MP3 output, and a fixed delivery configuration. Validate decoding before marking complete. No OpenRouter speech gateway, Azure integration, Android TTS, voice cloning, recording, model catalogue, or fallback chain. Store the Google credential at runtime (§11).
+Use **Google Cloud Text-to-Speech Chirp 3 HD directly**, with the Japanese voice explicitly selected in Settings (§4.7). Use synchronous file synthesis via `POST /v1/text:synthesize`, `languageCode = ja-JP`, the exact selected voice name, MP3 output, and a fixed delivery configuration. Validate decoding before marking complete. No voice cloning, recording, model catalogue, or fallback chain. Store the Google credential at runtime (§11).
 
 **Phonetic hints are required, not an optional best-effort feature.** Build the synthesis request from the current sentence and its structured, resolved readings, including manual corrections. Send Google Japanese yomigana pronunciation overrides for resolved kanji-containing spans using `input.customPronunciations.pronunciations` and `PHONETIC_ENCODING_JAPANESE_YOMIGANA`. Kana-only text needs no fabricated hint. Do not send Anki bracket notation, ruby HTML, parenthesized reading prose, or conversational instructions as spoken text. Keep exported sentence text unchanged; avoid replacing the entire sentence with kana.
 
 The hint builder must preserve inflection/okurigana and apply the sentence occurrence's reading, not blindly substitute the vocabulary lemma's reading. Do not apply one reading globally when the same spelling has different readings within the sentence. Use a tested occurrence-safe request representation, or report that the conflicting hints cannot be represented and block generation; never silently omit them. Reject invalid/unresolved readings before a paid request. Do not invent IPA, nasalization, or sentence-level pitch accents; yomigana hints specify readings, not a guarantee of dictionary accent in connected speech.
 
-Unsupported/rejected hint requests are generation failures, not permission to retry unhinted. Tests must inspect the serialized outbound request as well as listen to ambiguous-reading fixtures with the selected voice; a successful response does not establish that Google honored the hints. Japanese hint support for the exact voice/API combination remains a runtime acceptance check (§15), not an assumption based on an enum. Reading corrections invalidate hinted sentence audio (§10).
+An unsupported or rejected hint request is a generation failure; do not retry without hints. Tests must inspect the serialized outbound request and audition ambiguous-reading fixtures with the selected voice; a successful response alone does not establish that Google honored the hints. Japanese hint support for the exact voice/API combination requires runtime verification (§15). Reading corrections invalidate hinted sentence audio (§10).
 
 Target sentence-TTS spend is **at most USD 5/month at roughly two cards/day**. Review non-promotional rates, billing units, top-up fees, and a retry allowance. Quality acceptance prioritizes correct readings, counters, particles, omissions/additions, and natural Japanese prosody over expressive acting. Do not claim perfect pitch-controlled sentence speech.
 
@@ -207,35 +207,35 @@ Target sentence-TTS spend is **at most USD 5/month at roughly two cards/day**. R
 
 Generation begins only after the local meaning choice is confirmed. Never repeat billable work automatically after process death. Preserve completed matching results; Retry resumes incomplete/rejected work only. Cancel or ignore superseded responses. Audio for outdated inputs is unavailable for playback/export.
 
-Keep one bounded reusable audio cache (250 MB is the existing default). Cache keys include source/model, text or recording identity, exact voice ID/configuration, the canonical phonetic-hint payload and hint-builder version for sentence speech, and revision where relevant. Active-draft media is durable and protected from eviction. Cache clearing must not remove the draft or AnkiDroid's copies. No cache-management dashboard is needed.
+Keep one bounded reusable audio cache with a 250 MB limit. Cache keys include source/model, text or recording identity, exact voice ID/configuration, the canonical phonetic-hint payload and hint-builder version for sentence speech, and revision where relevant. Active-draft media is durable and protected from eviction. Cache clearing must not remove the draft or AnkiDroid's copies. No cache-management dashboard is needed.
 
 ### 6.4 Small modular provider boundary
 
 Keep sentence-speech operations behind a small injectable contract: list compatible voices and synthesize a structured request to an audio file. The workflow passes sentence text, occurrence-aware reading hints, selected voice ID, and delivery settings; it does not construct Google JSON. Keep Google authentication, HTTP/JSON mapping, voice filtering, response validation, and sanitized provider errors inside the Google adapter. Keep reading/hint construction in a pure, independently tested function. Compose consumes app-level voice/result/error data, not Google SDK types or raw HTTP responses.
 
-Provide one production adapter (Google) and a test fake/transport. Inject credential access and HTTP transport; do not couple either to an Activity or Settings widget. Translation and recorded-word lookup remain separate operations, not subclasses forced into the sentence-TTS contract. No plugin registry, runtime provider switch, abstract failover policies, or speculative second adapter. Modularity means a replaceable boundary, not shipping multiple paths.
+Provide one production adapter (Google) and a test fake/transport. Inject credential access and HTTP transport so neither is coupled to an Activity or Settings widget. Translation and recorded-word lookup remain separate operations rather than subclasses of the sentence-speech contract.
 
 ## 7. Images, translation, notes, and tags
 
 ### 7.1 Images
 
-Use **lossy WebP through Android `Bitmap.CompressFormat.WEBP_LOSSY`**. It is one platform encoding path, not platform-AVIF probing plus a bundled native codec contingency. Modern Anki WebViews are the rendering target; verify an actual imported image there.
+Use **lossy WebP through Android `Bitmap.CompressFormat.WEBP_LOSSY`**. Modern Anki WebViews are the rendering target; verify an actual imported image there.
 
 1. Decode safely off the UI thread; apply orientation and preserve the full frame.
 2. Run OCR from the source-resolution decode, independently of export compression.
-3. Resize to **1080 pixels maximum on the long edge**, preserve aspect ratio, never upscale. This means 1080×810 for a 4:3 landscape frame, not 1920×1080.
+3. Resize to **1080 pixels maximum on the long edge**, preserve aspect ratio, never upscale. A 4:3 landscape frame at the limit is 1080×810.
 4. Re-encode with a fixed measured quality preset, stripping location/EXIF metadata and normalizing display color as needed.
 5. Store a durable processed file with matching extension/MIME type. Release the original once OCR and draft processing no longer need it; do not store duplicate originals indefinitely.
 
-**Quality preset: 75.** A host-codec sweep at 35/45/55/65/75/85 selected this conservative default; see [docs/redesign-evidence.md](docs/redesign-evidence.md) for measured sizes, fixtures, and limitations. Quality 55 is smaller but is not the default without real-camera validation. Confirm 75 using Android's encoder and actual AnkiDroid rendering; the host experiment does not establish parity. Do not promise global minimum bytes or preservation of text already lost by downscaling.
+**Quality preset: 75.** Validate readability and file size on representative photographs and Japanese small-text fixtures using Android's encoder and actual AnkiDroid rendering. Perform OCR before resizing; image compression cannot recover detail lost by downscaling.
 
-No crop editor, per-note quality slider, adaptive multi-codec policy, or bundled AVIF encoder. A thumbnail crop is display-only. Attached images must finish processing before Send becomes available; import occurs during submission and must succeed before note insertion. Failure permits retry/replacement, or explicit removal for Type input only. No silent omission.
+No crop editor, per-note quality slider, or multi-codec policy. A thumbnail crop is display-only. Attached images must finish processing before Send becomes available; import occurs during submission and must succeed before note insertion. Failure permits retry/replacement, or explicit removal for Type input only. No silent omission.
 
 ### 7.2 Translation
 
-Use one selected OpenRouter text model with a fixed prompt for faithful Japanese-to-English sentence translation. Use the OpenRouter credential, separately from Google Cloud TTS authentication. Send the sentence and selected dictionary meaning only where useful; never the photograph or private Notes. Treat source text as data, not instructions. No Azure Translator or ML Kit translation fallback/model download.
+Use one selected OpenRouter text model with a fixed prompt for faithful Japanese-to-English sentence translation. Use the OpenRouter credential, separately from Google Cloud TTS authentication. Send the sentence and selected dictionary meaning only where useful; never the photograph or private Notes. Treat source text as data, not instructions.
 
-Select/pin the model against representative short mining sentences before release (§15). Require a nonempty translation; empty/refused/failed output blocks export. The translation is editable through Edit. Preserve manual corrections; no automatic competing suggestion tree or fallback-source badge.
+Select/pin the model against representative short mining sentences before release (§15). Require a nonempty translation; empty/refused/failed output blocks export. The translation is editable through Edit. Preserve manual corrections according to §10.
 
 ### 7.3 Notes and tags
 
@@ -266,7 +266,7 @@ Select an existing note type by name and remember its ID; map by exact field nam
 
 Treat all input/dictionary text as text, not trusted HTML. Generate only controlled highlight, furigana, definition, pitch, and media markup. Audio uses the imported filename, typically `[sound:filename]`; images use the imported filename, not a private path or temporary URI. Preserve sense boundaries and valid accent zero.
 
-The app does not install/modify templates. Provide a setup procedure for the reference template and necessary media/fonts/CSS. Test the **final displayed nasalization/devoicing**, not just the field string. The current reference parser checks phonetic classes only on outer pitch spans and splits their `textContent`, so AJT's nested marks are not correctly represented and the degree symbol can become a false mora. A separately installed template correction is needed before declaring this combination compatible; no silent app-side template mutation or falsified serialization. Other reference concerns include first-pattern-only display, single-digit accent-color parsing, and final-drop/mora handling.
+The app does not install or modify templates. Supply a compatible reference template and setup procedure, including necessary media/fonts/CSS, for the user to install. Its renderer must preserve nested phonetic marks, treat handakuten as an annotation rather than a mora, handle contracted kana and final drops, and parse accent numbers of ten or more correctly. Export one chosen pattern. Test the **final displayed nasalization/devoicing** and pitch contour in AnkiDroid, not just the serialized field string.
 
 ## 9. Safe AnkiDroid submission
 
@@ -276,7 +276,7 @@ Use AnkiDroid's supported Android API/content provider, not desktop AnkiConnect 
 
 Send requires all §1 content complete for one current revision, no unresolved rejected/stale values, a valid target/entry/meaning, valid imported-media candidates, API permission, and a valid note type/deck. An absent optional image/Notes/Tags is not an error. An attached but unfinished/failed image is not absent.
 
-Use the current AnkiDroid v2.24.0 source reference `ebcf8e0e34921628b9b8a496c66ffd4adbb3705f` until a tested pin is deliberately updated. It is not proof of runtime compatibility. Verify reordered/extra fields and required trailing empty `fm_*` fields; never put dummy text in user-owned fields to bypass provider behavior.
+The integration reference is AnkiDroid v2.24.0, source commit `ebcf8e0e34921628b9b8a496c66ffd4adbb3705f`. Verify runtime compatibility against this release. Verify reordered/extra fields and required trailing empty `fm_*` fields; never put dummy text in user-owned fields to bypass provider behavior.
 
 ### 9.2 Duplicate rule
 
@@ -320,14 +320,14 @@ Use a small lifecycle: **Prepare → Generate → Review → Send** with retaine
 
 Do not start billable work on every keystroke. Source-changing edits return to Prepare; Continue deliberately rebuilds affected results. Reuse unchanged valid results. Cancel/ignore obsolete completions and never play/export mismatched audio.
 
-Protect manual work without a permanent stale/suggestion subsystem: before applying a source change that invalidates manual corrections, explain which corrections will be replaced and require confirmation. Cancel leaves the existing draft intact; confirmation intentionally replaces only affected corrections during rebuilding. Store one current value per field, not old/manual/new suggestion branches. Direct corrections with unchanged inputs remain owned by the user and survive retry. Required unresolved values block export.
+Before applying a source change that invalidates manual corrections, explain which corrections will be replaced and require confirmation. Cancel preserves the draft; confirmation replaces only affected corrections during rebuilding. Store one active value per field. Direct corrections with unchanged inputs survive retry. Required unresolved values block export.
 
 ## 11. Privacy and diagnostics
 
 - Photographs remain on the device through capture, OCR, processing, and draft storage; the app may import them into the local AnkiDroid collection. AnkiDroid's user-controlled sync is outside this app. Never upload photos to OCR/LLM services or diagnostics.
 - Google Cloud receives sentence text and phonetic hints for synthesis; OpenRouter receives only text needed for translation; recording hosts receive necessary lookup/download requests. No private Notes, credentials in URLs, raw-media logs, or unrelated network processing.
 - No app analytics, ads, clipboard surveillance, automatic log upload, or private-content diagnostic upload. SDK-default diagnostic traffic is permitted only if it excludes user content and credentials; document selected versions and check behavior. Local text logs alone do not establish remote transmission.
-- Store Google Cloud and OpenRouter credentials separately at runtime using Android Keystore-backed protection. Send credentials only to their intended service, in authentication headers, and do not forward them across redirects. Never commit it, place it in Nix inputs/APKs, display it in errors, or log it. Exclude credentials, drafts, and media from backup/cloud restore.
+- Store Google Cloud and OpenRouter credentials separately at runtime using Android Keystore-backed protection. Send credentials only to their intended service, in authentication headers, and do not forward them across redirects. Never commit credentials, place them in Nix inputs/APKs, display them in errors, or log them. Exclude credentials, drafts, and media from backup/cloud restore.
 - Use HTTPS, bounded downloads/timeouts, and file-format validation. Request camera/AnkiDroid permissions normally; use the system photo picker rather than broad storage access.
 - Log dictionary/reading/pitch/recording misses in a bounded local diagnostic log: operation, source/version, spelling/reading, and reason. Distinguish missing record, ambiguous/unverified match, network/authentication failure, and invalid media. Ordinary local text is permitted; credentials and image/audio bytes are not. No telemetry service or analytics dashboard.
 
@@ -335,25 +335,25 @@ Protect manual work without a permanent stale/suggestion subsystem: before apply
 
 `flake.nix` supplies the JDK, API-37 SDK/build tools, Gradle, NDK/native tools, and data-build dependencies needed by a fresh checkout. Pin versions/source revisions and document SDK licenses, build/test/install commands, and emulator provisioning. Do not rely on undeclared global tools.
 
-Acceptance is a successful clean-checkout build/test in the Nix environment, not a cached APK, a development shell that never built the project, or byte-identical outputs. Dependency fetching is permitted; a sandboxed APK derivation and transitive offline Maven mirror are optional tooling, not release gates.
+Acceptance requires a successful build and test run from a clean checkout in the Nix environment. Record the exact commands and resulting APK. Dependency fetching is permitted.
 
 Keep dataset transformations repeatable, preserve upstream coverage, record versions/hashes/licenses, and include required attribution/notices in Sources/Licenses. Review linguistic fixtures after dataset updates. AJT code reuse and derived data each require their own licensing review; do not equate an add-on code license with recording rights.
 
-Keep signing secrets outside the repository/Nix store and document a local sideload/update procedure. No new cross-platform build system.
+Keep signing secrets outside the repository/Nix store and document a local sideload/update procedure.
 
 ## 13. Delivery priorities and quality evidence
 
-Build one connected vertical slice before expanding UI states: Photo/Type → local choice → actual generation → composed Review → confirmed AnkiDroid note. No inert playback/edit controls or mock-only success states in a claimed completed flow.
+Build one connected vertical slice before expanding UI states: Photo/Type → local choice → actual generation → composed Review → confirmed AnkiDroid note. Every visible playback, edit, and send control in the delivered slice must perform its real operation.
 
 Keep capture, correction, selection, and scrolling responsive. Do OCR, dictionary initialization, image work, network I/O, and export off the UI thread. Coalesce obsolete local analysis. Measure local preparation latency and memory on the selected runtime; do not hide image compression or network waits inside the low-latency choice phase.
 
-Use an interactive Compose prototype and screenshots from the real app to evaluate composition, touch flow, keyboard, Back, and rotation. Old HTML screenshots are not a second implementation to maintain. Check light/dark and large text before calling the UI complete.
+Use an interactive Compose prototype and screenshots from the real app to evaluate composition, touch flow, keyboard, Back, and rotation. Check light/dark and large text before calling the UI complete.
 
-Quality evidence must include real Japanese mining examples, an actual sentence-TTS audition, source-backed phonetic fixtures, image comparisons, and an exported note rendered in AnkiDroid. Mocks test failure handling, not provider quality or Android integration.
+Quality evidence must include real Japanese mining examples, source-backed phonetic fixtures, image comparisons, and an exported note rendered in AnkiDroid. Evaluate sentence-TTS quality through a live audition when credentials are available, under the delivery policy in §15. Controlled provider tests establish request/error handling, not live speech quality.
 
 ## 14. Acceptance checklist
 
-These R-series scenarios replace—not supplement—the old A01–A67 matrix. Record tested revision, fixture, environment, actual result, and evidence. An unrun or blocked check is not a pass.
+Record the tested revision, fixture, environment, actual result, and evidence for each scenario. An unrun or blocked check is not a pass. Apply the credential-dependent verification policy in §15 to live-service checks.
 
 | ID | Scenario | Required result |
 |---|---|---|
@@ -387,29 +387,31 @@ These R-series scenarios replace—not supplement—the old A01–A67 matrix. Re
 | R28 | Cloud voice selector | Google Japanese Chirp 3 HD results populate Settings; loading/empty/failure/refresh/cached states work; exact selection persists; missing saved voice requires reselection; change invalidates only sentence audio and does not trigger paid synthesis |
 | R29 | Modular speech boundary | Fake provider/transport tests cover voice listing/filtering, structured hint generation, actual request serialization, audio validation, auth/quota/timeouts/cancellation, and hint-aware cache identity without Compose or live credentials |
 
-## 15. Remaining decisions and release blockers
+## 15. Delivery and verification policy
 
-Keep these narrow. They authorize verification, not implementation of multiple alternatives. **v0.3 APK delivery does not require developer-supplied Google credentials:** the user supplies their key in app Settings after installation. Verify credential entry, real request construction, voice-list handling, and synthesis/error paths with controlled transport/provider tests. Without credentials, label live Google voice listing, synthesis, and listening assessment **not run** in the delivery report; do not block APK delivery, embed a key, pretend mock output is live output, or weaken the production complete-note export rule. Credential absence in the installed app correctly blocks only the operations that require it, not local preparation or delivery of the app.
+Deliver an installable v0.3 APK, a checksum, installation/setup instructions, screenshots, and an acceptance report with explicit PASS, FAIL, and NOT RUN results. Configure credentials through app Settings after installation; do not embed developer credentials.
 
-1. **AJT data integration and renderer:** the upstream/data direction and HTML style are selected in §5. Verify licensing/attribution, derived-index fidelity, Kotlin golden fixtures, reading/accent matching to recordings, and a corrected installed reference template. The nested-marker parser issue is known, not a speculative gate. Kanjium-only/all-filled output does not satisfy nasalization.
-2. **Cloud speech and translation validation:** Google Cloud Chirp 3 HD is selected. Ship the complete Settings/provider implementation and automated contract tests without requiring a Google key during development. After the user configures credentials, verify actual cloud voice listing and Japanese yomigana synthesis and audition the selected voice; retain this as an explicitly unverified live-service check until exercised, not an APK-delivery blocker. Google documentation differs on initial locale support, so a valid payload/enum alone is not proof. Separately select one OpenRouter translation model and pin its prompt. Verify available MP3/hint/error/credential-isolation evidence honestly. No alternative provider or unhinted fallback.
-3. **Image runtime validation:** the local quality sweep selected WebP 75. Confirm it on realistic camera photos with Android's encoder and AnkiDroid rendering. Do not require AVIF tooling or a codec fallback.
-4. **API-37 build/runtime and AnkiDroid:** provision the intended emulator, build both ABIs in Nix, exercise the end-to-end provider/media path and trailing fields. Old API-35 readiness is not this release's acceptance.
-5. **Local quality/privacy:** realistic OCR/reading fixtures, measured responsiveness, SDK diagnostics review, and preserved draft/submission safety.
+Google credentials are not required for APK delivery. Exercise credential entry, request serialization, voice-list filtering/state, synthesis/error handling, and cache behavior with controlled transport/provider tests. Without credentials, report live Google listing, synthesis, and listening assessment as **NOT RUN**. Controlled-response tests support integration evidence but do not substitute for live-service verification. Missing in-app credentials block only the operations that require them, not local preparation.
 
-If a required source is inadequate, return for a source decision or reject the input. Never silently remove required quality, fabricate phonetics, upload photographs, or export partial cards to make a gate pass.
+Required verification areas:
 
-## 16. References and document precedence
+1. **Linguistic data and rendering:** source licensing/attribution, derived-index fidelity, complete readings, Kotlin serialization fixtures, recording reading/accent matching, and reference-template rendering of nasalization/devoicing and pitch contours.
+2. **Cloud operations:** Google Chirp 3 HD hint/voice/MP3 contracts, separate credential handling, and one pinned OpenRouter translation model/prompt. Assess live pronunciation and translation quality when the corresponding credentials are available; clearly distinguish it from controlled-response evidence. No provider substitution or unhinted retry.
+3. **Images:** orientation, full-frame bounds, 1080 px limit, WebP quality 75, metadata removal, readability, and AnkiDroid rendering on realistic image fixtures.
+4. **Platform and export:** Nix build/tests, both ABI packages, API-37 x86_64 runtime, AnkiDroid fields/media/destination, duplicate checks, and interrupted-submission recovery.
+5. **Interaction and privacy:** responsive local preparation, usable Compose workflow, accessibility, durable drafts, SDK diagnostics, secret protection, and local-photo processing.
 
-- `SPEC.md` is the product contract. `docs/redesign-interview.md` records rationale, not additional requirements.
-- `docs/implementation-status.md`, `docs/emulator-readiness.md`, `docs/ui-plan.md`, and the old `docs/acceptance-test-matrix.md` are historical implementation/runbook evidence. Their superseded behavior and A-series tests are not current acceptance criteria.
-- `mockup/` is historical visual exploration. New design acceptance is the Compose prototype and real emulator journey.
-- `misc/Sentence (JA)/template.json`, `Recognition/front.html`, `Recognition/back.html`, `template.css`, and `samples.json` define the reference integration; samples are not authoritative linguistic truth.
-- [AJT Japanese pinned source](https://github.com/Ajatt-Tools/Japanese/tree/5729b8c080823eadaa121c76e0f23c55d6a81935) — actual furigana, pitch HTML, phonetic data, and recording behavior; source paths and compression evidence in [docs/redesign-evidence.md](docs/redesign-evidence.md).
+Do not silently remove required content, fabricate phonetics or test results, upload photographs, or export partial notes to satisfy acceptance.
+
+## 16. References
+
+This document is the product contract for v0.3.
+
+- `misc/Sentence (JA)/template.json` defines the reference field schema. `Recognition/front.html`, `Recognition/back.html`, and `template.css` provide the reference presentation. Validate their compatibility under §8.
+- [AJT Japanese pinned source](https://github.com/Ajatt-Tools/Japanese/tree/5729b8c080823eadaa121c76e0f23c55d6a81935) — furigana behavior, pitch HTML, and phonetic data.
+- [NHK-2016 pronunciation index](https://github.com/Ajatt-Tools/nhk_2016_pronunciations_index/tree/b0207d240f0f28cdc2dd491dd83343c3a5630119).
 - [Bundled ML Kit Japanese OCR](https://developers.google.com/ml-kit/vision/text-recognition/v2/android).
 - [Android bitmap compression](https://developer.android.com/reference/android/graphics/Bitmap.CompressFormat#WEBP_LOSSY).
 - [Google Chirp 3 HD](https://docs.cloud.google.com/text-to-speech/docs/chirp3-hd), [cloud voice listing](https://docs.cloud.google.com/text-to-speech/docs/reference/rest/v1/voices/list), [synthesis input](https://docs.cloud.google.com/text-to-speech/docs/reference/rest/v1/SynthesisInput), and [Japanese yomigana encoding](https://cloud.google.com/python/docs/reference/texttospeech/latest/google.cloud.texttospeech_v1.types.CustomPronunciationParams.PhoneticEncoding).
-- [AnkiDroid pinned provider reference](https://github.com/ankidroid/Anki-Android/tree/ebcf8e0e34921628b9b8a496c66ffd4adbb3705f/api).
+- [AnkiDroid integration reference](https://github.com/ankidroid/Anki-Android/tree/ebcf8e0e34921628b9b8a496c66ffd4adbb3705f/api).
 - [Material Design 3](https://m3.material.io/).
-
-No historical status claim, mockup, or retired gate overrides this specification. Document failures honestly; this rewrite does not itself certify any implementation or external service.
