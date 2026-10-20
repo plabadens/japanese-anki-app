@@ -23,6 +23,19 @@ android {
     buildToolsVersion = "36.0.0"
     ndkVersion = "27.2.12479018"
 
+    // Keep the sideload update identity stable. A path supplied here is the keystore used for
+    // debug builds; without it Gradle silently generates a throwaway key per ANDROID_USER_HOME,
+    // which makes an installed build impossible to update in place.
+    val sharedDebugKeystore = providers.environmentVariable("JAPANESE_ANKI_DEBUG_KEYSTORE").orNull
+    if (sharedDebugKeystore != null) {
+        signingConfigs.create("sharedDebug") {
+            storeFile = file(sharedDebugKeystore)
+            storePassword = providers.environmentVariable("JAPANESE_ANKI_DEBUG_KEYSTORE_PASSWORD").getOrElse("android")
+            keyAlias = providers.environmentVariable("JAPANESE_ANKI_DEBUG_KEY_ALIAS").getOrElse("androiddebugkey")
+            keyPassword = providers.environmentVariable("JAPANESE_ANKI_DEBUG_KEY_PASSWORD").getOrElse("android")
+        }
+    }
+
     defaultConfig {
         applicationId = "dev.pierre.japaneseanki"
         minSdk = 37
@@ -43,6 +56,9 @@ android {
     sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/unidicAssets"))
 
     buildTypes {
+        if (sharedDebugKeystore != null) {
+            getByName("debug") { signingConfig = signingConfigs.getByName("sharedDebug") }
+        }
         release {
             isMinifyEnabled = false
         }

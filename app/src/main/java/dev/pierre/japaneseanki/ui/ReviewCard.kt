@@ -4,10 +4,13 @@ import android.net.Uri
 import android.widget.ImageView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -46,6 +49,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
@@ -91,7 +95,7 @@ internal fun reviewAudioControlLabel(field: String, audio: ReviewAudioPresentati
     is ReviewAudioPresentation.Failed -> "Explain unavailable $field audio"
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun ReviewCard(
     sentence: String,
@@ -188,81 +192,71 @@ internal fun ReviewCard(
                 audio = sentenceAudio, onToggleAudio = onToggleSentenceAudio, onRetryAudio = onRetrySentenceAudio,
             ) {
                 val parts = reviewSentenceParts(sentence, target, sentenceReading, furigana)
-                val sentenceLayout = remember(sentence, target, sentenceReading, furigana) { mutableStateOf<TextLayoutResult?>(null) }
                 val unresolvedColor = MaterialTheme.colorScheme.onSurfaceVariant
-                val annotated = buildAnnotatedString {
-                    parts.forEachIndexed { index, part ->
-                        if (part.reading != null) {
-                            appendInlineContent("ruby-$index", part.text)
-                        } else {
-                            withStyle(
-                                SpanStyle(
-                                    color = if (part.highlighted) MaterialTheme.colorScheme.onSecondaryContainer else Color.Unspecified,
-                                    background = if (part.highlighted) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
-                                    fontWeight = if (part.highlighted) FontWeight.SemiBold else FontWeight.Normal,
-                                ),
-                            ) { append(part.text) }
-                        }
-                    }
-                }
-                val inlineRuby = parts.mapIndexedNotNull { index, part ->
-                    val reading = part.reading ?: return@mapIndexedNotNull null
-                    "ruby-$index" to InlineTextContent(
-                        Placeholder(
-                            width = part.text.length.coerceAtLeast(1).em,
-                            height = 2.4.em,
-                            placeholderVerticalAlign = PlaceholderVerticalAlign.AboveBaseline,
-                        ),
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(reading, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-                            Text(
-                                part.text,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = if (part.highlighted) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface,
-                                modifier = if (part.highlighted) Modifier.background(MaterialTheme.colorScheme.secondaryContainer) else Modifier,
-                            )
-                        }
-                    }
-                }.toMap()
-                Text(
-                    annotated,
-                    inlineContent = inlineRuby,
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.semantics {
+                // One flow item per ruby/plain run: each item owns its intrinsic width, so ruby
+                // readings and bases can never overlap the neighbouring run. FlowRow wraps
+                // between runs, mirroring normal Japanese line breaking.
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth().clearAndSetSemantics {
                         contentDescription = buildString {
                             append(sentence)
                             if (parts.any { it.unresolvedKanji }) append(". Some kanji have no available reading.")
                         }
                         stateDescription = "Target selected: ${target.textIn(sentence)}"
-                    }.drawWithContent {
-                        drawContent()
-                        val layout = sentenceLayout.value ?: return@drawWithContent
-                        var textOffset = 0
-                        parts.forEach { part ->
-                            if (part.unresolvedKanji) {
-                                part.text.forEachIndexed { charIndex, char ->
-                                    if (Character.UnicodeScript.of(char.code) == Character.UnicodeScript.HAN) {
-                                        val box = layout.getBoundingBox(textOffset + charIndex)
-                                        val dot = 1.dp.toPx()
-                                        val gap = 2.dp.toPx()
-                                        var x = box.left + dot / 2
-                                        while (x < box.right) {
-                                            drawCircle(
-                                                color = unresolvedColor,
-                                                radius = dot / 2,
-                                                center = Offset(x, box.bottom + 1.dp.toPx()),
-                                            )
-                                            x += dot + gap
-                                        }
-                                    }
-                                }
-                            }
-                            textOffset += part.text.length
-                        }
                     },
-                    onTextLayout = { sentenceLayout.value = it },
-                )
+                    horizontalArrangement = Arrangement.Start,
+                    verticalArrangement = Arrangement.Bottom,
+                ) {
+                    parts.forEach { part ->
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                part.reading ?: "\u00A0",
+                                fontSize = 9.sp,
+                                lineHeight = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                softWrap = false,
+                            )
+                            Text(
+                                part.text,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = if (part.highlighted) {
+                                    MaterialTheme.colorScheme.onSecondaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                                modifier = Modifier
+                                    .then(
+                                        if (part.highlighted) {
+                                            Modifier.background(
+                                                MaterialTheme.colorScheme.secondaryContainer,
+                                                RoundedCornerShape(2.dp),
+                                            )
+                                        } else {
+                                            Modifier
+                                        },
+                                    )
+                                    .then(
+                                        if (part.unresolvedKanji) {
+                                            Modifier.drawBehind {
+                                                val dot = 1.dp.toPx()
+                                                val gap = 2.dp.toPx()
+                                                var x = dot / 2
+                                                val y = size.height - dot
+                                                while (x < size.width) {
+                                                    drawCircle(unresolvedColor, dot / 2, Offset(x, y))
+                                                    x += dot + gap
+                                                }
+                                            }
+                                        } else {
+                                            Modifier
+                                        },
+                                    ),
+                                softWrap = false,
+                            )
+                        }
+                    }
+                }
             }
             ReviewFieldRow(
                 "Vocabulary", onEdit = { editingField = "Word" }, editingEnabled = editingEnabled,
