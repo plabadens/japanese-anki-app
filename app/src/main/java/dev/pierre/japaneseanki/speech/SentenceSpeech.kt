@@ -147,7 +147,21 @@ data class SentenceSpeechRequest(
     }
 }
 
-enum class SpeechFailure { NETWORK, AUTHORIZATION, QUOTA, INVALID_REQUEST, INVALID_RESPONSE, INVALID_AUDIO, CANCELLED }
+enum class SpeechFailure {
+    NETWORK,
+    AUTHORIZATION,
+
+    /** The Cloud Text-to-Speech API is not enabled for the project. */
+    API_NOT_ENABLED,
+
+    /** The project has no active billing account. */
+    BILLING,
+    QUOTA,
+    INVALID_REQUEST,
+    INVALID_RESPONSE,
+    INVALID_AUDIO,
+    CANCELLED,
+}
 
 /** Sanitized provider failure: messages never contain credentials, sentence text, or response bodies. */
 class SpeechException(val failure: SpeechFailure, message: String, cause: Throwable? = null) :

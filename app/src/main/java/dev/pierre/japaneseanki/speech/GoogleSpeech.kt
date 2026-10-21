@@ -1,5 +1,7 @@
 package dev.pierre.japaneseanki.speech
 
+import dev.pierre.japaneseanki.GoogleApiProblem
+import dev.pierre.japaneseanki.classifyGoogleApiError
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -86,7 +88,7 @@ class GoogleChirpSpeechProvider(
 
     override fun listVoices(): List<CloudVoice> {
         val key = requireCredential()
-        val response = transport.get(VOICES_URL, key, timeoutMillis)
+        val response = network("Voice listing") { transport.get(VOICES_URL, key, timeoutMillis) }
         requireSuccess(response, "Voice listing")
         return parseJapaneseChirpVoices(response.body.toString(Charsets.UTF_8))
     }
@@ -94,7 +96,9 @@ class GoogleChirpSpeechProvider(
     override fun synthesize(request: SentenceSpeechRequest, destination: File): File {
         val key = requireCredential()
         val payload = buildSynthesisJson(request)
-        val response = transport.post(SYNTHESIZE_URL, key, payload.toByteArray(Charsets.UTF_8), timeoutMillis)
+        val response = network("Speech synthesis") {
+            transport.post(SYNTHESIZE_URL, key, payload.toByteArray(Charsets.UTF_8), timeoutMillis)
+        }
         requireSuccess(response, "Speech synthesis")
         val audio = decodeAudioResponse(response.body)
         val parent = destination.absoluteFile.parentFile ?: throw SpeechException(
@@ -129,20 +133,44 @@ class GoogleChirpSpeechProvider(
         return key
     }
 
+    /** A dropped connection is a network failure, not a generic provider failure. */
+    private fun <T> network(operation: String, block: () -> T): T = try {
+        block()
+    } catch (error: SpeechException) {
+        throw error
+    } catch (_: IOException) {
+        throw SpeechException(SpeechFailure.NETWORK, "$operation service is unavailable.")
+    }
+
     private fun requireSuccess(response: SpeechHttpResponse, operation: String) {
-        when (response.code) {
-            in 200..299 -> Unit
-            in 300..399 -> throw SpeechException(
+        if (response.code in 200..299) return
+        if (response.code in 300..399) {
+            throw SpeechException(
                 SpeechFailure.AUTHORIZATION, "$operation was redirected; the credential was not forwarded.",
             )
-            401, 403 -> throw SpeechException(SpeechFailure.AUTHORIZATION, "$operation authorization failed.")
-            429 -> throw SpeechException(SpeechFailure.QUOTA, "$operation quota was reached.")
-            400 -> throw SpeechException(
-                SpeechFailure.INVALID_REQUEST, "$operation request was rejected by Google Cloud.",
-            )
-            in 500..599 -> throw SpeechException(SpeechFailure.NETWORK, "$operation service is unavailable.")
-            else -> throw SpeechException(SpeechFailure.INVALID_RESPONSE, "$operation failed.")
         }
+        val failure = when (classifyGoogleApiError(response.code, response.body.toString(Charsets.UTF_8))) {
+            GoogleApiProblem.AUTHENTICATION -> SpeechFailure.AUTHORIZATION
+            GoogleApiProblem.API_NOT_ENABLED -> SpeechFailure.API_NOT_ENABLED
+            GoogleApiProblem.BILLING -> SpeechFailure.BILLING
+            GoogleApiProblem.QUOTA -> SpeechFailure.QUOTA
+            GoogleApiProblem.INVALID_REQUEST -> SpeechFailure.INVALID_REQUEST
+            GoogleApiProblem.NONE ->
+                if (response.code in 500..599) SpeechFailure.NETWORK else SpeechFailure.INVALID_RESPONSE
+        }
+        throw SpeechException(failure, messageFor(failure, operation))
+    }
+
+    private fun messageFor(failure: SpeechFailure, operation: String): String = when (failure) {
+        SpeechFailure.AUTHORIZATION -> "$operation authorization failed."
+        SpeechFailure.API_NOT_ENABLED ->
+            "The Cloud Text-to-Speech API is not enabled for this Google Cloud project."
+        SpeechFailure.BILLING -> "Billing is not enabled for this Google Cloud project."
+        SpeechFailure.QUOTA -> "$operation quota was reached."
+        SpeechFailure.INVALID_REQUEST -> "$operation request was rejected by Google Cloud."
+        SpeechFailure.NETWORK -> "$operation service is unavailable."
+        SpeechFailure.INVALID_RESPONSE, SpeechFailure.INVALID_AUDIO, SpeechFailure.CANCELLED ->
+            "$operation failed."
     }
 
     private fun decodeAudioResponse(body: ByteArray): ByteArray {
