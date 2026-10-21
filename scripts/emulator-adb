@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+fail() {
+  printf 'emulator-adb: %s\n' "$*" >&2
+  exit 2
+}
+
+[[ -n "${ANDROID_SDK_ROOT:-}" ]] || fail 'ANDROID_SDK_ROOT is required (use the pinned Nix SDK)'
+ADB="$ANDROID_SDK_ROOT/platform-tools/adb"
+[[ -x "$ADB" ]] || fail "pinned adb executable not found: $ADB"
+
+valid_port() {
+  local port=$1
+  [[ "$port" =~ ^[1-9][0-9]{0,4}$ ]] || return 1
+  (( port <= 65535 ))
+}
+
+port="${EMULATOR_PORT:-5554}"
+valid_port "$port" || fail "invalid EMULATOR_PORT: $port"
+serial="emulator-$port"
+
+if [[ -n "${ANDROID_SERIAL:-}" ]]; then
+  if [[ ! "$ANDROID_SERIAL" =~ ^emulator-([1-9][0-9]{0,4})$ ]]; then
+    fail 'ANDROID_SERIAL must name an emulator (emulator-<port>); physical devices are not supported'
+  fi
+  selected_port="${BASH_REMATCH[1]}"
+  valid_port "$selected_port" || fail "invalid emulator serial: $ANDROID_SERIAL"
+  if [[ -n "${EMULATOR_PORT:-}" && "$ANDROID_SERIAL" != "$serial" ]]; then
+    fail "conflicting emulator selectors: EMULATOR_PORT selects $serial but ANDROID_SERIAL selects $ANDROID_SERIAL"
+  fi
+  serial="$ANDROID_SERIAL"
+fi
+
+[[ $# -gt 0 ]] || fail 'expected serial, run, devices, or start-server command'
+mode=$1
+shift
+case "$mode" in
+  serial)
+    [[ $# -eq 0 ]] || fail 'serial takes no arguments'
+    printf '%s\n' "$serial"
+    ;;
+  run)
+    [[ $# -gt 0 ]] || fail 'run requires an adb command'
+    [[ "$1" != -* ]] || fail 'adb global options are not accepted; the emulator target is fixed'
+    exec env -u ADB_SERVER_SOCKET "$ADB" -s "$serial" "$@"
+    ;;
+  devices)
+    exec env -u ADB_SERVER_SOCKET "$ADB" devices "$@"
+    ;;
+  start-server)
+    [[ $# -eq 0 ]] || fail 'start-server takes no arguments'
+    exec env -u ADB_SERVER_SOCKET "$ADB" start-server
+    ;;
+  *)
+    fail "unknown mode: $mode"
+    ;;
+esac

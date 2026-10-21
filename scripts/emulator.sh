@@ -8,18 +8,21 @@ export ANDROID_AVD_HOME="$ROOT/avd"
 export HOME="$ANDROID_USER_HOME"
 mkdir -p "$ANDROID_USER_HOME" "$ANDROID_AVD_HOME" "$ROOT/tmp"
 export TMPDIR="$ROOT/tmp"
-ADB="$ANDROID_SDK_ROOT/platform-tools/adb"
 EMULATOR="$ANDROID_SDK_ROOT/emulator/emulator"
 AVDMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/22.0/bin/avdmanager"
 AVD=japanese-anki-pixel7-api37
 # API 37.0 (Android 17) google_apis x86_64, supplied by the flake's Android SDK.
 SYSTEM_IMAGE='system-images;android-37.0;google_apis;x86_64'
 PORT="${EMULATOR_PORT:-5554}"
-SERIAL="emulator-$PORT"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ADB_HELPER="${EMULATOR_ADB:-$SCRIPT_DIR/emulator-adb}"
+[[ -x "$ADB_HELPER" ]] || { echo "ERROR: emulator ADB helper not found: $ADB_HELPER" >&2; exit 1; }
+SERIAL="$("$ADB_HELPER" serial)"
+PORT="${SERIAL#emulator-}"
 
-# The emulator only registers with adb's default TCP server, not a localfilesystem server.
-adb() { env -u ADB_SERVER_SOCKET "$ADB" -s "$SERIAL" "$@"; }
-adb_devices() { env -u ADB_SERVER_SOCKET "$ADB" devices "$@"; }
+# All device-directed operations go through the pinned, emulator-only selector.
+adb() { "$ADB_HELPER" run "$@"; }
+adb_devices() { "$ADB_HELPER" devices "$@"; }
 usage() {
   cat >&2 <<'USAGE'
 Usage:
@@ -49,7 +52,7 @@ start_emulator() {
     echo "$SERIAL already connected"
     return
   fi
-  env -u ADB_SERVER_SOCKET "$ADB" start-server >/dev/null
+  "$ADB_HELPER" start-server >/dev/null
   if ! "$AVDMANAGER" list avd | grep -q "Name: $AVD"; then
     # avdmanager 22.0 logs a harmless "could not load devices.xml" error for the 37.0
     # image and still writes a correct Pixel 7 profile.
@@ -71,7 +74,7 @@ start_emulator() {
     -gpu swiftshader_indirect -no-snapshot -skin 1080x2400 >"$ROOT/emulator.log" 2>&1 &
   EMULATOR_PID=$!
   echo "$EMULATOR_PID" > "$ROOT/emulator.pid"
-  if ! timeout 60 env -u ADB_SERVER_SOCKET "$ADB" -s "$SERIAL" wait-for-device; then
+  if ! timeout 60 "$ADB_HELPER" run wait-for-device; then
     echo "ERROR: ADB did not see $SERIAL within 60 seconds; see .tmp-nix/emulator.log" >&2
     return 1
   fi
@@ -183,8 +186,17 @@ case "$1" in
   dump)
     [[ $# == 2 ]] || usage
     mkdir -p "$(dirname "$2")"
-    adb shell uiautomator dump /sdcard/_dump.xml >/dev/null
-    adb pull /sdcard/_dump.xml "$2" >/dev/null
+    # Unique remote name per run: a fixed /sdcard/_dump.xml lets concurrent
+    # captures overwrite each other's hierarchy. --compressed is also the form
+    # that works on the API-37 image; a plain dump returns a null root node.
+    remote_dump="/sdcard/_dump-$$-${RANDOM}.xml"
+    dump_output="$(adb shell uiautomator dump --compressed "$remote_dump" 2>&1)" || dump_output="uiautomator exited non-zero: $dump_output"
+    case "$dump_output" in
+      *"dumped to"*) ;;
+      *) echo "ERROR: uiautomator dump failed on $SERIAL: $dump_output" >&2; exit 1 ;;
+    esac
+    adb pull "$remote_dump" "$2" >/dev/null
+    adb shell rm -f "$remote_dump" >/dev/null 2>&1 || true
     echo "UI dump saved: $2" ;;
   share-text)
     [[ $# == 2 ]] || usage

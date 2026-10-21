@@ -76,14 +76,54 @@ letting AGP resolve its Maven-hosted AAPT2 binary, which is incompatible with
 the NixOS sandbox. This does not address the separate Gradle dependency-cache
 coverage above.
 
+## Filtered Nix source inputs
+
+`flake.nix` does not hand `self` to the APK derivations or the core check. Each
+build has its own explicit `lib.fileset.toSource` input set:
+
+- `apkSource` — `app/` (manifest, Kotlin, resources, assets, native CMake, unit
+  tests), root `build.gradle.kts`, `settings.gradle.kts`, `gradle.properties` and
+  `gradle/` (version catalog and wrapper metadata). Documentation, screenshots,
+  `datasets/` and the tooling scripts are absent, so editing them does not rebuild
+  the APK.
+- `coreCheckSource` — the standalone Kotlin sources and unit tests that
+  `scripts/test-core.sh` compiles, the three Python checks with the builders they
+  import (`build_dictionary.py`, `package_unidic.py`), the packaged
+  `app/src/main/assets/dictionary.sqlite.gz`, and the `datasets/jmdict/JMdict_e.gz`
+  plus `datasets/kanjium/accents.txt` inputs whose hashes
+  `scripts/test-dictionary-asset.py` recomputes.
+
+Both sets are additive and explicit; there is no exclude list guessing at build
+outputs. New files under `app/` (including new unit tests) are picked up without a
+flake edit, while a new dataset or script read by the core check must be added to
+the set on purpose. Source identity can be checked with:
+
+```sh
+nix eval --raw .#debugApk.src.outPath                 # APK source tree
+nix eval --raw .#checks.x86_64-linux.core.drvPath     # core-check derivation
+```
+
+Editing documentation or screenshots leaves both unchanged; Kotlin, asset or
+Gradle edits change the APK source tree; dataset, builder-script or
+dictionary-asset edits change the core-check derivation while leaving the APK
+source tree alone. These check *which* inputs feed each build — they are not proof
+that the build succeeds, which needs a fresh sandboxed build.
+
 ## Emulator as the default test target
 
 **Status:** working, with environment-specific caveats documented in
 `scripts/emulator.sh` and its README section. Constraints discovered here:
 
-- The emulator only registers with a default-port ADB server (not the project's
-  `localfilesystem:` socket); the wrapper unsets `ADB_SERVER_SOCKET` for device
-  commands.
+- Device targeting is single-sourced in `scripts/emulator-adb` (installed as
+  `emulator-adb` by the flake, and exported to the dev shell and the wrapper as
+  `EMULATOR_ADB`). It resolves one emulator serial from `EMULATOR_PORT`
+  (default `5554`) or `ANDROID_SERIAL=emulator-<port>`, refuses conflicting
+  selectors and any physical-device serial, runs the pinned SDK's `adb`, and unsets
+  `ADB_SERVER_SOCKET` for every device-directed command. `scripts/emulator.sh` and
+  `scripts/ui-journey.py` both go through it; do not add an unqualified `adb` call.
+- The emulator itself only registers with a default-port ADB server (not a
+  `localfilesystem:` socket), which is why the helper always drops
+  `ADB_SERVER_SOCKET`.
 - A sandbox that kills the launcher's process tree requires a single-session mode
   (boot, install, capture, shut down in one command).
 - The API-37.0 AVD boots with a 4 GB guest, so the host needs roughly 5 GB of free
