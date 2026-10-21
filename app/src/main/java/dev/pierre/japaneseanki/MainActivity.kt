@@ -2678,35 +2678,7 @@ class MainActivity : ComponentActivity() {
                     isAppearanceLightNavigationBars = !darkTheme
                 }
             }
-            MaterialTheme(
-                colorScheme = if (darkTheme) {
-                    darkColorScheme(
-                        primary = Color(0xFFE4DAC5), onPrimary = Color(0xFF16181B),
-                        secondary = Color(0xFFE4DAC5), onSecondary = Color(0xFF16181B),
-                        tertiary = Color(0xFFE4DAC5), onTertiary = Color(0xFF16181B),
-                        primaryContainer = Color(0xFF35383C), onPrimaryContainer = Color(0xFFECE8DF),
-                        secondaryContainer = Color(0xFF35383C), onSecondaryContainer = Color(0xFFECE8DF),
-                        tertiaryContainer = Color(0xFF35383C), onTertiaryContainer = Color(0xFFECE8DF),
-                        background = Color(0xFF16181B), onBackground = Color(0xFFECE8DF),
-                        surface = Color(0xFF1D2024), onSurface = Color(0xFFECE8DF),
-                        surfaceVariant = Color(0xFF22262B), onSurfaceVariant = Color(0xFFB8B2A6),
-                        outline = Color(0xFF6C7176),
-                    )
-                } else {
-                    lightColorScheme(
-                        primary = Color(0xFF201F1D), onPrimary = Color(0xFFF6F3EC),
-                        secondary = Color(0xFF201F1D), onSecondary = Color(0xFFF6F3EC),
-                        tertiary = Color(0xFF201F1D), onTertiary = Color(0xFFF6F3EC),
-                        primaryContainer = Color(0xFFE5E1D8), onPrimaryContainer = Color(0xFF201F1D),
-                        secondaryContainer = Color(0xFFE5E1D8), onSecondaryContainer = Color(0xFF201F1D),
-                        tertiaryContainer = Color(0xFFE5E1D8), onTertiaryContainer = Color(0xFF201F1D),
-                        background = Color(0xFFF6F3EC), onBackground = Color(0xFF201F1D),
-                        surface = Color(0xFFFFFFFF), onSurface = Color(0xFF201F1D),
-                        surfaceVariant = Color(0xFFFBFAF6), onSurfaceVariant = Color(0xFF6B6558),
-                        outline = Color(0xFFDAD4C6),
-                    )
-                },
-            ) {
+            FlowTheme(darkTheme = darkTheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     contentColor = MaterialTheme.colorScheme.onSurface,
@@ -2716,10 +2688,7 @@ class MainActivity : ComponentActivity() {
                             .fillMaxSize()
                             .statusBarsPadding()
                             .navigationBarsPadding()
-                            .imePadding()
-                            .verticalScroll(rememberScrollState())
-                            .padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                            .imePadding(),
                     ) {
                         var submitAction: () -> Unit = {}
                         val reviewTarget = displayTarget?.takeIf { it.textIn(displaySentence) != null }

@@ -145,16 +145,30 @@ internal fun CameraShutterRow(
     onError: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-    var capturing by remember { mutableStateOf(false) }
     Row(
         modifier.fillMaxWidth().padding(vertical = 14.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (capturing) {
-            CircularProgressIndicator(Modifier.size(56.dp), strokeWidth = 3.dp)
-        } else {
+        CameraShutterButton(controller, enabled, outputDirectory, onCaptured, onError)
+    }
+}
+
+/** The circular shutter itself; the portrait capture triad places it beside Gallery and Type. */
+@Composable
+internal fun CameraShutterButton(
+    controller: LifecycleCameraController,
+    enabled: Boolean,
+    outputDirectory: File,
+    onCaptured: (File) -> Unit,
+    onError: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    var capturing by remember { mutableStateOf(false) }
+    if (capturing) {
+        CircularProgressIndicator(modifier.size(74.dp), strokeWidth = 3.dp)
+    } else {
             val takePhoto = {
                 capturing = true
                 val destination = File(outputDirectory, "${UUID.randomUUID()}.jpg")
@@ -175,12 +189,13 @@ internal fun CameraShutterRow(
                 )
             }
             Box(
-                Modifier.size(74.dp)
+                modifier.size(80.dp)
                     .clip(CircleShape)
                     .clickable(enabled = enabled, onClick = takePhoto)
                     .border(BorderStroke(4.dp, MaterialTheme.colorScheme.primary), CircleShape)
+                    .padding(7.dp)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape)
                     .semantics { contentDescription = "Capture photo" },
             )
-        }
     }
 }
