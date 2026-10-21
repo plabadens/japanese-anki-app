@@ -6,9 +6,11 @@ import java.io.File
 import java.io.FileOutputStream
 
 /** One-time private copy of the bundled, read-only JMdict/Kanjium index. */
-class OfflineDictionary(context: Context) : AutoCloseable {
-    private val appContext = context.applicationContext
-    private val databaseFile = File(appContext.filesDir, "japanese-dictionary-v2.sqlite")
+class OfflineDictionary(
+    context: Context,
+    private val databaseFile: File = File(context.applicationContext.filesDir, "japanese-dictionary-v2.sqlite"),
+) : AutoCloseable {
+    private val appContext: Context = context.applicationContext
     @Volatile private var database: SQLiteDatabase? = null
 
     @Synchronized
@@ -40,6 +42,23 @@ class OfflineDictionary(context: Context) : AutoCloseable {
             databaseFile.delete()
             throw failure
         }
+    }
+
+    /**
+     * Bounded existence probe for token grouping: does any entry have this exact surface as an
+     * expression or reading? Trims the input, answers `false` for blanks without requiring a
+     * prepared database, keeps the forms-to-entries join (an orphan form is not a match), uses
+     * the existing indexes and selects a constant with `LIMIT 1` - no ordering, no sense JSON.
+     *
+     * Existence is a grouping hint, not content validation. A corrupt `senses` value can make
+     * this return `true` for an entry that [search] would refuse to parse; selection still goes
+     * through [search], which surfaces the malformed entry instead of exporting a partial note.
+     */
+    fun hasEntry(surface: String): Boolean {
+        val query = surface.trim()
+        if (query.isEmpty()) return false
+        val db = database ?: error("Offline dictionary is not ready.")
+        return db.rawQuery(HAS_ENTRY_SQL, arrayOf(query, query)).use { it.moveToFirst() }
     }
 
     fun search(surface: String, lemma: String? = null, limit: Int = 50, offset: Int = 0): List<DictionaryEntry> {
@@ -171,3 +190,10 @@ data class DictionarySense(
     val partsOfSpeech: List<String>,
     val notes: List<String>,
 )
+
+/**
+ * Existence probe shared by [OfflineDictionary.hasEntry] and its query-plan test: one constant
+ * column, both lookup keys, the forms-to-entries join, and no ordering or sense parsing.
+ */
+internal const val HAS_ENTRY_SQL = """SELECT 1 FROM forms f JOIN entries e ON e.id=f.entry_id
+               WHERE f.expression=? OR f.reading=? LIMIT 1"""
