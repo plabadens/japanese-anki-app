@@ -15,16 +15,6 @@
         hash = "sha256-elB0Zr8DDkw3IZvvqVG+OBspZxFLPnvUSM9SRSILYWs=";
         rootDir = "mecab";
       };
-      tessdataJpn = pkgs.fetchurl {
-        url = "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/80d92b7db61cb6ddc519049990be34e4c913566f/jpn.traineddata";
-        hash = "sha256-H13pI20uhfX99LPFAPLUkm+NlEnyj1OURy2ejYO5G00=";
-        name = "jpn.traineddata";
-      };
-      tessdataJpnVert = pkgs.fetchurl {
-        url = "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/923915d4ced2a7235221788285785a29c4a42d4a/jpn_vert.traineddata";
-        hash = "sha256-vx4mQJVGkXl+LcFPOFM+YBtZ7jeVhpiuDwuB3G8Jxxs=";
-        name = "jpn_vert.traineddata";
-      };
       unidicArchive = pkgs.fetchurl {
         url = "https://clrd.ninjal.ac.jp/unidic_archive/cwj/3.1.1/unidic-cwj-3.1.1.zip";
         hash = "sha256-b1R6PnFWOaPgF4oi35QiOhR9lazrESpZDy1oTGRK0xA=";
@@ -57,6 +47,14 @@
         abiVersions = [ "x86_64" ];
       };
       sdkRoot = "${android.androidsdk}/libexec/android-sdk";
+      toolchainEnv = {
+        ANDROID_HOME = sdkRoot;
+        ANDROID_SDK_ROOT = sdkRoot;
+        ANDROID_NDK_HOME = "${sdkRoot}/ndk/27.2.12479018";
+        MECAB_SOURCE_DIR = "${mecabSource}";
+        UNIDIC_RUNTIME_ARCHIVE = "${unidicRuntime}";
+        GRADLE_OPTS = "-Dorg.gradle.native=false";
+      };
 
       emulatorWrapper = pkgs.writeShellApplication {
         name = "japanese-anki-emulator";
@@ -75,16 +73,8 @@
 
           nativeBuildInputs = [ jdk pkgs.gradle ];
           buildInputs = [ android.androidsdk ];
-          env = {
+          env = toolchainEnv // {
             JAVA_HOME = "${jdk}";
-            ANDROID_HOME = sdkRoot;
-            ANDROID_SDK_ROOT = sdkRoot;
-            ANDROID_NDK_HOME = "${sdkRoot}/ndk/27.2.12479018";
-            MECAB_SOURCE_DIR = "${mecabSource}";
-            UNIDIC_RUNTIME_ARCHIVE = "${unidicRuntime}";
-            TESSDATA_JPN = "${tessdataJpn}";
-            TESSDATA_JPN_VERT = "${tessdataJpnVert}";
-            GRADLE_OPTS = "-Dorg.gradle.native=false";
           };
 
           gradleBuildTask = task;
@@ -146,23 +136,15 @@
 
       checks.${system}.core = coreTests;
 
-      devShells.${system}.default = pkgs.mkShell {
+      devShells.${system}.default = pkgs.mkShell (toolchainEnv // {
         packages = [ jdk pkgs.gradle android.androidsdk android.platform-tools pkgs.git pkgs.python3 ];
         JAVA_HOME = jdk.home;
-        ANDROID_HOME = sdkRoot;
-        ANDROID_SDK_ROOT = sdkRoot;
-        ANDROID_NDK_HOME = "${sdkRoot}/ndk/27.2.12479018";
-        MECAB_SOURCE_DIR = "${mecabSource}";
-        UNIDIC_RUNTIME_ARCHIVE = "${unidicRuntime}";
-        TESSDATA_JPN = "${tessdataJpn}";
-        TESSDATA_JPN_VERT = "${tessdataJpnVert}";
-        GRADLE_OPTS = "-Dorg.gradle.native=false";
         LANG = "C.UTF-8";
         LC_ALL = "C.UTF-8";
         shellHook = ''
           export PATH="$ANDROID_HOME/platform-tools:$PATH"
           printf 'sdk.dir=%s\n' "$ANDROID_HOME" > local.properties
         '';
-      };
+      });
     };
 }

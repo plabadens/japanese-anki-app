@@ -176,24 +176,6 @@ interface SentenceSpeechProvider {
     fun synthesize(request: SentenceSpeechRequest, destination: java.io.File): java.io.File
 }
 
-/** Offline fake used by tests and previews; never installed as the production provider. */
-class FakeSentenceSpeechProvider(
-    private val voices: List<CloudVoice> = emptyList(),
-    private val onSynthesize: (SentenceSpeechRequest, java.io.File) -> java.io.File = { _, destination ->
-        destination.writeBytes(byteArrayOf(0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, 0))
-        destination
-    },
-) : SentenceSpeechProvider {
-    val requests = mutableListOf<SentenceSpeechRequest>()
-
-    override fun listVoices(): List<CloudVoice> = voices
-
-    override fun synthesize(request: SentenceSpeechRequest, destination: java.io.File): java.io.File {
-        requests += request
-        return onSynthesize(request, destination)
-    }
-}
-
 /** Serializes a fetched voice list for offline display. */
 internal fun encodeVoices(voices: List<CloudVoice>): String = voices.joinToString(separator = "\n") { voice ->
     listOf(
@@ -217,14 +199,4 @@ internal fun decodeVoices(encoded: String?): List<CloudVoice> {
             naturalSampleRateHz = parts[3].toIntOrNull(),
         )
     }.toList()
-}
-
-internal fun containsKanji(text: String): Boolean {
-    var index = 0
-    while (index < text.length) {
-        val codePoint = text.codePointAt(index)
-        if (Character.UnicodeScript.of(codePoint) == Character.UnicodeScript.HAN) return true
-        index += Character.charCount(codePoint)
-    }
-    return false
 }

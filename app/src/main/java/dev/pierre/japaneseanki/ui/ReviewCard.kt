@@ -3,9 +3,7 @@ package dev.pierre.japaneseanki.ui
 import android.graphics.Matrix
 import android.net.Uri
 import android.widget.ImageView
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -176,8 +174,6 @@ internal fun ReviewCard(
     onRetrySentenceAudio: (() -> Unit)? = null,
     onToggleVocabularyAudio: (() -> Unit)? = null,
     onRetryVocabularyAudio: (() -> Unit)? = null,
-    translationUsesFallback: Boolean = false,
-    translationInfoExpanded: Boolean = false,
     translationError: String? = null,
     translationStale: Boolean = false,
     translationSuggestion: String? = null,
@@ -187,7 +183,6 @@ internal fun ReviewCard(
     onRetryTranslation: () -> Unit = {},
     onKeepMyTranslation: () -> Unit = {},
     onUseTranslationSuggestion: () -> Unit = {},
-    onToggleTranslationInfo: () -> Unit = {},
     sendPresentation: ReviewSendPresentation? = null,
     onSend: (() -> Unit)? = null,
     onSendStatusAction: (() -> Unit)? = null,
@@ -272,9 +267,6 @@ internal fun ReviewCard(
                 onRetry = onRetryTranslation,
                 onKeepMine = onKeepMyTranslation,
                 onUseSuggestion = onUseTranslationSuggestion,
-                showInfo = translationUsesFallback,
-                infoExpanded = translationInfoExpanded,
-                onToggleInfo = onToggleTranslationInfo,
             )
 
             FlowCard(Modifier.padding(top = 8.dp)) {
@@ -778,9 +770,6 @@ private fun TranslationBlock(
     onRetry: () -> Unit,
     onKeepMine: () -> Unit,
     onUseSuggestion: () -> Unit,
-    showInfo: Boolean,
-    infoExpanded: Boolean,
-    onToggleInfo: () -> Unit,
 ) {
     if (editable) {
         OutlinedTextField(
@@ -825,14 +814,6 @@ private fun TranslationBlock(
             if (suggestion != null) {
                 TextButton(onClick = onUseSuggestion, modifier = Modifier.heightIn(min = 48.dp)) { Text("Use new suggestion") }
             }
-        }
-    }
-    if (showInfo) {
-        TextButton(onClick = onToggleInfo, modifier = Modifier.heightIn(min = 48.dp)) {
-            Text(if (infoExpanded) "Hide translation note" else "About this translation")
-        }
-        if (infoExpanded) {
-            Text("This translation was produced offline.", style = MaterialTheme.typography.bodySmall)
         }
     }
 }

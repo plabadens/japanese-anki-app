@@ -1,6 +1,5 @@
 package dev.pierre.japaneseanki
 
-import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
 import com.google.android.gms.tasks.Tasks
@@ -11,13 +10,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
-sealed interface OcrSetupStatus {
-    data object NotStarted : OcrSetupStatus
-    data object Installing : OcrSetupStatus
-    data object Ready : OcrSetupStatus
-    data class Error(val message: String) : OcrSetupStatus
-}
-
 data class JapaneseOcrResult(
     val text: String,
     val blocks: List<OcrBlock>,
@@ -26,14 +18,10 @@ data class JapaneseOcrResult(
 )
 
 /** Uses the bundled ML Kit Japanese model; recognition itself does not download a model or use network. */
-class JapaneseOcr(@Suppress("UNUSED_PARAMETER") context: Context) {
-    @Volatile var setupStatus: OcrSetupStatus = OcrSetupStatus.NotStarted
-        private set
-
+class JapaneseOcr {
     suspend fun recognize(image: File): JapaneseOcrResult = withContext(Dispatchers.IO) {
         require(image.isFile) { "Image file does not exist" }
         synchronized(lock) {
-            setupStatus = OcrSetupStatus.Installing
             var bitmap: Bitmap? = null
             try {
                 var sourceWidth = 0
@@ -53,7 +41,6 @@ class JapaneseOcr(@Suppress("UNUSED_PARAMETER") context: Context) {
                         if (block.text.isBlank()) return@mapNotNull null
                         OcrBlock(
                             block.text,
-                            100f,
                             scaleOcrBounds(
                                 OcrBounds(bounds.left, bounds.top, bounds.right, bounds.bottom),
                                 decoded.width,
@@ -63,14 +50,10 @@ class JapaneseOcr(@Suppress("UNUSED_PARAMETER") context: Context) {
                             ),
                         )
                     }
-                    setupStatus = OcrSetupStatus.Ready
                     JapaneseOcrResult(result.text, blocks, sourceWidth, sourceHeight)
                 } finally {
                     recognizer.close()
                 }
-            } catch (error: Exception) {
-                setupStatus = OcrSetupStatus.Error(error.message ?: "Japanese OCR failed")
-                throw error
             } finally {
                 bitmap?.recycle()
             }

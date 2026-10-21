@@ -15,9 +15,6 @@ internal object GoogleCloudCredential {
     /** Obsolete pre-shared-key Translation credential. Deleted, never reinterpreted as Google. */
     const val OBSOLETE_OPENROUTER_PREF = "openrouter_key_encrypted"
 
-    /** Cheap presence check for UI state; does not decrypt. */
-    fun isConfigured(settings: SharedPreferences): Boolean = settings.contains(PREF)
-
     /** Decrypts the shared key; failure means the saved ciphertext cannot be used. */
     fun load(settings: SharedPreferences): Result<String?> = runCatching {
         EncryptedSecretStore.decrypt(settings.getString(PREF, null)).trim().ifEmpty { null }

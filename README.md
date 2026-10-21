@@ -20,7 +20,7 @@ gradle -Pandroid.aapt2FromMavenOverride="$ANDROID_HOME/build-tools/36.0.0/aapt2"
 ```
 
 Dependency fetch: the first `gradle` invocation downloads the AGP/Kotlin/AndroidX
-artifacts from `google()` / `mavenCentral()` / jitpack into the Gradle user cache;
+artifacts from `google()` / `mavenCentral()` into the Gradle user cache;
 it needs network access once and is incremental afterwards. `nix develop` rewrites
 the ignored `local.properties` with the pinned SDK path.
 

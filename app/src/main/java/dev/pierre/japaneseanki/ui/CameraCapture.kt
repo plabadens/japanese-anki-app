@@ -9,10 +9,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -45,9 +43,8 @@ import java.util.UUID
 
 /**
  * Binds a CameraX controller to the current lifecycle (SPEC.md §4.2). Shared by
- * [CameraViewfinder] and [CameraShutterRow] so the viewfinder and shutter can be laid out as
- * independent rows (frame as a tight 4:3 box, shutter below with ordinary padding) while both
- * drive the same camera session.
+ * [CameraViewfinder] and [CameraShutterButton] so the preview and capture controls drive the
+ * same camera session.
  */
 @Composable
 internal fun rememberCameraController(): LifecycleCameraController {
@@ -64,17 +61,6 @@ internal fun rememberCameraController(): LifecycleCameraController {
     }
     return controller
 }
-
-/**
- * Height the landscape camera frame may use: the screen height minus the capture header, screen
- * padding and system bars. The 4:3 frame is height-limited in landscape, so deriving it from the
- * screen *width* (as portrait does) pushed the shutter row off-screen and cropped the preview.
- */
-internal fun landscapeViewfinderHeightDp(screenHeightDp: Int): Int =
-    (screenHeightDp - LANDSCAPE_CHROME_DP).coerceAtLeast(MIN_LANDSCAPE_FRAME_DP)
-
-internal const val LANDSCAPE_CHROME_DP = 150
-internal const val MIN_LANDSCAPE_FRAME_DP = 120
 
 /**
  * The live preview itself: an upright 3:4, corner-bracketed frame. The caller gives it an
@@ -122,25 +108,6 @@ internal fun CameraViewfinder(controller: LifecycleCameraController, modifier: M
             }
             // The study shows the photo frame itself, with no corner-bracket overlay.
         }
-    }
-}
-
-/** The shutter row below the viewfinder — ordinary UI, not part of the 4:3 frame. */
-@Composable
-internal fun CameraShutterRow(
-    controller: LifecycleCameraController,
-    enabled: Boolean,
-    outputDirectory: File,
-    onCaptured: (File) -> Unit,
-    onError: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier.fillMaxWidth().padding(vertical = 14.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        CameraShutterButton(controller, enabled, outputDirectory, onCaptured, onError)
     }
 }
 

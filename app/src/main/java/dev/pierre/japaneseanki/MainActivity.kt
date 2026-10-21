@@ -7,8 +7,6 @@ import android.content.SharedPreferences
 import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
 import android.media.MediaPlayer
 import android.provider.Settings
@@ -17,13 +15,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.camera.core.ImageCapture
-import androidx.camera.core.ImageCaptureException
-import androidx.camera.view.LifecycleCameraController
-import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.shape.RoundedCornerShape
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -34,20 +26,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -57,25 +45,15 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import dev.pierre.japaneseanki.ui.ReviewCard
 import dev.pierre.japaneseanki.ui.AppContentMaxWidth
@@ -91,7 +69,6 @@ import dev.pierre.japaneseanki.ui.ocrFocusFraction
 import dev.pierre.japaneseanki.speech.CloudVoice
 import dev.pierre.japaneseanki.speech.GoogleChirpSpeechProvider
 import dev.pierre.japaneseanki.speech.HintResult
-import dev.pierre.japaneseanki.speech.ReadingHint
 import dev.pierre.japaneseanki.speech.ReadingHintBuilder
 import dev.pierre.japaneseanki.speech.SentenceSpeechProvider
 import dev.pierre.japaneseanki.speech.SentenceSpeechRequest
@@ -100,7 +77,6 @@ import dev.pierre.japaneseanki.speech.decodeVoices
 import dev.pierre.japaneseanki.speech.encodeVoices
 import dev.pierre.japaneseanki.speech.sentenceHintSpans
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -110,15 +86,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
-import androidx.core.content.ContextCompat
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.io.File
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -245,7 +215,7 @@ class MainActivity : ComponentActivity() {
         sharedImage.value = imageFromIntent(intent)
         offlineDictionary = sharedDictionary(this)
         offlineAnalyzer = OfflineJapaneseAnalyzer.shared(this)
-        japaneseOcr = JapaneseOcr(this)
+        japaneseOcr = JapaneseOcr()
         val preferences = getSharedPreferences("draft", MODE_PRIVATE)
         val settings = getSharedPreferences("settings", MODE_PRIVATE)
         if (preferences.getString(SubmissionRecoveryKeys.STATUS, null) == "done") {
@@ -348,7 +318,6 @@ class MainActivity : ComponentActivity() {
                 )
             }
             val translation = (translationDraft.result as? TranslationResult.Ready)?.text.orEmpty()
-            val translationSource = (translationDraft.result as? TranslationResult.Ready)?.source
             var translationAttemptedSentence by remember {
                 mutableStateOf(preferences.getString("translation_attempted_sentence", null))
             }
@@ -373,7 +342,6 @@ class MainActivity : ComponentActivity() {
                     translationDraft.suggestion ?: TranslationResult.Pending
                 } else translationDraft.result
             }
-            var translationInfoExpanded by remember { mutableStateOf(false) }
             var notes by remember { mutableStateOf(preferences.getString("notes", "").orEmpty()) }
             var tags by remember {
                 mutableStateOf(
@@ -2984,8 +2952,6 @@ class MainActivity : ComponentActivity() {
                                         pitch = displayPitch,
                                         definition = displayDefinition,
                                         translation = displayTranslation,
-                                        translationUsesFallback = false,
-                                        translationInfoExpanded = translationInfoExpanded,
                                         generatingFields = if (activeTranslationResult() is TranslationResult.Pending) {
                                             setOf("Translation")
                                         } else {
@@ -2998,7 +2964,6 @@ class MainActivity : ComponentActivity() {
                                         editingEnabled = !submissionLocked && completedSubmission == null,
                                         onTranslationChange = { text ->
                                             translationRequestRevision++
-                                            translationInfoExpanded = false
                                             translationDraft = translationDraft.saveManualEdit(text)
                                         },
                                         onRetryTranslation = {
@@ -3013,7 +2978,6 @@ class MainActivity : ComponentActivity() {
                                             translationRequestRevision++
                                             translationDraft = translationDraft.useSuggestion()
                                         },
-                                        onToggleTranslationInfo = { translationInfoExpanded = !translationInfoExpanded },
                                         sentenceAudio = sentenceAudio.presentation(),
                                         vocabularyAudio = wordAudio.presentation(),
                                         onToggleSentenceAudio = {

@@ -82,22 +82,6 @@ class OfflineDictionary(context: Context) : AutoCloseable {
         }
     }
 
-    fun pitch(expression: String, reading: String): List<DictionaryPitch> {
-        val db = database ?: error("Offline dictionary is not ready.")
-        return db.rawQuery(
-            "SELECT part_of_speech, accent FROM pitch WHERE expression=? AND reading=? ORDER BY source_order",
-            arrayOf(expression, reading),
-        ).use { cursor ->
-            val posColumn = cursor.getColumnIndexOrThrow("part_of_speech")
-            val accentColumn = cursor.getColumnIndexOrThrow("accent")
-            buildList {
-                while (cursor.moveToNext()) {
-                    add(DictionaryPitch(cursor.getString(posColumn).orEmpty(), cursor.getInt(accentColumn)))
-                }
-            }
-        }
-    }
-
     override fun close() {
         database?.close()
         database = null
@@ -187,5 +171,3 @@ data class DictionarySense(
     val partsOfSpeech: List<String>,
     val notes: List<String>,
 )
-
-data class DictionaryPitch(val partOfSpeech: String, val accent: Int)
