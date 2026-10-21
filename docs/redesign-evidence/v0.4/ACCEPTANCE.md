@@ -86,6 +86,7 @@ adb -s emulator-5558 install -r -g releases/v0.4/japanese-anki-0.4-debug.apk
 | `11` | Pitch miss for `図書・としょ`, Continue blocked |
 | `12` | OCR excerpt sheet over the landscape textbook photo |
 | `13`–`14` | Type mode with IME; Back dismisses the IME, draft intact |
+| `13b` | Type canvas without the IME (empty-state writing view) |
 | `15`–`18` | Review light/dark at 360×828 and 390×844 |
 | `19`–`21` | Review at 200% font, light/dark, and scrolled to vocabulary |
 | `22` | Full-photo viewer, whole frame fitted |
@@ -150,6 +151,10 @@ re-run here or that depend on an install/service this run did not have. NOT RUN 
 6. **Pitch contour.** The production source-backed component is used: no axis legend, 22 sp katakana
    labels, hollow rings for source-backed nasal morae and crosses for devoiced morae. The study's
    contour is a fixture drawing, not linguistic data.
+7. **Camera preview letterboxes the emulator feed.** `PreviewView` uses `FIT_CENTER` so the preview
+   matches the captured frame; the emulator's virtual camera is 16:9 inside a taller portrait frame,
+   so `01`–`04` show black bands above and below the image. On a phone with a 3:4 sensor the frame is
+   filled. The study's illustration fills the card edge to edge.
 
 ## Known defects
 
