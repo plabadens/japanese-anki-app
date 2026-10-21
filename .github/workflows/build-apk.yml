@@ -1,0 +1,89 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Nix debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # The runner's preinstalled Android SDK is not the flake-pinned API 37 SDK, and the
+      # 524 MB APK plus the Nix Android closure need room. Nix supplies the entire toolchain.
+      - name: Reclaim runner disk
+        run: |
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          df -h
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      - name: Cache Gradle downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+          key: gradle-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml', 'gradle.properties', 'build.gradle.kts', 'app/build.gradle.kts', 'nix/gradle/deps.json') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Build and test
+        shell: bash
+        run: nix develop --command ./scripts/ci-build-apk.sh
+
+      - name: Collect APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk dist/japanese-anki-debug.apk
+          (
+            cd dist
+            sha256sum japanese-anki-debug.apk > SHA256SUMS.txt
+          )
+          ls -lh dist
+
+      - name: Write summary
+        run: |
+          {
+            echo "## Japanese Anki debug APK"
+            echo
+            echo "Built from \`$GITHUB_SHA\` with the flake-pinned Android toolchain."
+            echo
+            echo '```'
+            cat dist/SHA256SUMS.txt
+            echo '```'
+            echo
+            echo "This is a debug-signed APK. It installs normally but uses a CI debug identity,"
+            echo "so it is not an update-compatible replacement for a locally signed build."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: japanese-anki-debug-apk
+          path: dist/
+          retention-days: 14
+          compression-level: 0
