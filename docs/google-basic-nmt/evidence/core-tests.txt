@@ -1,0 +1,9 @@
+warning: Git tree '/srv/hermes/workspace/japanese-anki-app/.worktrees/t_e7982c2a' is dirty
+Failed to load native library:jansi-2.4.0-177ae8b9a6b19cc-libjansi.so. The native library file at /tmp/jansi-2.4.0-177ae8b9a6b19cc-libjansi.so is not executable, make sure that the directory is mounted on a partition without the noexec flag, or set the jansi.tmpdir system property to point to a proper location.  osinfo: Linux/x86_64
+java.lang.UnsatisfiedLinkError: /tmp/jansi-2.4.0-177ae8b9a6b19cc-libjansi.so: /tmp/jansi-2.4.0-177ae8b9a6b19cc-libjansi.so: failed to map segment from shared object
+JUnit version 4.13.2
+.................................................................................................................
+Time: 0.753
+
+OK (113 tests)
+

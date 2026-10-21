@@ -4,7 +4,7 @@ See `docs/toolchain-notes.md` for deferred toolchain work: the AGP 9.x upgrade (
 
 Native Android app for creating Japanese sentence-mining notes in AnkiDroid. See [SPEC.md](SPEC.md) for approved behavior and release gates.
 
-**Redesign in progress:** `SPEC.md` now defines the API-37-only Compose workflow, local preparation, Google Chirp 3 HD sentence speech with reading hints and cloud-listed voices, OpenRouter translation, required complete notes, annotated AJT-compatible pitch, and 1080 px WebP images. The implementation/build observations below predate that rewrite; they are not claims that the redesign is implemented. The API-35 AVD and old acceptance matrix are historical tooling, not the new release target. Nix development builds remain required; byte-identical/sandboxed APK builds do not.
+**Redesign in progress:** `SPEC.md` now defines the API-37-only Compose workflow, local preparation, Google Chirp 3 HD sentence speech with reading hints and cloud-listed voices, Google Cloud Translation Basic v2 default NMT (both behind one shared Google Cloud API key), required complete notes, annotated AJT-compatible pitch, and 1080 px WebP images. The implementation/build observations below predate that rewrite; they are not claims that the redesign is implemented. The API-35 AVD and old acceptance matrix are historical tooling, not the new release target. Nix development builds remain required; byte-identical/sandboxed APK builds do not.
 
 ## Build environment (NixOS x86_64)
 
@@ -69,7 +69,7 @@ For iterating on UI code, `scripts/rebuild.sh [test|build-only]` builds the debu
 
 Install AnkiDroid only in this emulator by downloading its APK from the official AnkiDroid release/Play distribution and running the wrapper's `install` command with that APK. Keep all test data disposable and isolated to the emulator; do not touch any attached phone.
 
-For the redesign, provision an API-37 x86_64 emulator and follow the R-series checklist in SPEC §14. Inject local image fixtures and use the chosen OpenRouter models for actual quality checks, with controlled responses for failure tests. No offline TTS engine or ARM64 emulator matrix is required. Verify ARM64 packaging separately; physical-device validation remains optional. Record emulator-only limitations honestly.
+For the redesign, provision an API-37 x86_64 emulator and follow the R-series checklist in SPEC §14. Inject local image fixtures and use the Google Cloud Translation Basic NMT path for actual quality checks, with controlled responses for failure tests. No offline TTS engine or ARM64 emulator matrix is required. Verify ARM64 packaging separately; physical-device validation remains optional. Record emulator-only limitations honestly.
 
 ## Current implementation
 
