@@ -11,8 +11,11 @@ export TMPDIR="$ROOT/tmp"
 ADB="$ANDROID_SDK_ROOT/platform-tools/adb"
 EMULATOR="$ANDROID_SDK_ROOT/emulator/emulator"
 AVDMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/22.0/bin/avdmanager"
-AVD=japanese-anki-pixel7-api35
-SERIAL=emulator-5554
+AVD=japanese-anki-pixel7-api37
+# API 37.0 (Android 17) google_apis x86_64, supplied by the flake's Android SDK.
+SYSTEM_IMAGE='system-images;android-37.0;google_apis;x86_64'
+PORT="${EMULATOR_PORT:-5554}"
+SERIAL="emulator-$PORT"
 
 # The emulator only registers with adb's default TCP server, not a localfilesystem server.
 adb() { env -u ADB_SERVER_SOCKET "$ADB" -s "$SERIAL" "$@"; }
@@ -48,20 +51,28 @@ start_emulator() {
   fi
   env -u ADB_SERVER_SOCKET "$ADB" start-server >/dev/null
   if ! "$AVDMANAGER" list avd | grep -q "Name: $AVD"; then
+    # avdmanager 22.0 logs a harmless "could not load devices.xml" error for the 37.0
+    # image and still writes a correct Pixel 7 profile.
     printf 'no\n' | "$AVDMANAGER" create avd --force --name "$AVD" \
-      --package 'system-images;android-35;google_apis;x86_64' --device pixel_7
+      --package "$SYSTEM_IMAGE" --device pixel_7
   fi
-  env -u ADB_SERVER_SOCKET "$EMULATOR" -avd "$AVD" -port 5554 -no-window -no-audio -no-boot-anim \
+  # The emulator injects $HOME/.android/adbkey into a fresh userdata by creating
+  # data/misc/adb with mode 02750. Hosts that refuse an explicit SGID bit (this
+  # hardened NixOS box returns EPERM) make that mkdir fail, after which the
+  # emulator dereferences the missing adb_keys file and dies with SIGSEGV.
+  # Pre-creating the directory without SGID makes the mkdir an EEXIST no-op.
+  mkdir -p "$ANDROID_AVD_HOME/$AVD.avd/data/misc/adb"
+  env -u ADB_SERVER_SOCKET "$EMULATOR" -avd "$AVD" -port "$PORT" -no-window -no-audio -no-boot-anim \
     -gpu swiftshader_indirect -no-snapshot -skin 1080x2400 >"$ROOT/emulator.log" 2>&1 &
   EMULATOR_PID=$!
   echo "$EMULATOR_PID" > "$ROOT/emulator.pid"
   if ! timeout 60 env -u ADB_SERVER_SOCKET "$ADB" -s "$SERIAL" wait-for-device; then
-    echo 'ERROR: ADB did not see emulator-5554 within 60 seconds; see .tmp-nix/emulator.log' >&2
+    echo "ERROR: ADB did not see $SERIAL within 60 seconds; see .tmp-nix/emulator.log" >&2
     return 1
   fi
   for _ in $(seq 1 120); do
     if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ]; then
-      echo 'Emulator boot completed (API 35 x86_64 google_apis)'
+      echo "Emulator boot completed (API $(adb shell getprop ro.build.version.sdk | tr -d '\r') x86_64 google_apis, $SERIAL)"
       return
     fi
     sleep 2

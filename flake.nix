@@ -38,62 +38,32 @@
         inherit pkgs;
         licenseAccepted = true;
       };
+
+      # Declared Android target: API 37 (Android 17) platform 37.0, build-tools 36.0.0
+      # (the version app/build.gradle.kts pins), NDK 27.2, emulator 37.1.11 and the
+      # API-37.0 google_apis x86_64 system image used for the v0.3 device acceptance.
+      # Everything lives in a single SDK root so `nix develop` and the emulator wrapper
+      # see the same, flake-declared SDK instead of a hand-provisioned one.
       android = androidEnv.composeAndroidPackages {
-        platformVersions = [ "35" "37" ];
+        platformVersions = [ "37.0" ];
         buildToolsVersions = [ "36.0.0" ];
         cmakeVersions = [ "4.1.2" ];
         includeNDK = true;
         ndkVersions = [ "27.2.12479018" ];
-        includeEmulator = false;
-        includeSystemImages = false;
-      };
-      emulatorSdk = androidEnv.composeAndroidPackages {
-        platformVersions = [ "35" ];
+        includeEmulator = true;
+        emulatorVersion = "37.1.11";
+        includeSystemImages = true;
         systemImageTypes = [ "google_apis" ];
         abiVersions = [ "x86_64" ];
-        includeEmulator = true;
-        includeSystemImages = true;
-        includeNDK = false;
-      };
-      emulatorSdk37 = androidEnv.composeAndroidPackages {
-        platformVersions = [ "37" ];
-        systemImageTypes = [ "google_apis" ];
-        abiVersions = [ "x86_64" ];
-        includeEmulator = true;
-        includeSystemImages = true;
-        includeNDK = false;
-      };
-      emulatorPackage37 = androidEnv.emulateApp {
-        name = "japanese-anki-emulator-api37";
-        platformVersion = "37";
-        abiVersion = "x86_64";
-        systemImageType = "google_apis";
-        sdkExtraArgs = {
-          includeEmulator = true;
-          includeSystemImages = true;
-          includeNDK = false;
-        };
       };
       sdkRoot = "${android.androidsdk}/libexec/android-sdk";
-      emulatorSdkRoot = "${emulatorSdk.androidsdk}/libexec/android-sdk";
-      emulatorPackage = androidEnv.emulateApp {
-        name = "japanese-anki-emulator";
-        platformVersion = "35";
-        abiVersion = "x86_64";
-        systemImageType = "google_apis";
-        sdkExtraArgs = {
-          includeEmulator = true;
-          includeSystemImages = true;
-          includeNDK = false;
-        };
-      };
+
       emulatorWrapper = pkgs.writeShellApplication {
         name = "japanese-anki-emulator";
         runtimeInputs = [ pkgs.coreutils pkgs.gnugrep pkgs.gnused ];
         text = builtins.readFile ./scripts/emulator.sh;
         runtimeEnv = {
-          ANDROID_SDK_ROOT = emulatorSdkRoot;
-          ADB_SERVER_SOCKET = "localfilesystem:/home/pierre/Development/japanese-anki-app/.tmp-nix/adb.sock";
+          ANDROID_SDK_ROOT = sdkRoot;
         };
       };
 
@@ -171,8 +141,6 @@
         default = releaseApk;
         apk = releaseApk;
         debugApk = debugApk;
-        emulator = emulatorPackage;
-        emulator-api37 = emulatorPackage37;
         emulator-wrapper = emulatorWrapper;
       };
 
@@ -183,6 +151,7 @@
         JAVA_HOME = jdk.home;
         ANDROID_HOME = sdkRoot;
         ANDROID_SDK_ROOT = sdkRoot;
+        ANDROID_NDK_HOME = "${sdkRoot}/ndk/27.2.12479018";
         MECAB_SOURCE_DIR = "${mecabSource}";
         UNIDIC_RUNTIME_ARCHIVE = "${unidicRuntime}";
         TESSDATA_JPN = "${tessdataJpn}";
