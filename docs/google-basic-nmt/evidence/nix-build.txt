@@ -1,0 +1,32 @@
+$ nix build .#checks.x86_64-linux.core -L   (log from that build)
+bundled dictionary asset self-check passed
+UniDic runtime packager self-check passed
+JUnit version 4.13.2
+.................................................................................................................
+Time: 0.716
+
+OK (113 tests)
+
+
+$ nix build .#apk -L   (log from that build)
+BUILD SUCCESSFUL in 5m 3s
+Running phase: checkPhase
+@nix { "action": "setPhase", "phase": "checkPhase" }
+> Task :app:testDebugUnitTest
+BUILD SUCCESSFUL in 1m 20s
+checkPhase completed in 1 minutes 21 seconds
+Running phase: installPhase
+@nix { "action": "setPhase", "phase": "installPhase" }
+Running phase: fixupPhase
+@nix { "action": "setPhase", "phase": "fixupPhase" }
+
+$ nix build .#apk --print-out-paths
+/nix/store/ljmnia7nc5hn791lbbyfi59rxpy9864n-japanese-anki-card-creator-0.1.0
+
+unsigned artifact:
+-r--r--r-- 2 root root 531756791 Jan  1  1970 /nix/store/ljmnia7nc5hn791lbbyfi59rxpy9864n-japanese-anki-card-creator-0.1.0/japanese-anki-unsigned.apk
+18b27bf5b668c9a26b8e9c1cfd36c2791f05e34875b55cfe53c214a77abd7f32  /nix/store/ljmnia7nc5hn791lbbyfi59rxpy9864n-japanese-anki-card-creator-0.1.0/japanese-anki-unsigned.apk
+
+debug candidate:
+-rw-r--r-- 1 hermes hermes 548134209 Oct 21 05:06 app/build/outputs/apk/debug/app-debug.apk
+433772d95170ab8a2805e2087d85b992efa52fa6ac76fabf4721cfbc208ad879  app/build/outputs/apk/debug/app-debug.apk

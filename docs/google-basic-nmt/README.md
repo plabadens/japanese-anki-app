@@ -45,19 +45,31 @@ nix develop --command bash -lc \
     BUILD SUCCESSFUL                                 (evidence/gradle-unit-tests.txt)
     153 unit tests, 0 failures, 0 errors
 
+nix build .#checks.x86_64-linux.core -L
+    OK (113 tests)                                   (evidence/nix-build.txt)
+
+nix build .#apk -L
+    BUILD SUCCESSFUL                                 (evidence/nix-build.txt)
+    unsigned APK in the Nix store, arm64-v8a and x86_64 libs packaged
+
 sha256sum app/build/outputs/apk/debug/app-debug.apk
     433772d95170ab8a2805e2087d85b992efa52fa6ac76fabf4721cfbc208ad879
 ```
 
-Installable candidate (debug-signed, both ABIs packaged):
+Installable candidates from this revision:
 
 ```
+debug-signed (installed and exercised on the emulator in this run)
 /srv/hermes/workspace/japanese-anki-app/.worktrees/t_e7982c2a/app/build/outputs/apk/debug/app-debug.apk
 548,134,209 bytes, sha256 433772d9…8ad879
+
+Nix build output (unsigned; signing is a release gate)
+/nix/store/ljmnia7nc5hn791lbbyfi59rxpy9864n-japanese-anki-card-creator-0.1.0/japanese-anki-unsigned.apk
+531,756,791 bytes, sha256 18b27bf5…abd7f32
 ```
 
-Version name/signing/ABI release gates belong to integration card `t_7349d4d0`; this is a candidate,
-not a release.
+Version name/signing/ABI release gates belong to integration card `t_7349d4d0`; these are
+candidates, not a release.
 
 ## Acceptance matrix
 
@@ -66,6 +78,7 @@ remainder is named; **NOT RUN** = not executed.
 
 | ID | Result | Evidence |
 |---|---|---|
+| Build and packaging | **PASS** (this card's scope) | `./scripts/test-core.sh` 113 tests; Gradle `testDebugUnitTest assembleDebug` 153 tests, 0 failures; `nix build .#checks.x86_64-linux.core` OK (113); `nix build .#apk` succeeds and the unsigned APK packages `arm64-v8a` and `x86_64`. Debug APK installed and exercised on the API-37 x86_64 AVD. |
 | R14 request contract | **PASS** (controlled transport) | Serialized body is exactly `{"q","source":"ja","target":"en","format":"text","model":"nmt"}`; URL is the Basic v2 endpoint with no query string; credential arrives only as the transport's `X-Goog-Api-Key` argument; body contains no prompt, meaning, reading, notes, image, or key. `basicV2NmtRequestIsSerializedExactly`, `payloadCarriesOnlyTheSentenceAndTheCredentialStaysInTheHeader`. |
 | R14 response handling | **PASS** (controlled transport) | HTML-escaped `translatedText` becomes plain text and `SentEng` re-escapes it (`&lt;b&gt;` exported); empty, malformed, non-string, and multi-result payloads block. `htmlEscapedResponseBecomesPlainTextAndExportEscapesIt`, `emptyMalformedAndAmbiguousResponsesBlock`. |
 | R14 failure isolation | **PASS** (controlled transport) | 302/401/403/403-`SERVICE_DISABLED`/403-`BILLING_DISABLED`/400-`API_KEY_INVALID`/429/500/IOException produce distinct retained messages with no body, key, or sentence text; no fallback path exists. `failuresAreSpecificSanitizedAndNeverFallBack`, `timeoutAndNetworkFailuresAreRetryableFailuresNotResults`. |
