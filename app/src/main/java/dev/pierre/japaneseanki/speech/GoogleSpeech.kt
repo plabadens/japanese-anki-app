@@ -1,11 +1,12 @@
 package dev.pierre.japaneseanki.speech
 
 import dev.pierre.japaneseanki.GoogleApiProblem
+import dev.pierre.japaneseanki.DefaultGoogleHttpConnectionFactory
+import dev.pierre.japaneseanki.GoogleHttp
+import dev.pierre.japaneseanki.GoogleHttpConnectionFactory
 import dev.pierre.japaneseanki.classifyGoogleApiError
 import java.io.File
 import java.io.IOException
-import java.net.HttpURLConnection
-import java.net.URL
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.Base64
@@ -23,6 +24,14 @@ interface GoogleSpeechTransport {
 }
 
 class HttpGoogleSpeechTransport : GoogleSpeechTransport {
+    private val connectionFactory: GoogleHttpConnectionFactory
+
+    constructor() : this(DefaultGoogleHttpConnectionFactory)
+
+    internal constructor(connectionFactory: GoogleHttpConnectionFactory) {
+        this.connectionFactory = connectionFactory
+    }
+
     override fun get(url: String, apiKey: String, timeoutMillis: Int): SpeechHttpResponse =
         request(url, apiKey, timeoutMillis, body = null)
 
@@ -30,47 +39,19 @@ class HttpGoogleSpeechTransport : GoogleSpeechTransport {
         request(url, apiKey, timeoutMillis, body = json)
 
     private fun request(url: String, apiKey: String, timeoutMillis: Int, body: ByteArray?): SpeechHttpResponse {
-        val connection = URL(url).openConnection() as HttpURLConnection
-        try {
-            connection.connectTimeout = timeoutMillis
-            connection.readTimeout = timeoutMillis
-            connection.useCaches = false
-            // A redirect would hand the credential to another host; refuse instead of following.
-            connection.instanceFollowRedirects = false
-            connection.setRequestProperty("X-Goog-Api-Key", apiKey)
-            connection.setRequestProperty("Accept", "application/json")
-            if (body != null) {
-                connection.requestMethod = "POST"
-                connection.doOutput = true
-                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                connection.setFixedLengthStreamingMode(body.size)
-                connection.outputStream.use { it.write(body) }
-            }
-            val code = connection.responseCode
-            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            val bytes = stream?.use { input -> readBounded(input, MAX_RESPONSE_BYTES) } ?: ByteArray(0)
-            return SpeechHttpResponse(code, bytes)
-        } finally {
-            connection.disconnect()
-        }
-    }
-
-    private fun readBounded(input: java.io.InputStream, limit: Int): ByteArray {
-        val out = java.io.ByteArrayOutputStream()
-        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-        var total = 0
-        while (true) {
-            val read = input.read(buffer)
-            if (read < 0) break
-            total += read
-            if (total > limit) throw IOException("Response too large")
-            out.write(buffer, 0, read)
-        }
-        return out.toByteArray()
+        val response = GoogleHttp.request(
+            url = url,
+            apiKey = apiKey,
+            timeoutMillis = timeoutMillis,
+            maxResponseBytes = MAX_RESPONSE_BYTES,
+            body = body,
+            connectionFactory = connectionFactory,
+        )
+        return SpeechHttpResponse(response.code, response.body)
     }
 
     companion object {
-        private const val MAX_RESPONSE_BYTES = 32 * 1024 * 1024
+        internal const val MAX_RESPONSE_BYTES = 32 * 1024 * 1024
     }
 }
 

@@ -2,9 +2,6 @@ package dev.pierre.japaneseanki
 
 import dev.pierre.japaneseanki.speech.MiniJson
 import java.io.IOException
-import java.io.InputStream
-import java.net.HttpURLConnection
-import java.net.URL
 import java.util.concurrent.CancellationException
 
 enum class TranslationSource { GOOGLE, MANUAL }
@@ -79,42 +76,24 @@ interface TranslatorTransport {
 
 /** Bounded, non-redirecting HTTPS transport; the key is sent only as `X-Goog-Api-Key`. */
 class HttpTranslatorTransport : TranslatorTransport {
-    override fun post(url: String, apiKey: String, json: ByteArray, timeoutMillis: Int): TranslatorHttpResponse {
-        val connection = URL(url).openConnection() as HttpURLConnection
-        try {
-            connection.requestMethod = "POST"
-            connection.connectTimeout = timeoutMillis
-            connection.readTimeout = timeoutMillis
-            connection.useCaches = false
-            // A redirect could hand the credential to another host; refuse instead of following.
-            connection.instanceFollowRedirects = false
-            connection.setRequestProperty("X-Goog-Api-Key", apiKey)
-            connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-            connection.setRequestProperty("Accept", "application/json")
-            connection.setFixedLengthStreamingMode(json.size)
-            connection.doOutput = true
-            connection.outputStream.use { it.write(json) }
-            val code = connection.responseCode
-            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            val body = stream?.use { readBounded(it) }.orEmpty()
-            return TranslatorHttpResponse(code, body)
-        } finally {
-            connection.disconnect()
-        }
+    private val connectionFactory: GoogleHttpConnectionFactory
+
+    constructor() : this(DefaultGoogleHttpConnectionFactory)
+
+    internal constructor(connectionFactory: GoogleHttpConnectionFactory) {
+        this.connectionFactory = connectionFactory
     }
 
-    private fun readBounded(input: InputStream): String {
-        val out = java.io.ByteArrayOutputStream()
-        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-        var total = 0
-        while (true) {
-            val read = input.read(buffer)
-            if (read < 0) break
-            total += read
-            if (total > MAX_RESPONSE_BYTES) throw IOException("Response too large")
-            out.write(buffer, 0, read)
-        }
-        return out.toString(Charsets.UTF_8.name())
+    override fun post(url: String, apiKey: String, json: ByteArray, timeoutMillis: Int): TranslatorHttpResponse {
+        val response = GoogleHttp.request(
+            url = url,
+            apiKey = apiKey,
+            timeoutMillis = timeoutMillis,
+            maxResponseBytes = MAX_RESPONSE_BYTES,
+            body = json,
+            connectionFactory = connectionFactory,
+        )
+        return TranslatorHttpResponse(response.code, response.body.toString(Charsets.UTF_8))
     }
 
     companion object {
@@ -236,48 +215,8 @@ class GoogleTranslationClient(
 
 /** Google escapes `&`, `<`, `>` and quotes in `translatedText`; the app stores plain text. */
 internal fun unescapeTranslationEntities(text: String): String {
-    if ('&' !in text) return text
-    val out = StringBuilder(text.length)
-    var index = 0
-    while (index < text.length) {
-        val char = text[index]
-        if (char != '&') {
-            out.append(char)
-            index++
-            continue
-        }
-        val end = text.indexOf(';', startIndex = index + 1)
-        if (end < 0 || end - index > 12) {
-            out.append(char)
-            index++
-            continue
-        }
-        val entity = text.substring(index + 1, end)
-        val decoded: String? = when {
-            entity == "amp" -> "&"
-            entity == "lt" -> "<"
-            entity == "gt" -> ">"
-            entity == "quot" -> "\""
-            entity == "apos" -> "'"
-            entity == "nbsp" -> "\u00a0"
-            entity.startsWith("#x") || entity.startsWith("#X") ->
-                entity.substring(2).toIntOrNull(16)?.takeIf(::isValidCodePoint)?.let { String(Character.toChars(it)) }
-            entity.startsWith("#") ->
-                entity.substring(1).toIntOrNull()?.takeIf(::isValidCodePoint)?.let { String(Character.toChars(it)) }
-            else -> null
-        }
-        if (decoded == null) {
-            out.append(char)
-            index++
-        } else {
-            out.append(decoded)
-            index = end + 1
-        }
-    }
-    return out.toString()
+    return HtmlEntityDecoder.decode(text, NumericEntityPolicy.TRANSLATION)
 }
-
-private fun isValidCodePoint(value: Int): Boolean = Character.isValidCodePoint(value) && value > 0
 
 enum class TranslatorFailure {
     NETWORK,
