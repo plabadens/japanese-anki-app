@@ -68,6 +68,8 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.semantics.contentDescription
@@ -1650,339 +1652,355 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+            val saveSettings: () -> Unit = {
+                val google = googleKey.trim()
+                if (google.isNotEmpty() && google.any { it.isWhitespace() }) {
+                    settingsError = "The Google Cloud key contains whitespace."
+                } else {
+                    settingsSaving = true
+                    settingsError = null
+                    coroutineScope.launch {
+                        try {
+                            withContext(Dispatchers.IO) {
+                                settings.edit()
+                                    .remove("default_tags")
+                                    .putString("google_tts_voice", selectedVoiceName)
+                                    .commit()
+                                check(GoogleCloudCredential.write(settings, google)) {
+                                    "Could not persist settings."
+                                }
+                                // The obsolete OpenRouter ciphertext is deleted, never read back as
+                                // a Google key. Drafts and media are untouched.
+                                GoogleCloudCredential.removeObsoleteOpenRouterStorage(settings)
+                            }
+                            // Saving writes only local state; it sends nothing. The previous listing
+                            // belongs to the old key, so speech status returns to "not checked"
+                            // until Refresh voices is tapped.
+                            googleKey = google
+                            translationTestResult = null
+                            cloudVoicesError = null
+                            cloudVoices = emptyList()
+                            voiceListAttempted = false
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) {
+                            settingsError = "Settings could not be saved. The key was not stored in plain text."
+                        } finally {
+                            settingsSaving = false
+                        }
+                    }
+                }
+            }
             if (showSettings) {
-                AlertDialog(
+                Dialog(
                     onDismissRequest = { if (!settingsSaving) showSettings = false },
-                    title = { Text("Settings") },
-                    text = {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp)
-                                .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            Text("AnkiDroid", style = MaterialTheme.typography.titleMedium)
-                            when {
-                                !ankiDroidInstalled -> Text(
-                                    "AnkiDroid not detected. Install it before setting up export.",
-                                    style = MaterialTheme.typography.bodyMedium,
+                    properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+                ) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background,
+                    ) {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().statusBarsPadding()
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                TextButton(
+                                    enabled = !settingsSaving,
+                                    onClick = { showSettings = false },
+                                ) { Text("Back") }
+                                Text(
+                                    "Settings",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    modifier = Modifier.weight(1f),
                                 )
-                                !apiPermissionGranted -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text("AnkiDroid detected. Grant API permission to continue setup.")
-                                    Button(enabled = !isSubmitting, onClick = {
-                                        apiPermissionLauncher.launch(ANKIDROID_READ_WRITE_PERMISSION)
-                                    }) { Text("Grant AnkiDroid API permission") }
-                                }
-                                else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    if (setupLoading) Text("Loading note types and decks…")
-                                    setupError?.let {
-                                        Text(it)
-                                        TextButton(onClick = { setupReload++ }) { Text("Retry") }
+                                TextButton(
+                                    enabled = !settingsLoading && !settingsSaving,
+                                    onClick = saveSettings,
+                                ) { Text(if (settingsSaving) "Saving…" else "Save") }
+                            }
+                            Column(
+                                modifier = Modifier.fillMaxWidth().weight(1f)
+                                    .navigationBarsPadding()
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                Text("AnkiDroid", style = MaterialTheme.typography.titleMedium)
+                                when {
+                                    !ankiDroidInstalled -> Text(
+                                        "AnkiDroid not detected. Install it before setting up export.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                    !apiPermissionGranted -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text("AnkiDroid detected. Grant API permission to continue setup.")
+                                        Button(enabled = !isSubmitting, onClick = {
+                                            apiPermissionLauncher.launch(ANKIDROID_READ_WRITE_PERMISSION)
+                                        }) { Text("Grant AnkiDroid API permission") }
                                     }
-                                    Text("Note type", style = MaterialTheme.typography.titleSmall)
-                                    Box {
-                                        OutlinedButton(
-                                            onClick = { showModelMenu = true },
-                                            enabled = !settingsLoading && !settingsSaving && noteTypes.isNotEmpty(),
-                                        ) {
-                                            Text(selectedModel?.name ?: if (selectedModelId == null) "Choose note type" else "Previously selected note type unavailable")
+                                    else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        if (setupLoading) Text("Loading note types and decks…")
+                                        setupError?.let {
+                                            Text(it)
+                                            TextButton(onClick = { setupReload++ }) { Text("Retry") }
                                         }
-                                        DropdownMenu(
-                                            expanded = showModelMenu,
-                                            onDismissRequest = { showModelMenu = false },
-                                        ) {
-                                            noteTypes.forEach { model ->
-                                                DropdownMenuItem(
-                                                    text = { Text(model.name) },
-                                                    onClick = { selectedModelId = model.id; showModelMenu = false },
-                                                )
+                                        Text("Note type", style = MaterialTheme.typography.titleSmall)
+                                        Box {
+                                            OutlinedButton(
+                                                onClick = { showModelMenu = true },
+                                                enabled = !settingsLoading && !settingsSaving && noteTypes.isNotEmpty(),
+                                            ) {
+                                                Text(selectedModel?.name ?: if (selectedModelId == null) "Choose note type" else "Previously selected note type unavailable")
+                                            }
+                                            DropdownMenu(
+                                                expanded = showModelMenu,
+                                                onDismissRequest = { showModelMenu = false },
+                                            ) {
+                                                noteTypes.forEach { model ->
+                                                    DropdownMenuItem(
+                                                        text = { Text(model.name) },
+                                                        onClick = { selectedModelId = model.id; showModelMenu = false },
+                                                    )
+                                                }
                                             }
                                         }
-                                    }
-                                    selectedModel?.let { model ->
-                                        AnkiFieldContract.mapToModelOrder(model.fields, emptyMap()).errors
-                                            .forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
-                                    }
-                                    Text("Destination deck", style = MaterialTheme.typography.titleSmall)
-                                    Box {
-                                        OutlinedButton(
-                                            onClick = { showDeckMenu = true },
-                                            enabled = !settingsLoading && !settingsSaving && decks.isNotEmpty(),
-                                        ) {
-                                            Text(selectedDeck?.name ?: if (selectedDeckId == null) "Choose destination deck" else "Previously selected deck unavailable")
+                                        selectedModel?.let { model ->
+                                            AnkiFieldContract.mapToModelOrder(model.fields, emptyMap()).errors
+                                                .forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
                                         }
-                                        DropdownMenu(
-                                            expanded = showDeckMenu,
-                                            onDismissRequest = { showDeckMenu = false },
-                                        ) {
-                                            decks.forEach { deck ->
-                                                DropdownMenuItem(
-                                                    text = { Text(deck.name) },
-                                                    onClick = { selectedDeckId = deck.id; showDeckMenu = false },
-                                                )
+                                        Text("Destination deck", style = MaterialTheme.typography.titleSmall)
+                                        Box {
+                                            OutlinedButton(
+                                                onClick = { showDeckMenu = true },
+                                                enabled = !settingsLoading && !settingsSaving && decks.isNotEmpty(),
+                                            ) {
+                                                Text(selectedDeck?.name ?: if (selectedDeckId == null) "Choose destination deck" else "Previously selected deck unavailable")
+                                            }
+                                            DropdownMenu(
+                                                expanded = showDeckMenu,
+                                                onDismissRequest = { showDeckMenu = false },
+                                            ) {
+                                                decks.forEach { deck ->
+                                                    DropdownMenuItem(
+                                                        text = { Text(deck.name) },
+                                                        onClick = { selectedDeckId = deck.id; showDeckMenu = false },
+                                                    )
+                                                }
                                             }
                                         }
-                                    }
-                                    if (!setupLoading && setupError == null && noteTypes.isEmpty()) {
-                                        Text("No note types available in AnkiDroid.")
-                                    }
-                                    if (!setupLoading && setupError == null && decks.isEmpty()) {
-                                        Text("No existing decks available in AnkiDroid.")
+                                        if (!setupLoading && setupError == null && noteTypes.isEmpty()) {
+                                            Text("No note types available in AnkiDroid.")
+                                        }
+                                        if (!setupLoading && setupError == null && decks.isEmpty()) {
+                                            Text("No existing decks available in AnkiDroid.")
+                                        }
                                     }
                                 }
-                            }
-                            Text("Google Cloud", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "One API key for sentence speech and translation. It is encrypted with " +
-                                    "Android Keystore, stays on this device, and is sent only to Google Cloud " +
-                                    "in an authentication header, never in a URL.",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            Text(
-                                "Project setup: enable billing, enable the Cloud Text-to-Speech API and the " +
-                                    "Cloud Translation API, and restrict this key to those two APIs. Entering or " +
-                                    "saving the key sends no request.",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            if (settingsLoading) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                    Text("Loading saved settings…")
+                                Text("Google Cloud", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "One API key for sentence speech and translation. It is encrypted with " +
+                                        "Android Keystore, stays on this device, and is sent only to Google Cloud " +
+                                        "in an authentication header, never in a URL.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                Text(
+                                    "Project setup: enable billing, enable the Cloud Text-to-Speech API and the " +
+                                        "Cloud Translation API, and restrict this key to those two APIs. Entering or " +
+                                        "saving the key sends no request.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                if (settingsLoading) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                        Text("Loading saved settings…")
+                                    }
                                 }
-                            }
-                            OutlinedTextField(
-                                value = googleKey,
-                                onValueChange = { googleKey = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Google Cloud API key") },
-                                visualTransformation = if (googleKeyVisible) VisualTransformation.None
-                                    else PasswordVisualTransformation(),
-                                singleLine = true,
-                                enabled = !settingsLoading && !settingsSaving,
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Checkbox(
-                                    checked = googleKeyVisible,
-                                    onCheckedChange = { googleKeyVisible = it },
+                                OutlinedTextField(
+                                    value = googleKey,
+                                    onValueChange = { googleKey = it },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text("Google Cloud API key") },
+                                    visualTransformation = if (googleKeyVisible) VisualTransformation.None
+                                        else PasswordVisualTransformation(),
+                                    singleLine = true,
                                     enabled = !settingsLoading && !settingsSaving,
                                 )
-                                Text("Show key")
-                            }
-                            Text(
-                                if (settings.contains(GoogleCloudCredential.PREF)) {
-                                    "Key saved for speech and translation."
-                                } else {
-                                    "No key saved. Local preparation works; speech and translation need a key."
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            Text("Speech · Cloud Text-to-Speech", style = MaterialTheme.typography.titleSmall)
-                            Text("Sentence voice", style = MaterialTheme.typography.bodyMedium)
-                            when {
-                                cloudVoicesLoading -> Row(verticalAlignment = Alignment.CenterVertically) {
-                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                    Text("  Listing Japanese Chirp 3 HD voices…")
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Checkbox(
+                                        checked = googleKeyVisible,
+                                        onCheckedChange = { googleKeyVisible = it },
+                                        enabled = !settingsLoading && !settingsSaving,
+                                    )
+                                    Text("Show key")
                                 }
-                                cloudVoicesError != null -> Text(
-                                    buildString {
-                                        append(cloudVoicesError)
-                                        if (cloudVoicesCached && cloudVoices.isNotEmpty()) {
-                                            append(" Showing the cached list, which is not fresh verification.")
-                                        }
+                                Text(
+                                    if (settings.contains(GoogleCloudCredential.PREF)) {
+                                        "Key saved for speech and translation."
+                                    } else {
+                                        "No key saved. Local preparation works; speech and translation need a key."
                                     },
-                                    color = MaterialTheme.colorScheme.error,
                                     style = MaterialTheme.typography.bodySmall,
                                 )
-                                cloudVoices.isEmpty() && settings.contains(GoogleCloudCredential.PREF) && voiceListAttempted ->
-                                    Text("No Japanese Chirp 3 HD voices were returned.", style = MaterialTheme.typography.bodySmall)
-                                cloudVoices.isEmpty() && settings.contains(GoogleCloudCredential.PREF) ->
-                                    Text(
-                                        "Voice listing not checked yet. Refresh voices to validate speech access.",
+                                Text("Speech · Cloud Text-to-Speech", style = MaterialTheme.typography.titleSmall)
+                                Text("Sentence voice", style = MaterialTheme.typography.bodyMedium)
+                                when {
+                                    cloudVoicesLoading -> Row(verticalAlignment = Alignment.CenterVertically) {
+                                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                        Text("  Listing Japanese Chirp 3 HD voices…")
+                                    }
+                                    cloudVoicesError != null -> Text(
+                                        buildString {
+                                            append(cloudVoicesError)
+                                            if (cloudVoicesCached && cloudVoices.isNotEmpty()) {
+                                                append(" Showing the cached list, which is not fresh verification.")
+                                            }
+                                        },
+                                        color = MaterialTheme.colorScheme.error,
                                         style = MaterialTheme.typography.bodySmall,
                                     )
-                            }
-                            Box {
-                                OutlinedButton(
-                                    onClick = { showVoiceMenu = true },
-                                    enabled = !settingsLoading && !settingsSaving && cloudVoices.isNotEmpty(),
-                                ) {
-                                    val voice = cloudVoices.firstOrNull { it.name == selectedVoiceName }
-                                    Text(voice?.let { "${it.displayName} · ${it.name}" }
-                                        ?: if (selectedVoiceName.isBlank()) "Choose sentence voice"
-                                        else "Saved voice not in this list")
-                                }
-                                DropdownMenu(
-                                    expanded = showVoiceMenu,
-                                    onDismissRequest = { showVoiceMenu = false },
-                                    modifier = Modifier.heightIn(max = 320.dp),
-                                ) {
-                                    cloudVoices.forEach { voice ->
-                                        DropdownMenuItem(
-                                            text = { Text("${voice.displayName} · ${voice.name}") },
-                                            onClick = {
-                                                selectedVoiceName = voice.name
-                                                showVoiceMenu = false
-                                            },
+                                    cloudVoices.isEmpty() && settings.contains(GoogleCloudCredential.PREF) && voiceListAttempted ->
+                                        Text("No Japanese Chirp 3 HD voices were returned.", style = MaterialTheme.typography.bodySmall)
+                                    cloudVoices.isEmpty() && settings.contains(GoogleCloudCredential.PREF) ->
+                                        Text(
+                                            "Voice listing not checked yet. Refresh voices to validate speech access.",
+                                            style = MaterialTheme.typography.bodySmall,
                                         )
+                                }
+                                Box {
+                                    OutlinedButton(
+                                        onClick = { showVoiceMenu = true },
+                                        enabled = !settingsLoading && !settingsSaving && cloudVoices.isNotEmpty(),
+                                    ) {
+                                        val voice = cloudVoices.firstOrNull { it.name == selectedVoiceName }
+                                        Text(voice?.let { "${it.displayName} · ${it.name}" }
+                                            ?: if (selectedVoiceName.isBlank()) "Choose sentence voice"
+                                            else "Saved voice not in this list")
+                                    }
+                                    DropdownMenu(
+                                        expanded = showVoiceMenu,
+                                        onDismissRequest = { showVoiceMenu = false },
+                                        modifier = Modifier.heightIn(max = 320.dp),
+                                    ) {
+                                        cloudVoices.forEach { voice ->
+                                            DropdownMenuItem(
+                                                text = { Text("${voice.displayName} · ${voice.name}") },
+                                                onClick = {
+                                                    selectedVoiceName = voice.name
+                                                    showVoiceMenu = false
+                                                },
+                                            )
+                                        }
                                     }
                                 }
-                            }
-                            if (selectedVoiceName.isNotBlank() && cloudVoices.isNotEmpty() &&
-                                cloudVoices.none { it.name == selectedVoiceName }
-                            ) {
+                                if (selectedVoiceName.isNotBlank() && cloudVoices.isNotEmpty() &&
+                                    cloudVoices.none { it.name == selectedVoiceName }
+                                ) {
+                                    Text(
+                                        "The saved voice is no longer listed. Choose another voice before generating sentence audio.",
+                                        color = MaterialTheme.colorScheme.error,
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                }
+                                TextButton(
+                                    enabled = !cloudVoicesLoading && !settingsSaving && settings.contains(GoogleCloudCredential.PREF),
+                                    onClick = { voiceRefresh++ },
+                                ) { Text("Refresh voices") }
+                                if (!settings.contains(GoogleCloudCredential.PREF) && googleKey.isNotBlank()) {
+                                    Text("Save the key, then refresh voices.", style = MaterialTheme.typography.bodySmall)
+                                }
                                 Text(
-                                    "The saved voice is no longer listed. Choose another voice before generating sentence audio.",
-                                    color = MaterialTheme.colorScheme.error,
+                                    "Changing the voice invalidates sentence audio only. Voice listing does not " +
+                                        "synthesize or bill any speech.",
                                     style = MaterialTheme.typography.bodySmall,
                                 )
-                            }
-                            TextButton(
-                                enabled = !cloudVoicesLoading && !settingsSaving && settings.contains(GoogleCloudCredential.PREF),
-                                onClick = { voiceRefresh++ },
-                            ) { Text("Refresh voices") }
-                            if (!settings.contains(GoogleCloudCredential.PREF) && googleKey.isNotBlank()) {
-                                Text("Save the key, then refresh voices.", style = MaterialTheme.typography.bodySmall)
-                            }
-                            Text(
-                                "Changing the voice invalidates sentence audio only. Voice listing does not " +
-                                    "synthesize or bill any speech.",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            Text("Audio cache", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "Reusable sentence and word audio: ${formatCacheSize(audioCacheBytes)}. " +
-                                    "The current draft's audio is kept outside this cache.",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            TextButton(
-                                enabled = !audioCacheBusy && !settingsSaving,
-                                onClick = {
-                                    audioCacheBusy = true
-                                    audioCacheMessage = null
-                                    coroutineScope.launch {
-                                        try {
-                                            val remaining = withContext(Dispatchers.IO) {
-                                                reusableAudioCache.clear()
-                                                reusableAudioCache.sizeBytes()
+                                Text("Audio cache", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "Reusable sentence and word audio: ${formatCacheSize(audioCacheBytes)}. " +
+                                        "The current draft's audio is kept outside this cache.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                TextButton(
+                                    enabled = !audioCacheBusy && !settingsSaving,
+                                    onClick = {
+                                        audioCacheBusy = true
+                                        audioCacheMessage = null
+                                        coroutineScope.launch {
+                                            try {
+                                                val remaining = withContext(Dispatchers.IO) {
+                                                    reusableAudioCache.clear()
+                                                    reusableAudioCache.sizeBytes()
+                                                }
+                                                audioCacheBytes = remaining
+                                                audioCacheMessage = "Audio cache cleared. Draft audio is unaffected."
+                                            } catch (_: Exception) {
+                                                audioCacheMessage = "The audio cache could not be cleared."
+                                            } finally {
+                                                audioCacheBusy = false
                                             }
-                                            audioCacheBytes = remaining
-                                            audioCacheMessage = "Audio cache cleared. Draft audio is unaffected."
-                                        } catch (_: Exception) {
-                                            audioCacheMessage = "The audio cache could not be cleared."
-                                        } finally {
-                                            audioCacheBusy = false
                                         }
+                                    },
+                                ) { Text(if (audioCacheBusy) "Clearing…" else "Clear audio cache") }
+                                audioCacheMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                                Text("Translation · Cloud Translation Basic", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "Google Cloud Translation Basic — default neural (NMT), Japanese → English. " +
+                                        "Fixed path: no model or provider choice.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                val testedTranslation = translationTestResult
+                                when {
+                                    translationTestRunning -> Row(verticalAlignment = Alignment.CenterVertically) {
+                                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                        Text("  Testing translation…")
                                     }
-                                },
-                            ) { Text(if (audioCacheBusy) "Clearing…" else "Clear audio cache") }
-                            audioCacheMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                            Text("Translation · Cloud Translation Basic", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "Google Cloud Translation Basic — default neural (NMT), Japanese → English. " +
-                                    "Fixed path: no model or provider choice.",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            val testedTranslation = translationTestResult
-                            when {
-                                translationTestRunning -> Row(verticalAlignment = Alignment.CenterVertically) {
-                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                    Text("  Testing translation…")
+                                    testedTranslation is TranslationResult.Ready -> Text(
+                                        "Test passed. Sample 「$TRANSLATION_TEST_SAMPLE」 → ${testedTranslation.text}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                    testedTranslation is TranslationResult.Failed -> Text(
+                                        testedTranslation.message,
+                                        color = MaterialTheme.colorScheme.error,
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                    else -> Text(
+                                        "Translation not tested in this session.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
                                 }
-                                testedTranslation is TranslationResult.Ready -> Text(
-                                    "Test passed. Sample 「$TRANSLATION_TEST_SAMPLE」 → ${testedTranslation.text}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                                testedTranslation is TranslationResult.Failed -> Text(
-                                    testedTranslation.message,
-                                    color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                                else -> Text(
-                                    "Translation not tested in this session.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-                            TextButton(
-                                enabled = !translationTestRunning && !settingsSaving &&
-                                    settings.contains(GoogleCloudCredential.PREF),
-                                onClick = {
-                                    translationTestRunning = true
-                                    translationTestResult = null
-                                    coroutineScope.launch {
-                                        try {
-                                            translationTestResult = withContext(Dispatchers.IO) {
-                                                translationService.translate(TRANSLATION_TEST_SAMPLE)
+                                TextButton(
+                                    enabled = !translationTestRunning && !settingsSaving &&
+                                        settings.contains(GoogleCloudCredential.PREF),
+                                    onClick = {
+                                        translationTestRunning = true
+                                        translationTestResult = null
+                                        coroutineScope.launch {
+                                            try {
+                                                translationTestResult = withContext(Dispatchers.IO) {
+                                                    translationService.translate(TRANSLATION_TEST_SAMPLE)
+                                                }
+                                            } finally {
+                                                translationTestRunning = false
                                             }
-                                        } finally {
-                                            translationTestRunning = false
                                         }
-                                    }
-                                },
-                            ) { Text(if (translationTestRunning) "Testing…" else "Test translation") }
-                            Text(
-                                "The test sends one disclosed sample sentence and may be billable. A failed or " +
-                                    "empty translation blocks Send; Retry keeps manual corrections. Voice listing " +
-                                    "validates speech access only, not translation access or speech quality.",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            settingsError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                            Text("Sources", style = MaterialTheme.typography.titleMedium)
-                            TextButton(onClick = { showSettings = false; showSources = true }) {
-                                Text("Sources & licenses")
+                                    },
+                                ) { Text(if (translationTestRunning) "Testing…" else "Test translation") }
+                                Text(
+                                    "The test sends one disclosed sample sentence and may be billable. A failed or " +
+                                        "empty translation blocks Send; Retry keeps manual corrections. Voice listing " +
+                                        "validates speech access only, not translation access or speech quality.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                settingsError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                                Text("Sources", style = MaterialTheme.typography.titleMedium)
+                                TextButton(onClick = { showSettings = false; showSources = true }) {
+                                    Text("Sources & licenses")
+                                }
+                                }
                             }
                         }
-                    },
-                    confirmButton = {
-                        TextButton(
-                            enabled = !settingsLoading && !settingsSaving,
-                            onClick = {
-                                val google = googleKey.trim()
-                                if (google.isNotEmpty() && google.any { it.isWhitespace() }) {
-                                    settingsError = "The Google Cloud key contains whitespace."
-                                } else {
-                                    settingsSaving = true
-                                    settingsError = null
-                                    coroutineScope.launch {
-                                        try {
-                                            withContext(Dispatchers.IO) {
-                                                settings.edit()
-                                                    .remove("default_tags")
-                                                    .putString("google_tts_voice", selectedVoiceName)
-                                                    .commit()
-                                                check(GoogleCloudCredential.write(settings, google)) {
-                                                    "Could not persist settings."
-                                                }
-                                                // The obsolete OpenRouter ciphertext is deleted, never
-                                                // read back as a Google key. Drafts and media are untouched.
-                                                GoogleCloudCredential.removeObsoleteOpenRouterStorage(settings)
-                                            }
-                                            // Saving writes only local state; it sends nothing. The
-                                            // previous listing belongs to the old key, so speech status
-                                            // returns to "not checked" until Refresh voices is tapped.
-                                            googleKey = google
-                                            translationTestResult = null
-                                            cloudVoicesError = null
-                                            cloudVoices = emptyList()
-                                            voiceListAttempted = false
-                                        } catch (cancelled: CancellationException) {
-                                            throw cancelled
-                                        } catch (_: Exception) {
-                                            settingsError = "Settings could not be saved. The key was not stored in plain text."
-                                        } finally {
-                                            settingsSaving = false
-                                        }
-                                    }
-                                }
-                            },
-                        ) { Text(if (settingsSaving) "Saving…" else "Save settings") }
-                    },
-                    dismissButton = {
-                        TextButton(
-                            enabled = !settingsSaving,
-                            onClick = { showSettings = false },
-                        ) { Text("Cancel") }
-                    },
-                )
-            }
+                    }
+                }
             if (showSources) {
                 AlertDialog(
                     onDismissRequest = { showSources = false },
