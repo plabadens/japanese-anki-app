@@ -1452,10 +1452,12 @@ class MainActivity : ComponentActivity() {
             // Declares the current inputs. Generation stays an explicit user action, so
             // recomposition, navigation and a restored draft never call a provider.
             androidx.compose.runtime.LaunchedEffect(
-                generationStarted, route, submissionLocked, audioInputRevision,
+                route, submissionLocked, audioInputRevision,
                 currentSentenceIdentity.value, currentWordIdentity.value,
             ) {
-                if (!generationStarted || submissionLocked || route != AppRoute.Review) return@LaunchedEffect
+                // Declaring inputs calls no provider, so a restored Review draft keeps its Ready
+                // audio (identical identity) instead of silently requiring a paid regeneration.
+                if (submissionLocked || route != AppRoute.Review) return@LaunchedEffect
 
                 val sentenceText = editor.text.trim()
                 val selectedTarget = target
@@ -1534,7 +1536,9 @@ class MainActivity : ComponentActivity() {
                     } else {
                         audioConfigErrors - AudioItem.VOCABULARY
                     }
-                    audioController.clear(AudioItem.VOCABULARY)
+                    // Only a blank word has no input at all; an unresolved entry keeps whatever is
+                    // on disk until a new input replaces it (the identity gate blocks Send).
+                    if (vocabulary.isBlank()) audioController.clear(AudioItem.VOCABULARY)
                 } else {
                     audioConfigErrors = audioConfigErrors - AudioItem.VOCABULARY
                     val entryIdentity = "$entryId|${entry.expression}|${entry.reading}"
