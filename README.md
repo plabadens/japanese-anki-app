@@ -8,38 +8,51 @@ Native Android app for creating Japanese sentence-mining notes in AnkiDroid. See
 
 ## Build environment (NixOS x86_64)
 
+The flake declares the shipped target: Android SDK platform **37.0**, build-tools
+36.0.0 (the version `app/build.gradle.kts` pins), NDK 27.2.12479018, CMake 4.1.2,
+emulator 37.1.11 and the API-37.0 `google_apis` x86_64 system image, all in one
+signed-for Nix SDK root. Nothing is expected from a globally installed Android SDK.
+
 ```sh
-nix develop
+nix develop   # JDK 17, Gradle 8.14.4, SDK 37.0, build-tools, NDK, CMake, emulator, adb
 ./scripts/test-core.sh
-python3 scripts/test-build-dictionary.py
-python3 scripts/test-package-unidic.py
-python3 scripts/build_dictionary.py
-python3 scripts/test-dictionary-asset.py
 gradle -Pandroid.aapt2FromMavenOverride="$ANDROID_HOME/build-tools/36.0.0/aapt2" testDebugUnitTest assembleDebug
-nix build .#checks.x86_64-linux.core
-nix build .#apk
 ```
 
-The flake pins Nixpkgs, JDK 17, Gradle, Android SDK platforms 35/37, build tools, CMake, and NDK. It now exposes a Nix core-test check, an unsigned release APK (`.#apk`, reproducibility target), and a signed debug APK (`.#debugApk`, for sideload testing). `nix develop` provides the same SDK/native tools and rewrites the ignored `local.properties` with the pinned SDK path. Nixpkgs' Gradle MITM cache is used to lock resolved Maven/plugin artifacts in `nix/gradle/deps.json`; initialize or refresh it with `./scripts/update-gradle-deps.sh` when Maven/Google and artifact redirect hosts are reachable. Until that lock is populated, the APK derivation is not yet verified as an offline build. The existing fixed-output inputs pin MeCab and UniDic; the flake packages UniDic into a deterministic 426 MiB runtime dictionary asset. First use expands UniDic to about 725 MB in app-private storage. A Gradle `testDebugUnitTest assembleDebug` run now succeeds: Kotlin and both NDK ABIs compile, unit tests pass, and the debug APK is produced at `app/build/outputs/apk/debug/app-debug.apk`. The APK passes 16 KB `zipalign` and v2 signature verification. A Pixel 7 on API 37 confirmed UniDic extraction, native MeCab tokenization, and SQLite/JMdict lookup. Device logs showed a stale APK asset-name mismatch and 4 KB ELF segments; both are fixed, and the updated app no longer logs the page-size mismatch dialog. The Nix APK outputs, dependency-lock refresh, network-disabled build, and clean-build reproducibility comparison remain unverified. The app targets API 37 and supports API 35+. The Nix-pinned `gradle` command is used directly; there is no separately downloaded Gradle wrapper.
+Dependency fetch: the first `gradle` invocation downloads the AGP/Kotlin/AndroidX
+artifacts from `google()` / `mavenCentral()` / jitpack into the Gradle user cache;
+it needs network access once and is incremental afterwards. `nix develop` rewrites
+the ignored `local.properties` with the pinned SDK path.
 
-Build and install the Nix-packaged debug APK on a connected device:
+`nix build .#apk` builds an unsigned release APK and `nix build .#debugApk` a debug
+APK inside the Nix sandbox; both also run `testDebugUnitTest` (`doCheck`). The
+first run resolves Maven artifacts through the Nix Gradle MITM cache
+(`nix/gradle/deps.json`, refreshed with `./scripts/update-gradle-deps.sh`), so it
+needs network access once. Outputs are `/nix/store` paths, not byte-identical
+across rebuilds, and no reproducibility claim is made. The primary supported
+workflow remains Gradle inside `nix develop`, which writes
+`app/build/outputs/apk/debug/app-debug.apk`.
+
+The sandbox build has no keystore configured, so `.#debugApk` signs with a throwaway
+debug key and cannot replace an existing install; for an update-compatible APK use
+the Gradle path with `JAPANESE_ANKI_DEBUG_KEYSTORE` set (see `app/build.gradle.kts`).
+
+The fixed-output inputs pin MeCab and UniDic; the flake packages UniDic into a
+deterministic 426 MiB runtime dictionary asset, which expands to about 725 MB in
+app-private storage on first use. The app targets API 37 and requires API 37.
+
+## Android emulator (Nix, API 37 x86_64)
+
+`.#emulator-wrapper` provisions the AVD and runs ADB operations against the
+flake-declared SDK; the API-37.0 `google_apis;x86_64` system image and emulator
+37.1.11 come from the same `nix develop` closure, so `nix build`/`nix run` needs no
+extra setup:
 
 ```sh
-nix build .#debugApk
-adb install -r result/japanese-anki-debug.apk
+nix run .#emulator-wrapper -- start
 ```
 
-The direct Gradle output is also available at `app/build/outputs/apk/debug/app-debug.apk` after `assembleDebug`.
-
-## Android emulator (Nix, API 35 x86_64)
-
-The flake exposes `.#emulator` using nixpkgs `androidenv.emulateApp` with the API 35 `google_apis;x86_64` system image, plus `.#emulator-wrapper` for project-local AVD state and ADB operations. Build the tooling once:
-
-```sh
-nix build .#emulator .#emulator-wrapper
-```
-
-The wrapper keeps AVD, Android user configuration, temporary files, logs, and screenshots under this checkout's `.tmp-nix/`. Android Emulator does not register with an `adb` server using `localfilesystem:`; emulator commands therefore use the default ADB server. Every wrapper device operation targets `emulator-5554` explicitly, never the attached phone. In process-isolated environments the emulator is killed when its launching shell exits, so run boot, install, launch, captures, crash scan, and shutdown together using the single-session command:
+The wrapper keeps AVD, Android user configuration, temporary files, logs, and screenshots under this checkout's `.tmp-nix/`. Android Emulator does not register with an `adb` server using `localfilesystem:`; emulator commands therefore use the default ADB server. Every wrapper device operation targets `emulator-5554` explicitly (override with `EMULATOR_PORT=<n>` when another emulator occupies that port), never the attached phone. The AVD is `japanese-anki-pixel7-api37` (Pixel 7 profile, 1080x2400, API 37.0). One AVD instance at a time: a second emulator on the same AVD corrupts its user data. In process-isolated environments the emulator is killed when its launching shell exits, so run boot, install, launch, captures, crash scan, and shutdown together using the single-session command:
 
 ```sh
 nix run .#emulator-wrapper -- session /path/to/app-debug.apk .tmp-nix/screenshots/smoke
