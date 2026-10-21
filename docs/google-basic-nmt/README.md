@@ -5,7 +5,8 @@ Implementation evidence for SPEC §3, §4.7, §7.2, §10, §11, §14 R14/R27/R30
 ## Revision and environment
 
 - Branch `japanese-anki-app/t_e7982c2a-use-google-translation-basic-nmt-and-one`.
-- Implementation commit `6dce438` (this evidence document is the commit on top).
+- Commits: `6dce438` adapter, shared credential, failure classification and tests; `cb655fa`
+  full-screen Settings pane; evidence on top.
 - Base: `main` at `02ef946` (approved SPEC change) merged with the verified reading/NHK fixes
   (`7e37e79`, merge `24769dc`). Parent card `t_430ab378` was removed from the board and shipped no
   Settings-screen commit; its branch contained none of that work, so the shared-key Settings wiring
@@ -24,7 +25,7 @@ Implementation evidence for SPEC §3, §4.7, §7.2, §10, §11, §14 R14/R27/R30
 | `GoogleApiError.kt` (new) | One tested classifier for Google Cloud API error bodies (key invalid, `SERVICE_DISABLED`, billing, quota, invalid request), shared by the speech and translation adapters so both report the same project problem in their own status. |
 | `GoogleCloudCredential.kt` (new) | The single shared key. Keeps the existing storage id (`google_tts_key_encrypted`) so an already-saved Text-to-Speech key is reused without re-entry; `write` is local-only, and the obsolete `openrouter_key_encrypted` ciphertext is deleted, never read as a Google key. |
 | `speech/GoogleSpeech.kt`, `speech/SentenceSpeech.kt` | Speech failures reuse the shared classifier (`API_NOT_ENABLED`, `BILLING` added) and map a dropped connection to a specific network failure instead of a generic one. Chirp 3 HD, exact selected voice, MP3 validation, and yomigana hints are unchanged. |
-| `MainActivity.kt` | One Google Cloud key entry supplies both adapters. OpenRouter key entry, storage, and prompt/model plumbing removed. Speech and translation have separate status blocks; translation shows the read-only Basic/NMT path, an explicit, disclosed, possibly billable `Test translation` action, and the project requirements (billing, both APIs, key restricted to them). Saving writes local state only. `translationResponseIsCurrent` keeps in-flight results from mutating a newer revision. |
+| `MainActivity.kt` | One Google Cloud key entry supplies both adapters. Settings is now a full-screen pane (top app bar with Back and Save, one scrolling body) instead of an `AlertDialog`. OpenRouter key entry, storage, and prompt/model plumbing removed. Speech and translation have separate status blocks; translation shows the read-only Basic/NMT path, an explicit, disclosed, possibly billable `Test translation` action, and the project requirements (billing, both APIs, key restricted to them). Saving writes local state only. `translationResponseIsCurrent` keeps in-flight results from mutating a newer revision. |
 | `TranslationServiceTest.kt` | Rewritten for the Google contract (see matrix). |
 | `scripts/test-core.sh` | Compiles and runs the new adapter, classifier, and tests. |
 | `README.md` | Current setup text describes Google Translation Basic NMT and the shared key. |
@@ -53,7 +54,7 @@ nix build .#apk -L
     unsigned APK in the Nix store, arm64-v8a and x86_64 libs packaged
 
 sha256sum app/build/outputs/apk/debug/app-debug.apk
-    433772d95170ab8a2805e2087d85b992efa52fa6ac76fabf4721cfbc208ad879
+    ca0b06ec1935e62d6081d8c90d163685b208f35fada187d9b547cf55d1681b9c
 ```
 
 Installable candidates from this revision:
@@ -61,11 +62,11 @@ Installable candidates from this revision:
 ```
 debug-signed (installed and exercised on the emulator in this run)
 /srv/hermes/workspace/japanese-anki-app/.worktrees/t_e7982c2a/app/build/outputs/apk/debug/app-debug.apk
-548,134,209 bytes, sha256 433772d9…8ad879
+548,139,889 bytes, sha256 ca0b06ec…681b9c
 
 Nix build output (unsigned; signing is a release gate)
-/nix/store/ljmnia7nc5hn791lbbyfi59rxpy9864n-japanese-anki-card-creator-0.1.0/japanese-anki-unsigned.apk
-531,756,791 bytes, sha256 18b27bf5…abd7f32
+/nix/store/nap4c61q1h7dksxmlvnbqgx8br5ic2ib-japanese-anki-card-creator-0.1.0/japanese-anki-unsigned.apk
+531,756,791 bytes, sha256 2b6504ad…0605fa
 ```
 
 Version name/signing/ABI release gates belong to integration card `t_7349d4d0`; these are
@@ -92,13 +93,17 @@ remainder is named; **NOT RUN** = not executed.
 | R30 key entry triggers no paid request | **PASS** | Adapter construction and save perform no network call (unit: zero transport calls); on device, saving with the radio off produced no request and only local state changed. Voice listing is a separate, non-synthesizing action. |
 | R30 no-key local preparation | **PASS** (emulator) | With no key the app starts, the dictionary installs, typing and settings work; Settings shows "No key saved. Local preparation works; speech and translation need a key." and `Test translation` is disabled. `screens/settings-no-key.png`, `screens/settings-no-key-translation.png`. |
 | R30 service-failure state | **PASS** (emulator, no network) | With a deliberately fake key (`TESTONLYKEY`) and the emulator radio off: key status "Key saved for speech and translation.", speech status "Voice listing service is unavailable." (red), and a separate translation status "Translation service could not be reached." after tapping `Test translation`. `screens/settings-shared-key-speech-failure.png`, `screens/translation-test-network-failure.png`. |
-| Draft retention through Settings | **PASS** (emulator) | Typed draft survives opening and cancelling Settings. `screens/draft-retained-after-settings.png`. |
+| Draft retention through Settings | **PASS** (emulator) | A typed draft survives opening the Settings pane and pressing Back. `screens/draft-retained-after-settings.png`. |
 | Obsolete OpenRouter storage removed | **PASS** (device + unit) | `shared_prefs/settings.xml` after launching and saving contains only `google_tts_voice` and `google_tts_key_encrypted`; `removeObsoleteOpenRouterStorage` deletes the pref and never reads it. |
-| Live Google translation quality / listing / synthesis / listening | **NOT RUN** | No live credentials were requested, read, or used, and no paid Google call was made. Mocks and the offline device states above are integration evidence only, not quality evidence. |
-| Native Settings *screen* (replacing the dialog) | **NOT RUN — remainder** | Parent `t_430ab378` was removed from the board without shipping this. The existing scrollable Settings dialog carries the shared-key wiring, per-service status, and translation test; converting it to a native Settings screen with the mockup layout is outstanding and was deliberately not attempted here. |
+| Native Settings screen | **PASS** (emulator) | Settings is a full-screen pane with a top app bar (Back, title, Save) and one scrolling body; Back returns to the draft unchanged. `screens/settings-shared-key-speech-failure.png`, `screens/settings-no-key.png`. |
+| Live Google translation quality / listing / synthesis / listening | **NOT RUN** | No live credentials were requested, read, or used, and no paid Google call was made (every failure capture ran with the emulator radio off, `Active default network: none`). Mocks and the offline device states above are integration evidence only, not quality evidence. Live-service verification stays with SPEC §15 / integration card `t_7349d4d0`. |
 
 ## Notes and deliberate exclusions
 
+- Settings is a full-screen pane rendered over the current draft inside `MainActivity` (top app bar,
+  Back, Save, one scrolling body). It is not a separate navigation route: the app has no settings
+  destination, and adding one was the removed parent card's scope. All controls and the per-service
+  status live in that pane.
 - No provider/model picker, prompt, fallback, or automatic retry was added; a failure keeps the
   draft and offers the existing explicit Retry.
 - `TranslationSource` is now `GOOGLE`/`MANUAL`. A draft restored from a build that stored
