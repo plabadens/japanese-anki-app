@@ -4,6 +4,11 @@ Status: local acceptance run. Live Google services and AnkiDroid export were not
 run and are marked NOT RUN below. Nothing here is a claim of pixel parity with the study; the
 composition was built from `mockup/expressive-flow` and compared screenshot by screenshot.
 
+> **Post-acceptance tokenizer follow-up:** the selection-unit layer in `TokenGrouping.kt` resolves
+> known defect 1 below. The Target row now groups `図書館` and `読みました`, and punctuation is
+> rendered beside the last word but outside its selectable pill. The screenshots in this record
+> remain the pre-follow-up v0.4 snapshot.
+
 ## Revision and environment
 
 | | |
