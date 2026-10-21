@@ -12,10 +12,7 @@ internal object AnkiMediaImporter {
 
     fun sanitizeAudioFilename(filename: String): String? {
         if (!SAFE_FILENAME.matches(filename) || filename.startsWith('.')) return null
-        if (!filename.endsWith(".wav", ignoreCase = true) &&
-            !filename.endsWith(".ogg", ignoreCase = true) &&
-            !filename.endsWith(".mp3", ignoreCase = true)
-        ) return null
+        if (AudioFormat.fromFilename(filename) == null) return null
         return filename
     }
 

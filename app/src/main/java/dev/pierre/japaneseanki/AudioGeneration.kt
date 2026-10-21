@@ -2,6 +2,9 @@ package dev.pierre.japaneseanki
 
 import java.io.File
 import java.io.IOException
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 
 /** Stable identity for reusable synthesis; source identifies the provider/engine and voice. */
@@ -30,93 +33,221 @@ data class AudioCacheKey(
     }
 }
 
-/** A completed reusable audio file. Draft copies are deliberately stored outside this cache. */
+/**
+ * File primitives the audio storage code depends on. Injectable so rename, fsync and delete
+ * failures are deterministic in tests instead of depending on filesystem permissions.
+ */
+interface AudioFileOperations {
+    @Throws(IOException::class)
+    fun move(source: File, destination: File)
+
+    /** Returns false when the file still exists after the attempt. */
+    fun delete(file: File): Boolean
+
+    @Throws(IOException::class)
+    fun sync(file: File)
+
+    companion object {
+        fun system(): AudioFileOperations = SystemAudioFileOperations
+    }
+}
+
+internal object SystemAudioFileOperations : AudioFileOperations {
+    override fun move(source: File, destination: File) {
+        try {
+            Files.move(
+                source.toPath(),
+                destination.toPath(),
+                StandardCopyOption.REPLACE_EXISTING,
+                StandardCopyOption.ATOMIC_MOVE,
+            )
+        } catch (_: AtomicMoveNotSupportedException) {
+            Files.move(source.toPath(), destination.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
+
+    override fun delete(file: File): Boolean = !file.exists() || file.delete()
+
+    override fun sync(file: File) {
+        java.io.RandomAccessFile(file, "rw").use { it.fd.sync() }
+    }
+}
+
+/** Raised for a cache-only storage failure; callers keep the durable draft audio regardless. */
+class AudioCacheException(message: String, cause: Throwable? = null) : IOException(message, cause)
+
+/** Best-effort cache write outcome. Reasons are sanitized: no paths or audio text. */
+sealed interface AudioCacheStoreResult {
+    data class Stored(val file: File) : AudioCacheStoreResult
+    data class Skipped(val reason: String) : AudioCacheStoreResult
+    data class Failed(val reason: String) : AudioCacheStoreResult
+}
+
+/** A pinned cache entry. Until [close] the file cannot be cleared or evicted. */
+class AudioCacheLease internal constructor(
+    val file: File,
+    val format: AudioFormat,
+    private val releaser: () -> Unit,
+) : AutoCloseable {
+    private var released = false
+
+    override fun close() {
+        if (released) return
+        released = true
+        releaser()
+    }
+}
+
+/**
+ * Immutable accepted audio. Draft copies are deliberately stored outside this cache.
+ *
+ * The cache owns one list of supported formats ([AudioFormat]) and validates content before
+ * returning an entry, so an MP3 stored by [put] is also found by [get].
+ */
 class ReusableAudioCache(
     private val directory: File,
     private val maxBytes: Long = DEFAULT_MAX_BYTES,
-) {
+    private val operations: AudioFileOperations = AudioFileOperations.system(),
+) : AudioCacheSource {
     init {
         require(maxBytes >= 0)
     }
 
+    /** Cache entries pinned by an open lease, keyed by canonical path. */
+    private val leases = HashMap<String, Int>()
+
     @Synchronized
     fun get(key: AudioCacheKey): File? {
-        val cached = listOf(cacheFile(key, "wav"), cacheFile(key, "ogg")).firstOrNull(File::isFile) ?: return null
+        val cached = findValid(key) ?: return null
         cached.setLastModified(System.currentTimeMillis())
         return cached
+    }
+
+    /** Opens a validated entry and pins it until the returned lease is closed. */
+    @Synchronized
+    override fun open(key: AudioCacheKey): AudioCacheLease? {
+        val cached = findValid(key) ?: return null
+        cached.setLastModified(System.currentTimeMillis())
+        val format = AudioFormat.fromFilename(cached.name) ?: return null
+        val path = runCatching { cached.canonicalPath }.getOrElse { return null }
+        leases[path] = (leases[path] ?: 0) + 1
+        return AudioCacheLease(cached, format) {
+            synchronized(this@ReusableAudioCache) {
+                val remaining = (leases[path] ?: 1) - 1
+                if (remaining <= 0) leases.remove(path) else leases[path] = remaining
+            }
+        }
     }
 
     /** Copies only complete audio into cache using an atomic rename; oversized files are not cached. */
     @Synchronized
     @Throws(IOException::class)
-    fun put(key: AudioCacheKey, completedFile: File): File? {
-        require(completedFile.isFile)
-        AudioFileValidator.requireSupported(completedFile)
-        val length = completedFile.length()
-        if (length > maxBytes) return null
-        if (!directory.exists() && !directory.mkdirs()) throw IOException("Could not create audio cache")
-        val extension = AudioFileValidator.requireSupported(completedFile).extension.lowercase().ifBlank { "wav" }
-        val destination = cacheFile(key, extension)
-        removeTemporaryFiles()
-        evictForIncoming(length, destination)
-        val temporary = File(directory, ".${key.filename()}.${System.nanoTime()}.tmp")
-        try {
-            completedFile.inputStream().use { input -> temporary.outputStream().use { output ->
-                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                var copied = 0L
-                while (true) {
-                    val count = input.read(buffer)
-                    if (count < 0) break
-                    copied += count
-                    if (copied > maxBytes) throw IOException("Audio exceeds cache limit")
-                    output.write(buffer, 0, count)
-                }
-            } }
-            if (!temporary.renameTo(destination)) throw IOException("Could not commit cached audio")
-        } finally {
-            temporary.delete()
-        }
-        evictExcept(destination)
-        return destination.takeIf(File::isFile)
+    fun put(key: AudioCacheKey, completedFile: File): File? = when (val result = storeOrThrow(key, completedFile)) {
+        is AudioCacheStoreResult.Stored -> result.file
+        else -> null
     }
 
-    /** Keeps a durable copy in the draft area, independent of later cache eviction/clearing. */
+    /**
+     * Best-effort cache write used by the production audio route. Invalid source audio still
+     * throws; only cache I/O failures are turned into a sanitized, non-fatal result.
+     */
+    @Synchronized
+    @Throws(IOException::class)
+    override fun store(key: AudioCacheKey, completedFile: File): AudioCacheStoreResult {
+        val format = AudioFileValidator.requireContentFormat(completedFile)
+        return try {
+            storeValidated(key, completedFile, format)
+        } catch (error: IOException) {
+            AudioCacheStoreResult.Failed("Reusable audio cache is unavailable (${error.javaClass.simpleName})")
+        } catch (error: SecurityException) {
+            AudioCacheStoreResult.Failed("Reusable audio cache is unavailable (security)")
+        }
+    }
+
+    /**
+     * Keeps a durable copy in the draft area, independent of later cache eviction/clearing.
+     * The cache entry stays pinned for the whole copy.
+     */
     @Synchronized
     @Throws(IOException::class)
     fun copyToActiveDraft(key: AudioCacheKey, draftDirectory: File, name: String): File {
-        require(name.matches(Regex("[A-Za-z0-9._-]+")))
+        require(name.matches(SAFE_DRAFT_NAME))
         require(!isInsideCache(draftDirectory)) { "Active-draft media must be outside the reusable cache" }
-        val source = get(key) ?: throw IOException("Audio is not cached")
-        AudioFileValidator.requireSupported(source)
-        require(name.substringAfterLast('.', "").equals(source.extension, ignoreCase = true)) {
-            "Draft audio filename extension must match its content"
-        }
-        if (!draftDirectory.exists() && !draftDirectory.mkdirs()) throw IOException("Could not create draft media directory")
-        val destination = File(draftDirectory, name)
-        val temporary = File(draftDirectory, ".$name.${System.nanoTime()}.tmp.${source.extension.lowercase()}")
+        val lease = open(key) ?: throw IOException("Audio is not cached")
         try {
-            source.inputStream().use { input -> temporary.outputStream().use(input::copyTo) }
-            AudioFileValidator.requireSupported(temporary)
-            if (!temporary.renameTo(destination)) throw IOException("Could not commit draft audio")
+            return AudioDraftMaterializer.materialize(lease.file, draftDirectory, name, operations)
         } finally {
-            temporary.delete()
+            lease.close()
         }
-        return destination
     }
 
     @Synchronized
     fun clear() {
-        directory.listFiles()?.filter { it.isFile }?.forEach(File::delete)
+        directory.listFiles()?.filter { it.isFile && !isLeased(it) }?.forEach { operations.delete(it) }
     }
 
     @Synchronized
-    fun sizeBytes(): Long = directory.listFiles()?.filter { it.isFile && !it.name.endsWith(".tmp") }?.sumOf(File::length) ?: 0L
+    fun sizeBytes(): Long = directory.listFiles()
+        ?.filter { it.isFile && !it.name.endsWith(".tmp") }
+        ?.sumOf(File::length) ?: 0L
 
-    private fun removeTemporaryFiles() {
-        directory.listFiles()?.filter { it.isFile && it.name.endsWith(".tmp") }?.forEach(File::delete)
+    private fun storeOrThrow(key: AudioCacheKey, completedFile: File): AudioCacheStoreResult {
+        val format = AudioFileValidator.requireContentFormat(completedFile)
+        return storeValidated(key, completedFile, format)
     }
 
-    private fun cacheFile(key: AudioCacheKey, extension: String) = File(directory, "${key.filename()}.$extension")
+    @Throws(IOException::class)
+    private fun storeValidated(key: AudioCacheKey, completedFile: File, format: AudioFormat): AudioCacheStoreResult {
+        val length = completedFile.length()
+        if (maxBytes <= 0L) return AudioCacheStoreResult.Skipped("cache budget is zero")
+        if (length > maxBytes) return AudioCacheStoreResult.Skipped("audio is larger than the cache budget")
+        if (!directory.exists() && !directory.mkdirs()) throw AudioCacheException("Could not create audio cache")
+        val destination = File(directory, "${key.filename()}.${format.extension}")
+        removeTemporaryFiles()
+        evictForIncoming(length, destination)
+        val temporary = File(directory, ".${key.filename()}.${System.nanoTime()}.tmp.${format.extension}")
+        try {
+            copyAndSync(completedFile, temporary)
+            if (AudioFileValidator.requireContentFormat(temporary) != format) {
+                throw AudioCacheException("Cached audio changed format during copy")
+            }
+            operations.move(temporary, destination)
+        } finally {
+            operations.delete(temporary)
+        }
+        evictExcept(destination)
+        return if (destination.isFile) {
+            AudioCacheStoreResult.Stored(destination)
+        } else {
+            throw AudioCacheException("Could not commit cached audio")
+        }
+    }
+
+    @Throws(IOException::class)
+    private fun copyAndSync(source: File, destination: File) {
+        source.inputStream().use { input ->
+            destination.outputStream().use { output ->
+                input.copyTo(output, DEFAULT_BUFFER_SIZE)
+                output.flush()
+            }
+        }
+        operations.sync(destination)
+    }
+
+    private fun findValid(key: AudioCacheKey): File? = AudioFormat.entries.asSequence()
+        .map { File(directory, "${key.filename()}.${it.extension}") }
+        .firstOrNull { candidate ->
+            candidate.isFile && runCatching { AudioFileValidator.requireFormat(candidate) }.isSuccess
+        }
+
+    private fun isLeased(file: File): Boolean {
+        val path = runCatching { file.canonicalPath }.getOrNull() ?: return false
+        return (leases[path] ?: 0) > 0
+    }
+
+    private fun removeTemporaryFiles() {
+        directory.listFiles()?.filter { it.isFile && it.name.endsWith(".tmp") }?.forEach { operations.delete(it) }
+    }
 
     private fun isInsideCache(target: File): Boolean {
         val root = directory.canonicalFile.toPath()
@@ -124,28 +255,77 @@ class ReusableAudioCache(
     }
 
     private fun evictForIncoming(incoming: Long, destination: File) {
-        val files = directory.listFiles()?.filter { it.isFile && it != destination && !it.name.endsWith(".tmp") } ?: return
+        val files = directory.listFiles()
+            ?.filter { it.isFile && it != destination && !it.name.endsWith(".tmp") && !isLeased(it) }
+            ?: return
         var total = files.sumOf(File::length) + (if (destination.isFile) destination.length() else 0L)
         for (file in files.sortedBy(File::lastModified)) {
             if (total + incoming <= maxBytes) break
             val length = file.length()
-            if (file.delete()) total -= length
+            if (operations.delete(file)) total -= length
         }
-        if (total + incoming > maxBytes) throw IOException("Could not make room in audio cache")
+        if (total + incoming > maxBytes) throw AudioCacheException("Could not make room in audio cache")
     }
 
     private fun evictExcept(protected: File) {
-        val files = directory.listFiles()?.filter { it.isFile && it != protected } ?: return
+        val files = directory.listFiles()?.filter { it.isFile && it != protected && !isLeased(it) } ?: return
         var total = protected.length() + files.sumOf(File::length)
         for (file in files.sortedBy(File::lastModified)) {
             if (total <= maxBytes) break
             val length = file.length()
-            if (file.delete()) total -= length
+            if (operations.delete(file)) total -= length
         }
     }
 
     companion object {
         const val DEFAULT_MAX_BYTES: Long = 250L * 1024 * 1024
+        internal val SAFE_DRAFT_NAME = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+    }
+}
+
+/**
+ * One validated, atomic source-to-draft materialization used by every audio route.
+ *
+ * The source is validated by content, copied into a unique temporary sibling, flushed and
+ * fsynced, validated again, then published with an atomic rename. A failure never leaves a
+ * partial file at [destinationDirectory]/[name].
+ */
+object AudioDraftMaterializer {
+    @Throws(IOException::class)
+    fun materialize(
+        source: File,
+        destinationDirectory: File,
+        name: String,
+        operations: AudioFileOperations = AudioFileOperations.system(),
+    ): File {
+        require(name.matches(ReusableAudioCache.SAFE_DRAFT_NAME)) { "Unsafe draft audio filename" }
+        val format = AudioFileValidator.requireContentFormat(source)
+        val named = AudioFormat.fromFilename(name)
+            ?: throw IOException("Draft audio filename must use a supported extension")
+        if (named != format) throw IOException("Draft audio filename extension must match its content")
+        if (!destinationDirectory.isDirectory && !destinationDirectory.mkdirs()) {
+            throw IOException("Could not create draft media directory")
+        }
+        val destination = File(destinationDirectory, name)
+        val canonicalRoot = destinationDirectory.canonicalFile
+        if (destination.canonicalFile.parentFile != canonicalRoot) {
+            throw IOException("Draft audio destination is outside the draft media directory")
+        }
+        val temporary = File(destinationDirectory, ".$name.${System.nanoTime()}.tmp.${format.extension}")
+        try {
+            source.inputStream().use { input ->
+                temporary.outputStream().use { output ->
+                    input.copyTo(output, DEFAULT_BUFFER_SIZE)
+                    output.flush()
+                }
+            }
+            operations.sync(temporary)
+            AudioFileValidator.requireFormat(temporary)
+            operations.move(temporary, destination)
+        } finally {
+            operations.delete(temporary)
+        }
+        return destination
     }
 }
 
@@ -163,7 +343,15 @@ sealed interface AudioGenerationState {
     data class Failed(val request: AudioRequestIdentity, val retryable: Boolean) : AudioGenerationState
 }
 
-/** Accepts completion only for the exact current input revision; callers initiate retry explicitly. */
+/**
+ * Test-only revision machine kept so existing assertions stay comparable during migration.
+ *
+ * INTEGRATOR: once `MainActivity` is wired to [DraftAudioController], delete this class, its
+ * state types above that are then unused, and the two revision/retry tests in
+ * `AudioGenerationTest`. The controller carries the equivalent (stronger) revision, retry,
+ * restart and token rules; this class is not the production audio lifecycle.
+ */
+@Deprecated("Superseded by DraftAudioController; delete after MainActivity wiring.")
 class RevisionedAudioResult {
     private val transitionLock = Any()
 
@@ -180,7 +368,6 @@ class RevisionedAudioResult {
     /**
      * Starts automatic work only for a newer revision. Pass [afterProcessRestart] for a restored,
      * interrupted request: it is retained as retryable failure but never restarted automatically.
-     * This prevents silently repeating potentially billable work after process recreation.
      */
     fun beginIfNeeded(request: AudioRequestIdentity, afterProcessRestart: Boolean = false): Boolean = synchronized(transitionLock) {
         if (afterProcessRestart) {
@@ -236,5 +423,20 @@ class RevisionedAudioResult {
         if ((state as? AudioGenerationState.Generating)?.request != request) return false
         state = AudioGenerationState.Failed(request, retryable)
         true
+    }
+}
+
+/** Minimal cache boundary the production controller needs; [ReusableAudioCache] implements it. */
+interface AudioCacheSource {
+    fun open(key: AudioCacheKey): AudioCacheLease?
+    fun store(key: AudioCacheKey, source: File): AudioCacheStoreResult
+
+    companion object {
+        /** Disabled cache: every attempt synthesizes once and keeps no reusable copy. */
+        val disabled: AudioCacheSource = object : AudioCacheSource {
+            override fun open(key: AudioCacheKey): AudioCacheLease? = null
+            override fun store(key: AudioCacheKey, source: File): AudioCacheStoreResult =
+                AudioCacheStoreResult.Skipped("reusable cache is disabled")
+        }
     }
 }
