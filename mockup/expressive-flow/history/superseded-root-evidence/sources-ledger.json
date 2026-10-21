@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "sources": [
+    {
+      "id": 1,
+      "url": "https://design.google/library/expressive-material-design-google-research",
+      "title": "",
+      "accessed": "2026-10-21"
+    },
+    {
+      "id": 2,
+      "url": "https://m3.material.io",
+      "title": "",
+      "accessed": "2026-10-21"
+    },
+    {
+      "id": 3,
+      "url": "https://developer.android.com/develop/ui/compose/designsystems/material3",
+      "title": "",
+      "accessed": "2026-10-21"
+    },
+    {
+      "id": 4,
+      "url": "https://developer.android.com/jetpack/androidx/releases/compose-material3",
+      "title": "",
+      "accessed": "2026-10-21"
+    },
+    {
+      "id": 5,
+      "url": "https://m3.material.io/blog/building-with-m3-expressive",
+      "title": "",
+      "accessed": "2026-10-21"
+    },
+    {
+      "id": 6,
+      "url": "https://m3.material.io/blog/whats-new-at-io26",
+      "title": "",
+      "accessed": "2026-10-21"
+    },
+    {
+      "id": 7,
+      "url": "https://m3.material.io/components/buttons/overview",
+      "title": "",
+      "accessed": "2026-10-21"
+    },
+    {
+      "id": 8,
+      "url": "https://m3.material.io/styles/motion/overview",
+      "title": "",
+      "accessed": "2026-10-21"
+    },
+    {
+      "id": 9,
+      "url": "https://m3.material.io/components/button-groups/overview",
+      "title": "",
+      "accessed": "2026-10-21"
+    }
+  ]
+}

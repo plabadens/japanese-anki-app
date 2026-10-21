@@ -1,0 +1,158 @@
+[
+  {
+    "case": "SVG-fill-RED",
+    "path": "light actual SVG text exists",
+    "expected": {
+      "condition": "pitch labels are rendered",
+      "satisfied": true
+    },
+    "actual": {
+      "condition": "pitch labels are rendered",
+      "satisfied": true
+    },
+    "pass": true
+  },
+  {
+    "case": "SVG-fill-RED",
+    "path": "light/SVG-fill/ジョ",
+    "expected": ">=4.5:1 actual text fill including opacity",
+    "actual": {
+      "text": "ジョ",
+      "fill": "rgb(0, 0, 0)",
+      "opacity": 1,
+      "background": "rgb(250, 240, 235)",
+      "ratio": 18.72846567309816
+    },
+    "pass": true
+  },
+  {
+    "case": "SVG-fill-RED",
+    "path": "light visible pitch text ジョ",
+    "expected": {
+      "condition": "rendered SVG fill contrasts at least 4.5:1",
+      "satisfied": true
+    },
+    "actual": {
+      "condition": "rendered SVG fill contrasts at least 4.5:1",
+      "satisfied": true
+    },
+    "pass": true
+  },
+  {
+    "case": "SVG-fill-RED",
+    "path": "light/SVG-fill/ウ",
+    "expected": ">=4.5:1 actual text fill including opacity",
+    "actual": {
+      "text": "ウ",
+      "fill": "rgb(0, 0, 0)",
+      "opacity": 1,
+      "background": "rgb(250, 240, 235)",
+      "ratio": 18.72846567309816
+    },
+    "pass": true
+  },
+  {
+    "case": "SVG-fill-RED",
+    "path": "light visible pitch text ウ",
+    "expected": {
+      "condition": "rendered SVG fill contrasts at least 4.5:1",
+      "satisfied": true
+    },
+    "actual": {
+      "condition": "rendered SVG fill contrasts at least 4.5:1",
+      "satisfied": true
+    },
+    "pass": true
+  },
+  {
+    "case": "SVG-fill-RED",
+    "path": "light/SVG-fill/ブ",
+    "expected": ">=4.5:1 actual text fill including opacity",
+    "actual": {
+      "text": "ブ",
+      "fill": "rgb(0, 0, 0)",
+      "opacity": 1,
+      "background": "rgb(250, 240, 235)",
+      "ratio": 18.72846567309816
+    },
+    "pass": true
+  },
+  {
+    "case": "SVG-fill-RED",
+    "path": "light visible pitch text ブ",
+    "expected": {
+      "condition": "rendered SVG fill contrasts at least 4.5:1",
+      "satisfied": true
+    },
+    "actual": {
+      "condition": "rendered SVG fill contrasts at least 4.5:1",
+      "satisfied": true
+    },
+    "pass": true
+  },
+  {
+    "case": "SVG-fill-RED",
+    "path": "light/SVG-fill/（ヲ）",
+    "expected": ">=4.5:1 actual text fill including opacity",
+    "actual": {
+      "text": "（ヲ）",
+      "fill": "rgb(0, 0, 0)",
+      "opacity": 0.7,
+      "background": "rgb(250, 240, 235)",
+      "ratio": 8.087169104157706
+    },
+    "pass": true
+  },
+  {
+    "case": "SVG-fill-RED",
+    "path": "light visible pitch text （ヲ）",
+    "expected": {
+      "condition": "rendered SVG fill contrasts at least 4.5:1",
+      "satisfied": true
+    },
+    "actual": {
+      "condition": "rendered SVG fill contrasts at least 4.5:1",
+      "satisfied": true
+    },
+    "pass": true
+  },
+  {
+    "case": "SVG-fill-RED",
+    "path": "dark actual SVG text exists",
+    "expected": {
+      "condition": "pitch labels are rendered",
+      "satisfied": true
+    },
+    "actual": {
+      "condition": "pitch labels are rendered",
+      "satisfied": true
+    },
+    "pass": true
+  },
+  {
+    "case": "SVG-fill-RED",
+    "path": "dark/SVG-fill/ジョ",
+    "expected": ">=4.5:1 actual text fill including opacity",
+    "actual": {
+      "text": "ジョ",
+      "fill": "rgb(0, 0, 0)",
+      "opacity": 1,
+      "background": "rgb(37, 28, 24)",
+      "ratio": 1.2579540718029338
+    },
+    "pass": false
+  },
+  {
+    "case": "SVG-fill-RED",
+    "path": "dark visible pitch text ジョ",
+    "expected": {
+      "condition": "rendered SVG fill contrasts at least 4.5:1",
+      "satisfied": true
+    },
+    "actual": {
+      "condition": "rendered SVG fill contrasts at least 4.5:1",
+      "satisfied": false
+    },
+    "pass": false
+  }
+]

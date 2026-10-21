@@ -1,0 +1,32 @@
+{
+  "artifact": "/srv/hermes/.gradle/caches/modules-2/files-2.1/androidx.compose.material3/material3-android/1.4.0/6064b108969ab5557a0c19c7e026554f377cecf5/material3.aar",
+  "sha256": "3a37e8b36df3822fe1e6059f0f9fafda8800388860477624ac1b9422c418a36e",
+  "classes": {
+    "Expressive": [
+      "androidx/compose/material3/ExperimentalMaterial3ExpressiveApi.class",
+      "androidx/compose/material3/tokens/ExpressiveMotionTokens.class"
+    ],
+    "ButtonGroup": [
+      "androidx/compose/material3/tokens/ButtonGroupSmallTokens.class",
+      "androidx/compose/material3/tokens/ConnectedButtonGroupSmallTokens.class"
+    ],
+    "LoadingIndicator": [
+      "androidx/compose/material3/tokens/LoadingIndicatorTokens.class"
+    ],
+    "MotionScheme": [
+      "androidx/compose/material3/MotionScheme.class",
+      "androidx/compose/material3/MotionSchemeKt.class",
+      "androidx/compose/material3/tokens/MotionSchemeKeyTokens.class"
+    ],
+    "ButtonKt": [
+      "androidx/compose/material3/ButtonKt.class",
+      "androidx/compose/material3/FloatingActionButtonKt.class",
+      "androidx/compose/material3/IconButtonKt.class",
+      "androidx/compose/material3/RadioButtonKt.class",
+      "androidx/compose/material3/SegmentedButtonKt.class"
+    ],
+    "IconButtonKt": [
+      "androidx/compose/material3/IconButtonKt.class"
+    ]
+  }
+}

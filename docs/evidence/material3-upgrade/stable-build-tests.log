@@ -1,0 +1,215 @@
+warning: Git tree '/srv/hermes/workspace/japanese-anki-app' is dirty
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.4/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+
+> Configure project :app
+WARNING: The option setting 'android.aapt2FromMavenOverride=/nix/store/b2q3zdf5fpn9rirp7nywkrs38gqmca4n-androidsdk/libexec/android-sdk/build-tools/36.0.0/aapt2' is experimental.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+
+> Task :app:dependencyInsight
+androidx.compose.material3:material3:1.4.0
+  Variant androidApiElements-published:
+    | Attribute Name                                  | Provided | Requested  |
+    |-------------------------------------------------|----------|------------|
+    | org.gradle.libraryelements                      | aar      |            |
+    | org.gradle.status                               | release  |            |
+    | org.gradle.category                             | library  | library    |
+    | org.gradle.jvm.environment                      | android  | android    |
+    | org.gradle.usage                                | java-api | java-api   |
+    | org.jetbrains.kotlin.platform.type              | jvm      | androidJvm |
+    | com.android.build.api.attributes.AgpVersionAttr |          | 8.13.2     |
+    | com.android.build.api.attributes.BuildTypeAttr  |          | debug      |
+   Selection reasons:
+      - By constraint: version resolved in configuration ':app:debugRuntimeClasspath' by consistent resolution
+      - By ancestor
+
+androidx.compose.material3:material3:1.4.0
+\--- debugCompileClasspath
+
+androidx.compose.material3:material3:{strictly 1.4.0} -> 1.4.0
+\--- debugCompileClasspath
+
+androidx.compose.material3:material3:1.3.2 -> 1.4.0
+\--- androidx.compose:compose-bom:2025.09.00
+     \--- debugCompileClasspath
+
+androidx.compose.material3:material3-android:1.4.0
+  Variant androidApiElements-published:
+    | Attribute Name                                  | Provided | Requested  |
+    |-------------------------------------------------|----------|------------|
+    | org.gradle.libraryelements                      | aar      |            |
+    | org.gradle.status                               | release  |            |
+    | org.gradle.category                             | library  | library    |
+    | org.gradle.jvm.environment                      | android  | android    |
+    | org.gradle.usage                                | java-api | java-api   |
+    | org.jetbrains.kotlin.platform.type              | jvm      | androidJvm |
+    | com.android.build.api.attributes.AgpVersionAttr |          | 8.13.2     |
+    | com.android.build.api.attributes.BuildTypeAttr  |          | debug      |
+   Selection reasons:
+      - By constraint: version resolved in configuration ':app:debugRuntimeClasspath' by consistent resolution
+      - By ancestor
+
+androidx.compose.material3:material3-android:{strictly 1.4.0} -> 1.4.0
+\--- debugCompileClasspath
+
+androidx.compose.material3:material3-android:1.4.0
+\--- androidx.compose.material3:material3:1.4.0
+     +--- debugCompileClasspath
+     \--- androidx.compose:compose-bom:2025.09.00 (requested androidx.compose.material3:material3:1.3.2)
+          \--- debugCompileClasspath
+
+androidx.compose.material3:material3-android:1.3.2 -> 1.4.0
+\--- androidx.compose:compose-bom:2025.09.00
+     \--- debugCompileClasspath
+
+(*) - Indicates repeated occurrences of a transitive dependency subtree. Gradle expands transitive dependency subtrees only once per project; repeat occurrences only display the root of the subtree, followed by this annotation.
+
+A web-based, searchable dependency report is available by adding the --scan option.
+
+BUILD SUCCESSFUL in 28s
+1 actionable task: 1 executed
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.4/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+
+> Configure project :app
+WARNING: The option setting 'android.aapt2FromMavenOverride=/nix/store/b2q3zdf5fpn9rirp7nywkrs38gqmca4n-androidsdk/libexec/android-sdk/build-tools/36.0.0/aapt2' is experimental.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: We recommend using a newer Android Gradle plugin to use compile SDK version 37.0
+
+This Android Gradle plugin (8.13.2) was tested up to compile SDK version 36.1.
+
+You are strongly encouraged to update your project to use a newer
+Android Gradle plugin that has been tested with compile SDK version 37.0.
+
+If you are already using the latest version of the Android Gradle plugin,
+you may need to wait until a newer version with support for compile SDK version 37.0 is available.
+
+For more information refer to the compatibility table:
+https://d.android.com/r/tools/api-level-support
+
+To suppress this warning, add/update
+    android.suppressUnsupportedCompileSdk=37.0
+to this project's gradle.properties.
+
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:packageUniDicRuntime UP-TO-DATE
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:processDebugNavigationResources UP-TO-DATE
+> Task :app:compileDebugNavigationResources UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:mergeDebugShaders UP-TO-DATE
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :app:processDebugManifestForPackage
+> Task :app:compressDebugAssets UP-TO-DATE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :app:mergeLibDexDebug UP-TO-DATE
+
+> Task :app:configureCMakeDebug[arm64-v8a]
+[CXX5304] Observed package id 'ndk;27.2.12479018' in inconsistent location '/nix/store/b2q3zdf5fpn9rirp7nywkrs38gqmca4n-androidsdk/libexec/android-sdk/ndk-bundle' (Expected '/nix/store/b2q3zdf5fpn9rirp7nywkrs38gqmca4n-androidsdk/libexec/android-sdk/ndk/27.2.12479018')
+[CXX5304] Observed package id 'ndk;27.2.12479018' in inconsistent location '/nix/store/b2q3zdf5fpn9rirp7nywkrs38gqmca4n-androidsdk/libexec/android-sdk/ndk-bundle' (Expected '/nix/store/b2q3zdf5fpn9rirp7nywkrs38gqmca4n-androidsdk/libexec/android-sdk/ndk/27.2.12479018')
+
+> Task :app:buildCMakeDebug[arm64-v8a]
+> Task :app:configureCMakeDebug[x86_64]
+> Task :app:buildCMakeDebug[x86_64]
+> Task :app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :app:mergeDebugNativeLibs UP-TO-DATE
+> Task :app:processDebugResources
+> Task :app:stripDebugDebugSymbols
+> Task :app:validateSigningDebug UP-TO-DATE
+> Task :app:writeDebugAppMetadata UP-TO-DATE
+> Task :app:writeDebugSigningConfigVersions UP-TO-DATE
+> Task :app:compileDebugKotlin
+w: file:///srv/hermes/workspace/japanese-anki-app/app/src/main/java/dev/pierre/japaneseanki/MainActivity.kt:3440:38 'fun <T : Parcelable!> getParcelableExtra(p0: String!): T?' is deprecated. Deprecated in Java.
+
+> Task :app:compileDebugJavaWithJavac NO-SOURCE
+> Task :app:bundleDebugClassesToRuntimeJar
+> Task :app:bundleDebugClassesToCompileJar
+> Task :app:processDebugJavaRes
+
+> Task :app:dexBuilderDebug
+WARNING: D8: An API level of 37 is not supported by this compiler. Please use an API level of 36 or earlier
+WARNING: D8: An API level of 37 is not supported by this compiler. Please use an API level of 36 or earlier
+WARNING: D8: An API level of 37 is not supported by this compiler. Please use an API level of 36 or earlier
+WARNING: D8: An API level of 37 is not supported by this compiler. Please use an API level of 36 or earlier
+WARNING: D8: An API level of 37 is not supported by this compiler. Please use an API level of 36 or earlier
+WARNING: D8: An API level of 37 is not supported by this compiler. Please use an API level of 36 or earlier
+WARNING: D8: An API level of 37 is not supported by this compiler. Please use an API level of 36 or earlier
+WARNING: D8: An API level of 37 is not supported by this compiler. Please use an API level of 36 or earlier
+
+> Task :app:compileDebugUnitTestKotlin
+w: file:///srv/hermes/workspace/japanese-anki-app/app/src/test/java/dev/pierre/japaneseanki/SubmissionRecoveryTest.kt:177:25 'fun createTempDir(prefix: String = ..., suffix: String? = ..., directory: File? = ...): File' is deprecated. Avoid creating temporary directories in the default temp location with this function due to too wide permissions on the newly created directory. Use kotlin.io.path.createTempDirectory instead.
+
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processDebugUnitTestJavaRes
+> Task :app:testDebugUnitTest
+> Task :app:mergeDebugGlobalSynthetics
+
+> Task :app:mergeProjectDexDebug
+WARNING: D8: An API level of 37 is not supported by this compiler. Please use an API level of 36 or earlier
+WARNING: D8: An API level of 37 is not supported by this compiler. Please use an API level of 36 or earlier
+WARNING: D8: An API level of 37 is not supported by this compiler. Please use an API level of 36 or earlier
+
+> Task :app:mergeDebugJavaResource
+> Task :app:packageDebug
+> Task :app:createDebugApkListingFileRedirect
+> Task :app:assembleDebug
+
+BUILD SUCCESSFUL in 2m 45s
+48 actionable tasks: 20 executed, 28 up-to-date

@@ -1,0 +1,21 @@
+[
+  {
+    "probe": "stale-notification-before",
+    "focus": "sentence",
+    "buffer": {
+      "sentence": "図書館で本を読んだ。"
+    }
+  },
+  {
+    "probe": "stale-notification-after",
+    "focus": "close-sheet",
+    "buffer": {
+      "sentence": "図書館で本を読んだ。"
+    }
+  },
+  {
+    "probe": "native-Enter-with-text",
+    "sheet": "dialog",
+    "overlay": "extras"
+  }
+]

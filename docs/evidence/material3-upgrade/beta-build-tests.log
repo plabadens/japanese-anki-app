@@ -1,0 +1,117 @@
+warning: Git tree '/srv/hermes/workspace/japanese-anki-app' is dirty
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.4/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+
+> Configure project :app
+WARNING: The option setting 'android.aapt2FromMavenOverride=/nix/store/b2q3zdf5fpn9rirp7nywkrs38gqmca4n-androidsdk/libexec/android-sdk/build-tools/36.0.0/aapt2' is experimental.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+C/C++: Platform version 37 is beyond 35, the maximum API level supported by this NDK. Using 35 instead.
+WARNING: We recommend using a newer Android Gradle plugin to use compile SDK version 37.0
+
+This Android Gradle plugin (8.13.2) was tested up to compile SDK version 36.1.
+
+You are strongly encouraged to update your project to use a newer
+Android Gradle plugin that has been tested with compile SDK version 37.0.
+
+If you are already using the latest version of the Android Gradle plugin,
+you may need to wait until a newer version with support for compile SDK version 37.0 is available.
+
+For more information refer to the compatibility table:
+https://d.android.com/r/tools/api-level-support
+
+To suppress this warning, add/update
+    android.suppressUnsupportedCompileSdk=37.0
+to this project's gradle.properties.
+
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:packageUniDicRuntime UP-TO-DATE
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:checkDebugAarMetadata FAILED
+> Task :app:processDebugNavigationResources
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:checkDebugAarMetadata'.
+> A failure occurred while executing com.android.build.gradle.internal.tasks.CheckAarMetadataWorkAction
+   > 13 issues were found when checking AAR metadata:
+     
+       1.  Dependency 'androidx.compose.material3:material3-ripple-android:1.5.0-beta01' requires Android Gradle plugin 9.1.0 or higher.
+     
+           This build currently uses Android Gradle plugin 8.13.2.
+     
+       2.  Dependency 'androidx.compose.animation:animation-core-android:1.12.0' requires Android Gradle plugin 9.1.0 or higher.
+     
+           This build currently uses Android Gradle plugin 8.13.2.
+     
+       3.  Dependency 'androidx.compose.material:material-ripple-android:1.12.0' requires Android Gradle plugin 9.1.0 or higher.
+     
+           This build currently uses Android Gradle plugin 8.13.2.
+     
+       4.  Dependency 'androidx.compose.animation:animation-android:1.12.0' requires Android Gradle plugin 9.1.0 or higher.
+     
+           This build currently uses Android Gradle plugin 8.13.2.
+     
+       5.  Dependency 'androidx.compose.foundation:foundation-layout-android:1.12.0' requires Android Gradle plugin 9.1.0 or higher.
+     
+           This build currently uses Android Gradle plugin 8.13.2.
+     
+       6.  Dependency 'androidx.compose.foundation:foundation-android:1.12.0' requires Android Gradle plugin 9.1.0 or higher.
+     
+           This build currently uses Android Gradle plugin 8.13.2.
+     
+       7.  Dependency 'androidx.compose.ui:ui-tooling-data-android:1.12.0' requires Android Gradle plugin 9.1.0 or higher.
+     
+           This build currently uses Android Gradle plugin 8.13.2.
+     
+       8.  Dependency 'androidx.compose.ui:ui-graphics-android:1.12.0' requires Android Gradle plugin 9.1.0 or higher.
+     
+           This build currently uses Android Gradle plugin 8.13.2.
+     
+       9.  Dependency 'androidx.compose.ui:ui-text-android:1.12.0' requires Android Gradle plugin 9.1.0 or higher.
+     
+           This build currently uses Android Gradle plugin 8.13.2.
+     
+      10.  Dependency 'androidx.compose.ui:ui-tooling-android:1.12.0' requires Android Gradle plugin 9.1.0 or higher.
+     
+           This build currently uses Android Gradle plugin 8.13.2.
+     
+      11.  Dependency 'androidx.compose.material3:material3-android:1.5.0-beta01' requires Android Gradle plugin 9.1.0 or higher.
+     
+           This build currently uses Android Gradle plugin 8.13.2.
+     
+      12.  Dependency 'androidx.compose.ui:ui-android:1.12.0' requires Android Gradle plugin 9.1.0 or higher.
+     
+           This build currently uses Android Gradle plugin 8.13.2.
+     
+      13.  Dependency 'androidx.compose.runtime:runtime-saveable-android:1.12.0' requires Android Gradle plugin 9.1.0 or higher.
+     
+           This build currently uses Android Gradle plugin 8.13.2.
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 2m 47s
+3 actionable tasks: 2 executed, 1 up-to-date

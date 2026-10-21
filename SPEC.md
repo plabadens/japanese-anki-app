@@ -89,15 +89,15 @@ Use actual Compose Material 3 Expressive components, typography, color roles, sh
 
 Use conventional top app bars, Back navigation, settings lists, bottom sheets, chips, progress, and brief success feedback where appropriate. Use native component behavior and Material color roles consistently.
 
-Support English UI, system light/dark mode, portrait/landscape, 200% font scaling, TalkBack labels/states, at least 48 dp non-overlapping touch targets, 4.5:1 normal-text contrast and 3:1 actionable-icon contrast. Respect system-bar/keyboard insets; long content scrolls. Support reduced/disabled animation settings and do not use color alone to communicate state.
+Support English UI, system light/dark mode, a portrait-only app composition with landscape photograph capture/import, 200% font scaling, TalkBack labels/states, at least 48 dp non-overlapping touch targets, 4.5:1 normal-text contrast and 3:1 actionable-icon contrast. Respect system-bar/keyboard insets; long content scrolls. Support reduced/disabled animation settings and do not use color alone to communicate state.
 
 Use a small interactive **Compose prototype built from production components** to validate the design, then reuse those components. Validate the complete journey, including interaction and accessibility.
 
 ### 4.2 Capture
 
-Offer **Photo** (initial default) and **Type**, remembering the last used mode. Use CameraX with standard 4:3 capture and orientation-aware portrait/landscape layout. Preview must accurately represent the captured bounds without stretching the image.
+Offer **Photo** (initial default) and **Type**, remembering the last used mode. Use CameraX with standard 4:3 capture and orientation-aware capture. The app interface remains portrait-only; landscape captures and picked/shared landscape images are stored orientation-corrected and displayed correctly in the portrait composition. Preview must accurately represent the captured bounds without stretching the image.
 
-The usual sequence—rotate to landscape, capture, rotate back to portrait, continue—must preserve the photo and draft. Store orientation-corrected media. Request camera permission through the normal Android flow; denial preserves work and leaves Type/image-picker entry usable.
+The usual sequence—rotate to landscape, capture, rotate back to portrait, continue—must preserve the photo and draft without switching the interface to a landscape composition. Store orientation-corrected media. Request camera permission through the normal Android flow; denial preserves work and leaves Type/image-picker entry usable.
 
 Photo input uses the capture/picked/shared image as its contextual image. It can be replaced without rerunning OCR or altering the sentence, but the photo-origin draft still requires an image. Type input may attach, replace, or remove an image independently. Taking a contextual photo from Type must not replace typed text with OCR. Input origin belongs to the draft, not the currently displayed mode switch; toggling modes cannot bypass the image rule.
 
@@ -122,7 +122,7 @@ A required dataset miss is not fixed by repeatedly calling a service. Show that 
 
 ### 4.5 Review and corrections
 
-Present a composed learning artifact: contextual image when present, prominent Japanese sentence with target/ruby, a vocabulary/definition block with pitch and word playback, then translation. Sentence playback remains available but secondary. There are no permanent text boxes, mandatory row per stored field, empty image placeholder for Type, or always-present empty Notes row.
+Present a composed learning artifact: contextual image when present, prominent Japanese sentence with target/ruby, its translation immediately beneath the sentence, then a vocabulary/definition block with pitch and word playback. Sentence playback remains available but secondary. There are no permanent text boxes, mandatory row per stored field, empty image placeholder for Type, or always-present empty Notes row.
 
 **Send to AnkiDroid** is the primary action. **Edit** opens targeted correction controls; Notes and Tags remain secondary additions. Display any chosen tags and notes before sending. Settings is conventionally reachable without destroying the draft; destination selection does not become a recurring mining step.
 
@@ -362,7 +362,7 @@ Record the tested revision, fixture, environment, actual result, and evidence fo
 | R01 | Clean checkout in Nix | Tests and APK build succeed using documented tools; API 37 config and both intended ABI artifacts verified |
 | R02 | API-37 x86_64 emulator | Startup, native libraries, bundled dictionaries/OCR, media encoding, and complete creation flow work; no ARM64 runtime claim inferred |
 | R03 | Fresh install without network | Photo OCR, typing, target and meaning choices work locally; network generation fails clearly and preserves the draft |
-| R04 | Landscape capture → portrait continuation | Correct orientation/full frame; no lost photo, text, selection, or duplicate generation |
+| R04 | Landscape capture → portrait continuation | Correct orientation/full frame; portrait UI preserved; no lost photo, text, selection, or duplicate generation |
 | R05 | One/multiple OCR regions and textbook text | Direct editable text for a single region; readable excerpt selection for several; correction before target selection; photo stays local |
 | R06 | Type and share inputs | Typed/text-shared image is optional; image attachment does not replace text; image sharing follows Photo; replacement confirmation protects draft |
 | R07 | Inflection, repeats, contiguous selection, Unicode | Correct lemma, one highlighted occurrence, intact surface/characters, no adjacent-target guess |
@@ -378,8 +378,8 @@ Record the tested revision, fixture, environment, actual result, and evidence fo
 | R17 | Image processing | Orientation/full frame, max 1080 long edge/no upscale, WebP/metadata removal, measured size/readability, decodable Android and Anki output |
 | R18 | Incomplete required result or attached image | Send unavailable; no partial note or silent media omission; Type-only image removal remains possible |
 | R19 | Source edit after manual correction | Clear destructive-change confirmation; cancel preserves current draft; accept rebuilds only affected results with no stale export |
-| R20 | Review and targeted Edit | Composed native learning content, no field-form default; working playback/edit/notes/tags and reachable Send |
-| R21 | Material/accessibility/navigation | Native components, themes, motion settings, 200% fonts, TalkBack, 48 dp targets, contrast, insets, Back, and both orientations work |
+| R20 | Review and targeted Edit | Composed native learning content, translation directly beneath the sentence, no field-form default; working playback/edit/notes/tags and reachable Send |
+| R21 | Material/accessibility/navigation | Native components, themes, motion settings, 200% fonts, TalkBack, 48 dp targets, contrast, insets, Back, portrait layout, and landscape capture/rotation work |
 | R22 | Model/deck/permission failures | No draft loss or silent destination substitution; reordered/extra/trailing empty fields verified against actual AnkiDroid |
 | R23 | Duplicate rule | Same sentence+lemma+model in destination deck blocked; different sentence/lemma or other deck allowed; query failure blocks |
 | R24 | Successful export | Required fields, phonetic markup, image/audio, tags, and actual destination verified; confirmed success alone resets to fresh capture |

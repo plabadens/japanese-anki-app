@@ -1,0 +1,22 @@
+/* Current composition: progress, word pills and portrait camera. */
+.flow-progress { display:flex; gap:8px; margin:0 16px 8px; height:8px; flex:none; }
+.flow-progress > span { flex:1; border:1px solid var(--outline); border-radius:4px; }
+.flow-progress > [data-state="completed"] { background:var(--on-surface-variant); border-color:var(--on-surface-variant); }
+.flow-progress > [data-state="current"] { border:2px solid var(--primary); background:var(--primary-container); }
+.phone .camera-main { padding:8px 0; overflow:hidden; }
+.camera-stage { flex:1; min-height:0; min-width:0; display:flex; align-items:center; justify-content:center; padding:16px; container: camera / size; }
+.phone .viewfinder { width:min(100cqw, calc(100cqh * .75)); aspect-ratio:3 / 4; max-height:100%; margin:0; }
+.phone .viewfinder > img { object-position:center; }
+.phone .shutter-row { flex:none; padding:16px 24px; min-height:112px; }
+.phone .camera-side { position:relative; height:80px; justify-content:center; }
+.phone .camera-side small { position:absolute; top:calc(50% + 28px); margin:0; }
+.phone .photo-confirm { flex:none; padding:16px; }
+.phone .sentence-box { padding:16px; background:transparent; }
+.phone .sentence-run { display:flex; flex-wrap:wrap; align-items:center; gap:8px; line-height:1.5; }
+.phone .sentence-run mark { display:contents; }
+.phone .word-pill { min-height:48px; min-width:48px; max-width:100%; display:inline-flex; align-items:center; justify-content:center; padding:8px 16px; border:1px solid var(--outline); border-radius:24px; background:var(--surface-container-low); font-size:inherit; line-height:1.5; overflow-wrap:anywhere; touch-action:pan-y; user-select:none; }
+.phone .word-pill[aria-pressed="true"] { border:2px solid var(--selection-outline); padding:7px 15px; background:var(--secondary-container); color:var(--on-secondary-container); text-decoration:underline; text-decoration-thickness:2px; text-underline-offset:4px; }
+.phone .word-pill:active { border-radius:12px; }
+.phone .context-strip { height:144px; margin-bottom:16px; }
+.phone .context-strip img { object-fit:cover; object-position:center 18%; }
+.phone .pitch-svg text { fill:var(--on-surface); }

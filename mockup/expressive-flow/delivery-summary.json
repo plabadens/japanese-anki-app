@@ -1,0 +1,24 @@
+{
+  "htmlSha256": "1effd3a327bd67cdea2484991878fe4daee0837774fdebacafaa01b9ceff087c",
+  "harnessSha256": "e35af15283a26b0703d4fad6dac7acd09e01bef7c9d92b6175e0d5f2745023b1",
+  "browser": {
+    "checks": 382,
+    "passed": 382,
+    "failed": 0,
+    "screenshots": 81
+  },
+  "modelTests": 32,
+  "nativeUnitTests": 110,
+  "nativeMaterial3": "1.4.0",
+  "nativeUIImplemented": false,
+  "pureNixBuild": "interrupted",
+  "zip": {
+    "file": "japanese-anki-ui-mockups.zip",
+    "bytes": 5202100,
+    "sha256": "dbb26bd7b61dce4bc88d58054c34829ce6d8c0cea32dce2bc658a0a847594df6",
+    "entries": 122
+  },
+  "browserEvidence": "verification.current.json",
+  "modelEvidence": "model-tests.tap",
+  "updatedAt": "2026-10-21T04:25:46.214606+00:00"
+}

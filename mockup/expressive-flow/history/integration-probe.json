@@ -1,0 +1,413 @@
+[
+  {
+    "label": "editor-open",
+    "state": {
+      "id": "live",
+      "stage": "target",
+      "status": "ready",
+      "mode": "photo",
+      "sentence": "図書館で本を読みました。",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 3,
+          "text": "図書館",
+          "reading": "としょかん"
+        },
+        {
+          "start": 3,
+          "end": 4,
+          "text": "で"
+        },
+        {
+          "start": 4,
+          "end": 5,
+          "text": "本",
+          "reading": "ほん"
+        },
+        {
+          "start": 5,
+          "end": 6,
+          "text": "を"
+        },
+        {
+          "start": 6,
+          "end": 11,
+          "text": "読みました",
+          "reading": "よみました"
+        },
+        {
+          "start": 11,
+          "end": 12,
+          "text": "。"
+        }
+      ],
+      "selection": {
+        "start": 4,
+        "end": 5
+      },
+      "entryId": "book",
+      "senseIds": [
+        0
+      ],
+      "definition": "book; volume",
+      "translation": "",
+      "notes": "",
+      "tags": "",
+      "deck": "Japanese",
+      "hasPhoto": true,
+      "origin": "photo",
+      "captured": false,
+      "blockedEntries": [],
+      "generation": 0,
+      "submission": null,
+      "snapshot": null,
+      "readings": {},
+      "sentenceAudioStale": true,
+      "pitchIndex": 0
+    },
+    "local": {
+      "overlay": "sentence",
+      "editing": false,
+      "toast": "",
+      "error": "",
+      "returnFocus": "[data-action=\"edit-sentence\"]",
+      "buffer": {}
+    },
+    "active": {
+      "tag": "BUTTON",
+      "action": "close-sheet",
+      "value": ""
+    },
+    "sheet": "Sentence\nJapanese sentence\nCorrect a reading\nDone"
+  },
+  {
+    "label": "editor-filled",
+    "state": {
+      "id": "live",
+      "stage": "target",
+      "status": "ready",
+      "mode": "photo",
+      "sentence": "図書館で本を読みました。",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 3,
+          "text": "図書館",
+          "reading": "としょかん"
+        },
+        {
+          "start": 3,
+          "end": 4,
+          "text": "で"
+        },
+        {
+          "start": 4,
+          "end": 5,
+          "text": "本",
+          "reading": "ほん"
+        },
+        {
+          "start": 5,
+          "end": 6,
+          "text": "を"
+        },
+        {
+          "start": 6,
+          "end": 11,
+          "text": "読みました",
+          "reading": "よみました"
+        },
+        {
+          "start": 11,
+          "end": 12,
+          "text": "。"
+        }
+      ],
+      "selection": {
+        "start": 4,
+        "end": 5
+      },
+      "entryId": "book",
+      "senseIds": [
+        0
+      ],
+      "definition": "book; volume",
+      "translation": "",
+      "notes": "",
+      "tags": "",
+      "deck": "Japanese",
+      "hasPhoto": true,
+      "origin": "photo",
+      "captured": false,
+      "blockedEntries": [],
+      "generation": 0,
+      "submission": null,
+      "snapshot": null,
+      "readings": {},
+      "sentenceAudioStale": true,
+      "pitchIndex": 0
+    },
+    "local": {
+      "overlay": "sentence",
+      "editing": false,
+      "toast": "",
+      "error": "",
+      "returnFocus": "[data-action=\"edit-sentence\"]",
+      "buffer": {
+        "sentence": "図書館で本を読んだ。"
+      }
+    },
+    "active": {
+      "tag": "TEXTAREA",
+      "editor": "sentence",
+      "value": "図書館で本を読んだ。"
+    },
+    "sheet": "Sentence\nJapanese sentence\nCorrect a reading\nDone"
+  },
+  {
+    "label": "editor-saved",
+    "state": {
+      "id": "live",
+      "stage": "target",
+      "status": "ready",
+      "mode": "photo",
+      "sentence": "図書館で本を読んだ。",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 3,
+          "text": "図書館",
+          "reading": "としょかん"
+        },
+        {
+          "start": 3,
+          "end": 4,
+          "text": "で"
+        },
+        {
+          "start": 4,
+          "end": 5,
+          "text": "本",
+          "reading": "ほん"
+        },
+        {
+          "start": 5,
+          "end": 6,
+          "text": "を"
+        },
+        {
+          "start": 6,
+          "end": 9,
+          "text": "読んだ",
+          "reading": "よんだ"
+        },
+        {
+          "start": 9,
+          "end": 10,
+          "text": "。"
+        }
+      ],
+      "selection": null,
+      "entryId": null,
+      "senseIds": [],
+      "definition": "",
+      "translation": "",
+      "notes": "",
+      "tags": "",
+      "deck": "Japanese",
+      "hasPhoto": true,
+      "origin": "photo",
+      "captured": false,
+      "blockedEntries": [],
+      "generation": 0,
+      "submission": null,
+      "snapshot": null,
+      "readings": {},
+      "sentenceAudioStale": true,
+      "pitchIndex": 0
+    },
+    "local": {
+      "overlay": null,
+      "editing": false,
+      "toast": "",
+      "error": "",
+      "returnFocus": "[data-action=\"edit-sentence\"]",
+      "buffer": {
+        "sentence": "図書館で本を読んだ。"
+      }
+    },
+    "active": {
+      "tag": "BUTTON",
+      "action": "edit-sentence",
+      "value": ""
+    },
+    "sheet": null
+  },
+  {
+    "label": "keyboard-extras-focused",
+    "state": {
+      "id": "live",
+      "stage": "review",
+      "status": "ready",
+      "mode": "type",
+      "sentence": "図書館で本を読みました。",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 3,
+          "text": "図書館",
+          "reading": "としょかん"
+        },
+        {
+          "start": 3,
+          "end": 4,
+          "text": "で"
+        },
+        {
+          "start": 4,
+          "end": 5,
+          "text": "本",
+          "reading": "ほん"
+        },
+        {
+          "start": 5,
+          "end": 6,
+          "text": "を"
+        },
+        {
+          "start": 6,
+          "end": 11,
+          "text": "読みました",
+          "reading": "よみました"
+        },
+        {
+          "start": 11,
+          "end": 12,
+          "text": "。"
+        }
+      ],
+      "selection": {
+        "start": 4,
+        "end": 5
+      },
+      "entryId": "book",
+      "senseIds": [
+        0
+      ],
+      "definition": "book; volume",
+      "translation": "I read a book at the library.",
+      "notes": "",
+      "tags": "",
+      "deck": "Japanese",
+      "hasPhoto": false,
+      "origin": "type",
+      "captured": false,
+      "blockedEntries": [],
+      "generation": 3,
+      "submission": null,
+      "snapshot": null,
+      "readings": {},
+      "sentenceAudioStale": false,
+      "pitchIndex": 0
+    },
+    "local": {
+      "overlay": null,
+      "editing": false,
+      "toast": "",
+      "error": "",
+      "returnFocus": "[data-action=\"entries\"]",
+      "buffer": {},
+      "failNext": false
+    },
+    "active": {
+      "tag": "BUTTON",
+      "action": "extras",
+      "value": ""
+    },
+    "sheet": null
+  },
+  {
+    "label": "keyboard-enter",
+    "state": {
+      "id": "live",
+      "stage": "review",
+      "status": "ready",
+      "mode": "type",
+      "sentence": "図書館で本を読みました。",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 3,
+          "text": "図書館",
+          "reading": "としょかん"
+        },
+        {
+          "start": 3,
+          "end": 4,
+          "text": "で"
+        },
+        {
+          "start": 4,
+          "end": 5,
+          "text": "本",
+          "reading": "ほん"
+        },
+        {
+          "start": 5,
+          "end": 6,
+          "text": "を"
+        },
+        {
+          "start": 6,
+          "end": 11,
+          "text": "読みました",
+          "reading": "よみました"
+        },
+        {
+          "start": 11,
+          "end": 12,
+          "text": "。"
+        }
+      ],
+      "selection": {
+        "start": 4,
+        "end": 5
+      },
+      "entryId": "book",
+      "senseIds": [
+        0
+      ],
+      "definition": "book; volume",
+      "translation": "I read a book at the library.",
+      "notes": "",
+      "tags": "",
+      "deck": "Japanese",
+      "hasPhoto": false,
+      "origin": "type",
+      "captured": false,
+      "blockedEntries": [],
+      "generation": 3,
+      "submission": null,
+      "snapshot": null,
+      "readings": {},
+      "sentenceAudioStale": false,
+      "pitchIndex": 0
+    },
+    "local": {
+      "overlay": null,
+      "editing": false,
+      "toast": "",
+      "error": "",
+      "returnFocus": "[data-action=\"entries\"]",
+      "buffer": {},
+      "failNext": false
+    },
+    "active": {
+      "tag": "BUTTON",
+      "action": "extras",
+      "value": ""
+    },
+    "sheet": null
+  }
+]

@@ -202,7 +202,7 @@ Run relevant unit tests first, then emulator scenarios. App-specific routes and 
 
 ## 5. Mockup-to-capture matrix
 
-There are 34 PNG/HTML reference pairs in `mockup/screens/` (33 portrait references plus `06b` rotated capture); `00-pitch-component` is a component reference, not a navigable app screen. Each PNG is generated from its same-basename HTML using `./mockup/render.sh`; preserve the current PNGs as goldens and compare structure/spacing/color, not just pixel diff. `mockup/mockup.html`, `mockup/REVIEW.md`, `mockup/shared.css`, and `docs/ui-plan.md` explain states/tokens and known deviations. Capture app PNGs to `.tmp-nix/screenshots/<id>-<state>-<theme>.png`, keep matching UI dump/logcat, and compare against `mockup/screens/<id>-*.png`.
+> **Historical file inventory:** the retired v0.2 mockup set described here (`mockup/screens/`, `mockup/mockup.html`, `mockup/shared.css`, `mockup/render.sh`) was removed when the portrait `mockup/expressive-flow` study replaced it. The table below is retained as historical test intent only; do not treat missing files as current defects. Current visual reference: `mockup/expressive-flow/flow.html`, `mockup/expressive-flow/final-screens/`, and `mockup/expressive-flow/delivery/`.
 
 | Mockup reference | SPEC / matrix | Reproducible state and evidence |
 |---|---|---|

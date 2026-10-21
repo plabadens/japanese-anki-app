@@ -1,0 +1,9 @@
+[
+  {
+    "case": "notification-expiry-focus-RED",
+    "path": "same-draft expiry preserves editor focus",
+    "expected": "sentence",
+    "actual": null,
+    "pass": false
+  }
+]

@@ -8,8 +8,8 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Material Symbols (m3.material.io/styles/icons), outlined style, ported from the exact
- * path data already vendored in mockup/shared.css and the mockup screen sources so the set
- * stays visually identical to the mockups without fetching an icon font (SPEC.md §4.1).
+ * path data used by the current mockup study so the set stays visually consistent without
+ * fetching an icon font (SPEC.md §4.1).
  */
 private fun symbol(name: String, path: String): ImageVector = ImageVector.Builder(
     name = name,

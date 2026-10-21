@@ -1,0 +1,164 @@
+[
+  {
+    "file": "overview-light.png",
+    "theme": "light",
+    "scenario": "Input \u2192 Target \u2192 Review board",
+    "width": 2880,
+    "height": 2640,
+    "sha256": "a029b703cfdddeb12efe7e9be5dc921eaab1dd33494097b672165c32fcd314fc",
+    "evidence": "Rendered HTML design mockup, not Android runtime evidence"
+  },
+  {
+    "file": "input-light.png",
+    "theme": "light",
+    "scenario": "input",
+    "width": 720,
+    "height": 1656,
+    "sha256": "c21bd810b8977294004a3f953b9eb04fbf946b7ab6884bdc8681831a6f40d319",
+    "evidence": "Rendered HTML design mockup, not Android runtime evidence"
+  },
+  {
+    "file": "target-light.png",
+    "theme": "light",
+    "scenario": "target",
+    "width": 720,
+    "height": 1656,
+    "sha256": "d620571e85d9d8574deba0674c81ba8d0f7d6d6518525448dfa2ba42343287cf",
+    "evidence": "Rendered HTML design mockup, not Android runtime evidence"
+  },
+  {
+    "file": "review-light.png",
+    "theme": "light",
+    "scenario": "review",
+    "width": 720,
+    "height": 1656,
+    "sha256": "16121e26659c93c7f97d395ea6215fea542a636f49223afefc53e70a7dcb1f99",
+    "evidence": "Rendered HTML design mockup, not Android runtime evidence"
+  },
+  {
+    "file": "overview-dark.png",
+    "theme": "dark",
+    "scenario": "Input \u2192 Target \u2192 Review board",
+    "width": 2880,
+    "height": 2640,
+    "sha256": "86bc539df9071a32f99d78c97b8a108edf4a21842fddec6c865ca496b24b146d",
+    "evidence": "Rendered HTML design mockup, not Android runtime evidence"
+  },
+  {
+    "file": "input-dark.png",
+    "theme": "dark",
+    "scenario": "input",
+    "width": 720,
+    "height": 1656,
+    "sha256": "d3815131c1cb8458bb87ada7b969e626a9b1acd7b60ae6220fecc52950d0afac",
+    "evidence": "Rendered HTML design mockup, not Android runtime evidence"
+  },
+  {
+    "file": "target-dark.png",
+    "theme": "dark",
+    "scenario": "target",
+    "width": 720,
+    "height": 1656,
+    "sha256": "8871d9ca2ec7c907fea89fb60d0f9b4b8432856c116265cb3b4a41f832be0f8e",
+    "evidence": "Rendered HTML design mockup, not Android runtime evidence"
+  },
+  {
+    "file": "review-dark.png",
+    "theme": "dark",
+    "scenario": "review",
+    "width": 720,
+    "height": 1656,
+    "sha256": "c85459014e97a96c6a1653ee59939878047eee859484f9253919f3aa3e6ae0bb",
+    "evidence": "Rendered HTML design mockup, not Android runtime evidence"
+  },
+  {
+    "file": "type-light.png",
+    "theme": "light",
+    "scenario": "type",
+    "width": 720,
+    "height": 1656,
+    "sha256": "a1483c39afee979005a3407ef393d0c9c858b1b098155cd8c1143765b8afab8a",
+    "evidence": "Rendered HTML design mockup, not Android runtime evidence"
+  },
+  {
+    "file": "regions-light.png",
+    "theme": "light",
+    "scenario": "regions",
+    "width": 720,
+    "height": 1656,
+    "sha256": "36e5ce646e7000dfb21065bf009ff587aec3727081567897c0b1d8714b22d30d",
+    "evidence": "Rendered HTML design mockup, not Android runtime evidence"
+  },
+  {
+    "file": "entries-light.png",
+    "theme": "light",
+    "scenario": "entries",
+    "width": 720,
+    "height": 1656,
+    "sha256": "51940e06d8278624a9919c01771ce890783a4824ed292604f3a7a470a77ae81b",
+    "evidence": "Rendered HTML design mockup, not Android runtime evidence"
+  },
+  {
+    "file": "generating-light.png",
+    "theme": "light",
+    "scenario": "generating",
+    "width": 720,
+    "height": 1656,
+    "sha256": "af70a38b8127d3a43b5dc874ba9e84e489cc7d0059fafcc3e22c36bb4af2974d",
+    "evidence": "Rendered HTML design mockup, not Android runtime evidence"
+  },
+  {
+    "file": "failed-light.png",
+    "theme": "light",
+    "scenario": "failed",
+    "width": 720,
+    "height": 1656,
+    "sha256": "cf41e9ba7f89fc7b6db130a4b8b371342bf04ab7230cedced8b0a8e358a86800",
+    "evidence": "Rendered HTML design mockup, not Android runtime evidence"
+  },
+  {
+    "file": "missing-light.png",
+    "theme": "light",
+    "scenario": "missing",
+    "width": 720,
+    "height": 1656,
+    "sha256": "50384e882a85042c94f60bde45af0cbfac33055d888995aae2426fba8cee6d94",
+    "evidence": "Rendered HTML design mockup, not Android runtime evidence"
+  },
+  {
+    "file": "edit-light.png",
+    "theme": "light",
+    "scenario": "edit",
+    "width": 720,
+    "height": 1656,
+    "sha256": "7b9be490c6a18877322209b63f5a6a356ccde76b1264ebfe71ce16c2abf84ac5",
+    "evidence": "Rendered HTML design mockup, not Android runtime evidence"
+  },
+  {
+    "file": "uncertain-light.png",
+    "theme": "light",
+    "scenario": "uncertain",
+    "width": 720,
+    "height": 1656,
+    "sha256": "33eb7c39f511b2daba0dd3bbf0807ecd234e1da2bb49d86449e7f57894373e76",
+    "evidence": "Rendered HTML design mockup, not Android runtime evidence"
+  },
+  {
+    "file": "review-large-text.png",
+    "theme": "light",
+    "scenario": "Large-text composition, not Android 200% proof",
+    "width": 720,
+    "height": 1656,
+    "sha256": "b312e527b46fd654414cc7a62c52cead12b2a5b60ddbda50a6095ed5965fb141",
+    "evidence": "Rendered HTML design mockup, not Android runtime evidence"
+  },
+  {
+    "file": "secondary-contact-sheet.png",
+    "theme": "light",
+    "scenario": "Eight-state contact sheet",
+    "width": 1520,
+    "height": 1760,
+    "sha256": "502fd1763296ed390d4e84880b130d4fb721ac03d3afc7f7b4fb790d47569b1c",
+    "evidence": "Contact sheet derived from eight separately captured HTML secondary-state mockups"
+  }
+]

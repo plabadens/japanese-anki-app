@@ -1,0 +1,7128 @@
+{
+  "generatedAt": "2026-10-21T02:40:57.993978+00:00",
+  "command": [
+    "/nix/store/q55vy0pdyihvwpjlwn0xavm8nyz5v4fh-hermes-agent-env/bin/python3.14",
+    "mockup/expressive-flow/verify_flow.py",
+    "--html",
+    "mockup/expressive-flow/flow.html",
+    "--output",
+    "mockup/expressive-flow/verification.current.json",
+    "--screens",
+    "mockup/expressive-flow/current-screens"
+  ],
+  "htmlSha256": "94568af52075d2ab12f5f56a065ac4f9e069fa2dd31b6f15cbb1b9654b4b4030",
+  "screenshots": [
+    {
+      "file": "001-restored-top-progress.png",
+      "sha256": "007c28023d1a9f6f35341e55678d55a0b1f036ef08166168d9dcc8ec9816cb18",
+      "bytes": 40876,
+      "size": [
+        360,
+        828
+      ],
+      "case": "requested-progress",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "uncertain",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": "uncertain",
+        "snapshot": {
+          "id": "live",
+          "stage": "review",
+          "status": "ready",
+          "mode": "photo",
+          "sentence": "図書館で本を読みました。",
+          "tokens": [
+            {
+              "start": 0,
+              "end": 3,
+              "text": "図書館",
+              "reading": "としょかん"
+            },
+            {
+              "start": 3,
+              "end": 4,
+              "text": "で"
+            },
+            {
+              "start": 4,
+              "end": 5,
+              "text": "本",
+              "reading": "ほん"
+            },
+            {
+              "start": 5,
+              "end": 6,
+              "text": "を"
+            },
+            {
+              "start": 6,
+              "end": 11,
+              "text": "読みました",
+              "reading": "よみました"
+            },
+            {
+              "start": 11,
+              "end": 12,
+              "text": "。"
+            }
+          ],
+          "selection": {
+            "start": 4,
+            "end": 5
+          },
+          "entryId": "book",
+          "senseIds": [
+            0
+          ],
+          "definition": "book; volume",
+          "translation": "I read a book at the library.",
+          "notes": "",
+          "tags": "",
+          "deck": "Japanese",
+          "hasPhoto": true,
+          "origin": "photo",
+          "captured": false,
+          "blockedEntries": [],
+          "generation": 1,
+          "submission": null,
+          "snapshot": null,
+          "readings": {},
+          "sentenceAudioStale": false,
+          "pitchIndex": 0,
+          "word": "本",
+          "reading": "ほん"
+        },
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "002-tapped-word-pill-target.png",
+      "sha256": "3ec09cdc521332d20937cf2629df77b09d136ca7508b061aacf1a1d264517e2e",
+      "bytes": 29751,
+      "size": [
+        360,
+        828
+      ],
+      "case": "requested-word-pills",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "target",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 0,
+          "end": 3
+        },
+        "entryId": "library",
+        "senseIds": [
+          0
+        ],
+        "definition": "library",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 0,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "003-review-photo-straight-pitch.png",
+      "sha256": "e021763b43f8fdf0152c84295500653185ced4a3c78549cf7272dc49353083db",
+      "bytes": 36037,
+      "size": [
+        360,
+        828
+      ],
+      "case": "requested-straight-pitch-photo",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "004-camera-360x828.png",
+      "sha256": "f2799d8d4c5a8a84dbdd9a714c12191ba8595de1d72b135b31119e84a9c19fb3",
+      "bytes": 51581,
+      "size": [
+        360,
+        828
+      ],
+      "case": "requested-camera-landscape",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "input",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "",
+        "tokens": [],
+        "selection": null,
+        "entryId": null,
+        "senseIds": [],
+        "definition": "",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": false,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 0,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "005-photo-confirm-360x828.png",
+      "sha256": "5c2d90fc954ade84e30789463a1bb201959dbede715a2069644b025f4af41008",
+      "bytes": 46615,
+      "size": [
+        360,
+        828
+      ],
+      "case": "requested-camera-landscape",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "input",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "",
+        "tokens": [],
+        "selection": null,
+        "entryId": null,
+        "senseIds": [],
+        "definition": "",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 0,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "006-camera-828x390.png",
+      "sha256": "7c647afaaca3c9d6a2fe05d546ad85104f683c3477a6ddab6b8e795d90fe7cf1",
+      "bytes": 29497,
+      "size": [
+        828,
+        390
+      ],
+      "case": "requested-camera-landscape",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 828,
+      "viewportWidth": 828,
+      "state": {
+        "id": "live",
+        "stage": "input",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "",
+        "tokens": [],
+        "selection": null,
+        "entryId": null,
+        "senseIds": [],
+        "definition": "",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": false,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 0,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "007-photo-confirm-828x390.png",
+      "sha256": "68e30f67f49c5711180493166e1d110d854351d694fbc18113a510d0d37ad2b3",
+      "bytes": 24452,
+      "size": [
+        828,
+        390
+      ],
+      "case": "requested-camera-landscape",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 828,
+      "viewportWidth": 828,
+      "state": {
+        "id": "live",
+        "stage": "input",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "",
+        "tokens": [],
+        "selection": null,
+        "entryId": null,
+        "senseIds": [],
+        "definition": "",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 0,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "008-camera-640x360.png",
+      "sha256": "b40a1d03b1eb39a594fbc2c7a03a52a7096d07f774c5a23d6cf036c25feb9e76",
+      "bytes": 26118,
+      "size": [
+        640,
+        360
+      ],
+      "case": "requested-camera-landscape",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 640,
+      "viewportWidth": 640,
+      "state": {
+        "id": "live",
+        "stage": "input",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "",
+        "tokens": [],
+        "selection": null,
+        "entryId": null,
+        "senseIds": [],
+        "definition": "",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": false,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 0,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "009-photo-confirm-640x360.png",
+      "sha256": "6a5f69fb12e5aed98b7eca686ad6e617ca6aa96632a8f4ac33bf47bb57724bcb",
+      "bytes": 21371,
+      "size": [
+        640,
+        360
+      ],
+      "case": "requested-camera-landscape",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 640,
+      "viewportWidth": 640,
+      "state": {
+        "id": "live",
+        "stage": "input",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "",
+        "tokens": [],
+        "selection": null,
+        "entryId": null,
+        "senseIds": [],
+        "definition": "",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 0,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "010-rotation-return-review-photo.png",
+      "sha256": "26260f463743e9ae12c0929a3b46ed1a771349fd9b64a91bf1319297dc847797",
+      "bytes": 36020,
+      "size": [
+        360,
+        828
+      ],
+      "case": "requested-camera-landscape",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "011-happy-review.png",
+      "sha256": "a8705e3c00d53e58ff89bc2b7137b1d2836590a1c04377fcfca327858e8117ab",
+      "bytes": 36030,
+      "size": [
+        360,
+        828
+      ],
+      "case": "happy-path",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "012-happy-sent-outcome.png",
+      "sha256": "9b8f33b1af9047c0216cdab8973f318f9cf1e2052a24c9d4dc1d40f4dbf2b097",
+      "bytes": 51102,
+      "size": [
+        360,
+        828
+      ],
+      "case": "happy-path",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "input",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "",
+        "tokens": [],
+        "selection": null,
+        "entryId": null,
+        "senseIds": [],
+        "definition": "",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": false,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 2,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "013-uncertain-Back-outcome.png",
+      "sha256": "cb94537edd705fda632ac2893e1bb7c582a3d6410588d1811c19e251e5d5b401",
+      "bytes": 43176,
+      "size": [
+        360,
+        828
+      ],
+      "case": "uncertain-Back",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "uncertain",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": "uncertain",
+        "snapshot": {
+          "id": "live",
+          "stage": "review",
+          "status": "ready",
+          "mode": "photo",
+          "sentence": "図書館で本を読みました。",
+          "tokens": [
+            {
+              "start": 0,
+              "end": 3,
+              "text": "図書館",
+              "reading": "としょかん"
+            },
+            {
+              "start": 3,
+              "end": 4,
+              "text": "で"
+            },
+            {
+              "start": 4,
+              "end": 5,
+              "text": "本",
+              "reading": "ほん"
+            },
+            {
+              "start": 5,
+              "end": 6,
+              "text": "を"
+            },
+            {
+              "start": 6,
+              "end": 11,
+              "text": "読みました",
+              "reading": "よみました"
+            },
+            {
+              "start": 11,
+              "end": 12,
+              "text": "。"
+            }
+          ],
+          "selection": {
+            "start": 4,
+            "end": 5
+          },
+          "entryId": "book",
+          "senseIds": [
+            0
+          ],
+          "definition": "book; volume",
+          "translation": "I read a book at the library.",
+          "notes": "",
+          "tags": "",
+          "deck": "Japanese",
+          "hasPhoto": true,
+          "origin": "photo",
+          "captured": false,
+          "blockedEntries": [],
+          "generation": 1,
+          "submission": null,
+          "snapshot": null,
+          "readings": {},
+          "sentenceAudioStale": false,
+          "pitchIndex": 0,
+          "word": "本",
+          "reading": "ほん"
+        },
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "014-uncertain-Escape-outcome.png",
+      "sha256": "544e93935e4fb3cd77dd0edf6871df2c2915f770f81b21a63de49133b029d125",
+      "bytes": 44986,
+      "size": [
+        360,
+        828
+      ],
+      "case": "uncertain-Escape",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "uncertain",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": "uncertain",
+        "snapshot": {
+          "id": "live",
+          "stage": "review",
+          "status": "ready",
+          "mode": "photo",
+          "sentence": "図書館で本を読みました。",
+          "tokens": [
+            {
+              "start": 0,
+              "end": 3,
+              "text": "図書館",
+              "reading": "としょかん"
+            },
+            {
+              "start": 3,
+              "end": 4,
+              "text": "で"
+            },
+            {
+              "start": 4,
+              "end": 5,
+              "text": "本",
+              "reading": "ほん"
+            },
+            {
+              "start": 5,
+              "end": 6,
+              "text": "を"
+            },
+            {
+              "start": 6,
+              "end": 11,
+              "text": "読みました",
+              "reading": "よみました"
+            },
+            {
+              "start": 11,
+              "end": 12,
+              "text": "。"
+            }
+          ],
+          "selection": {
+            "start": 4,
+            "end": 5
+          },
+          "entryId": "book",
+          "senseIds": [
+            0
+          ],
+          "definition": "book; volume",
+          "translation": "I read a book at the library.",
+          "notes": "",
+          "tags": "",
+          "deck": "Japanese",
+          "hasPhoto": true,
+          "origin": "photo",
+          "captured": false,
+          "blockedEntries": [],
+          "generation": 1,
+          "submission": null,
+          "snapshot": null,
+          "readings": {},
+          "sentenceAudioStale": false,
+          "pitchIndex": 0,
+          "word": "本",
+          "reading": "ほん"
+        },
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "015-uncertain-sheet-Escape-outcome.png",
+      "sha256": "3b19759479dc5de560a792c3178062e5ce1870db2ffcdc2a2ba912c998c2dd25",
+      "bytes": 43960,
+      "size": [
+        360,
+        828
+      ],
+      "case": "uncertain-sheet-Escape",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "uncertain",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": "uncertain",
+        "snapshot": {
+          "id": "live",
+          "stage": "review",
+          "status": "ready",
+          "mode": "photo",
+          "sentence": "図書館で本を読みました。",
+          "tokens": [
+            {
+              "start": 0,
+              "end": 3,
+              "text": "図書館",
+              "reading": "としょかん"
+            },
+            {
+              "start": 3,
+              "end": 4,
+              "text": "で"
+            },
+            {
+              "start": 4,
+              "end": 5,
+              "text": "本",
+              "reading": "ほん"
+            },
+            {
+              "start": 5,
+              "end": 6,
+              "text": "を"
+            },
+            {
+              "start": 6,
+              "end": 11,
+              "text": "読みました",
+              "reading": "よみました"
+            },
+            {
+              "start": 11,
+              "end": 12,
+              "text": "。"
+            }
+          ],
+          "selection": {
+            "start": 4,
+            "end": 5
+          },
+          "entryId": "book",
+          "senseIds": [
+            0
+          ],
+          "definition": "book; volume",
+          "translation": "I read a book at the library.",
+          "notes": "",
+          "tags": "",
+          "deck": "Japanese",
+          "hasPhoto": true,
+          "origin": "photo",
+          "captured": false,
+          "blockedEntries": [],
+          "generation": 1,
+          "submission": null,
+          "snapshot": null,
+          "readings": {},
+          "sentenceAudioStale": false,
+          "pitchIndex": 0,
+          "word": "本",
+          "reading": "ほん"
+        },
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "016-uncertain-backdrop-outcome.png",
+      "sha256": "5961c39ff7c8e5077f8d2ca01398830c1ae1c03ae877f659683e4893232d51f2",
+      "bytes": 42243,
+      "size": [
+        360,
+        828
+      ],
+      "case": "uncertain-backdrop",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "uncertain",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": "uncertain",
+        "snapshot": {
+          "id": "live",
+          "stage": "review",
+          "status": "ready",
+          "mode": "photo",
+          "sentence": "図書館で本を読みました。",
+          "tokens": [
+            {
+              "start": 0,
+              "end": 3,
+              "text": "図書館",
+              "reading": "としょかん"
+            },
+            {
+              "start": 3,
+              "end": 4,
+              "text": "で"
+            },
+            {
+              "start": 4,
+              "end": 5,
+              "text": "本",
+              "reading": "ほん"
+            },
+            {
+              "start": 5,
+              "end": 6,
+              "text": "を"
+            },
+            {
+              "start": 6,
+              "end": 11,
+              "text": "読みました",
+              "reading": "よみました"
+            },
+            {
+              "start": 11,
+              "end": 12,
+              "text": "。"
+            }
+          ],
+          "selection": {
+            "start": 4,
+            "end": 5
+          },
+          "entryId": "book",
+          "senseIds": [
+            0
+          ],
+          "definition": "book; volume",
+          "translation": "I read a book at the library.",
+          "notes": "",
+          "tags": "",
+          "deck": "Japanese",
+          "hasPhoto": true,
+          "origin": "photo",
+          "captured": false,
+          "blockedEntries": [],
+          "generation": 1,
+          "submission": null,
+          "snapshot": null,
+          "readings": {},
+          "sentenceAudioStale": false,
+          "pitchIndex": 0,
+          "word": "本",
+          "reading": "ほん"
+        },
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "017-uncertain-popstate-outcome.png",
+      "sha256": "d9f757befc3e3f4ea1a68b9ba9bc36e119a6243393e2a3827e1a6617b3001602",
+      "bytes": 42424,
+      "size": [
+        360,
+        828
+      ],
+      "case": "uncertain-popstate",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "uncertain",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": "uncertain",
+        "snapshot": {
+          "id": "live",
+          "stage": "review",
+          "status": "ready",
+          "mode": "photo",
+          "sentence": "図書館で本を読みました。",
+          "tokens": [
+            {
+              "start": 0,
+              "end": 3,
+              "text": "図書館",
+              "reading": "としょかん"
+            },
+            {
+              "start": 3,
+              "end": 4,
+              "text": "で"
+            },
+            {
+              "start": 4,
+              "end": 5,
+              "text": "本",
+              "reading": "ほん"
+            },
+            {
+              "start": 5,
+              "end": 6,
+              "text": "を"
+            },
+            {
+              "start": 6,
+              "end": 11,
+              "text": "読みました",
+              "reading": "よみました"
+            },
+            {
+              "start": 11,
+              "end": 12,
+              "text": "。"
+            }
+          ],
+          "selection": {
+            "start": 4,
+            "end": 5
+          },
+          "entryId": "book",
+          "senseIds": [
+            0
+          ],
+          "definition": "book; volume",
+          "translation": "I read a book at the library.",
+          "notes": "",
+          "tags": "",
+          "deck": "Japanese",
+          "hasPhoto": true,
+          "origin": "photo",
+          "captured": false,
+          "blockedEntries": [],
+          "generation": 1,
+          "submission": null,
+          "snapshot": null,
+          "readings": {},
+          "sentenceAudioStale": false,
+          "pitchIndex": 0,
+          "word": "本",
+          "reading": "ほん"
+        },
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "018-uncertain-edit-outcome.png",
+      "sha256": "4f01575e3797c86b98aa5acc3394bae79f7678919844acc2a754702514a054cf",
+      "bytes": 42430,
+      "size": [
+        360,
+        828
+      ],
+      "case": "uncertain-edit",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "uncertain",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": "uncertain",
+        "snapshot": {
+          "id": "live",
+          "stage": "review",
+          "status": "ready",
+          "mode": "photo",
+          "sentence": "図書館で本を読みました。",
+          "tokens": [
+            {
+              "start": 0,
+              "end": 3,
+              "text": "図書館",
+              "reading": "としょかん"
+            },
+            {
+              "start": 3,
+              "end": 4,
+              "text": "で"
+            },
+            {
+              "start": 4,
+              "end": 5,
+              "text": "本",
+              "reading": "ほん"
+            },
+            {
+              "start": 5,
+              "end": 6,
+              "text": "を"
+            },
+            {
+              "start": 6,
+              "end": 11,
+              "text": "読みました",
+              "reading": "よみました"
+            },
+            {
+              "start": 11,
+              "end": 12,
+              "text": "。"
+            }
+          ],
+          "selection": {
+            "start": 4,
+            "end": 5
+          },
+          "entryId": "book",
+          "senseIds": [
+            0
+          ],
+          "definition": "book; volume",
+          "translation": "I read a book at the library.",
+          "notes": "",
+          "tags": "",
+          "deck": "Japanese",
+          "hasPhoto": true,
+          "origin": "photo",
+          "captured": false,
+          "blockedEntries": [],
+          "generation": 1,
+          "submission": null,
+          "snapshot": null,
+          "readings": {},
+          "sentenceAudioStale": false,
+          "pitchIndex": 0,
+          "word": "本",
+          "reading": "ほん"
+        },
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "019-uncertain-gear-outcome.png",
+      "sha256": "7e2968658246f75e406ae35b268167d4df362b5d4021bba69b80b09cda833cc8",
+      "bytes": 42424,
+      "size": [
+        360,
+        828
+      ],
+      "case": "uncertain-gear",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "uncertain",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": "uncertain",
+        "snapshot": {
+          "id": "live",
+          "stage": "review",
+          "status": "ready",
+          "mode": "photo",
+          "sentence": "図書館で本を読みました。",
+          "tokens": [
+            {
+              "start": 0,
+              "end": 3,
+              "text": "図書館",
+              "reading": "としょかん"
+            },
+            {
+              "start": 3,
+              "end": 4,
+              "text": "で"
+            },
+            {
+              "start": 4,
+              "end": 5,
+              "text": "本",
+              "reading": "ほん"
+            },
+            {
+              "start": 5,
+              "end": 6,
+              "text": "を"
+            },
+            {
+              "start": 6,
+              "end": 11,
+              "text": "読みました",
+              "reading": "よみました"
+            },
+            {
+              "start": 11,
+              "end": 12,
+              "text": "。"
+            }
+          ],
+          "selection": {
+            "start": 4,
+            "end": 5
+          },
+          "entryId": "book",
+          "senseIds": [
+            0
+          ],
+          "definition": "book; volume",
+          "translation": "I read a book at the library.",
+          "notes": "",
+          "tags": "",
+          "deck": "Japanese",
+          "hasPhoto": true,
+          "origin": "photo",
+          "captured": false,
+          "blockedEntries": [],
+          "generation": 1,
+          "submission": null,
+          "snapshot": null,
+          "readings": {},
+          "sentenceAudioStale": false,
+          "pitchIndex": 0,
+          "word": "本",
+          "reading": "ほん"
+        },
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "020-uncertain-direct-Continue-outcome.png",
+      "sha256": "3758191e63d475a7ed53f73693ec8662ccef45b235c322f21783978e683312e5",
+      "bytes": 40869,
+      "size": [
+        360,
+        828
+      ],
+      "case": "uncertain-direct-Continue",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "uncertain",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": "uncertain",
+        "snapshot": {
+          "id": "live",
+          "stage": "review",
+          "status": "ready",
+          "mode": "photo",
+          "sentence": "図書館で本を読みました。",
+          "tokens": [
+            {
+              "start": 0,
+              "end": 3,
+              "text": "図書館",
+              "reading": "としょかん"
+            },
+            {
+              "start": 3,
+              "end": 4,
+              "text": "で"
+            },
+            {
+              "start": 4,
+              "end": 5,
+              "text": "本",
+              "reading": "ほん"
+            },
+            {
+              "start": 5,
+              "end": 6,
+              "text": "を"
+            },
+            {
+              "start": 6,
+              "end": 11,
+              "text": "読みました",
+              "reading": "よみました"
+            },
+            {
+              "start": 11,
+              "end": 12,
+              "text": "。"
+            }
+          ],
+          "selection": {
+            "start": 4,
+            "end": 5
+          },
+          "entryId": "book",
+          "senseIds": [
+            0
+          ],
+          "definition": "book; volume",
+          "translation": "I read a book at the library.",
+          "notes": "",
+          "tags": "",
+          "deck": "Japanese",
+          "hasPhoto": true,
+          "origin": "photo",
+          "captured": false,
+          "blockedEntries": [],
+          "generation": 1,
+          "submission": null,
+          "snapshot": null,
+          "readings": {},
+          "sentenceAudioStale": false,
+          "pitchIndex": 0,
+          "word": "本",
+          "reading": "ほん"
+        },
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "021-uncertain-demo-reset-outcome.png",
+      "sha256": "007c28023d1a9f6f35341e55678d55a0b1f036ef08166168d9dcc8ec9816cb18",
+      "bytes": 40876,
+      "size": [
+        360,
+        828
+      ],
+      "case": "uncertain-demo-reset",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "uncertain",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": "uncertain",
+        "snapshot": {
+          "id": "live",
+          "stage": "review",
+          "status": "ready",
+          "mode": "photo",
+          "sentence": "図書館で本を読みました。",
+          "tokens": [
+            {
+              "start": 0,
+              "end": 3,
+              "text": "図書館",
+              "reading": "としょかん"
+            },
+            {
+              "start": 3,
+              "end": 4,
+              "text": "で"
+            },
+            {
+              "start": 4,
+              "end": 5,
+              "text": "本",
+              "reading": "ほん"
+            },
+            {
+              "start": 5,
+              "end": 6,
+              "text": "を"
+            },
+            {
+              "start": 6,
+              "end": 11,
+              "text": "読みました",
+              "reading": "よみました"
+            },
+            {
+              "start": 11,
+              "end": 12,
+              "text": "。"
+            }
+          ],
+          "selection": {
+            "start": 4,
+            "end": 5
+          },
+          "entryId": "book",
+          "senseIds": [
+            0
+          ],
+          "definition": "book; volume",
+          "translation": "I read a book at the library.",
+          "notes": "",
+          "tags": "",
+          "deck": "Japanese",
+          "hasPhoto": true,
+          "origin": "photo",
+          "captured": false,
+          "blockedEntries": [],
+          "generation": 1,
+          "submission": null,
+          "snapshot": null,
+          "readings": {},
+          "sentenceAudioStale": false,
+          "pitchIndex": 0,
+          "word": "本",
+          "reading": "ほん"
+        },
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "022-uncertain-recheck-outcome.png",
+      "sha256": "10c980e3f2a8b2d9f09aeb141b7c93409eaec0f95eb99065322a4baeb3612064",
+      "bytes": 43069,
+      "size": [
+        360,
+        828
+      ],
+      "case": "uncertain-recheck",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "uncertain",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": "uncertain",
+        "snapshot": {
+          "id": "live",
+          "stage": "review",
+          "status": "ready",
+          "mode": "photo",
+          "sentence": "図書館で本を読みました。",
+          "tokens": [
+            {
+              "start": 0,
+              "end": 3,
+              "text": "図書館",
+              "reading": "としょかん"
+            },
+            {
+              "start": 3,
+              "end": 4,
+              "text": "で"
+            },
+            {
+              "start": 4,
+              "end": 5,
+              "text": "本",
+              "reading": "ほん"
+            },
+            {
+              "start": 5,
+              "end": 6,
+              "text": "を"
+            },
+            {
+              "start": 6,
+              "end": 11,
+              "text": "読みました",
+              "reading": "よみました"
+            },
+            {
+              "start": 11,
+              "end": 12,
+              "text": "。"
+            }
+          ],
+          "selection": {
+            "start": 4,
+            "end": 5
+          },
+          "entryId": "book",
+          "senseIds": [
+            0
+          ],
+          "definition": "book; volume",
+          "translation": "I read a book at the library.",
+          "notes": "",
+          "tags": "",
+          "deck": "Japanese",
+          "hasPhoto": true,
+          "origin": "photo",
+          "captured": false,
+          "blockedEntries": [],
+          "generation": 1,
+          "submission": null,
+          "snapshot": null,
+          "readings": {},
+          "sentenceAudioStale": false,
+          "pitchIndex": 0,
+          "word": "本",
+          "reading": "ほん"
+        },
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "023-uncertain-open-Anki-outcome.png",
+      "sha256": "2c74058c97842922ffe39101897c0e8256dad4b6076d00cdf49487793214dcd1",
+      "bytes": 44117,
+      "size": [
+        360,
+        828
+      ],
+      "case": "uncertain-open-Anki",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "uncertain",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": "uncertain",
+        "snapshot": {
+          "id": "live",
+          "stage": "review",
+          "status": "ready",
+          "mode": "photo",
+          "sentence": "図書館で本を読みました。",
+          "tokens": [
+            {
+              "start": 0,
+              "end": 3,
+              "text": "図書館",
+              "reading": "としょかん"
+            },
+            {
+              "start": 3,
+              "end": 4,
+              "text": "で"
+            },
+            {
+              "start": 4,
+              "end": 5,
+              "text": "本",
+              "reading": "ほん"
+            },
+            {
+              "start": 5,
+              "end": 6,
+              "text": "を"
+            },
+            {
+              "start": 6,
+              "end": 11,
+              "text": "読みました",
+              "reading": "よみました"
+            },
+            {
+              "start": 11,
+              "end": 12,
+              "text": "。"
+            }
+          ],
+          "selection": {
+            "start": 4,
+            "end": 5
+          },
+          "entryId": "book",
+          "senseIds": [
+            0
+          ],
+          "definition": "book; volume",
+          "translation": "I read a book at the library.",
+          "notes": "",
+          "tags": "",
+          "deck": "Japanese",
+          "hasPhoto": true,
+          "origin": "photo",
+          "captured": false,
+          "blockedEntries": [],
+          "generation": 1,
+          "submission": null,
+          "snapshot": null,
+          "readings": {},
+          "sentenceAudioStale": false,
+          "pitchIndex": 0,
+          "word": "本",
+          "reading": "ほん"
+        },
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "024-uncertain-discard-confirmation.png",
+      "sha256": "5961c39ff7c8e5077f8d2ca01398830c1ae1c03ae877f659683e4893232d51f2",
+      "bytes": 42243,
+      "size": [
+        360,
+        828
+      ],
+      "case": "uncertain-explicit-discard",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "uncertain",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": "uncertain",
+        "snapshot": {
+          "id": "live",
+          "stage": "review",
+          "status": "ready",
+          "mode": "photo",
+          "sentence": "図書館で本を読みました。",
+          "tokens": [
+            {
+              "start": 0,
+              "end": 3,
+              "text": "図書館",
+              "reading": "としょかん"
+            },
+            {
+              "start": 3,
+              "end": 4,
+              "text": "で"
+            },
+            {
+              "start": 4,
+              "end": 5,
+              "text": "本",
+              "reading": "ほん"
+            },
+            {
+              "start": 5,
+              "end": 6,
+              "text": "を"
+            },
+            {
+              "start": 6,
+              "end": 11,
+              "text": "読みました",
+              "reading": "よみました"
+            },
+            {
+              "start": 11,
+              "end": 12,
+              "text": "。"
+            }
+          ],
+          "selection": {
+            "start": 4,
+            "end": 5
+          },
+          "entryId": "book",
+          "senseIds": [
+            0
+          ],
+          "definition": "book; volume",
+          "translation": "I read a book at the library.",
+          "notes": "",
+          "tags": "",
+          "deck": "Japanese",
+          "hasPhoto": true,
+          "origin": "photo",
+          "captured": false,
+          "blockedEntries": [],
+          "generation": 1,
+          "submission": null,
+          "snapshot": null,
+          "readings": {},
+          "sentenceAudioStale": false,
+          "pitchIndex": 0,
+          "word": "本",
+          "reading": "ほん"
+        },
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "025-uncertain-explicit-local-discard-outcome.png",
+      "sha256": "754e36a0d7fcac4371705ad9c710e62cc1b392f3f13b0344bae17de19d4f84b1",
+      "bytes": 51577,
+      "size": [
+        360,
+        828
+      ],
+      "case": "uncertain-explicit-discard",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "input",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "",
+        "tokens": [],
+        "selection": null,
+        "entryId": null,
+        "senseIds": [],
+        "definition": "",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": false,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 2,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "026-edited-sentence-inflected-review.png",
+      "sha256": "429f774403f463dfbada1873a2724b7cbad6c403454d49ea696f9dfd4b358839",
+      "bytes": 35735,
+      "size": [
+        360,
+        828
+      ],
+      "case": "P0-2-edit-retokenize",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読んだ。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 9,
+            "text": "読んだ",
+            "reading": "よんだ"
+          },
+          {
+            "start": 9,
+            "end": 10,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 6,
+          "end": 9
+        },
+        "entryId": "read",
+        "senseIds": [
+          0
+        ],
+        "definition": "to read",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "027-edited-unknown-recoverable.png",
+      "sha256": "18a5d7ac793c30b903a3efcc26ff0332843fe5aaf18c00aacf707e55eab61249",
+      "bytes": 28174,
+      "size": [
+        360,
+        828
+      ],
+      "case": "P0-2-edit-retokenize",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "target",
+        "status": "unknown",
+        "mode": "photo",
+        "sentence": "図書館で本を読んだ。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 9,
+            "text": "読んだ",
+            "reading": "よんだ"
+          },
+          {
+            "start": 9,
+            "end": 10,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 3,
+          "end": 4
+        },
+        "entryId": null,
+        "senseIds": [],
+        "definition": "",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 2,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "028-span-preserved-outcome.png",
+      "sha256": "6bf3e6f260f963f91194929f8ae78905fbbbd4434eb88dca5bfdf69ffe706c39",
+      "bytes": 29474,
+      "size": [
+        360,
+        828
+      ],
+      "case": "P0-3-contiguous-spans",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "target",
+        "status": "unknown",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 0,
+          "end": 5
+        },
+        "entryId": null,
+        "senseIds": [],
+        "definition": "",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 0,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "029-span-trimmed-recovered.png",
+      "sha256": "998ab56b2456946d76a9e5966e4d146bc53e4a7e15945ea245b828224cbdcafd",
+      "bytes": 30020,
+      "size": [
+        360,
+        828
+      ],
+      "case": "P0-3-contiguous-spans",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "target",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 0,
+          "end": 3
+        },
+        "entryId": "library",
+        "senseIds": [
+          0
+        ],
+        "definition": "library",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 0,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "030-span-dragged-outcome.png",
+      "sha256": "fd47fa3e0b82be9ad2407444e523d08c2aaf9f400402fe783a6f11ee83f62dff",
+      "bytes": 29302,
+      "size": [
+        360,
+        828
+      ],
+      "case": "P0-3-contiguous-spans",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "target",
+        "status": "unknown",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 0,
+          "end": 5
+        },
+        "entryId": null,
+        "senseIds": [],
+        "definition": "",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 0,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "031-missing-miss.png",
+      "sha256": "1eb36640a35ff7b13b4fe0fa794645f879154494e7bdebca9de1dcf04faeb028",
+      "bytes": 39030,
+      "size": [
+        360,
+        828
+      ],
+      "case": "P0-4-missing-entry-recovery",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "target",
+        "status": "missing",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [
+          "book"
+        ],
+        "generation": 0,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "032-missing-cleared-recovery-outcome.png",
+      "sha256": "bdb679c4938294499ed9e4eeb7f0919869aaaf18446c3fd9ca1bce25df8f0f63",
+      "bytes": 23697,
+      "size": [
+        360,
+        828
+      ],
+      "case": "P0-4-missing-entry-recovery",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "target",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": null,
+        "entryId": null,
+        "senseIds": [],
+        "definition": "",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [
+          "book"
+        ],
+        "generation": 0,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "033-missing-counter-explicit-outcome.png",
+      "sha256": "ccc798eed803fb466b900e487d1553ba8d04438cec1fd2c10be12e16852be3d4",
+      "bytes": 39783,
+      "size": [
+        360,
+        828
+      ],
+      "case": "P0-4-missing-entry-recovery",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "target",
+        "status": "missing",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "counter",
+        "senseIds": [
+          0
+        ],
+        "definition": "counter for long, cylindrical things",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [
+          "book",
+          "counter"
+        ],
+        "generation": 0,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "034-missing-explicit-book-outcome.png",
+      "sha256": "71cb705ef626cb0d71b364e82ad171b58cf217527671e6f8e349ce9eb558203e",
+      "bytes": 39038,
+      "size": [
+        360,
+        828
+      ],
+      "case": "P0-4-missing-entry-recovery",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "target",
+        "status": "missing",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [
+          "book",
+          "counter"
+        ],
+        "generation": 0,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "035-counter-miss.png",
+      "sha256": "cb7300d4c36b945452fff40dcb20406e6fa8c07556542a729a911e3d8ffe2229",
+      "bytes": 41371,
+      "size": [
+        360,
+        828
+      ],
+      "case": "P0-4-missing-entry-recovery",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "target",
+        "status": "missing",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "counter",
+        "senseIds": [
+          0
+        ],
+        "definition": "counter for long, cylindrical things",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [
+          "counter"
+        ],
+        "generation": 0,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "036-counter-cleared-recovery-outcome.png",
+      "sha256": "bdb679c4938294499ed9e4eeb7f0919869aaaf18446c3fd9ca1bce25df8f0f63",
+      "bytes": 23697,
+      "size": [
+        360,
+        828
+      ],
+      "case": "P0-4-missing-entry-recovery",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "target",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": null,
+        "entryId": null,
+        "senseIds": [],
+        "definition": "",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [
+          "counter"
+        ],
+        "generation": 0,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "037-counter-counter-explicit-outcome.png",
+      "sha256": "ccc798eed803fb466b900e487d1553ba8d04438cec1fd2c10be12e16852be3d4",
+      "bytes": 39783,
+      "size": [
+        360,
+        828
+      ],
+      "case": "P0-4-missing-entry-recovery",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "target",
+        "status": "missing",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "counter",
+        "senseIds": [
+          0
+        ],
+        "definition": "counter for long, cylindrical things",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [
+          "counter"
+        ],
+        "generation": 0,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "038-counter-explicit-book-outcome.png",
+      "sha256": "370e39eaf1f240f2cc8b262410c5411c83f858c04699d4a958d70ba1383e6fed",
+      "bytes": 31327,
+      "size": [
+        360,
+        828
+      ],
+      "case": "P0-4-missing-entry-recovery",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "target",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [
+          "counter"
+        ],
+        "generation": 0,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "039-network-failure-outcome.png",
+      "sha256": "1b0b38b014cc2401e59d8b372be9f77062853d12498abf7b3407bcb80b228278",
+      "bytes": 28634,
+      "size": [
+        360,
+        828
+      ],
+      "case": "network-retry-cancel-discard",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "preparing",
+        "status": "failed",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "040-network-retry-review-outcome.png",
+      "sha256": "4a8832ebb90420378d98c6890d221ff4e7cf6f5b93c7071dec4d3f912f128387",
+      "bytes": 38958,
+      "size": [
+        360,
+        828
+      ],
+      "case": "network-retry-cancel-discard",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 2,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "041-generation-cancel-outcome.png",
+      "sha256": "303145e7399ba0ec0103dada4d4c154c8bb2cf53afbb0625212964fa6a5aee03",
+      "bytes": 31335,
+      "size": [
+        360,
+        828
+      ],
+      "case": "network-retry-cancel-discard",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "target",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 5,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "042-discard-confirmation.png",
+      "sha256": "65ab56b73feb59fa6ce95fdab8ae2125e63e1557bfe7f53a699a8165fe9e4366",
+      "bytes": 33314,
+      "size": [
+        360,
+        828
+      ],
+      "case": "network-retry-cancel-discard",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "preparing",
+        "status": "failed",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "043-discard-confirmed-empty-outcome.png",
+      "sha256": "f2799d8d4c5a8a84dbdd9a714c12191ba8595de1d72b135b31119e84a9c19fb3",
+      "bytes": 51581,
+      "size": [
+        360,
+        828
+      ],
+      "case": "network-retry-cancel-discard",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "input",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "",
+        "tokens": [],
+        "selection": null,
+        "entryId": null,
+        "senseIds": [],
+        "definition": "",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": false,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 2,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "044-type-empty.png",
+      "sha256": "fac8116e4bf391180cafc1651bfb8b53d735f04ce5d7a4fc7d001f36e41e375b",
+      "bytes": 13390,
+      "size": [
+        360,
+        828
+      ],
+      "case": "typed-no-photo-notes",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "input",
+        "status": "ready",
+        "mode": "type",
+        "sentence": "",
+        "tokens": [],
+        "selection": null,
+        "entryId": null,
+        "senseIds": [],
+        "definition": "",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": false,
+        "origin": "type",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 0,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "045-typed-no-photo-review-outcome.png",
+      "sha256": "c564c1d7c2a6c31575ee7368ce2527859cb474344ba5c2f351d59b7572659371",
+      "bytes": 28867,
+      "size": [
+        360,
+        828
+      ],
+      "case": "typed-no-photo-notes",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "type",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": false,
+        "origin": "type",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "046-notes-tags-filled-outcome.png",
+      "sha256": "e4100989aee6d18bbe02b130e8e5df58ed6b3f11120d43bf76181db628534f0c",
+      "bytes": 33463,
+      "size": [
+        360,
+        828
+      ],
+      "case": "typed-no-photo-notes",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "type",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "Remember this context.",
+        "tags": "reading textbook JLPT::N5",
+        "deck": "Japanese",
+        "hasPhoto": false,
+        "origin": "type",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "047-review-icons-pitch.png",
+      "sha256": "e1e4f050edbb73e86c2487d9a8333d254d5c37661901c7790889ae7c44641c91",
+      "bytes": 39632,
+      "size": [
+        360,
+        828
+      ],
+      "case": "caption-icons-pitch-handles",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "048-translation-edit-outcome.png",
+      "sha256": "54125d9689799382f1bd5bdc73f9167a72a3ef68a8ce6fb8f9d9219563269101",
+      "bytes": 38243,
+      "size": [
+        360,
+        828
+      ],
+      "case": "caption-icons-pitch-handles",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I finished reading at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "049-pronunciation-correction-outcome.png",
+      "sha256": "57340b8c6c9a93ab6980265e9645787ae56211add4152eb37beb851c1b504bc3",
+      "bytes": 39503,
+      "size": [
+        360,
+        828
+      ],
+      "case": "caption-icons-pitch-handles",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "type",
+        "sentence": "この本は丈夫です。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 1,
+            "text": "こ"
+          },
+          {
+            "start": 1,
+            "end": 2,
+            "text": "の"
+          },
+          {
+            "start": 2,
+            "end": 3,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "は"
+          },
+          {
+            "start": 4,
+            "end": 6,
+            "text": "丈夫",
+            "reading": "じょうぶ"
+          },
+          {
+            "start": 6,
+            "end": 7,
+            "text": "で"
+          },
+          {
+            "start": 7,
+            "end": 8,
+            "text": "す"
+          },
+          {
+            "start": 8,
+            "end": 9,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 6
+        },
+        "entryId": "sturdy",
+        "senseIds": [
+          0
+        ],
+        "definition": "sturdy; durable",
+        "translation": "This book is sturdy.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": false,
+        "origin": "type",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 1
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "050-sentence-reading-regeneration-outcome.png",
+      "sha256": "5ea429d2f95b8c0d576e5d33cca1137ad840230c11d2735cadeef39bbd99f7b0",
+      "bytes": 28386,
+      "size": [
+        360,
+        828
+      ],
+      "case": "caption-icons-pitch-handles",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "type",
+        "sentence": "この本は丈夫です。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 1,
+            "text": "こ"
+          },
+          {
+            "start": 1,
+            "end": 2,
+            "text": "の"
+          },
+          {
+            "start": 2,
+            "end": 3,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "は"
+          },
+          {
+            "start": 4,
+            "end": 6,
+            "text": "丈夫",
+            "reading": "じょうぶ"
+          },
+          {
+            "start": 6,
+            "end": 7,
+            "text": "で"
+          },
+          {
+            "start": 7,
+            "end": 8,
+            "text": "す"
+          },
+          {
+            "start": 8,
+            "end": 9,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 6
+        },
+        "entryId": "sturdy",
+        "senseIds": [
+          0
+        ],
+        "definition": "sturdy; durable",
+        "translation": "This book is sturdy.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": false,
+        "origin": "type",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 4,
+        "submission": null,
+        "snapshot": null,
+        "readings": {
+          "2:3": "ほん",
+          "4:6": "ジョウブ"
+        },
+        "sentenceAudioStale": false,
+        "pitchIndex": 1
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "051-notification-expiry-edit-outcome.png",
+      "sha256": "08f7b25fa7fb906575a1a7a40bf818155babec8797447f996dfd84957f6bbdea",
+      "bytes": 22820,
+      "size": [
+        360,
+        828
+      ],
+      "case": "notification-expiry-focus",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "target",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読んだ。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 9,
+            "text": "読んだ",
+            "reading": "よんだ"
+          },
+          {
+            "start": 9,
+            "end": 10,
+            "text": "。"
+          }
+        ],
+        "selection": null,
+        "entryId": null,
+        "senseIds": [],
+        "definition": "",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 0,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "052-keyboard-focus-restored.png",
+      "sha256": "8d01e19f6bb2526fe542a76d63872f335623b55e3435f7c70850c94d78f76a75",
+      "bytes": 32479,
+      "size": [
+        360,
+        828
+      ],
+      "case": "keyboard-focus",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "type",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "Keyboard note",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": false,
+        "origin": "type",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 3,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "053-light-field-border.png",
+      "sha256": "7daba50c107d461ab472a696a3f1b1396a70f4aba3dbad0d8a5c5bc0f99dbaa8",
+      "bytes": 33359,
+      "size": [
+        360,
+        828
+      ],
+      "case": "non-text-contrast-light",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "target",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 0,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "054-dark-field-border.png",
+      "sha256": "25c2c495c7e27343c70f09d2688db4bc3d17d7ab16a803a3db78cdcd437392d9",
+      "bytes": 33464,
+      "size": [
+        360,
+        828
+      ],
+      "case": "non-text-contrast-dark",
+      "theme": "dark",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "target",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 0,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "055-review-320-light-1x-top.png",
+      "sha256": "f3a7b6de073f3b5a0dac477d82209f605ec32e2e9070fa3097ba5d3616e768ae",
+      "bytes": 35541,
+      "size": [
+        320,
+        828
+      ],
+      "case": "responsive-320-light-1x",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 320,
+      "viewportWidth": 320,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "056-review-320-light-1x-bottom.png",
+      "sha256": "abb21b3bedc09e10dd8076d6b295398d135dca5f83424bcfa74ef3fd1e3d67ac",
+      "bytes": 33556,
+      "size": [
+        320,
+        828
+      ],
+      "case": "responsive-320-light-1x",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 320,
+      "viewportWidth": 320,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 41
+    },
+    {
+      "file": "057-review-320-light-2x-top.png",
+      "sha256": "6608b7c362098c7f4bca8f9ca121eec9f2d9e3019e8e5b7afb9ebb4b26a47986",
+      "bytes": 40137,
+      "size": [
+        320,
+        828
+      ],
+      "case": "responsive-320-light-2x",
+      "theme": "light",
+      "textScale": 2,
+      "phoneWidth": 320,
+      "viewportWidth": 320,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "058-review-320-light-2x-bottom.png",
+      "sha256": "1b30bb879ce105a8e7314904ac782e6eea7ec588ee823083e741e1b20b7ad8d9",
+      "bytes": 29912,
+      "size": [
+        320,
+        828
+      ],
+      "case": "responsive-320-light-2x",
+      "theme": "light",
+      "textScale": 2,
+      "phoneWidth": 320,
+      "viewportWidth": 320,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 623
+    },
+    {
+      "file": "059-review-320-dark-1x-top.png",
+      "sha256": "d80826f901d947c751e3475416c61160988da049b9bc677667b3e9b971c85cac",
+      "bytes": 35796,
+      "size": [
+        320,
+        828
+      ],
+      "case": "responsive-320-dark-1x",
+      "theme": "dark",
+      "textScale": 1,
+      "phoneWidth": 320,
+      "viewportWidth": 320,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "060-review-320-dark-1x-bottom.png",
+      "sha256": "1a68673d7bb714d425f5f0772e6a570c44f246ea223fc8cf948301a543ae8543",
+      "bytes": 33788,
+      "size": [
+        320,
+        828
+      ],
+      "case": "responsive-320-dark-1x",
+      "theme": "dark",
+      "textScale": 1,
+      "phoneWidth": 320,
+      "viewportWidth": 320,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 41
+    },
+    {
+      "file": "061-review-320-dark-2x-top.png",
+      "sha256": "3632069352108e679044859f6ed50dda50e718f66e6182fca6a7535c5e965b58",
+      "bytes": 40579,
+      "size": [
+        320,
+        828
+      ],
+      "case": "responsive-320-dark-2x",
+      "theme": "dark",
+      "textScale": 2,
+      "phoneWidth": 320,
+      "viewportWidth": 320,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "062-review-320-dark-2x-bottom.png",
+      "sha256": "c0eabb00b2d31b5804f8201e8fbd3979accb2e8acf6856e470630ff6ec8f6e14",
+      "bytes": 30052,
+      "size": [
+        320,
+        828
+      ],
+      "case": "responsive-320-dark-2x",
+      "theme": "dark",
+      "textScale": 2,
+      "phoneWidth": 320,
+      "viewportWidth": 320,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 623
+    },
+    {
+      "file": "063-review-360-light-1x-top.png",
+      "sha256": "a8705e3c00d53e58ff89bc2b7137b1d2836590a1c04377fcfca327858e8117ab",
+      "bytes": 36030,
+      "size": [
+        360,
+        828
+      ],
+      "case": "responsive-360-light-1x",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "064-review-360-light-1x-bottom.png",
+      "sha256": "a8705e3c00d53e58ff89bc2b7137b1d2836590a1c04377fcfca327858e8117ab",
+      "bytes": 36030,
+      "size": [
+        360,
+        828
+      ],
+      "case": "responsive-360-light-1x",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "065-review-360-light-2x-top.png",
+      "sha256": "607394716e4d12c4149d0643b433dda58bc41055e1dfc75bf8e4b269cd4bb713",
+      "bytes": 42229,
+      "size": [
+        360,
+        828
+      ],
+      "case": "responsive-360-light-2x",
+      "theme": "light",
+      "textScale": 2,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "066-review-360-light-2x-bottom.png",
+      "sha256": "9a48bf11675926fb53655613c601fed3eb6367983a85014c5feaf68bdbc07bd3",
+      "bytes": 30070,
+      "size": [
+        360,
+        828
+      ],
+      "case": "responsive-360-light-2x",
+      "theme": "light",
+      "textScale": 2,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 487
+    },
+    {
+      "file": "067-review-360-dark-1x-top.png",
+      "sha256": "76e0e9fc2c9bc2dd8b9a774d2f395d8a5538541eb5f40588693e5ce6c3676b68",
+      "bytes": 36200,
+      "size": [
+        360,
+        828
+      ],
+      "case": "responsive-360-dark-1x",
+      "theme": "dark",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "068-review-360-dark-1x-bottom.png",
+      "sha256": "76e0e9fc2c9bc2dd8b9a774d2f395d8a5538541eb5f40588693e5ce6c3676b68",
+      "bytes": 36200,
+      "size": [
+        360,
+        828
+      ],
+      "case": "responsive-360-dark-1x",
+      "theme": "dark",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "069-review-360-dark-2x-top.png",
+      "sha256": "e532330b4d75a92f086de5be3efae8bd6954950d3f1404765a805a16f32b304d",
+      "bytes": 42764,
+      "size": [
+        360,
+        828
+      ],
+      "case": "responsive-360-dark-2x",
+      "theme": "dark",
+      "textScale": 2,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "070-review-360-dark-2x-bottom.png",
+      "sha256": "52b6978da7dc83fe8280626fd14a399e9a2e755c7f63de7f7398e9d8f9b2ce12",
+      "bytes": 30102,
+      "size": [
+        360,
+        828
+      ],
+      "case": "responsive-360-dark-2x",
+      "theme": "dark",
+      "textScale": 2,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 487
+    },
+    {
+      "file": "071-review-390-light-1x-top.png",
+      "sha256": "9f84df427b99a57bab2fa5ec86da9992221f0fe19e2fd9d9201dbe0d2c1b5f3c",
+      "bytes": 36745,
+      "size": [
+        390,
+        828
+      ],
+      "case": "responsive-390-light-1x",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 390,
+      "viewportWidth": 390,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "072-review-390-light-1x-bottom.png",
+      "sha256": "9f84df427b99a57bab2fa5ec86da9992221f0fe19e2fd9d9201dbe0d2c1b5f3c",
+      "bytes": 36745,
+      "size": [
+        390,
+        828
+      ],
+      "case": "responsive-390-light-1x",
+      "theme": "light",
+      "textScale": 1,
+      "phoneWidth": 390,
+      "viewportWidth": 390,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "073-review-390-light-2x-top.png",
+      "sha256": "9120441da3f779a1f06501dc0a212296cc2f6dbe6fe77a4248318ef95f6f0577",
+      "bytes": 43089,
+      "size": [
+        390,
+        828
+      ],
+      "case": "responsive-390-light-2x",
+      "theme": "light",
+      "textScale": 2,
+      "phoneWidth": 390,
+      "viewportWidth": 390,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "074-review-390-light-2x-bottom.png",
+      "sha256": "33bc2cfdf56f4fa737d1908d0be83ad1cd2abf158018e06a69406f0b2966850f",
+      "bytes": 31454,
+      "size": [
+        390,
+        828
+      ],
+      "case": "responsive-390-light-2x",
+      "theme": "light",
+      "textScale": 2,
+      "phoneWidth": 390,
+      "viewportWidth": 390,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 487
+    },
+    {
+      "file": "075-review-390-dark-1x-top.png",
+      "sha256": "299238056a48d25f0610bd5d089f49852039b36638331c4a021a3ae00bbf29ba",
+      "bytes": 36850,
+      "size": [
+        390,
+        828
+      ],
+      "case": "responsive-390-dark-1x",
+      "theme": "dark",
+      "textScale": 1,
+      "phoneWidth": 390,
+      "viewportWidth": 390,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "076-review-390-dark-1x-bottom.png",
+      "sha256": "299238056a48d25f0610bd5d089f49852039b36638331c4a021a3ae00bbf29ba",
+      "bytes": 36850,
+      "size": [
+        390,
+        828
+      ],
+      "case": "responsive-390-dark-1x",
+      "theme": "dark",
+      "textScale": 1,
+      "phoneWidth": 390,
+      "viewportWidth": 390,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "077-review-390-dark-2x-top.png",
+      "sha256": "f7e78ac4cd850b0269c4eac20ff3f9bdf744958af51273a17dccb5d0c85623c8",
+      "bytes": 43659,
+      "size": [
+        390,
+        828
+      ],
+      "case": "responsive-390-dark-2x",
+      "theme": "dark",
+      "textScale": 2,
+      "phoneWidth": 390,
+      "viewportWidth": 390,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "078-review-390-dark-2x-bottom.png",
+      "sha256": "7bcfd018bbbcad5e48899429d016ecf63f745c152d10a132c6bfd7536ef90bcd",
+      "bytes": 31360,
+      "size": [
+        390,
+        828
+      ],
+      "case": "responsive-390-dark-2x",
+      "theme": "dark",
+      "textScale": 2,
+      "phoneWidth": 390,
+      "viewportWidth": 390,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "ready",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": true,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 487
+    },
+    {
+      "file": "079-dark-failed.png",
+      "sha256": "d6be6d7e76c178b8c528cd4278dec81d0e425ef50661c581810d7b354c898cec",
+      "bytes": 25528,
+      "size": [
+        360,
+        828
+      ],
+      "case": "responsive-390-dark-2x",
+      "theme": "dark",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "preparing",
+        "status": "failed",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "080-dark-counter.png",
+      "sha256": "fabcc049a1eb88b24b81d21115978ca13d51e2f898b7d0beb0613103ae91f049",
+      "bytes": 40172,
+      "size": [
+        360,
+        828
+      ],
+      "case": "responsive-390-dark-2x",
+      "theme": "dark",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "target",
+        "status": "missing",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "counter",
+        "senseIds": [
+          0
+        ],
+        "definition": "counter for long, cylindrical things",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [
+          "counter"
+        ],
+        "generation": 0,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "081-dark-uncertain.png",
+      "sha256": "66c7276f95b6824125ca57c5e960e73837051129771fc5d725c861e25dfaf9f1",
+      "bytes": 42819,
+      "size": [
+        360,
+        828
+      ],
+      "case": "responsive-390-dark-2x",
+      "theme": "dark",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "review",
+        "status": "uncertain",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 4,
+          "end": 5
+        },
+        "entryId": "book",
+        "senseIds": [
+          0
+        ],
+        "definition": "book; volume",
+        "translation": "I read a book at the library.",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 1,
+        "submission": "uncertain",
+        "snapshot": {
+          "id": "live",
+          "stage": "review",
+          "status": "ready",
+          "mode": "photo",
+          "sentence": "図書館で本を読みました。",
+          "tokens": [
+            {
+              "start": 0,
+              "end": 3,
+              "text": "図書館",
+              "reading": "としょかん"
+            },
+            {
+              "start": 3,
+              "end": 4,
+              "text": "で"
+            },
+            {
+              "start": 4,
+              "end": 5,
+              "text": "本",
+              "reading": "ほん"
+            },
+            {
+              "start": 5,
+              "end": 6,
+              "text": "を"
+            },
+            {
+              "start": 6,
+              "end": 11,
+              "text": "読みました",
+              "reading": "よみました"
+            },
+            {
+              "start": 11,
+              "end": 12,
+              "text": "。"
+            }
+          ],
+          "selection": {
+            "start": 4,
+            "end": 5
+          },
+          "entryId": "book",
+          "senseIds": [
+            0
+          ],
+          "definition": "book; volume",
+          "translation": "I read a book at the library.",
+          "notes": "",
+          "tags": "",
+          "deck": "Japanese",
+          "hasPhoto": true,
+          "origin": "photo",
+          "captured": false,
+          "blockedEntries": [],
+          "generation": 1,
+          "submission": null,
+          "snapshot": null,
+          "readings": {},
+          "sentenceAudioStale": false,
+          "pitchIndex": 0,
+          "word": "本",
+          "reading": "ほん"
+        },
+        "readings": {},
+        "sentenceAudioStale": false,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    },
+    {
+      "file": "082-dark-span.png",
+      "sha256": "da79331c43b204e364dd2b5470b5ac49f76a77410f48fc38bb9f1be36bb42433",
+      "bytes": 29260,
+      "size": [
+        360,
+        828
+      ],
+      "case": "responsive-390-dark-2x",
+      "theme": "dark",
+      "textScale": 1,
+      "phoneWidth": 360,
+      "viewportWidth": 360,
+      "state": {
+        "id": "live",
+        "stage": "target",
+        "status": "unknown",
+        "mode": "photo",
+        "sentence": "図書館で本を読みました。",
+        "tokens": [
+          {
+            "start": 0,
+            "end": 3,
+            "text": "図書館",
+            "reading": "としょかん"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "text": "で"
+          },
+          {
+            "start": 4,
+            "end": 5,
+            "text": "本",
+            "reading": "ほん"
+          },
+          {
+            "start": 5,
+            "end": 6,
+            "text": "を"
+          },
+          {
+            "start": 6,
+            "end": 11,
+            "text": "読みました",
+            "reading": "よみました"
+          },
+          {
+            "start": 11,
+            "end": 12,
+            "text": "。"
+          }
+        ],
+        "selection": {
+          "start": 0,
+          "end": 5
+        },
+        "entryId": null,
+        "senseIds": [],
+        "definition": "",
+        "translation": "",
+        "notes": "",
+        "tags": "",
+        "deck": "Japanese",
+        "hasPhoto": true,
+        "origin": "photo",
+        "captured": false,
+        "blockedEntries": [],
+        "generation": 0,
+        "submission": null,
+        "snapshot": null,
+        "readings": {},
+        "sentenceAudioStale": true,
+        "pitchIndex": 0
+      },
+      "scrollTop": 0
+    }
+  ]
+}

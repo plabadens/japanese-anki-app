@@ -1,0 +1,202 @@
+TAP version 13
+# Subtest: photo happy path is pure and exports the browser/CommonJS API
+ok 1 - photo happy path is pure and exports the browser/CommonJS API
+  ---
+  duration_ms: 8.248118
+  type: 'test'
+  ...
+# Subtest: P0-1 regression assertion rejects the unchanged legacy Back escape
+ok 2 - P0-1 regression assertion rejects the unchanged legacy Back escape
+  ---
+  duration_ms: 6.492454
+  type: 'test'
+  ...
+# Subtest: P0-1 uncertain submission blocks every mutation independently of stage/status
+ok 3 - P0-1 uncertain submission blocks every mutation independently of stage/status
+  ---
+  duration_ms: 17.977547
+  type: 'test'
+  ...
+# Subtest: sending is also immutable and cannot snapshot twice or accept unsolicited completion
+ok 4 - sending is also immutable and cannot snapshot twice or accept unsolicited completion
+  ---
+  duration_ms: 0.982147
+  type: 'test'
+  ...
+# Subtest: destination is editable before send and frozen with the submitted note
+ok 5 - destination is editable before send and frozen with the submitted note
+  ---
+  duration_ms: 0.564735
+  type: 'test'
+  ...
+# Subtest: P0-2 regression assertion rejects the unchanged legacy edited-sentence failure
+ok 6 - P0-2 regression assertion rejects the unchanged legacy edited-sentence failure
+  ---
+  duration_ms: 2.646357
+  type: 'test'
+  ...
+# Subtest: P0-2 editing retokenizes and resolves an inflected occurrence without replacing the sentence
+ok 7 - P0-2 editing retokenizes and resolves an inflected occurrence without replacing the sentence
+  ---
+  duration_ms: 0.826631
+  type: 'test'
+  ...
+# Subtest: tokenization covers unknown text, punctuation, and UTF-16 offsets without a dead end
+ok 8 - tokenization covers unknown text, punctuation, and UTF-16 offsets without a dead end
+  ---
+  duration_ms: 1.649252
+  type: 'test'
+  ...
+# Subtest: P0-3 regression assertion rejects unchanged legacy span collapse
+ok 9 - P0-3 regression assertion rejects unchanged legacy span collapse
+  ---
+  duration_ms: 2.946542
+  type: 'test'
+  ...
+# Subtest: P0-3 exact multi-token spans remain unknown and can be trimmed or explicitly cleared
+ok 10 - P0-3 exact multi-token spans remain unknown and can be trimmed or explicitly cleared
+  ---
+  duration_ms: 0.684595
+  type: 'test'
+  ...
+# Subtest: selection validates UTF-16 and grapheme boundaries and never coerces bad ranges
+ok 11 - selection validates UTF-16 and grapheme boundaries and never coerces bad ranges
+  ---
+  duration_ms: 0.856254
+  type: 'test'
+  ...
+# Subtest: P0-4 regression assertions reject unchanged legacy missing/counter recovery
+ok 12 - P0-4 regression assertions reject unchanged legacy missing/counter recovery
+  ---
+  duration_ms: 2.164219
+  type: 'test'
+  ...
+# Subtest: P0-4 a selected counter never silently changes to the book meaning
+ok 13 - P0-4 a selected counter never silently changes to the book meaning
+  ---
+  duration_ms: 0.842281
+  type: 'test'
+  ...
+# Subtest: P0-4 missing fixture survives recovery, same-target reselection, and status tampering
+ok 14 - P0-4 missing fixture survives recovery, same-target reselection, and status tampering
+  ---
+  duration_ms: 0.59607
+  type: 'test'
+  ...
+# Subtest: generation fail/retry/cancel retains context and rejects out-of-order completions
+ok 15 - generation fail/retry/cancel retains context and rejects out-of-order completions
+  ---
+  duration_ms: 0.548163
+  type: 'test'
+  ...
+# Subtest: editing/reselection/Back invalidate outstanding work and discard cannot reuse a generation ticket
+ok 16 - editing/reselection/Back invalidate outstanding work and discard cannot reuse a generation ticket
+  ---
+  duration_ms: 1.038897
+  type: 'test'
+  ...
+# Subtest: Type input PREPARE preserves optional images and mode changes preserve text
+ok 17 - Type input PREPARE preserves optional images and mode changes preserve text
+  ---
+  duration_ms: 0.485448
+  type: 'test'
+  ...
+# Subtest: photo origin cannot bypass its required image by mode switching, retake, or direct status edits
+ok 18 - photo origin cannot bypass its required image by mode switching, retake, or direct status edits
+  ---
+  duration_ms: 0.416394
+  type: 'test'
+  ...
+# Subtest: taking a contextual photo for Type never OCR-replaces its text or changes its origin
+ok 19 - taking a contextual photo for Type never OCR-replaces its text or changes its origin
+  ---
+  duration_ms: 0.221068
+  type: 'test'
+  ...
+# Subtest: sense choices and direct definition/translation/notes/tags edits remain pure and independent
+ok 20 - sense choices and direct definition/translation/notes/tags edits remain pure and independent
+  ---
+  duration_ms: 1.033105
+  type: 'test'
+  ...
+# Subtest: sentence reading correction is occurrence-specific and requires deliberate audio regeneration
+ok 21 - sentence reading correction is occurrence-specific and requires deliberate audio regeneration
+  ---
+  duration_ms: 1.964521
+  type: 'test'
+  ...
+# Subtest: word reading corrections re-resolve identity or clear it, never invent a pronunciation
+ok 22 - word reading corrections re-resolve identity or clear it, never invent a pronunciation
+  ---
+  duration_ms: 1.036394
+  type: 'test'
+  ...
+# Subtest: pitch alternatives are listed numeric fixture values for one reading, not arbitrary accents
+ok 23 - pitch alternatives are listed numeric fixture values for one reading, not arbitrary accents
+  ---
+  duration_ms: 0.806595
+  type: 'test'
+  ...
+# Subtest: controlled seeds cover declared UI states without simulating real service acceptance
+ok 24 - controlled seeds cover declared UI states without simulating real service acceptance
+  ---
+  duration_ms: 4.698789
+  type: 'test'
+  ...
+# Subtest: the second OCR region has genuine selectable fixture entries and contiguous inflection
+ok 25 - the second OCR region has genuine selectable fixture entries and contiguous inflection
+  ---
+  duration_ms: 0.773202
+  type: 'test'
+  ...
+# Subtest: public state has exactly the agreed serializable fields; entries cannot corrupt other drafts
+ok 26 - public state has exactly the agreed serializable fields; entries cannot corrupt other drafts
+  ---
+  duration_ms: 1.262541
+  type: 'test'
+  ...
+# Subtest: confirmed completion preserves destination, input mode, and last-sent tags, never source content
+ok 27 - confirmed completion preserves destination, input mode, and last-sent tags, never source content
+  ---
+  duration_ms: 0.475783
+  type: 'test'
+  ...
+# Subtest: completion never invents a translation for text outside controlled fixtures
+ok 28 - completion never invents a translation for text outside controlled fixtures
+  ---
+  duration_ms: 0.531037
+  type: 'test'
+  ...
+# Subtest: send validates selected senses and pitch bounds independently of display status
+ok 29 - send validates selected senses and pitch bounds independently of display status
+  ---
+  duration_ms: 0.408987
+  type: 'test'
+  ...
+# Subtest: recording availability is independently enforced before any generation request
+ok 30 - recording availability is independently enforced before any generation request
+  ---
+  duration_ms: 4.761746
+  type: 'test'
+  ...
+# Subtest: no-Intl fallback retains every code point and valid UTF-16 selection offsets
+ok 31 - no-Intl fallback retains every code point and valid UTF-16 selection offsets
+  ---
+  duration_ms: 3.55022
+  type: 'test'
+  ...
+# Subtest: retry cannot bypass required-image or preparation completeness guards
+ok 32 - retry cannot bypass required-image or preparation completeness guards
+  ---
+  duration_ms: 0.420651
+  type: 'test'
+  ...
+1..32
+# tests 32
+# suites 0
+# pass 32
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 281.188039
