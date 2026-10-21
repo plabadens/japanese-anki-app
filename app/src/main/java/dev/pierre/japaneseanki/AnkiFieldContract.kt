@@ -82,52 +82,9 @@ class DuplicateKey private constructor(val sentence: String, val lemma: String) 
             )
 
         private fun canonicalField(serialized: String): String =
-            decodeGeneratedEntities(
+            HtmlEntityDecoder.decode(
                 serialized.replace(Regex("(?i)</?(?:b|strong)\\b[^>]*>"), ""),
+                NumericEntityPolicy.DUPLICATE_CANONICALIZATION,
             ).trim()
-
-        private fun decodeGeneratedEntities(text: String): String {
-            val out = StringBuilder(text.length)
-            var i = 0
-            while (i < text.length) {
-                if (text[i] != '&') {
-                    out.append(text[i++])
-                    continue
-                }
-                val semicolon = text.indexOf(';', i + 1)
-                if (semicolon < 0 || semicolon - i > 12) {
-                    out.append(text[i++])
-                    continue
-                }
-                val entity = text.substring(i + 1, semicolon)
-                val decoded = when (entity) {
-                    "amp" -> "&"
-                    "lt" -> "<"
-                    "gt" -> ">"
-                    "quot" -> "\""
-                    "nbsp" -> "\u00a0"
-                    "#39", "apos" -> "'"
-                    else -> decodeNumericEntity(entity)
-                }
-                if (decoded == null) {
-                    out.append(text[i++])
-                } else {
-                    out.append(decoded)
-                    i = semicolon + 1
-                }
-            }
-            return out.toString()
-        }
-
-        private fun decodeNumericEntity(entity: String): String? {
-            if (!entity.startsWith('#')) return null
-            val value = if (entity.startsWith("#x", ignoreCase = true)) {
-                entity.substring(2).toIntOrNull(16)
-            } else {
-                entity.substring(1).toIntOrNull()
-            } ?: return null
-            if (!Character.isValidCodePoint(value) || value in 0xD800..0xDFFF) return null
-            return String(Character.toChars(value))
-        }
     }
 }

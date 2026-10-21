@@ -184,6 +184,24 @@ class TranslationServiceTest {
     }
 
     @Test
+    fun translationAndSpeechRedirectsKeepTheirDistinctFailureClasses() {
+        val translationError = assertThrows(TranslatorException::class.java) {
+            GoogleTranslationClient(FakeTranslationTransport(status = 302), timeoutMillis = 1_000)
+                .translate("test-key", "文")
+        }
+        assertEquals(TranslatorFailure.NETWORK, translationError.failure)
+
+        val speechError = assertThrows(SpeechException::class.java) {
+            GoogleChirpSpeechProvider(
+                credential = { "test-key" },
+                transport = FakeSpeechTransport(status = 302),
+                timeoutMillis = 1_000,
+            ).listVoices()
+        }
+        assertEquals(SpeechFailure.AUTHORIZATION, speechError.failure)
+    }
+
+    @Test
     fun timeoutAndNetworkFailuresAreRetryableFailuresNotResults() {
         val timeout = service(FakeTranslationTransport(failure = SocketTimeoutException("read timed out"))).translate("文")
         assertTrue(timeout is TranslationResult.Failed)
@@ -343,6 +361,39 @@ class TranslationServiceTest {
         val complete = base.copy(translation = "The cat runs.")
         assertNotNull(complete.fieldsByName())
         assertEquals("The cat runs.", complete.fieldsByName()!!["SentEng"])
+    }
+
+    @Test
+    fun translationEntityScannerPreservesItsNumericAndOnePassPolicy() {
+        val cases = listOf(
+            "&amp;" to "&",
+            "&lt;&gt;&quot;&apos;&nbsp;" to "<>\"'\u00a0",
+            "&AMP;" to "&AMP;",
+            "&unknown;" to "&unknown;",
+            "&amp" to "&amp",
+            "&#0;" to "&#0;",
+            "&#55295;" to "\uD7FF",
+            "&#55296;" to "\uD800",
+            "&#57343;" to "\uDFFF",
+            "&#57344;" to "\uE000",
+            "&#128512;" to "\uD83D\uDE00",
+            "&#1114111;" to "\uDBFF\uDFFF",
+            "&#1114112;" to "&#1114112;",
+            "&#-1;" to "&#-1;",
+            "&#x-1;" to "&#x-1;",
+            "&#+65;" to "A",
+            "&#x+41;" to "A",
+            "&#X41;" to "A",
+            "&#2147483648;" to "&#2147483648;",
+            "&#x000000041;" to "A",
+            "&#x0000000041;" to "&#x0000000041;",
+            "&amp;&lt;" to "&<",
+            "&amp;lt;" to "&lt;",
+        )
+
+        cases.forEach { (encoded, expected) ->
+            assertEquals(encoded, expected, unescapeTranslationEntities(encoded))
+        }
     }
 
     private companion object {
