@@ -368,3 +368,20 @@ sha256(tone.mp3) = d17bf96be1a23cb75b4d407bd91cf3fff77b667ad26e0c5d16322229e1cc3
   with a Generate action; that is the only new affordance.
 * No Android `SharedPreferences` adapter is checked in (it would be an unused stub); the adapter
   is the eight lines in §2 for the integrator to add beside `MainActivity`.
+
+## 7. Integration status (consumed)
+
+This recipe has been applied in the integration branch:
+
+* `SharedPreferencesDraftAudioPersistence` lives beside `MainActivity` (as specified in §2).
+* One controller per draft generation, rebuilt after `discard()`; `DisposableEffect` disposes it.
+* `MainActivity` declares inputs instead of generating, wires Continue/Retry, plays through a
+  `PLAYBACK` lease, freezes before import, releases the freeze on every Send outcome (retained on
+  an uncertain Send), runs the startup sweep and calls `discard()` on a draft reset.
+* `RevisionedAudioResult`, `AudioGenerationState` and `AudioRequestIdentity`, and their two
+  `AudioGenerationTest` cases, were deleted after the wiring landed.
+* `DraftAudioStore.sweep()` now filters the staging root by recognised names.
+* `discard()`/`setInput()` only retire files after the state commit succeeded; `clear(item)` was
+  added for an item that has no input at all.
+* `scripts/test-core.sh` carries the source/test/runner entries from §4 (183 tests).
+

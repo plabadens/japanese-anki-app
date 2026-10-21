@@ -63,3 +63,11 @@ receiptFilename, localFileExists, localIdentity)`. Both frozen checks in `MainAc
 
 No receipt format changes: the four keys per slot stay as they are, so existing preferences
 continue to load.
+
+## Integration status (consumed)
+
+Applied in the integration branch: both frozen checks and the review-screen receipt use
+`frozenImagePermitsImport`/`importedReceiptFromPreferences`; the Send path computes
+`liveMediaIdentity` once per phase and reuses it for the receipt and the frozen snapshot; audio
+slots take their identity from the frozen `DraftAudioFile` metadata instead of another stat; the
+post-import writes stay inline; the private `importedReceipt()` helper is gone.
