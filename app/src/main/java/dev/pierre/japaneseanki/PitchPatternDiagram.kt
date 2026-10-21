@@ -1,22 +1,18 @@
 package dev.pierre.japaneseanki
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -28,39 +24,31 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-internal enum class PitchDiagramScale { Compact, Full }
-
+/**
+ * Source-backed pitch contour: katakana morae joined by straight lines with the study's
+ * diagram-specific 22 sp labels and no axis legend. The mora cells are spacing only — the
+ * study draws no boxes around them — so the contour reads as one shape rather than a table.
+ */
 @Composable
-internal fun PitchPatternDiagram(
-    pitch: PitchAccent,
-    scale: PitchDiagramScale = PitchDiagramScale.Compact,
-    selected: Boolean = false,
-) {
+internal fun PitchPatternDiagram(pitch: PitchAccent, modifier: Modifier = Modifier) {
     val pitchColor = pitchColor(pitch.patternKind)
-    val surface = MaterialTheme.colorScheme.surface
-    val outline = MaterialTheme.colorScheme.outline
-    val compact = scale == PitchDiagramScale.Compact
-    val fullBlockWidth = 28f * LocalDensity.current.fontScale.coerceAtLeast(1f)
-    val blockWidth = if (compact) 17.dp else fullBlockWidth.dp
-    val blockHeight = if (compact) 18.dp else 26.dp
-    val gap = if (compact) 2.dp else 3.dp
-    val tailWidth = if (compact) 7.dp else 12.dp
+    val blockWidth = 28.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
+    val gap = 3.dp
+    val tailWidth = 12.dp
+    val chartHeight = 32.dp
     val totalWidth = blockWidth * pitch.morae.size + gap * (pitch.morae.size - 1) + tailWidth
-    val dotRadius = if (compact) 2.5.dp else 3.5.dp
-    val lineWidth = if (compact) 1.5.dp else 2.dp
+    val dotRadius = 4.5.dp
+    val lineWidth = 2.dp
     val description = pitch.accessibilityDescription()
-    val selectedModifier = if (selected) {
-        Modifier.border(1.dp, outline, RoundedCornerShape(6.dp)).padding(2.dp)
-    } else Modifier
 
     Column(
-        modifier = selectedModifier.horizontalScroll(rememberScrollState()),
+        modifier = modifier.horizontalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.Start,
     ) {
         Canvas(
             modifier = Modifier
                 .width(totalWidth)
-                .height(blockHeight)
+                .height(chartHeight)
                 .semantics { contentDescription = description },
         ) {
             val blockPx = blockWidth.toPx()
@@ -68,26 +56,11 @@ internal fun PitchPatternDiagram(
             val tailPx = tailWidth.toPx()
             val highY = size.height * 0.27f
             val lowY = size.height * 0.73f
+            if (pitch.morae.isEmpty()) return@Canvas
             val centers = pitch.highLevels.mapIndexed { index, high ->
                 Offset(
                     x = blockPx / 2 + index * (blockPx + gapPx),
                     y = if (high) highY else lowY,
-                )
-            }
-            centers.forEachIndexed { index, _ ->
-                val topLeft = Offset(index * (blockPx + gapPx), 0f)
-                drawRoundRect(
-                    color = surface,
-                    topLeft = topLeft,
-                    size = androidx.compose.ui.geometry.Size(blockPx, size.height),
-                    cornerRadius = CornerRadius(4.dp.toPx()),
-                )
-                drawRoundRect(
-                    color = outline,
-                    topLeft = topLeft,
-                    size = androidx.compose.ui.geometry.Size(blockPx, size.height),
-                    cornerRadius = CornerRadius(4.dp.toPx()),
-                    style = Stroke(width = 1.dp.toPx()),
                 )
             }
             val tailY = if (pitch.accentPosition == pitch.morae.size) lowY else centers.last().y
@@ -96,12 +69,20 @@ internal fun PitchPatternDiagram(
                 drawLine(pitchColor, start, end, strokeWidth = lineWidth.toPx(), cap = StrokeCap.Round)
             }
             centers.forEachIndexed { index, center ->
-                drawCircle(pitchColor, radius = dotRadius.toPx(), center = center)
                 if (pitchDotIsHollow(isSourceBackedNasalMora = index in pitch.marks.nasalMorae)) {
-                    drawCircle(surface, radius = (dotRadius - 0.9.dp).toPx(), center = center)
+                    // A source-backed nasal mora is a ring, not a filled dot; a ring reads the
+                    // same on any card tint, unlike punching a hole with a guessed background.
+                    drawCircle(
+                        pitchColor,
+                        radius = dotRadius.toPx(),
+                        center = center,
+                        style = Stroke(width = lineWidth.toPx()),
+                    )
+                } else {
+                    drawCircle(pitchColor, radius = dotRadius.toPx(), center = center)
                 }
                 if (index in pitch.marks.devoicedMorae) {
-                    // Devoiced is a separate source fact from nasalization: a small cross, not a hollow dot.
+                    // Devoiced is a separate source fact from nasalization: a small cross.
                     val arm = dotRadius.toPx() * 0.8f
                     drawLine(
                         pitchColor,
@@ -118,18 +99,17 @@ internal fun PitchPatternDiagram(
                 }
             }
         }
-        if (!compact) {
-            Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                pitch.morae.forEach { mora ->
-                    Text(
-                        mora,
-                        modifier = Modifier.width(blockWidth),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 13.sp,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                    )
-                }
+        Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+            pitch.morae.forEach { mora ->
+                Text(
+                    mora,
+                    modifier = Modifier.width(blockWidth),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 22.sp,
+                    lineHeight = 28.sp,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                )
             }
         }
     }

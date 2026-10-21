@@ -45,6 +45,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -76,8 +78,16 @@ import androidx.compose.material3.TextButton
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import dev.pierre.japaneseanki.ui.ReviewCard
+import dev.pierre.japaneseanki.ui.AppContentMaxWidth
 import dev.pierre.japaneseanki.ui.ReviewSendPresentation
 import dev.pierre.japaneseanki.ui.ReviewAudioPresentation
+import dev.pierre.japaneseanki.ui.FlowProgress
+import dev.pierre.japaneseanki.ui.FlowStep
+import dev.pierre.japaneseanki.ui.FlowTheme
+import dev.pierre.japaneseanki.ui.FlowTopBar
+import dev.pierre.japaneseanki.ui.InputScreen
+import dev.pierre.japaneseanki.ui.TargetScreen
+import dev.pierre.japaneseanki.ui.ocrFocusFraction
 import dev.pierre.japaneseanki.speech.CloudVoice
 import dev.pierre.japaneseanki.speech.GoogleChirpSpeechProvider
 import dev.pierre.japaneseanki.speech.HintResult
@@ -378,6 +388,9 @@ class MainActivity : ComponentActivity() {
             var showReplace by remember { mutableStateOf(restoredPendingPhoto != null) }
             var showSources by remember { mutableStateOf(false) }
             var showSettings by remember { mutableStateOf(false) }
+            var showSentenceEditor by remember { mutableStateOf(false) }
+            var showDeckSheet by remember { mutableStateOf(false) }
+            var showDiscardConfirm by remember { mutableStateOf(false) }
             var audioCacheBytes by remember { mutableStateOf(0L) }
             var audioCacheBusy by remember { mutableStateOf(false) }
             var audioCacheMessage by remember { mutableStateOf<String?>(null) }
@@ -479,7 +492,6 @@ class MainActivity : ComponentActivity() {
                         },
                 )
             }
-            var autoOpenReview by remember { mutableStateOf(false) }
             var photoSourcePath by remember {
                 mutableStateOf(preferences.getString("photo_source_path", null)?.takeIf { File(it).isFile })
             }
@@ -499,6 +511,8 @@ class MainActivity : ComponentActivity() {
             var ocrError by remember { mutableStateOf<String?>(null) }
             var ocrChoices by remember { mutableStateOf<List<OcrBlock>>(emptyList()) }
             var showOcrSheet by remember { mutableStateOf(false) }
+            var ocrImageHeight by remember { mutableStateOf(0) }
+            var photoFocusY by remember { mutableStateOf(0.5f) }
             var pendingPhotoFile by remember { mutableStateOf(restoredPendingPhoto) }
             var pendingSharedImageUri by remember { mutableStateOf<Uri?>(null) }
             var cameraPermissionGranted by remember {
@@ -668,7 +682,6 @@ class MainActivity : ComponentActivity() {
             val selectTarget: (TargetSpan?) -> Unit = selectTarget@{ selected ->
                 if (currentSubmissionLocked.value) return@selectTarget
                 val previousTarget = target
-                autoOpenReview = selected != null
                 if (selected != previousTarget) {
                     if (hasManualDefinition) dependentFieldsStale = true
                     selectedDictionaryEntry = null
@@ -693,10 +706,11 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            val applyOcrText: (String) -> Unit = applyOcrText@{ text ->
+            val applyOcrText: (String, Float) -> Unit = applyOcrText@{ text, focusY ->
                 if (currentSubmissionLocked.value) return@applyOcrText
                 selectTarget(null)
                 replaceEditorText(text.trim(), false)
+                photoFocusY = focusY.coerceIn(0f, 1f)
                 japaneseTokens = emptyList()
                 tokenizationError = null
                 tokenizationLoading = analyzerReady
@@ -774,13 +788,17 @@ class MainActivity : ComponentActivity() {
                                 ) || imageProcessingRevision != processingRevision || noteImagePath != file.absolutePath
                             ) return@launch
                             val blocks = result.blocks.filter { it.text.isNotBlank() }
+                            ocrImageHeight = result.sourceHeight
                             when {
                                 blocks.size > 1 -> {
                                     ocrChoices = blocks
                                     showOcrSheet = true
                                 }
-                                blocks.size == 1 -> applyOcrText(blocks.single().text)
-                                result.text.isNotBlank() -> applyOcrText(result.text)
+                                blocks.size == 1 -> applyOcrText(
+                                    blocks.single().text,
+                                    ocrFocusFraction(blocks.single().bounds, result.sourceHeight),
+                                )
+                                result.text.isNotBlank() -> applyOcrText(result.text, 0.5f)
                                 else -> {
                                     ocrError = "No text was found. Type or edit the sentence to continue."
                                     route = AppRoute.Target
@@ -2121,13 +2139,42 @@ class MainActivity : ComponentActivity() {
                                 onClick = {
                                     showOcrSheet = false
                                     ocrChoices = emptyList()
-                                    applyOcrText(block.text)
+                                    applyOcrText(block.text, ocrFocusFraction(block.bounds, ocrImageHeight))
                                 },
                                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                             ) { Text("${index + 1}. ${block.text.trim()}") }
                         }
                     }
                 }
+            }
+
+            if (showDiscardConfirm) {
+                val hasWork = editor.text.isNotBlank() || noteImagePath != null || target != null
+                AlertDialog(
+                    onDismissRequest = { showDiscardConfirm = false },
+                    title = { Text("Discard this draft?") },
+                    text = {
+                        Text(
+                            if (hasWork) {
+                                "The sentence, target, photo and any generated results will be deleted. This cannot be undone."
+                            } else {
+                                "This draft is already empty."
+                            },
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            enabled = !submissionLocked,
+                            onClick = {
+                                showDiscardConfirm = false
+                                clearDraft()
+                            },
+                        ) { Text("Discard draft") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDiscardConfirm = false }) { Text("Keep working") }
+                    },
+                )
             }
 
             val processedImageIdentity = processedImagePath?.let { path ->
@@ -2563,7 +2610,6 @@ class MainActivity : ComponentActivity() {
                     knownNoteId = null
                     submitMessage = null
                     recoveryMessage = null
-                    autoOpenReview = false
                     route = AppRoute.Target
                     draftGeneration++
                 }, modifier = Modifier.heightIn(min = 48.dp)) {
@@ -2680,602 +2726,498 @@ class MainActivity : ComponentActivity() {
                     isAppearanceLightNavigationBars = !darkTheme
                 }
             }
-            MaterialTheme(
-                colorScheme = if (darkTheme) {
-                    darkColorScheme(
-                        primary = Color(0xFFE4DAC5), onPrimary = Color(0xFF16181B),
-                        secondary = Color(0xFFE4DAC5), onSecondary = Color(0xFF16181B),
-                        tertiary = Color(0xFFE4DAC5), onTertiary = Color(0xFF16181B),
-                        primaryContainer = Color(0xFF35383C), onPrimaryContainer = Color(0xFFECE8DF),
-                        secondaryContainer = Color(0xFF35383C), onSecondaryContainer = Color(0xFFECE8DF),
-                        tertiaryContainer = Color(0xFF35383C), onTertiaryContainer = Color(0xFFECE8DF),
-                        background = Color(0xFF16181B), onBackground = Color(0xFFECE8DF),
-                        surface = Color(0xFF1D2024), onSurface = Color(0xFFECE8DF),
-                        surfaceVariant = Color(0xFF22262B), onSurfaceVariant = Color(0xFFB8B2A6),
-                        outline = Color(0xFF6C7176),
-                    )
-                } else {
-                    lightColorScheme(
-                        primary = Color(0xFF201F1D), onPrimary = Color(0xFFF6F3EC),
-                        secondary = Color(0xFF201F1D), onSecondary = Color(0xFFF6F3EC),
-                        tertiary = Color(0xFF201F1D), onTertiary = Color(0xFFF6F3EC),
-                        primaryContainer = Color(0xFFE5E1D8), onPrimaryContainer = Color(0xFF201F1D),
-                        secondaryContainer = Color(0xFFE5E1D8), onSecondaryContainer = Color(0xFF201F1D),
-                        tertiaryContainer = Color(0xFFE5E1D8), onTertiaryContainer = Color(0xFF201F1D),
-                        background = Color(0xFFF6F3EC), onBackground = Color(0xFF201F1D),
-                        surface = Color(0xFFFFFFFF), onSurface = Color(0xFF201F1D),
-                        surfaceVariant = Color(0xFFFBFAF6), onSurfaceVariant = Color(0xFF6B6558),
-                        outline = Color(0xFFDAD4C6),
-                    )
-                },
-            ) {
+            FlowTheme(darkTheme = darkTheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     contentColor = MaterialTheme.colorScheme.onSurface,
                 ) {
+                    // Portrait composition only: on a rotated or wide window the study's column
+                    // stays centred instead of stretching the photo slot and sentence across it.
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
+                            .wrapContentWidth(Alignment.CenterHorizontally)
+                            .widthIn(max = AppContentMaxWidth)
                             .statusBarsPadding()
                             .navigationBarsPadding()
-                            .imePadding()
-                            .verticalScroll(rememberScrollState())
-                            .padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                            .imePadding(),
                     ) {
                         var submitAction: () -> Unit = {}
                         val reviewTarget = displayTarget?.takeIf { it.textIn(displaySentence) != null }
-                        if (visibleRoute == AppRoute.Review && reviewTarget != null) {
-                            ReviewCard(
-                                sentence = displaySentence,
-                                target = reviewTarget,
-                                sentenceReading = frozenForDisplay?.sentenceReading ?: sentenceReading,
-                                furigana = if (frozenForDisplay == null) sentenceFurigana else emptyList(),
-                                vocabulary = displayVocabulary,
-                                vocabularyReading = displayVocabularyReading,
-                                pitch = displayPitch,
-                                definition = displayDefinition,
-                                translation = displayTranslation,
-                                translationUsesFallback = false,
-                                translationInfoExpanded = translationInfoExpanded,
-                                generatingFields = if (activeTranslationResult() is TranslationResult.Pending) setOf("Translation") else emptySet(),
-                                translationError = (activeTranslationResult() as? TranslationResult.Failed)?.message,
-                                translationStale = translationDraft.manuallyEdited && translationDraft.stale,
-                                translationSuggestion = (translationDraft.suggestion as? TranslationResult.Ready)?.text,
-                                translationEditable = !submissionLocked && completedSubmission == null,
-                                editingEnabled = !submissionLocked && completedSubmission == null,
-                                onTranslationChange = { text ->
-                                    translationRequestRevision++
-                                    translationInfoExpanded = false
-                                    translationDraft = translationDraft.saveManualEdit(text)
+                        FlowTopBar(
+                            title = when (visibleRoute) {
+                                AppRoute.Capture -> "Input"
+                                AppRoute.Target -> "Target"
+                                AppRoute.Review -> "Review"
+                            },
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            onBack = when (visibleRoute) {
+                                AppRoute.Review -> ({ generationStarted = false; route = AppRoute.Target })
+                                AppRoute.Target -> ({ route = AppRoute.Capture })
+                                AppRoute.Capture -> null
+                            },
+                            onSettings = if (visibleRoute == AppRoute.Capture && !submissionLocked) {
+                                ({ settingsLoading = true; showSettings = true })
+                            } else {
+                                null
+                            },
+                            onClose = if (visibleRoute == AppRoute.Capture && !submissionLocked) {
+                                ({ showDiscardConfirm = true })
+                            } else {
+                                null
+                            },
+                        )
+                        FlowProgress(
+                            current = when (visibleRoute) {
+                                AppRoute.Capture -> FlowStep.Input
+                                AppRoute.Target -> FlowStep.Target
+                                AppRoute.Review -> FlowStep.Review
+                            },
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        )
+                        if (analyzerLoading || dictionaryLoading || dictionaryError != null) {
+                            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+                                if (analyzerLoading) {
+                                    Text(
+                                        "Installing UniDic: ${(analyzerProgress * 100).toInt()}% (about 725 MB)…",
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                } else if (dictionaryLoading) {
+                                    Text("Preparing the offline dictionary for first use…", style = MaterialTheme.typography.bodySmall)
+                                } else if (dictionaryError != null) {
+                                    Text(dictionaryError!!, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                                }
+                            }
+                        }
+                        val updateEditor: (TextFieldValue) -> Unit = updateEditor@{ updated ->
+                            if (submissionLocked) return@updateEditor
+                            if (updated.text != editor.text) {
+                                if (photoSourcePath == null) setDraftOrigin("Type")
+                                draftGeneration++
+                                updateTranslationSentence(updated.text)
+                                if (hasManualDefinition) dependentFieldsStale = true
+                                selectTarget(null)
+                                japaneseTokens = emptyList()
+                                tokenizationError = null
+                                tokenizationLoading = analyzerReady
+                            }
+                            editor = updated
+                        }
+                        val submitHint = when {
+                            completedSubmission != null || duplicateBlocked || recoveryRequired -> null
+                            isSubmitting -> null
+                            submitMessage != null -> null
+                            imagePending -> "The image is still being prepared. Send becomes available when it is ready."
+                            imageAttached && !imageProcessing && imageError == null && !imageReady ->
+                                "The selected image is not ready to send."
+                            !apiPermissionGranted -> "Allow AnkiDroid API access in Settings before sending."
+                            validationErrors.isNotEmpty() -> "Still needed: ${validationErrors.first()}"
+                            !canSend -> "Complete the note before sending."
+                            else -> null
+                        }
+                        val loadMoreMatches: () -> Unit = {
+                            val query = target?.textIn(editor.text)
+                            if (query != null) {
+                                val callbackGeneration = draftGeneration
+                                coroutineScope.launch {
+                                    if (!asyncDraftIsCurrent(callbackGeneration)) return@launch
+                                    dictionarySearchLoading = true
+                                    try {
+                                        val more = withContext(Dispatchers.IO) {
+                                            offlineDictionary.search(
+                                                query,
+                                                analyzedTarget?.expression,
+                                                offset = dictionaryEntries.size,
+                                            )
+                                        }
+                                        if (!asyncDraftIsCurrent(callbackGeneration)) return@launch
+                                        dictionaryEntries = dictionaryEntries + more
+                                        dictionaryHasMore = more.size == 50
+                                    } catch (cancelled: CancellationException) {
+                                        throw cancelled
+                                    } catch (_: Exception) {
+                                        if (asyncDraftIsCurrent(callbackGeneration)) {
+                                            dictionaryError = "Could not load more dictionary matches."
+                                        }
+                                    } finally {
+                                        dictionarySearchLoading = false
+                                    }
+                                }
+                            }
+                        }
+                        when (visibleRoute) {
+                            AppRoute.Capture -> InputScreen(
+                                captureMode = captureMode,
+                                onCaptureModeChange = { mode ->
+                                    captureMode = mode
+                                    preferences.edit().putString("capture_mode", mode).apply()
                                 },
-                                onRetryTranslation = {
-                                    translationAutoAllowed = true
-                                    translationRetry++
+                                editor = editor,
+                                onEditorChange = updateEditor,
+                                onContinue = { route = AppRoute.Target },
+                                onOpenGallery = {
+                                    photoPicker.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                    )
                                 },
-                                onKeepMyTranslation = {
-                                    translationRequestRevision++
-                                    translationDraft = translationDraft.keepMyText()
+                                onChoosePhoto = {
+                                    noteImagePicker.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                    )
                                 },
-                                onUseTranslationSuggestion = {
-                                    translationRequestRevision++
-                                    translationDraft = translationDraft.useSuggestion()
-                                },
-                                onToggleTranslationInfo = { translationInfoExpanded = !translationInfoExpanded },
-                                sentenceAudio = sentenceAudio.presentation(),
-                                vocabularyAudio = wordAudio.presentation(),
-                                onToggleSentenceAudio = {
-                                    if (playingAudio == AudioItem.SENTENCE) {
-                                        stopAudioPlayback()
-                                        playingAudio = null
+                                onCaptured = { file -> cameraError = null; requestPhoto(file) },
+                                onCameraError = { message -> cameraError = message },
+                                outputDirectory = File(filesDir, "draft").apply { mkdirs() },
+                                modifier = Modifier.weight(1f).fillMaxWidth(),
+                                enabled = !submissionLocked,
+                                cameraPermissionGranted = cameraPermissionGranted,
+                                onRequestCamera = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) },
+                                cameraError = cameraError,
+                                ocrLoading = ocrLoading,
+                                ocrError = ocrError,
+                                onRetryOcr = {
+                                    val source = photoSourcePath?.let(::File)?.takeIf(File::isFile)
+                                    if (source != null) {
+                                        processImage(source, true)
                                     } else {
-                                        sentenceAudio.path?.let { playAudio(AudioItem.SENTENCE, it) }
+                                        photoPicker.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                        )
                                     }
                                 },
-                                onRetrySentenceAudio = {
-                                    sentenceAudio = DraftAudio()
-                                    audioRetry++
-                                },
-                                onToggleVocabularyAudio = {
-                                    if (playingAudio == AudioItem.VOCABULARY) {
-                                        stopAudioPlayback()
-                                        playingAudio = null
-                                    } else {
-                                        wordAudio.path?.let { playAudio(AudioItem.VOCABULARY, it) }
-                                    }
-                                },
-                                onRetryVocabularyAudio = {
-                                    wordAudio = DraftAudio()
-                                    audioRetry++
-                                },
-                                notes = displayNotes,
-                                tags = displayTags.split(Regex("\\s+")).filter(String::isNotBlank),
-                                imagePath = frozenForDisplay?.media?.path ?: noteImagePath,
+                                imageAttached = imageAttached,
                                 imageStatus = when {
-                                    imageProcessing -> "Preparing image…"
+                                    imageProcessing -> "Preparing the photo for Anki…"
                                     imageError != null -> imageError
-                                    imageAttached -> "Image is not available"
+                                    imageAttached -> "Photo attached"
                                     else -> null
                                 },
-                                pitchHasAlternatives = pitchCandidates.size > 1,
-                                pitchInfoExpanded = pitchInfoExpanded,
-                                onTogglePitchInfo = { pitchInfoExpanded = !pitchInfoExpanded },
-                                onEdit = { if (!submissionLocked) { autoOpenReview = false; generationStarted = false; route = AppRoute.Target } },
-                                onAddTag = { if (!submissionLocked) { autoOpenReview = false; generationStarted = false; route = AppRoute.Target } },
-                                onChooseImage = { if (!submissionLocked) noteImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-                                onRemoveImage = { if (!submissionLocked) removeDraftImage() },
-                                imageRemovable = draftOrigin != "Photo",
-                                onDefinitionChange = { text -> if (!submissionLocked) { definition = text; definitionManuallyEdited = true; definitionProvenanceKnown = true; selectedSenseIndices = emptySet() } },
-                                onNotesChange = { text -> if (!submissionLocked) notes = text },
+                                imageFailed = !imageProcessing && imageError != null,
+                                onRetryImage = {
+                                    val source = photoSourcePath?.let(::File)?.takeIf(File::isFile)
+                                    if (source != null) {
+                                        processImage(source, true)
+                                    } else {
+                                        photoPicker.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                        )
+                                    }
+                                },
+                            )
+                            AppRoute.Target -> TargetScreen(
                                 tokens = japaneseTokens,
-                                onSelectToken = { span -> if (!submissionLocked) selectTarget(span) },
-                                correctableReadings = if (frozenForDisplay == null) correctableReadings else emptyList(),
-                                onCorrectReading = { row, reading -> applyReadingCorrection(row.span, reading) },
-                                readingCorrectionError = readingCorrectionError,
-                                onVocabularyReadingChange = { raw -> applyVocabularyReading(raw) },
-                                vocabularyReadingError = vocabularyReadingError,
-                                vocabularyAudioProgress = nhkProgress?.describe(),
-                                vocabularyAudioProgressFraction = nhkProgress?.fraction,
-                                onCancelVocabularyAudio = if (nhkProgress == null) null else ({ nhkCancelRequested.set(true) }),
-                                definitionSenses = selectedDictionaryEntry?.senses ?: emptyList(),
-                                selectedSenseIndices = selectedSenseIndices,
+                                selectedSpan = target,
+                                onSelectSpan = { span ->
+                                    selectTarget(span)
+                                    editor = editor.copy(selection = TextRange(span.start, span.end))
+                                },
+                                onEditSentence = { showSentenceEditor = true },
+                                entryLabel = selectedDictionaryEntry?.expression ?: vocabulary.takeIf { it.isNotBlank() },
+                                entryDetail = selectedDictionaryEntry?.reading,
+                                entryCount = dictionaryEntries.size,
+                                onChooseEntry = { showDictionarySheet = true },
+                                senses = selectedDictionaryEntry?.senses
+                                    ?.map { sense -> sense.glosses.joinToString("; ") }
+                                    ?: emptyList(),
+                                selectedSenses = selectedSenseIndices,
                                 onToggleSense = { index, checked ->
                                     if (!submissionLocked) {
-                                        val newSelection = if (checked) selectedSenseIndices + index else selectedSenseIndices - index
+                                        val newSelection = if (checked) {
+                                            selectedSenseIndices + index
+                                        } else {
+                                            selectedSenseIndices - index
+                                        }
                                         selectedSenseIndices = newSelection
                                         selectedDictionaryEntry?.let { entry ->
-                                            definition = newSelection.sorted().mapNotNull { index2 ->
-                                                entry.senses.getOrNull(index2)?.glosses?.joinToString("; ")
+                                            definition = newSelection.sorted().mapNotNull { selected ->
+                                                entry.senses.getOrNull(selected)?.glosses?.joinToString("; ")
                                             }.joinToString("\n")
                                         }
                                         definitionManuallyEdited = false
                                         definitionProvenanceKnown = true
                                     }
                                 },
-                                sendPresentation = when {
-                                    isSubmitting -> ReviewSendPresentation.Sending
-                                    completedSubmission != null -> ReviewSendPresentation.Status(
-                                        submitMessage ?: "Note sent to AnkiDroid.",
-                                    )
-                                    duplicateBlocked -> ReviewSendPresentation.Status(
-                                        submitMessage ?: "A matching note already exists in AnkiDroid.",
-                                    )
-                                    recoveryRequired -> ReviewSendPresentation.Status(
-                                        recoveryMessage ?: "Pending Send needs review.",
-                                    )
-                                    submitMessage?.startsWith("Blocked:") == true -> ReviewSendPresentation.Status(submitMessage.orEmpty())
-                                    submitMessage != null -> ReviewSendPresentation.Status(submitMessage!!, "Retry Send")
-                                    else -> ReviewSendPresentation.Ready
+                                meaningStatus = when {
+                                    target == null -> "Tap a word to choose the target."
+                                    dictionarySearchLoading -> "Searching JMdict…"
+                                    selectedDictionaryEntry == null && dictionaryLoading -> "Preparing the offline dictionary…"
+                                    selectedDictionaryEntry == null && dictionaryEntries.size > 1 -> "Choose the intended dictionary entry."
+                                    selectedDictionaryEntry == null && dictionaryReady -> "No dictionary match for this selection."
+                                    vocabularyReadingError != null -> vocabularyReadingError
+                                    pitchIndexError != null -> pitchIndexError
+                                    else -> null
                                 },
-                                onSend = if (canSend && completedSubmission == null && !duplicateBlocked &&
-                                    submitMessage?.startsWith("Blocked:") != true
-                                ) ({ submitAction() }) else null,
-                                onSendStatusAction = if (canSend && completedSubmission == null && !duplicateBlocked) ({ submitAction() }) else null,
-                                sendStatusContent = sendRecoveryContent,
-                            )
-                        } else {
-                        if (!frozenRetryReady && imagePending) {
-                            Text("The image is still being prepared. Send becomes available when it is ready.", style = MaterialTheme.typography.bodyMedium)
-                        }
-                        if (imageAttached && !imageProcessing && imageError == null && !imageReady) {
-                            Text("The selected image is not ready to send.", style = MaterialTheme.typography.bodyMedium)
-                        }
-                        imageError?.let { message ->
-                            Text(message, style = MaterialTheme.typography.bodyMedium)
-                            TextButton(enabled = !submissionLocked, onClick = {
-                                val source = noteImagePath?.let(::File)
-                                if (source?.isFile == true) attachImage(source)
-                                else noteImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                            }) { Text("Retry image") }
-                            TextButton(
-                                enabled = !submissionLocked && draftOrigin != "Photo",
-                                onClick = removeDraftImage,
-                            ) { Text("Remove image") }
-                        }
-                        if (visibleRoute == AppRoute.Capture) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                SingleChoiceSegmentedButtonRow {
-                                    listOf("Photo", "Type").forEachIndexed { index, mode ->
-                                        SegmentedButton(
-                                            selected = captureMode == mode,
-                                            enabled = !submissionLocked,
-                                            shape = SegmentedButtonDefaults.itemShape(index, 2),
-                                            colors = SegmentedButtonDefaults.colors(
-                                                activeContainerColor = MaterialTheme.colorScheme.primary,
-                                                activeContentColor = MaterialTheme.colorScheme.onPrimary,
-                                            ),
-                                            icon = {},
-                                            onClick = {
-                                                captureMode = mode
-                                                preferences.edit().putString("capture_mode", captureMode).apply()
-                                            },
-                                        ) { Text(mode) }
-                                    }
-                                }
-                                IconButton(
-                                    enabled = !submissionLocked,
-                                    onClick = {
-                                        settingsLoading = true
-                                        showSettings = true
-                                    },
-                                    modifier = Modifier.semantics { contentDescription = "Settings" },
-                                ) { Icon(dev.pierre.japaneseanki.ui.MaterialSymbols.Settings, contentDescription = null) }
-                            }
-                        } else if (visibleRoute == AppRoute.Target) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                TextButton(enabled = !submissionLocked, onClick = { route = AppRoute.Capture }) { Text("Back to capture") }
-                                if (displayTarget?.textIn(displaySentence) != null) {
-                                    TextButton(enabled = !submissionLocked, onClick = { route = AppRoute.Review }) { Text("Back to review") }
-                                }
-                            }
-                            Button(
-                                enabled = !submissionLocked && displayTarget != null && selectedDictionaryEntry != null &&
-                                    vocabulary.isNotBlank() && definition.isNotBlank() && pitch != null,
-                                onClick = {
-                                    generationStarted = true
-                                    route = AppRoute.Review
+                                canContinue = !submissionLocked && target != null && selectedDictionaryEntry != null &&
+                                    definition.isNotBlank() && pitch != null,
+                                continueHint = when {
+                                    target == null -> "Tap a word to continue."
+                                    selectedDictionaryEntry == null -> "Choose a dictionary entry to continue."
+                                    definition.isBlank() -> "Choose a meaning to continue."
+                                    pitch == null -> "A source-listed pitch pattern is required to continue."
+                                    else -> null
                                 },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) { Text("Continue to generate") }
-                        }
-                        if (visibleRoute == AppRoute.Review) {
-                            Text("Review card", style = MaterialTheme.typography.titleLarge)
-                        }
-                        if (dictionaryLoading) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                                Text("Preparing offline dictionary for first use…")
-                            }
-                        }
-                        if (dictionaryError != null) {
-                            Text(dictionaryError!!, style = MaterialTheme.typography.bodyMedium)
-                            TextButton(enabled = !submissionLocked, onClick = { dictionaryRetry++ }) { Text("Retry offline data setup") }
-                        }
-                        if (analyzerLoading) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                                Text("Installing UniDic: ${(analyzerProgress * 100).toInt()}% (about 725 MB)…")
-                            }
-                        }
-                        if (analyzerError != null) {
-                            Text(analyzerError!!, style = MaterialTheme.typography.bodyMedium)
-                            TextButton(enabled = !submissionLocked, onClick = { dictionaryRetry++ }) { Text("Retry analyzer setup") }
-                        }
-                        if (visibleRoute == AppRoute.Capture && captureMode == "Photo") {
-                            if (cameraPermissionGranted) {
-                                cameraError?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
-                                val cameraController = dev.pierre.japaneseanki.ui.rememberCameraController()
-                                val configuration = LocalConfiguration.current
-                                val landscape = configuration.screenWidthDp > configuration.screenHeightDp
-                                val shutter: @Composable (Modifier) -> Unit = { shutterModifier ->
-                                    dev.pierre.japaneseanki.ui.CameraShutterRow(
-                                        controller = cameraController,
-                                        enabled = !submissionLocked,
-                                        outputDirectory = File(filesDir, "draft").apply { mkdirs() },
-                                        onCaptured = { file -> cameraError = null; requestPhoto(file) },
-                                        onError = { message -> cameraError = message },
-                                        modifier = shutterModifier,
-                                    )
-                                }
-                                if (landscape) {
-                                    // A 4:3 frame is height-limited in landscape; putting the shutter
-                                    // below it would push it off-screen, so it sits beside the frame.
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        dev.pierre.japaneseanki.ui.CameraViewfinder(
-                                            controller = cameraController,
-                                            modifier = Modifier
-                                                .height(dev.pierre.japaneseanki.ui.landscapeViewfinderHeightDp(configuration.screenHeightDp).dp)
-                                                .aspectRatio(4f / 3f),
-                                        )
-                                        shutter(Modifier.width(110.dp))
-                                    }
-                                } else {
-                                    dev.pierre.japaneseanki.ui.CameraViewfinder(
-                                        controller = cameraController,
-                                        modifier = Modifier.fillMaxWidth().aspectRatio(3f / 4f),
-                                    )
-                                    shutter(Modifier.fillMaxWidth())
-                                }
-                                OutlinedButton(
-                                    enabled = !submissionLocked,
-                                    onClick = {
-                                        photoPicker.launch(
-                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                                        )
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                ) { Text("Use a photo from this device") }
-                            } else {
-                                Text("Camera access is needed to take a photo.", style = MaterialTheme.typography.bodyMedium)
-                                Button(onClick = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) }) {
-                                    Text("Grant camera access")
-                                }
-                            }
-                        } else {
-                        OutlinedTextField(
-                            value = if (frozenForDisplay != null) {
-                                TextFieldValue(displaySentence, selection = TextRange(displaySentence.length))
-                            } else editor,
-                            readOnly = submissionLocked,
-                            onValueChange = { updated ->
-                                if (updated.text != editor.text) {
-                                    if (photoSourcePath == null) setDraftOrigin("Type")
-                                    draftGeneration++
-                                    updateTranslationSentence(updated.text)
-                                    if (hasManualDefinition) dependentFieldsStale = true
-                                    selectTarget(null)
-                                    japaneseTokens = emptyList()
-                                    tokenizationError = null
-                                    tokenizationLoading = analyzerReady
-                                    if (updated.text.isNotBlank()) route = AppRoute.Target
-                                }
-                                editor = updated
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text("Japanese sentence") },
-                            minLines = 3,
-                        )
-                        if (captureMode == "Type" && visibleRoute == AppRoute.Capture) {
-                            OutlinedButton(
-                                enabled = !submissionLocked,
-                                onClick = { noteImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) { Text(if (noteImagePath == null) "Add photo (optional)" else "Change photo") }
-                            Button(
-                                enabled = !submissionLocked && editor.text.isNotBlank(),
-                                onClick = { route = AppRoute.Target },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) { Text("Continue to prepare") }
-                        }
-                        ocrError?.let { message ->
-                            Text(message, style = MaterialTheme.typography.bodyMedium)
-                            TextButton(enabled = !submissionLocked, onClick = {
-                                val source = photoSourcePath?.let(::File)?.takeIf(File::isFile)
-                                if (source != null) processImage(source, true)
-                                else photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                            }) { Text("Retry photo text reading") }
-                            TextButton(enabled = !submissionLocked, onClick = {
-                                ocrError = null
-                                route = AppRoute.Target
-                            }) { Text("Edit sentence") }
-                        }
-                        if (analyzerReady && japaneseTokens.isNotEmpty()) {
-                            Text("Tap a word to mine.", style = MaterialTheme.typography.bodyMedium)
-                            Row(
-                                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                                japaneseTokens.forEach { token ->
-                                    val selected = target == token.span
-                                    val onSelect = {
-                                        selectTarget(token.span)
-                                        editor = editor.copy(selection = TextRange(token.span.start, token.span.end))
-                                    }
-                                    if (selected) {
-                                        Button(enabled = !submissionLocked, onClick = onSelect) { Text(token.surface) }
-                                    } else {
-                                        OutlinedButton(enabled = !submissionLocked, onClick = onSelect) { Text(token.surface) }
-                                    }
-                                }
-                            }
-                            if (tokenizationLoading) Text("Analyzing sentence…")
-                            if (tokenizationError != null) {
-                                Text(tokenizationError!!, style = MaterialTheme.typography.bodyMedium)
-                                TextButton(enabled = !submissionLocked, onClick = { analysisRetry++ }) { Text("Retry sentence analysis") }
-                            }
-                        }
-                        OutlinedButton(
-                            enabled = !submissionLocked && editor.selection.start != editor.selection.end,
-                            onClick = {
-                                selectTarget(
-                                    TargetSpan.fromSelection(
-                                        editor.text,
-                                        editor.selection.start,
-                                        editor.selection.end,
-                                    ),
-                                )
-                            },
-                        ) { Text("Use selected text as target") }
-                        val targetText = displayTarget?.textIn(displaySentence)
-                        val lemmaLabel = displayVocabulary.takeIf(String::isNotBlank)?.let { " → $it" }.orEmpty()
-                        Text(
-                            targetText?.let { "Selected: $it$lemmaLabel" }
-                                ?: "Select text in the sentence to choose a target.",
-                            style = MaterialTheme.typography.bodyLarge,
-                        )
-                        if (dependentFieldsStale && target?.textIn(editor.text) == null) {
-                            Text(
-                                "Previous vocabulary and reading work was kept. Select a new target to review it.",
-                                style = MaterialTheme.typography.bodyMedium,
+                                onContinue = { generationStarted = true; route = AppRoute.Review },
+                                modifier = Modifier.weight(1f).fillMaxWidth(),
+                                locked = submissionLocked,
+                                tokensLoading = tokenizationLoading,
+                                hasMoreEntries = dictionaryHasMore && !dictionarySearchLoading,
+                                onLoadMoreEntries = loadMoreMatches,
                             )
-                        }
-                        }
-                        if (displayTarget?.textIn(displaySentence) != null) {
-                            if (frozenForDisplay != null) {
-                                Text("$displayVocabulary · $displayVocabularyReading", style = MaterialTheme.typography.titleSmall)
-                            }
-                            if (frozenForDisplay == null && dictionaryEntries.size > 1 && selectedDictionaryEntry == null) {
-                                Text(
-                                    "No dictionary entry is selected, so this word stays unresolved.",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                                OutlinedButton(enabled = !submissionLocked, onClick = { showDictionarySheet = true }) {
-                                    Text("Choose dictionary entry")
-                                }
-                            }
-                            if (frozenForDisplay == null && vocabularyReadingError != null) {
-                                Text(vocabularyReadingError!!, style = MaterialTheme.typography.bodyMedium)
-                            }
-                            if (frozenForDisplay == null) {
-                                when {
-                                    !dictionaryReady && dictionaryLoading -> Text("Dictionary is being prepared…")
-                                    !dictionaryReady -> Text("Dictionary unavailable; an entry is required before Send.")
-                                    dictionarySearchLoading -> Text("Searching JMdict…")
-                                    dictionaryEntries.isEmpty() -> Text("No dictionary match for this selection. Edit the sentence or reselect a target.")
-                                }
-                                selectedDictionaryEntry?.takeIf { dictionaryEntries.size == 1 }?.let { entry ->
-                                    Text("${entry.expression} · ${entry.reading}", style = MaterialTheme.typography.titleSmall)
-                                    Text(entry.senses.firstOrNull()?.glosses?.joinToString("; ").orEmpty())
-                                }
-                            }
-                            if (frozenForDisplay == null && dictionaryHasMore && !dictionarySearchLoading) {
-                                TextButton(enabled = !submissionLocked, onClick = {
-                                    val query = target?.textIn(editor.text) ?: return@TextButton
-                                    val callbackGeneration = draftGeneration
-                                    coroutineScope.launch {
-                                        if (!asyncDraftIsCurrent(callbackGeneration)) return@launch
-                                        dictionarySearchLoading = true
-                                        try {
-                                            val more = withContext(Dispatchers.IO) {
-                                                offlineDictionary.search(
-                                                    query,
-                                                    analyzedTarget?.expression,
-                                                    offset = dictionaryEntries.size,
+                            AppRoute.Review -> Box(Modifier.weight(1f).fillMaxWidth()) {
+                                if (reviewTarget != null) {
+                                    ReviewCard(
+                                        sentence = displaySentence,
+                                        target = reviewTarget,
+                                        sentenceReading = frozenForDisplay?.sentenceReading ?: sentenceReading,
+                                        furigana = if (frozenForDisplay == null) sentenceFurigana else emptyList(),
+                                        vocabulary = displayVocabulary,
+                                        vocabularyReading = displayVocabularyReading,
+                                        pitch = displayPitch,
+                                        definition = displayDefinition,
+                                        translation = displayTranslation,
+                                        translationUsesFallback = false,
+                                        translationInfoExpanded = translationInfoExpanded,
+                                        generatingFields = if (activeTranslationResult() is TranslationResult.Pending) {
+                                            setOf("Translation")
+                                        } else {
+                                            emptySet()
+                                        },
+                                        translationError = (activeTranslationResult() as? TranslationResult.Failed)?.message,
+                                        translationStale = translationDraft.manuallyEdited && translationDraft.stale,
+                                        translationSuggestion = (translationDraft.suggestion as? TranslationResult.Ready)?.text,
+                                        translationEditable = !submissionLocked && completedSubmission == null,
+                                        editingEnabled = !submissionLocked && completedSubmission == null,
+                                        onTranslationChange = { text ->
+                                            translationRequestRevision++
+                                            translationInfoExpanded = false
+                                            translationDraft = translationDraft.saveManualEdit(text)
+                                        },
+                                        onRetryTranslation = {
+                                            translationAutoAllowed = true
+                                            translationRetry++
+                                        },
+                                        onKeepMyTranslation = {
+                                            translationRequestRevision++
+                                            translationDraft = translationDraft.keepMyText()
+                                        },
+                                        onUseTranslationSuggestion = {
+                                            translationRequestRevision++
+                                            translationDraft = translationDraft.useSuggestion()
+                                        },
+                                        onToggleTranslationInfo = { translationInfoExpanded = !translationInfoExpanded },
+                                        sentenceAudio = sentenceAudio.presentation(),
+                                        vocabularyAudio = wordAudio.presentation(),
+                                        onToggleSentenceAudio = {
+                                            if (playingAudio == AudioItem.SENTENCE) {
+                                                stopAudioPlayback()
+                                                playingAudio = null
+                                            } else {
+                                                sentenceAudio.path?.let { playAudio(AudioItem.SENTENCE, it) }
+                                            }
+                                        },
+                                        onRetrySentenceAudio = {
+                                            sentenceAudio = DraftAudio()
+                                            audioRetry++
+                                        },
+                                        onToggleVocabularyAudio = {
+                                            if (playingAudio == AudioItem.VOCABULARY) {
+                                                stopAudioPlayback()
+                                                playingAudio = null
+                                            } else {
+                                                wordAudio.path?.let { playAudio(AudioItem.VOCABULARY, it) }
+                                            }
+                                        },
+                                        onRetryVocabularyAudio = {
+                                            wordAudio = DraftAudio()
+                                            audioRetry++
+                                        },
+                                        notes = displayNotes,
+                                        tags = displayTags.split(Regex("\\s+")).filter(String::isNotBlank),
+                                        imagePath = frozenForDisplay?.media?.path ?: noteImagePath,
+                                        imageStatus = when {
+                                            imageProcessing -> "Preparing image…"
+                                            imageError != null -> imageError
+                                            imageAttached -> "Image is not available"
+                                            else -> null
+                                        },
+                                        pitchHasAlternatives = pitchCandidates.size > 1,
+                                        pitchInfoExpanded = pitchInfoExpanded,
+                                        onTogglePitchInfo = { pitchInfoExpanded = !pitchInfoExpanded },
+                                        onEdit = {
+                                            if (!submissionLocked) {
+                                                generationStarted = false
+                                                route = AppRoute.Target
+                                            }
+                                        },
+                                        onTagsChange = { text -> if (!submissionLocked) tags = text },
+                                        onChooseImage = {
+                                            if (!submissionLocked) {
+                                                noteImagePicker.launch(
+                                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                                                 )
                                             }
-                                            if (!asyncDraftIsCurrent(callbackGeneration)) return@launch
-                                            dictionaryEntries = dictionaryEntries + more
-                                            dictionaryHasMore = more.size == 50
-                                        } catch (cancelled: CancellationException) {
-                                            throw cancelled
-                                        } catch (_: Exception) {
-                                            if (asyncDraftIsCurrent(callbackGeneration)) {
-                                                dictionaryError = "Could not load more dictionary matches."
+                                        },
+                                        onRemoveImage = { if (!submissionLocked) removeDraftImage() },
+                                        imageRemovable = draftOrigin != "Photo",
+                                        onDefinitionChange = { text ->
+                                            if (!submissionLocked) {
+                                                definition = text
+                                                definitionManuallyEdited = true
+                                                definitionProvenanceKnown = true
+                                                selectedSenseIndices = emptySet()
                                             }
-                                        } finally {
-                                            dictionarySearchLoading = false
-                                        }
-                                    }
-                                }) { Text("Load more matches") }
-                            }
-                            selectedDictionaryEntry?.let { entry ->
-                                Text("Select the applicable JMdict senses:", style = MaterialTheme.typography.titleSmall)
-                                entry.senses.forEachIndexed { index, sense ->
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Checkbox(
-                                            enabled = !submissionLocked,
-                                            checked = index in selectedSenseIndices,
-                                            onCheckedChange = { checked ->
+                                        },
+                                        onNotesChange = { text -> if (!submissionLocked) notes = text },
+                                        tokens = japaneseTokens,
+                                        onSelectToken = { span -> if (!submissionLocked) selectTarget(span) },
+                                        correctableReadings = if (frozenForDisplay == null) correctableReadings else emptyList(),
+                                        onCorrectReading = { row, reading -> applyReadingCorrection(row.span, reading) },
+                                        readingCorrectionError = readingCorrectionError,
+                                        definitionStale = dependentFieldsStale && definitionManuallyEdited,
+                                        onAcknowledgeDefinition = {
+                                            if (!submissionLocked) dependentFieldsStale = false
+                                        },
+                                        onVocabularyReadingChange = { raw -> applyVocabularyReading(raw) },
+                                        vocabularyReadingError = vocabularyReadingError,
+                                        vocabularyAudioProgress = nhkProgress?.describe(),
+                                        vocabularyAudioProgressFraction = nhkProgress?.fraction,
+                                        onCancelVocabularyAudio = if (nhkProgress == null) null else ({ nhkCancelRequested.set(true) }),
+                                        definitionSenses = selectedDictionaryEntry?.senses ?: emptyList(),
+                                        selectedSenseIndices = selectedSenseIndices,
+                                        onToggleSense = { index, checked ->
+                                            if (!submissionLocked) {
                                                 val newSelection = if (checked) {
                                                     selectedSenseIndices + index
                                                 } else {
                                                     selectedSenseIndices - index
                                                 }
                                                 selectedSenseIndices = newSelection
-                                                definition = newSelection.sorted().mapNotNull { selected ->
-                                                    entry.senses.getOrNull(selected)?.glosses?.joinToString("; ")
-                                                }.joinToString("\n")
+                                                selectedDictionaryEntry?.let { entry ->
+                                                    definition = newSelection.sorted().mapNotNull { selected ->
+                                                        entry.senses.getOrNull(selected)?.glosses?.joinToString("; ")
+                                                    }.joinToString("\n")
+                                                }
                                                 definitionManuallyEdited = false
                                                 definitionProvenanceKnown = true
-                                            },
-                                        )
-                                        Column {
-                                            Text(sense.glosses.joinToString("; "))
-                                            if (sense.partsOfSpeech.isNotEmpty()) {
-                                                Text(sense.partsOfSpeech.joinToString(", "), style = MaterialTheme.typography.bodySmall)
+                                                dependentFieldsStale = false
                                             }
-                                        }
-                                    }
-                                }
-                            }
-                            if (displayPitch != null) PitchPatternDiagram(displayPitch, PitchDiagramScale.Compact)
-                            pitchIndexError?.let { message ->
-                                Text(message, style = MaterialTheme.typography.bodyMedium)
-                            }
-                            if (pitchCandidates.size > 1) {
-                                Text(
-                                    "Source-listed pitch patterns for this reading:",
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                                Row(
-                                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    pitchCandidates.forEach { record ->
-                                        OutlinedButton(
-                                            enabled = !submissionLocked,
-                                            onClick = {
+                                        },
+                                        sendPresentation = when {
+                                            isSubmitting -> ReviewSendPresentation.Sending
+                                            completedSubmission != null -> ReviewSendPresentation.Status(
+                                                submitMessage ?: "Note sent to AnkiDroid.",
+                                            )
+                                            duplicateBlocked -> ReviewSendPresentation.Status(
+                                                submitMessage ?: "A matching note already exists in AnkiDroid.",
+                                            )
+                                            recoveryRequired -> ReviewSendPresentation.Status(
+                                                recoveryMessage ?: "Pending Send needs review.",
+                                            )
+                                            submitMessage?.startsWith("Blocked:") == true ->
+                                                ReviewSendPresentation.Status(submitMessage.orEmpty())
+                                            submitMessage != null -> ReviewSendPresentation.Status(
+                                                submitMessage!!,
+                                                "Retry Send",
+                                            )
+                                            else -> ReviewSendPresentation.Ready
+                                        },
+                                        onSend = if (canSend && completedSubmission == null && !duplicateBlocked &&
+                                            submitMessage?.startsWith("Blocked:") != true
+                                        ) {
+                                            ({ submitAction() })
+                                        } else {
+                                            null
+                                        },
+                                        onSendStatusAction = if (canSend && completedSubmission == null && !duplicateBlocked) {
+                                            ({ submitAction() })
+                                        } else {
+                                            null
+                                        },
+                                        sendStatusContent = sendRecoveryContent,
+                                        imageFocalY = photoFocusY,
+                                        deckLabel = selectedDeck?.name.orEmpty(),
+                                        onChooseDeck = { showDeckSheet = true },
+                                        sendHint = submitHint,
+                                        pitchAlternativeAccents = pitchCandidates.map { it.accent },
+                                        selectedPitchAccent = pitchAccentText.toIntOrNull(),
+                                        onSelectPitch = { accent ->
+                                            pitchCandidates.firstOrNull { it.accent == accent }?.let { record ->
                                                 pitchAccentText = record.accent.toString()
                                                 pitchHtmlText = record.html
+                                            }
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                        if (showSentenceEditor) {
+                            ModalBottomSheet(onDismissRequest = { showSentenceEditor = false }) {
+                                Column(
+                                    Modifier.fillMaxWidth().heightIn(max = 620.dp).verticalScroll(rememberScrollState())
+                                        .padding(horizontal = 24.dp, vertical = 8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    Text("Edit sentence", style = MaterialTheme.typography.titleLarge)
+                                    OutlinedTextField(
+                                        value = editor,
+                                        onValueChange = updateEditor,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        label = { Text("Japanese sentence") },
+                                        minLines = 3,
+                                    )
+                                    Text(
+                                        "Select part of the sentence, then use it as the target for a multi-word phrase.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        OutlinedButton(
+                                            enabled = editor.selection.start != editor.selection.end,
+                                            onClick = {
+                                                selectTarget(
+                                                    TargetSpan.fromSelection(
+                                                        editor.text,
+                                                        editor.selection.start,
+                                                        editor.selection.end,
+                                                    ),
+                                                )
+                                                showSentenceEditor = false
                                             },
-                                        ) {
-                                            Text("Accent ${record.accent}")
-                                        }
-                                    }
-                                }
-                            }
-                            OutlinedTextField(
-                                value = displayDefinition,
-                                readOnly = submissionLocked,
-                                onValueChange = {
-                                    definition = it
-                                    definitionManuallyEdited = true
-                                    definitionProvenanceKnown = true
-                                    dependentFieldsStale = false
-                                    selectedSenseIndices = emptySet()
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                label = { Text("English definition (required)") },
-                                minLines = 2,
-                            )
-                            OutlinedTextField(
-                                value = displayTranslation,
-                                readOnly = submissionLocked,
-                                onValueChange = {
-                                    translationRequestRevision++
-                                    translationInfoExpanded = false
-                                    translationDraft = translationDraft.saveManualEdit(it)
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Sentence translation (required)") },
-                                minLines = 2,
-                            )
-                            OutlinedTextField(
-                                value = displayNotes,
-                                readOnly = submissionLocked,
-                                onValueChange = { notes = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Notes (optional)") },
-                                minLines = 2,
-                            )
-                            OutlinedTextField(
-                                value = displayTags,
-                                readOnly = submissionLocked,
-                                onValueChange = { tags = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Tags (optional)") },
-                                singleLine = true,
-                            )
-                        }
-                        if (target != null) {
-                            if (dependentFieldsStale) {
-                                Text(
-                                    "Sentence, target, or entry changed. Your manual definition was kept; review it before using this note.",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                                OutlinedButton(enabled = !submissionLocked, onClick = { dependentFieldsStale = false }) {
-                                    Text("I've reviewed these fields")
-                                }
-                            }
-                            if (validationErrors.isEmpty()) {
-                                Text("Required note text is complete.", style = MaterialTheme.typography.bodyMedium)
-                            } else {
-                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text("Still needed", style = MaterialTheme.typography.titleSmall)
-                                    validationErrors.forEach { issue ->
-                                        Text("• $issue", style = MaterialTheme.typography.bodyMedium)
+                                            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                                        ) { Text("Use selection as target") }
+                                        Button(
+                                            onClick = { showSentenceEditor = false },
+                                            modifier = Modifier.heightIn(min = 48.dp),
+                                        ) { Text("Done") }
                                     }
                                 }
                             }
                         }
+                        if (showDeckSheet) {
+                            ModalBottomSheet(onDismissRequest = { showDeckSheet = false }) {
+                                Column(
+                                    Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState())
+                                        .padding(horizontal = 24.dp, vertical = 8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    Text("Destination deck", style = MaterialTheme.typography.titleLarge)
+                                    if (decks.isEmpty()) {
+                                        Text(
+                                            "No decks are available. Check AnkiDroid setup in Settings.",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                        )
+                                    }
+                                    decks.forEach { deck ->
+                                        TextButton(
+                                            onClick = {
+                                                selectedDeckId = deck.id
+                                                preferences.edit().putLong("deck_id", deck.id).apply()
+                                                showDeckSheet = false
+                                            },
+                                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                                        ) { Text(deck.name) }
+                                    }
+                                }
+                            }
                         }
                         if (visibleRoute == AppRoute.Review && reviewTarget == null) {
                             submitMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }

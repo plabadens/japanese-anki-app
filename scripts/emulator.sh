@@ -62,7 +62,12 @@ start_emulator() {
   # emulator dereferences the missing adb_keys file and dies with SIGSEGV.
   # Pre-creating the directory without SGID makes the mkdir an EEXIST no-op.
   mkdir -p "$ANDROID_AVD_HOME/$AVD.avd/data/misc/adb"
+  # API 37's CameraX validator rejects a device that reports only one lens because the AVD
+  # config sets hw.camera.front=none; every prepare/select pass then fails with
+  # CameraIdListIncorrectException and no preview ever starts. A real Pixel 7 has both
+  # cameras, so give the emulator an emulated front lens as well.
   env -u ADB_SERVER_SOCKET "$EMULATOR" -avd "$AVD" -port "$PORT" -no-window -no-audio -no-boot-anim \
+    -camera-back environment -camera-front environment \
     -gpu swiftshader_indirect -no-snapshot -skin 1080x2400 >"$ROOT/emulator.log" 2>&1 &
   EMULATOR_PID=$!
   echo "$EMULATOR_PID" > "$ROOT/emulator.pid"
