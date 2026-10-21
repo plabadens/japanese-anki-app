@@ -76,6 +76,120 @@ class Nhk2016PronunciationSourceTest {
         } finally { root.deleteRecursively() }
     }
 
+    @Test fun indexDownloadReportsDeterminateProgressAndClearsWhenFinished() {
+        val root = Files.createTempDirectory("nhk-source-progress").toFile()
+        try {
+            val index = indexJsonWithHeadwords(8_000).toByteArray()
+            val progress = mutableListOf<NhkIndexProgress?>()
+            val source = Nhk2016PronunciationSource(
+                File(root, "index"),
+                { "猫" },
+                connectionFactory = { url -> FakeConnection(url, if (url.path.endsWith("index.json")) index else validOgg()) },
+                onIndexProgress = { progress += it },
+            )
+
+            source.synthesize(AudioSynthesisRequest(AudioItem.VOCABULARY, "cat", 0, "entry"), File(root, "word.ogg"))
+
+            val downloading = progress.filterNotNull()
+            assertTrue(progress.last() == null) // nothing in flight once the index is committed
+            assertEquals(0L, downloading.first().receivedBytes)
+            assertEquals(index.size.toLong(), downloading.first().totalBytes)
+            assertTrue(downloading.first().determinate)
+            assertEquals(index.size.toLong(), downloading.last().receivedBytes)
+            assertTrue(downloading.zipWithNext().all { (a, b) -> b.receivedBytes >= a.receivedBytes })
+            assertTrue(downloading.last().describe().contains("MB"))
+        } finally { root.deleteRecursively() }
+    }
+
+    @Test fun progressWithoutContentLengthIsIndeterminateAndStillReportsBytes() {
+        val root = Files.createTempDirectory("nhk-source-indeterminate").toFile()
+        try {
+            val index = indexJsonWithHeadwords(200).toByteArray()
+            val progress = mutableListOf<NhkIndexProgress?>()
+            val source = Nhk2016PronunciationSource(
+                File(root, "index"),
+                { "猫" },
+                connectionFactory = { url -> FakeConnection(url, if (url.path.endsWith("index.json")) index else validOgg(), contentLength = false) },
+                onIndexProgress = { progress += it },
+            )
+
+            source.synthesize(AudioSynthesisRequest(AudioItem.VOCABULARY, "cat", 0, "entry"), File(root, "word.ogg"))
+
+            val downloading = progress.filterNotNull()
+            assertTrue(downloading.isNotEmpty())
+            assertFalse(downloading.first().determinate)
+            assertTrue(downloading.last().receivedBytes > 0)
+            assertTrue(downloading.last().describe().contains("MB"))
+        } finally { root.deleteRecursively() }
+    }
+
+    @Test fun cancellingTheIndexDownloadStopsItAndLeavesNoIndexBehind() {
+        val root = Files.createTempDirectory("nhk-source-cancel").toFile()
+        try {
+            val index = indexJsonWithHeadwords(8_000).toByteArray()
+            var received = 0L
+            val source = Nhk2016PronunciationSource(
+                File(root, "index"),
+                { "猫" },
+                connectionFactory = { url -> FakeConnection(url, if (url.path.endsWith("index.json")) index else validOgg()) },
+                onIndexProgress = { progress -> progress?.let { received = it.receivedBytes } },
+                isIndexFetchCancelled = { received > 0 },
+            )
+
+            val failure = runCatching {
+                source.synthesize(AudioSynthesisRequest(AudioItem.VOCABULARY, "cat", 0, "entry"), File(root, "word.ogg"))
+            }.exceptionOrNull()
+
+            assertTrue(failure is java.io.IOException)
+            assertTrue(failure!!.message.orEmpty().contains("cancelled", ignoreCase = true))
+            assertFalse(File(root, "index/nhk-2016-b0207d240f0f.json").exists())
+            assertFalse(File(root, "word.ogg").exists())
+        } finally { root.deleteRecursively() }
+    }
+
+    @Test fun twoConcurrentRequestsShareOneIndexDownload() {
+        val root = Files.createTempDirectory("nhk-source-dedupe").toFile()
+        try {
+            val index = indexJsonWithHeadwords(200).toByteArray()
+            var indexRequests = 0
+            val failures = java.util.Collections.synchronizedList(mutableListOf<Throwable>())
+            val source = Nhk2016PronunciationSource(
+                File(root, "index"),
+                { "猫" },
+                connectionFactory = { url ->
+                    if (url.path.endsWith("index.json")) {
+                        synchronized(failures) { indexRequests++ }
+                        FakeConnection(url, index, delayMillis = 300)
+                    } else {
+                        FakeConnection(url, validOgg())
+                    }
+                },
+            )
+
+            val threads = (1..2).map { index ->
+                Thread {
+                    runCatching {
+                        source.synthesize(
+                            AudioSynthesisRequest(AudioItem.VOCABULARY, "cat", 0, "entry"),
+                            File(root, "word-$index.ogg"),
+                        )
+                    }.exceptionOrNull()?.let(failures::add)
+                }.also { it.start() }
+            }
+            threads.forEach { it.join(20_000) }
+
+            assertTrue(failures.toString(), failures.isEmpty())
+            assertEquals(1, indexRequests)
+            assertTrue(File(root, "index/nhk-2016-b0207d240f0f.json").isFile)
+        } finally { root.deleteRecursively() }
+    }
+
+    private fun indexJsonWithHeadwords(count: Int): String = buildString {
+        append("{\"meta\":{\"version\":2},\"headwords\":{")
+        repeat(count) { append("\"dummy$it\":[\"20170616125901.ogg\"],") }
+        append("\"猫\":[\"20170616125901.ogg\"]}}")
+    }
+
     private fun validOgg(): ByteArray {
         val page = ByteArrayOutputStream()
         page.write("OggS".toByteArray())
@@ -87,10 +201,18 @@ class Nhk2016PronunciationSourceTest {
         return page.toByteArray()
     }
 
-    private class FakeConnection(url: URL, private val body: ByteArray) : HttpURLConnection(url) {
-        override fun getResponseCode() = HTTP_OK
+    private class FakeConnection(
+        url: URL,
+        private val body: ByteArray,
+        private val contentLength: Boolean = true,
+        private val delayMillis: Long = 0,
+    ) : HttpURLConnection(url) {
+        override fun getResponseCode(): Int {
+            if (delayMillis > 0) Thread.sleep(delayMillis)
+            return HTTP_OK
+        }
         override fun getInputStream(): InputStream = ByteArrayInputStream(body)
-        override fun getContentLengthLong() = body.size.toLong()
+        override fun getContentLengthLong() = if (contentLength) body.size.toLong() else -1L
         override fun connect() = Unit
         override fun disconnect() = Unit
         override fun usingProxy() = false

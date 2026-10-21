@@ -23,6 +23,12 @@ java -cp "$gradle_lib/*" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler \
   app/src/main/java/dev/pierre/japaneseanki/AnkiFieldContract.kt \
   app/src/main/java/dev/pierre/japaneseanki/AnkiFieldSerializer.kt \
   app/src/main/java/dev/pierre/japaneseanki/ManualNoteDraft.kt \
+  app/src/main/java/dev/pierre/japaneseanki/SentenceReadings.kt \
+  app/src/main/java/dev/pierre/japaneseanki/VocabularyReadings.kt \
+  app/src/main/java/dev/pierre/japaneseanki/DraftAudioIdentity.kt \
+  app/src/main/java/dev/pierre/japaneseanki/AudioProvider.kt \
+  app/src/main/java/dev/pierre/japaneseanki/AudioGeneration.kt \
+  app/src/main/java/dev/pierre/japaneseanki/Nhk2016PronunciationSource.kt \
   app/src/main/java/dev/pierre/japaneseanki/PitchAccent.kt \
   app/src/main/java/dev/pierre/japaneseanki/AjtPitchHtml.kt \
   app/src/main/java/dev/pierre/japaneseanki/speech/MiniJson.kt \
@@ -34,8 +40,13 @@ java -cp "$gradle_lib/*" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler \
   app/src/test/java/dev/pierre/japaneseanki/AnkiFieldContractTest.kt \
   app/src/test/java/dev/pierre/japaneseanki/AnkiFieldSerializerTest.kt \
   app/src/test/java/dev/pierre/japaneseanki/ManualNoteDraftTest.kt \
+  app/src/test/java/dev/pierre/japaneseanki/SentenceReadingsTest.kt \
+  app/src/test/java/dev/pierre/japaneseanki/VocabularyReadingsTest.kt \
+  app/src/test/java/dev/pierre/japaneseanki/DraftAudioIdentityTest.kt \
+  app/src/test/java/dev/pierre/japaneseanki/Nhk2016PronunciationSourceTest.kt \
   app/src/test/java/dev/pierre/japaneseanki/PitchAccentTest.kt \
   app/src/test/java/dev/pierre/japaneseanki/speech/SpeechTest.kt \
+  app/src/test/java/dev/pierre/japaneseanki/speech/ReadingHintCorrectionTest.kt \
   app/src/test/java/dev/pierre/japaneseanki/JapaneseMorphologyTest.kt \
   app/src/test/java/dev/pierre/japaneseanki/OcrCandidateSelectionTest.kt
 
@@ -44,7 +55,12 @@ java -cp "$classes:$runtime_cp" org.junit.runner.JUnitCore \
   dev.pierre.japaneseanki.AnkiFieldContractTest \
   dev.pierre.japaneseanki.AnkiFieldSerializerTest \
   dev.pierre.japaneseanki.ManualNoteDraftTest \
+  dev.pierre.japaneseanki.SentenceReadingsTest \
+  dev.pierre.japaneseanki.VocabularyReadingsTest \
+  dev.pierre.japaneseanki.DraftAudioIdentityTest \
+  dev.pierre.japaneseanki.Nhk2016PronunciationSourceTest \
   dev.pierre.japaneseanki.PitchAccentTest \
+  dev.pierre.japaneseanki.speech.ReadingHintCorrectionTest \
   dev.pierre.japaneseanki.speech.SpeechHintBuilderTest \
   dev.pierre.japaneseanki.speech.GoogleSpeechProviderTest \
   dev.pierre.japaneseanki.JapaneseMorphologyTest \

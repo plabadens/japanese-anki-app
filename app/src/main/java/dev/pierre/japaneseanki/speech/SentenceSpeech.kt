@@ -1,5 +1,8 @@
 package dev.pierre.japaneseanki.speech
 
+import dev.pierre.japaneseanki.FuriganaSpan
+import dev.pierre.japaneseanki.TargetSpan
+import dev.pierre.japaneseanki.containsKanji
 import java.security.MessageDigest
 
 /** A single resolved surface/reading pair used to build Japanese yomigana hints. */
@@ -13,6 +16,28 @@ sealed interface HintResult {
 
     /** The sentence cannot be expressed with phrase-level hints; generation must not fall back. */
     data class Impossible(val reason: String) : HintResult
+}
+
+/**
+ * The sentence's hint spans in sentence order: every kanji-containing furigana run (corrected
+ * readings included) plus the selected target with its own reading. An unresolved kanji span is
+ * passed through so [ReadingHintBuilder] can reject the request instead of dropping it.
+ */
+fun sentenceHintSpans(
+    sentence: String,
+    target: TargetSpan,
+    targetReading: String,
+    furigana: List<FuriganaSpan>,
+): List<ReadingHintSpan> = buildList {
+    furigana.forEach { span ->
+        val surface = span.span.textIn(sentence) ?: return@forEach
+        if (!containsKanji(surface)) return@forEach
+        add(ReadingHintSpan(span.span.start, span.span.end, surface, span.reading))
+    }
+    val targetSurface = target.textIn(sentence) ?: return@buildList
+    if (containsKanji(targetSurface)) {
+        add(ReadingHintSpan(target.start, target.end, targetSurface, targetReading))
+    }
 }
 
 /**
