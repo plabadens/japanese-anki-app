@@ -1,11 +1,14 @@
 package dev.pierre.japaneseanki
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.Assert.assertThrows
 import android.content.SharedPreferences
 import java.io.File
+import java.nio.file.Files
 
 class SubmissionRecoveryTest {
     @Test
@@ -204,6 +207,148 @@ class SubmissionRecoveryTest {
         assertEquals("image.webp", restored.importedFilename)
         assertEquals(FrozenAudioItem(null), restored.sentenceAudio)
         assertEquals(FrozenAudioItem(null), restored.wordAudio)
+    }
+
+    @Test
+    fun liveReceiptMatchesOnlyTheExactSavedIdentityAndFilename() {
+        val saved = MediaIdentity("/tmp/draft/image-1.webp", 4096L, 1_700_000_000L)
+        assertEquals(
+            "image-1.webp",
+            matchImportedReceipt(saved, "image-1.webp", saved.copy(), AnkiMediaImporter::sanitizeFilename),
+        )
+        // Every component of the identity is load-bearing: each single-field change must miss.
+        assertNull(matchImportedReceipt(saved, "image-1.webp", saved.copy(path = "/tmp/draft/other.webp"), AnkiMediaImporter::sanitizeFilename))
+        assertNull(matchImportedReceipt(saved, "image-1.webp", saved.copy(size = 4097L), AnkiMediaImporter::sanitizeFilename))
+        assertNull(matchImportedReceipt(saved, "image-1.webp", saved.copy(modified = saved.modified + 1), AnkiMediaImporter::sanitizeFilename))
+    }
+
+    @Test
+    fun liveReceiptRequiresBothIdentitiesAndASafeFilename() {
+        val identity = MediaIdentity("/tmp/draft/clip.wav", 12L, 34L)
+        val sanitize = AnkiMediaImporter::sanitizeAudioFilename
+        assertNull(matchImportedReceipt(null, "clip.wav", identity, sanitize))
+        assertNull(matchImportedReceipt(identity, "clip.wav", null, sanitize))
+        assertNull(matchImportedReceipt(null, null, null, sanitize))
+        assertNull(matchImportedReceipt(identity, null, identity, sanitize))
+        assertEquals("clip.wav", matchImportedReceipt(identity, "clip.wav", identity, sanitize))
+        // Unsafe and wrong-extension names never survive the slot's own sanitizer.
+        assertNull(matchImportedReceipt(identity, "../clip.wav", identity, sanitize))
+        assertNull(matchImportedReceipt(identity, ".hidden.wav", identity, sanitize))
+        assertNull(matchImportedReceipt(identity, "clip.mp4", identity, sanitize))
+        assertNull(matchImportedReceipt(identity, "clip.wav", identity, AnkiMediaImporter::sanitizeFilename))
+        // An incomplete legacy receipt cannot describe real media.
+        assertNull(matchImportedReceipt(MediaIdentity("/tmp/draft/clip.wav", -1L, -1L), "clip.wav", identity, sanitize))
+    }
+
+    @Test
+    fun liveReceiptMatcherNeverTouchesTheFileSystem() {
+        val gone = MediaIdentity("/nonexistent-receipt/draft/image-9.webp", 77L, 88L)
+        assertEquals(
+            "image-9.webp",
+            matchImportedReceipt(gone, "image-9.webp", gone, AnkiMediaImporter::sanitizeFilename),
+        )
+    }
+
+    @Test
+    fun receiptPreferencesAdapterReadsItsOwnKeysAndIgnoresLegacyDefaults() {
+        val preferences = MemoryPreferences()
+        val keys = ImportedReceiptKeys("image_path", "image_filename", "image_size", "image_modified")
+        val identity = MediaIdentity("/tmp/draft/image-2.webp", 512L, 99L)
+        assertNull(importedReceiptFromPreferences(preferences, keys, identity, AnkiMediaImporter::sanitizeFilename))
+        preferences.edit()
+            .putString(keys.path, identity.path)
+            .putString(keys.filename, "image-2.webp")
+            .putLong(keys.size, identity.size)
+            .putLong(keys.modified, identity.modified)
+            .commit()
+        assertEquals(
+            "image-2.webp",
+            importedReceiptFromPreferences(preferences, keys, identity, AnkiMediaImporter::sanitizeFilename),
+        )
+        // The audio slot's prefix is a different receipt entirely.
+        val audioKeys = ImportedReceiptKeys("audio_path", "audio_filename", "audio_size", "audio_modified")
+        assertNull(importedReceiptFromPreferences(preferences, audioKeys, identity, AnkiMediaImporter::sanitizeFilename))
+    }
+
+    @Test
+    fun receiptPreferencesAdapterDoesNotStatWhenTheCallerSuppliesIdentity() {
+        val preferences = MemoryPreferences()
+        val keys = ImportedReceiptKeys("image_path", "image_filename", "image_size", "image_modified")
+        val missing = MediaIdentity("/nonexistent-receipt/image-3.webp", 55L, 66L)
+        preferences.edit()
+            .putString(keys.path, missing.path)
+            .putString(keys.filename, "image-3.webp")
+            .putLong(keys.size, missing.size)
+            .putLong(keys.modified, missing.modified)
+            .commit()
+        // The identity is the caller's: nothing stats the nonexistent path.
+        assertEquals(
+            "image-3.webp",
+            importedReceiptFromPreferences(preferences, keys, missing, AnkiMediaImporter::sanitizeFilename),
+        )
+        // Without an identity there is no hidden fallback stat; the receipt simply does not match.
+        assertNull(importedReceiptFromPreferences(preferences, keys, null, AnkiMediaImporter::sanitizeFilename))
+    }
+
+    @Test
+    fun liveMediaIdentityIsNullForMissingNonFileAndUnstatablePaths() {
+        val directory = Files.createTempDirectory("media-identity-").toFile()
+        try {
+            val file = File(directory, "present.webp").apply { writeBytes(byteArrayOf(1, 2, 3)) }
+            assertNull(liveMediaIdentity(null))
+            assertNull(liveMediaIdentity(File(directory, "missing.webp")))
+            assertNull(liveMediaIdentity(directory))
+            val loop = File(directory, "loop.webp")
+            Files.createSymbolicLink(loop.toPath(), loop.toPath())
+            assertNull(liveMediaIdentity(loop))
+            assertEquals(MediaIdentity.fromFile(file), liveMediaIdentity(file))
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun frozenImageReceiptToleratesADeletedExportButNotAChangedSource() {
+        val frozen = MediaIdentity("/tmp/draft/frozen.webp", 900L, 1_600_000_000L)
+        // Already imported with no image at all: nothing to verify.
+        assertTrue(frozenImagePermitsImport(null, null, null, null, false, null))
+        // Deleted local export: the import already lives in AnkiDroid.
+        assertTrue(frozenImagePermitsImport("frozen.webp", frozen, frozen, "frozen.webp", false, null))
+        // Present and identical: still fine.
+        assertTrue(frozenImagePermitsImport("frozen.webp", frozen, frozen, "frozen.webp", true, frozen))
+        // Present but re-encoded by a new export: rejected.
+        assertFalse(frozenImagePermitsImport("frozen.webp", frozen, frozen, "frozen.webp", true, frozen.copy(size = 901L)))
+        assertFalse(frozenImagePermitsImport("frozen.webp", frozen, frozen, "frozen.webp", true, frozen.copy(modified = 1L)))
+        // Receipt no longer describes the frozen media: rejected even when the file is gone.
+        assertFalse(frozenImagePermitsImport("frozen.webp", frozen, frozen.copy(path = "/tmp/draft/other.webp"), "frozen.webp", false, null))
+        assertFalse(frozenImagePermitsImport("frozen.webp", frozen, frozen, "other.webp", false, null))
+        assertFalse(frozenImagePermitsImport("frozen.webp", null, null, "frozen.webp", false, null))
+        assertFalse(frozenImagePermitsImport("frozen.webp", MediaIdentity("", -1L, -1L), frozen, "frozen.webp", true, frozen))
+    }
+
+    @Test
+    fun audioReceiptRecoveryKeepsItsOwnClassifications() {
+        val directory = Files.createTempDirectory("audio-recovery-").toFile()
+        try {
+            val source = File(directory, "source.ogg").apply { writeBytes(byteArrayOf(7, 8, 9)) }
+            val identity = MediaIdentity.fromFile(source)
+            assertEquals(AudioReceiptValidation.NO_RECEIPT, validateAudioReceipt(FrozenAudioItem(identity, null), source))
+            assertEquals(AudioReceiptValidation.VALID, validateAudioReceipt(FrozenAudioItem(identity, "source.ogg"), source))
+            assertEquals(
+                AudioReceiptValidation.INVALID_RECEIPT,
+                validateAudioReceipt(FrozenAudioItem(identity, "../source.ogg"), source),
+            )
+            assertEquals(
+                AudioReceiptValidation.INVALID_RECEIPT,
+                validateAudioReceipt(FrozenAudioItem(identity, "source.mp4"), source),
+            )
+            assertEquals(
+                AudioReceiptValidation.SOURCE_MISSING,
+                validateAudioReceipt(FrozenAudioItem(identity, "source.ogg"), File(directory, "gone.ogg")),
+            )
+        } finally {
+            directory.deleteRecursively()
+        }
     }
 
     private class MemoryPreferences : SharedPreferences {
