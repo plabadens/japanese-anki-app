@@ -28,6 +28,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -55,6 +56,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.darkColorScheme
@@ -66,6 +68,8 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.semantics.contentDescription
@@ -78,13 +82,14 @@ import dev.pierre.japaneseanki.speech.GoogleChirpSpeechProvider
 import dev.pierre.japaneseanki.speech.HintResult
 import dev.pierre.japaneseanki.speech.ReadingHint
 import dev.pierre.japaneseanki.speech.ReadingHintBuilder
-import dev.pierre.japaneseanki.speech.ReadingHintSpan
 import dev.pierre.japaneseanki.speech.SentenceSpeechProvider
 import dev.pierre.japaneseanki.speech.SentenceSpeechRequest
 import dev.pierre.japaneseanki.speech.SpeechException
 import dev.pierre.japaneseanki.speech.decodeVoices
 import dev.pierre.japaneseanki.speech.encodeVoices
+import dev.pierre.japaneseanki.speech.sentenceHintSpans
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -114,8 +119,10 @@ private const val IMAGE_RECEIPT_PATH = "image_import_receipt_path"
 private const val IMAGE_RECEIPT_FILENAME = "image_import_receipt_filename"
 private const val IMAGE_RECEIPT_SIZE = "image_import_receipt_size"
 private const val IMAGE_RECEIPT_MODIFIED = "image_import_receipt_modified"
-private const val GOOGLE_KEY_PREF = "google_tts_key_encrypted"
 private const val VOICE_CACHE_PREF = "google_voice_cache"
+
+/** Fixed, disclosed sample for the explicit translation check; one billable request. */
+private const val TRANSLATION_TEST_SAMPLE = "今日はいい天気ですね。"
 private const val SENTENCE_AUDIO_RECEIPT_PATH = "sentence_audio_receipt_path"
 private const val SENTENCE_AUDIO_RECEIPT_FILENAME = "sentence_audio_receipt_filename"
 private const val SENTENCE_AUDIO_RECEIPT_SIZE = "sentence_audio_receipt_size"
@@ -258,6 +265,7 @@ class MainActivity : ComponentActivity() {
             }
             var vocabulary by remember { mutableStateOf(preferences.getString("vocabulary", "").orEmpty()) }
             var vocabularyReading by remember { mutableStateOf(preferences.getString("vocabulary_reading", "").orEmpty()) }
+            var vocabularyReadingError by remember { mutableStateOf<String?>(null) }
             var pitchAccentText by remember { mutableStateOf(preferences.getString("pitch_accent", "").orEmpty()) }
             var pitchHtmlText by remember { mutableStateOf(preferences.getString("pitch_html", null)) }
             var pitchIndexError by remember { mutableStateOf<String?>(null) }
@@ -268,6 +276,15 @@ class MainActivity : ComponentActivity() {
             var definitionManuallyEdited by remember { mutableStateOf(preferences.getBoolean("definition_manual", false)) }
             var definitionProvenanceKnown by remember { mutableStateOf(preferences.contains("definition_manual")) }
             var sentenceReading by remember { mutableStateOf(preferences.getString("sentence_reading", "").orEmpty()) }
+            var readingCorrections by remember {
+                mutableStateOf(
+                    SentenceReadings.decode(
+                        preferences.getString("sentence_reading_corrections", null),
+                        preferences.getString("sentence", "").orEmpty(),
+                    ),
+                )
+            }
+            var readingCorrectionError by remember { mutableStateOf<String?>(null) }
             var dependentFieldsStale by remember {
                 mutableStateOf(preferences.getBoolean("definition_manual_stale", false) &&
                     preferences.getBoolean("definition_manual", false))
@@ -330,6 +347,10 @@ class MainActivity : ComponentActivity() {
             var lastHandledTranslationRetry by remember { mutableStateOf(0) }
             var translationRequestRevision by remember { mutableStateOf(0) }
             val currentTranslationRequestRevision = rememberUpdatedState(translationRequestRevision)
+            // The shared Google Cloud key feeds translation too; Compose only sees results.
+            val translationService = remember {
+                TranslationService(credential = { GoogleCloudCredential.read(settings) })
+            }
             val updateTranslationSentence: (String) -> Unit = { sentence ->
                 translationRequestRevision++
                 translationAutoAllowed = true
@@ -360,13 +381,14 @@ class MainActivity : ComponentActivity() {
             var audioCacheMessage by remember { mutableStateOf<String?>(null) }
             var googleKey by remember { mutableStateOf("") }
             var googleKeyVisible by remember { mutableStateOf(false) }
-            var openRouterKey by remember { mutableStateOf("") }
-            var openRouterKeyVisible by remember { mutableStateOf(false) }
+            var translationTestRunning by remember { mutableStateOf(false) }
+            var translationTestResult by remember { mutableStateOf<TranslationResult?>(null) }
             var selectedVoiceName by remember { mutableStateOf("") }
             var cloudVoices by remember { mutableStateOf(emptyList<CloudVoice>()) }
             var cloudVoicesCached by remember { mutableStateOf(false) }
             var cloudVoicesLoading by remember { mutableStateOf(false) }
             var cloudVoicesError by remember { mutableStateOf<String?>(null) }
+            var voiceListAttempted by remember { mutableStateOf(false) }
             var voiceRefresh by remember { mutableStateOf(0) }
             var showVoiceMenu by remember { mutableStateOf(false) }
             var settingsLoading by remember { mutableStateOf(false) }
@@ -385,7 +407,20 @@ class MainActivity : ComponentActivity() {
             var tokenizationError by remember { mutableStateOf<String?>(null) }
             var analysisRetry by remember { mutableStateOf(0) }
             var japaneseTokens by remember { mutableStateOf<List<JapaneseToken>>(emptyList()) }
-            val sentenceFurigana = sentenceFuriganaSpans(editor.text, japaneseTokens, target)
+            val sentenceFurigana = SentenceReadings.effective(
+                editor.text,
+                japaneseTokens,
+                target,
+                sentenceReading,
+                readingCorrections,
+            )
+            val correctableReadings = SentenceReadings.correctable(
+                editor.text,
+                japaneseTokens,
+                target,
+                sentenceReading,
+                readingCorrections,
+            )
             val analyzedTarget = target?.let { resolveAnalyzedLemma(japaneseTokens, it) }
             var dictionaryEntries by remember { mutableStateOf<List<DictionaryEntry>>(emptyList()) }
             var dictionarySearchLoading by remember { mutableStateOf(false) }
@@ -639,12 +674,14 @@ class MainActivity : ComponentActivity() {
                     dictionaryEntries = emptyList()
                     pitchAccentText = ""
                 }
-                target = selected
-                if (selected != null && sentenceReading.isBlank()) {
-                    sentenceReading = resolveSurfaceReading(
-                        editor.text, japaneseTokens, selected,
-                    ).orEmpty()
+                if (selected != previousTarget) {
+                    // The reading belongs to the selected occurrence; a new target must never
+                    // inherit the previous target's reading.
+                    sentenceReading = selected?.let { span ->
+                        resolveSurfaceReading(editor.text, japaneseTokens, span)
+                    }.orEmpty()
                 }
+                target = selected
                 if (selected != null && vocabulary.isBlank()) {
                     val surface = selected.textIn(editor.text).orEmpty()
                     val lemma = resolveAnalyzedLemma(japaneseTokens, selected)
@@ -927,6 +964,119 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            // Nothing from a previous word may survive an unresolved dictionary choice.
+            fun clearUnresolvedVocabulary() {
+                val unresolved = VocabularyResolution.unresolved()
+                vocabulary = unresolved.vocabulary
+                vocabularyReading = unresolved.reading
+                vocabularyReadingError = null
+                definition = unresolved.definition
+                definitionManuallyEdited = false
+                definitionProvenanceKnown = true
+                dependentFieldsStale = false
+                selectedDictionaryEntry = null
+                selectedDictionaryEntryId = null
+                selectedSenseIndices = unresolved.senseIndices
+                pitchAccentText = unresolved.pitchAccent
+                pitchHtmlText = null
+                pitchCandidates = emptyList()
+                pitchIndexError = "Choose a dictionary entry to resolve this word."
+                wordAudio = DraftAudio()
+            }
+
+            fun dismissDictionarySheet() {
+                showDictionarySheet = false
+                if (VocabularyResolution.isUnresolved(dictionaryEntries.size, selectedDictionaryEntry?.id)) {
+                    clearUnresolvedVocabulary()
+                }
+            }
+
+            /** A corrected vocabulary reading re-resolves entry, pitch and recording identity. */
+            fun applyVocabularyReading(raw: String): Boolean {
+                if (submissionLocked) return false
+                val corrected = VocabularyReadings.normalize(raw)
+                val match = VocabularyReadings.selectEntry(
+                    dictionaryEntries.map { ReadingCandidate(it.id, it.expression, it.reading) },
+                    vocabulary,
+                    corrected,
+                )
+                if (match == null) {
+                    wordAudio = DraftAudio()
+                    pitchAccentText = ""
+                    pitchHtmlText = null
+                    pitchCandidates = emptyList()
+                    // Never display a pronunciation that no dictionary entry supports.
+                    vocabularyReading = ""
+                    vocabularyReadingError = if (corrected.isEmpty()) {
+                        "Enter the reading in kana."
+                    } else if (dictionaryEntries.isEmpty()) {
+                        "No dictionary entry is loaded for this word yet."
+                    } else {
+                        "No dictionary entry for ${vocabulary.ifBlank { "this word" }} is read ${corrected}. Pick a listed reading."
+                    }
+                    selectedDictionaryEntry = null
+                    selectedDictionaryEntryId = null
+                    selectedSenseIndices = emptySet()
+                    pitchIndexError = "No pitch pattern can be resolved for this reading."
+                    return false
+                }
+                val entry = dictionaryEntries.first { it.id == match.id }
+                vocabularyReadingError = null
+                if (vocabularyReading == entry.reading && selectedDictionaryEntry?.id == entry.id) {
+                    // Already resolved to this entry and reading: nothing to invalidate.
+                    return true
+                }
+                // The recording belongs to the previous reading/entry; re-resolve it.
+                wordAudio = DraftAudio()
+                pitchAccentText = ""
+                pitchHtmlText = null
+                pitchCandidates = emptyList()
+                pitchIndexError = null
+                vocabularyReading = entry.reading
+                if (selectedDictionaryEntry?.id != entry.id) {
+                    selectedDictionaryEntry = entry
+                    selectedDictionaryEntryId = entry.id
+                    val senses = if (entry.senses.isEmpty()) emptySet() else setOf(0)
+                    selectedSenseIndices = senses
+                    definition = senses.sorted().mapNotNull { index ->
+                        entry.senses.getOrNull(index)?.glosses?.joinToString("; ")
+                    }.joinToString("\n")
+                    definitionManuallyEdited = false
+                    definitionProvenanceKnown = true
+                }
+                return true
+            }
+
+            /** Correct one kanji span's reading without editing the sentence (SPEC §4.5). */
+            fun applyReadingCorrection(span: TargetSpan, reading: String): Boolean {
+                if (submissionLocked) return false
+                val rejection = SentenceReadings.rejection(editor.text, span, reading)
+                if (rejection != null) {
+                    readingCorrectionError = rejection
+                    return false
+                }
+                readingCorrectionError = null
+                val corrected = SentenceReadings.normalizeReading(reading)
+                if (span == target) {
+                    if (sentenceReading == corrected) return true
+                    sentenceReading = corrected
+                } else {
+                    readingCorrections = SentenceReadings.correct(readingCorrections, editor.text, span, corrected)
+                }
+                // Any sentence-reading change invalidates the sentence recording and its hints.
+                sentenceAudio = DraftAudio()
+                preferences.edit().remove("sentence_audio_path").apply()
+                return true
+            }
+
+            // Typing in the sentence can shift the spans a correction was stored against.
+            androidx.compose.runtime.LaunchedEffect(editor.text) {
+                val stale = readingCorrections.filter { it.span.textIn(editor.text) != it.surface }
+                if (stale.isNotEmpty()) {
+                    readingCorrections = readingCorrections.filter { it.span.textIn(editor.text) == it.surface }
+                }
+            }
+
             androidx.compose.runtime.LaunchedEffect(
                 editor.text, translationRequestRevision, translationRetry, translationAutoAllowed, submissionLocked,
                 generationStarted,
@@ -967,8 +1117,10 @@ class MainActivity : ComponentActivity() {
                 lastHandledTranslationRetry = translationRetry
                 val requestRevision = translationRequestRevision
                 kotlinx.coroutines.delay(350)
-                if (sentence != editor.text || requestRevision != currentTranslationRequestRevision.value ||
-                    currentSubmissionLocked.value
+                if (!translationResponseIsCurrent(
+                        sentence, requestRevision, editor.text,
+                        currentTranslationRequestRevision.value, currentSubmissionLocked.value,
+                    )
                 ) return@LaunchedEffect
 
                 translationDraft = translationDraft.requestStarted()
@@ -986,15 +1138,17 @@ class MainActivity : ComponentActivity() {
 
                 val result = try {
                     withContext(Dispatchers.IO) {
-                        TranslationService.fromSettings(settings).translate(sentence)
+                        translationService.translate(sentence)
                     }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
                     TranslationResult.Failed("Translation is unavailable. Tap Retry to continue.")
                 }
-                if (sentence == editor.text && requestRevision == currentTranslationRequestRevision.value &&
-                    !currentSubmissionLocked.value
+                if (translationResponseIsCurrent(
+                        sentence, requestRevision, editor.text,
+                        currentTranslationRequestRevision.value, currentSubmissionLocked.value,
+                    )
                 ) {
                     translationDraft = translationDraft.requestFinished(result)
                 }
@@ -1029,7 +1183,7 @@ class MainActivity : ComponentActivity() {
 
             androidx.compose.runtime.LaunchedEffect(
                 target, editor.text, japaneseTokens, vocabulary, vocabularyReading,
-                dependentFieldsStale,
+                vocabularyReadingError, dependentFieldsStale,
             ) {
                 if (submissionLocked) return@LaunchedEffect
                 val targetSpan = target ?: return@LaunchedEffect
@@ -1038,7 +1192,10 @@ class MainActivity : ComponentActivity() {
                 val shouldResolveSurface = vocabulary.isBlank() ||
                     (!dependentFieldsStale && vocabulary == targetText)
                 if (shouldResolveSurface) vocabulary = resolved.expression
-                if ((shouldResolveSurface || vocabulary == resolved.expression) && vocabularyReading.isBlank() &&
+                // A rejected reading correction stays unresolved; do not silently restore a
+                // different pronunciation over the user's attempt.
+                if (vocabularyReadingError == null &&
+                    (shouldResolveSurface || vocabulary == resolved.expression) && vocabularyReading.isBlank() &&
                     containsKanji(resolved.expression)
                 ) vocabularyReading = resolved.reading
             }
@@ -1059,30 +1216,40 @@ class MainActivity : ComponentActivity() {
 
             val speechProvider: SentenceSpeechProvider = remember {
                 GoogleChirpSpeechProvider(
-                    credential = {
-                        runCatching {
-                            EncryptedSecretStore.decrypt(settings.getString(GOOGLE_KEY_PREF, null))
-                        }.getOrNull()
-                    },
+                    credential = { GoogleCloudCredential.read(settings) },
                 )
             }
-            val recordedWordSource = remember { Nhk2016PronunciationSource(File(filesDir, "nhk-recordings")) }
+            val nhkProgressFlow = remember { MutableStateFlow<NhkIndexProgress?>(null) }
+            val nhkProgress by nhkProgressFlow.collectAsState()
+            val nhkCancelRequested = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
+            val recordedWordSource = remember {
+                Nhk2016PronunciationSource(
+                    dataDirectory = File(filesDir, "nhk-recordings"),
+                    onIndexProgress = { nhkProgressFlow.value = it },
+                    isIndexFetchCancelled = { nhkCancelRequested.get() },
+                )
+            }
             val reusableAudioCache = remember { ReusableAudioCache(File(cacheDir, "audio")) }
             val draftAudioDirectory = remember { File(filesDir, "draft").apply { mkdirs() } }
             val currentWordIdentity = rememberUpdatedState(
-                listOf(
-                    editor.text,
-                    target?.start ?: -1,
-                    target?.end ?: -1,
+                DraftAudioIdentity.word(
+                    selectedDictionaryEntry?.takeIf {
+                        it.id == selectedDictionaryEntryId && it.expression == vocabulary && it.reading == vocabularyReading
+                    }?.id,
                     vocabulary,
                     vocabularyReading,
-                    sentenceReading,
-                    sentenceFurigana.joinToString(";") { "${it.span.start}:${it.span.end}:${it.reading}" },
-                ).joinToString("\u0000"),
+                ),
             )
-            // A voice change invalidates the sentence recording only; the word recording is unaffected.
+            // A reading, sentence or voice change invalidates the sentence recording; a vocabulary
+            // reading change also re-resolves the word recording through its own identity.
             val currentSentenceIdentity = rememberUpdatedState(
-                currentWordIdentity.value + "\u0000" + selectedVoiceName,
+                DraftAudioIdentity.sentence(
+                    editor.text,
+                    target,
+                    sentenceReading,
+                    sentenceFurigana,
+                    selectedVoiceName,
+                ),
             )
 
             fun playAudio(item: AudioItem, path: String) {
@@ -1127,7 +1294,7 @@ class MainActivity : ComponentActivity() {
 
                 val sentenceText = editor.text.trim()
                 val selectedTarget = target ?: return@LaunchedEffect
-                val targetSurface = selectedTarget.textIn(editor.text) ?: return@LaunchedEffect
+                if (selectedTarget.textIn(editor.text) == null) return@LaunchedEffect
                 val entryId = selectedDictionaryEntryId
                 val entry = selectedDictionaryEntry?.takeIf {
                     it.id == entryId && it.expression == vocabulary && it.reading == vocabularyReading
@@ -1138,25 +1305,21 @@ class MainActivity : ComponentActivity() {
                         CloudVoice(it, it.substringAfterLast('-'), listOf("ja-JP"), null)
                     }
 
-                val hintSpans = buildList {
-                    sentenceFurigana.forEach { span ->
-                        add(ReadingHintSpan(span.span.start, span.span.end, span.surface, span.reading))
-                    }
-                    if (containsKanji(targetSurface)) {
-                        add(ReadingHintSpan(selectedTarget.start, selectedTarget.end, targetSurface, sentenceReading))
-                    }
-                }
+                val hintSpans = sentenceHintSpans(sentenceText, selectedTarget, sentenceReading, sentenceFurigana)
                 val hintResult = ReadingHintBuilder.build(sentenceText, hintSpans)
 
                 if (needSentence) sentenceAudio = sentenceAudio.copy(generating = true, error = null)
-                if (needWord) wordAudio = wordAudio.copy(generating = true, error = null)
+                if (needWord) {
+                    nhkCancelRequested.set(false)
+                    wordAudio = wordAudio.copy(generating = true, error = null)
+                }
 
                 if (!needSentence) {
                     // The current sentence recording and voice already match the prepared inputs.
                 } else if (voice == null) {
                     sentenceAudio = sentenceAudio.copy(
                         generating = false, path = null, identity = identity,
-                        error = if (!settings.contains(GOOGLE_KEY_PREF)) {
+                        error = if (!settings.contains(GoogleCloudCredential.PREF)) {
                             "Add your Google Cloud API key and choose a sentence voice in Settings."
                         } else {
                             "Choose a sentence voice in Settings."
@@ -1282,10 +1445,15 @@ class MainActivity : ComponentActivity() {
                             }
                         } catch (cancelled: CancellationException) {
                             throw cancelled
-                        } catch (_: Exception) {
+                        } catch (error: Exception) {
                             if (currentWordIdentity.value == wordIdentity) {
+                                val cancelledDownload = error.message.orEmpty().contains("cancelled", ignoreCase = true)
                                 wordAudio = DraftAudio(
-                                    error = "No matching NHK recording is available for this word.",
+                                    error = if (cancelledDownload) {
+                                        "The NHK pronunciation index download was cancelled. Tap Retry to continue."
+                                    } else {
+                                        "No matching NHK recording is available for this word."
+                                    },
                                     identity = wordIdentity,
                                 )
                             }
@@ -1350,7 +1518,12 @@ class MainActivity : ComponentActivity() {
                                 }.joinToString("\n")
                             }
                         }
-                        if (entries.size > 1 && entry == null) showDictionarySheet = true
+                        if (VocabularyResolution.isUnresolved(entries.size, entry?.id)) {
+                            // Several entries compete and none is chosen: clear the previous word
+                            // before the chooser is shown, so dismissing it cannot show stale data.
+                            clearUnresolvedVocabulary()
+                            showDictionarySheet = true
+                        }
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
@@ -1479,292 +1652,355 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            if (showSettings) {
-                AlertDialog(
-                    onDismissRequest = { if (!settingsSaving) showSettings = false },
-                    title = { Text("Settings") },
-                    text = {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp)
-                                .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            Text("AnkiDroid", style = MaterialTheme.typography.titleMedium)
-                            when {
-                                !ankiDroidInstalled -> Text(
-                                    "AnkiDroid not detected. Install it before setting up export.",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                                !apiPermissionGranted -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text("AnkiDroid detected. Grant API permission to continue setup.")
-                                    Button(enabled = !isSubmitting, onClick = {
-                                        apiPermissionLauncher.launch(ANKIDROID_READ_WRITE_PERMISSION)
-                                    }) { Text("Grant AnkiDroid API permission") }
+            val saveSettings: () -> Unit = {
+                val google = googleKey.trim()
+                if (google.isNotEmpty() && google.any { it.isWhitespace() }) {
+                    settingsError = "The Google Cloud key contains whitespace."
+                } else {
+                    settingsSaving = true
+                    settingsError = null
+                    coroutineScope.launch {
+                        try {
+                            withContext(Dispatchers.IO) {
+                                settings.edit()
+                                    .remove("default_tags")
+                                    .putString("google_tts_voice", selectedVoiceName)
+                                    .commit()
+                                check(GoogleCloudCredential.write(settings, google)) {
+                                    "Could not persist settings."
                                 }
-                                else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    if (setupLoading) Text("Loading note types and decks…")
-                                    setupError?.let {
-                                        Text(it)
-                                        TextButton(onClick = { setupReload++ }) { Text("Retry") }
-                                    }
-                                    Text("Note type", style = MaterialTheme.typography.titleSmall)
-                                    Box {
-                                        OutlinedButton(
-                                            onClick = { showModelMenu = true },
-                                            enabled = !settingsLoading && !settingsSaving && noteTypes.isNotEmpty(),
-                                        ) {
-                                            Text(selectedModel?.name ?: if (selectedModelId == null) "Choose note type" else "Previously selected note type unavailable")
-                                        }
-                                        DropdownMenu(
-                                            expanded = showModelMenu,
-                                            onDismissRequest = { showModelMenu = false },
-                                        ) {
-                                            noteTypes.forEach { model ->
-                                                DropdownMenuItem(
-                                                    text = { Text(model.name) },
-                                                    onClick = { selectedModelId = model.id; showModelMenu = false },
-                                                )
-                                            }
-                                        }
-                                    }
-                                    selectedModel?.let { model ->
-                                        AnkiFieldContract.mapToModelOrder(model.fields, emptyMap()).errors
-                                            .forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
-                                    }
-                                    Text("Destination deck", style = MaterialTheme.typography.titleSmall)
-                                    Box {
-                                        OutlinedButton(
-                                            onClick = { showDeckMenu = true },
-                                            enabled = !settingsLoading && !settingsSaving && decks.isNotEmpty(),
-                                        ) {
-                                            Text(selectedDeck?.name ?: if (selectedDeckId == null) "Choose destination deck" else "Previously selected deck unavailable")
-                                        }
-                                        DropdownMenu(
-                                            expanded = showDeckMenu,
-                                            onDismissRequest = { showDeckMenu = false },
-                                        ) {
-                                            decks.forEach { deck ->
-                                                DropdownMenuItem(
-                                                    text = { Text(deck.name) },
-                                                    onClick = { selectedDeckId = deck.id; showDeckMenu = false },
-                                                )
-                                            }
-                                        }
-                                    }
-                                    if (!setupLoading && setupError == null && noteTypes.isEmpty()) {
-                                        Text("No note types available in AnkiDroid.")
-                                    }
-                                    if (!setupLoading && setupError == null && decks.isEmpty()) {
-                                        Text("No existing decks available in AnkiDroid.")
-                                    }
-                                }
+                                // The obsolete OpenRouter ciphertext is deleted, never read back as
+                                // a Google key. Drafts and media are untouched.
+                                GoogleCloudCredential.removeObsoleteOpenRouterStorage(settings)
                             }
-                            Text("Sources", style = MaterialTheme.typography.titleMedium)
-                            TextButton(onClick = { showSettings = false; showSources = true }) {
-                                Text("Sources & licenses")
-                            }
-                            Text("Google Cloud speech", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "Your Google Cloud API key with Text-to-Speech access. It is encrypted with " +
-                                    "Android Keystore, stays on this device, and is never shared with OpenRouter.",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            if (settingsLoading) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                    Text("Loading saved settings…")
-                                }
-                            }
-                            OutlinedTextField(
-                                value = googleKey,
-                                onValueChange = { googleKey = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Google Cloud API key") },
-                                visualTransformation = if (googleKeyVisible) VisualTransformation.None
-                                    else PasswordVisualTransformation(),
-                                singleLine = true,
-                                enabled = !settingsLoading && !settingsSaving,
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Checkbox(
-                                    checked = googleKeyVisible,
-                                    onCheckedChange = { googleKeyVisible = it },
-                                    enabled = !settingsLoading && !settingsSaving,
-                                )
-                                Text("Show key")
-                            }
-                            Text("Sentence voice", style = MaterialTheme.typography.titleSmall)
-                            when {
-                                cloudVoicesLoading -> Row(verticalAlignment = Alignment.CenterVertically) {
-                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                    Text("  Listing Japanese Chirp 3 HD voices…")
-                                }
-                                cloudVoicesError != null -> Text(
-                                    buildString {
-                                        append(cloudVoicesError)
-                                        if (cloudVoicesCached && cloudVoices.isNotEmpty()) {
-                                            append(" Showing the cached list, which is not fresh verification.")
-                                        }
-                                    },
-                                    color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                                cloudVoices.isEmpty() && settings.contains(GOOGLE_KEY_PREF) ->
-                                    Text("No Japanese Chirp 3 HD voices were returned.", style = MaterialTheme.typography.bodySmall)
-                            }
-                            Box {
-                                OutlinedButton(
-                                    onClick = { showVoiceMenu = true },
-                                    enabled = !settingsLoading && !settingsSaving && cloudVoices.isNotEmpty(),
-                                ) {
-                                    val voice = cloudVoices.firstOrNull { it.name == selectedVoiceName }
-                                    Text(voice?.let { "${it.displayName} · ${it.name}" }
-                                        ?: if (selectedVoiceName.isBlank()) "Choose sentence voice"
-                                        else "Saved voice not in this list")
-                                }
-                                DropdownMenu(
-                                    expanded = showVoiceMenu,
-                                    onDismissRequest = { showVoiceMenu = false },
-                                    modifier = Modifier.heightIn(max = 320.dp),
-                                ) {
-                                    cloudVoices.forEach { voice ->
-                                        DropdownMenuItem(
-                                            text = { Text("${voice.displayName} · ${voice.name}") },
-                                            onClick = {
-                                                selectedVoiceName = voice.name
-                                                showVoiceMenu = false
-                                            },
-                                        )
-                                    }
-                                }
-                            }
-                            if (selectedVoiceName.isNotBlank() && cloudVoices.isNotEmpty() &&
-                                cloudVoices.none { it.name == selectedVoiceName }
-                            ) {
-                                Text(
-                                    "The saved voice is no longer listed. Choose another voice before generating sentence audio.",
-                                    color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-                            TextButton(
-                                enabled = !cloudVoicesLoading && !settingsSaving && settings.contains(GOOGLE_KEY_PREF),
-                                onClick = { voiceRefresh++ },
-                            ) { Text("Refresh voices") }
-                            if (!settings.contains(GOOGLE_KEY_PREF) && googleKey.isNotBlank()) {
-                                Text("Save the key, then refresh voices.", style = MaterialTheme.typography.bodySmall)
-                            }
-                            Text(
-                                "Changing the voice invalidates sentence audio only. Voice listing does not " +
-                                    "synthesize or bill any speech.",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            Text("Audio cache", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "Reusable sentence and word audio: ${formatCacheSize(audioCacheBytes)}. " +
-                                    "The current draft's audio is kept outside this cache.",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            TextButton(
-                                enabled = !audioCacheBusy && !settingsSaving,
-                                onClick = {
-                                    audioCacheBusy = true
-                                    audioCacheMessage = null
-                                    coroutineScope.launch {
-                                        try {
-                                            val remaining = withContext(Dispatchers.IO) {
-                                                reusableAudioCache.clear()
-                                                reusableAudioCache.sizeBytes()
-                                            }
-                                            audioCacheBytes = remaining
-                                            audioCacheMessage = "Audio cache cleared. Draft audio is unaffected."
-                                        } catch (_: Exception) {
-                                            audioCacheMessage = "The audio cache could not be cleared."
-                                        } finally {
-                                            audioCacheBusy = false
-                                        }
-                                    }
-                                },
-                            ) { Text(if (audioCacheBusy) "Clearing…" else "Clear audio cache") }
-                            audioCacheMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                            Text("OpenRouter translation", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "Separate credential for translation only. Model: ${OpenRouterTranslator.MODEL} (fixed).",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            OutlinedTextField(
-                                value = openRouterKey,
-                                onValueChange = { openRouterKey = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                label = { Text("OpenRouter API key") },
-                                visualTransformation = if (openRouterKeyVisible) VisualTransformation.None
-                                    else PasswordVisualTransformation(),
-                                singleLine = true,
-                                enabled = !settingsLoading && !settingsSaving,
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Checkbox(
-                                    checked = openRouterKeyVisible,
-                                    onCheckedChange = { openRouterKeyVisible = it },
-                                    enabled = !settingsLoading && !settingsSaving,
-                                )
-                                Text("Show key")
-                            }
-                            settingsError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                            // Saving writes only local state; it sends nothing. The previous listing
+                            // belongs to the old key, so speech status returns to "not checked"
+                            // until Refresh voices is tapped.
+                            googleKey = google
+                            translationTestResult = null
+                            cloudVoicesError = null
+                            cloudVoices = emptyList()
+                            voiceListAttempted = false
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) {
+                            settingsError = "Settings could not be saved. The key was not stored in plain text."
+                        } finally {
+                            settingsSaving = false
                         }
-                    },
-                    confirmButton = {
-                        TextButton(
-                            enabled = !settingsLoading && !settingsSaving,
-                            onClick = {
-                                val google = googleKey.trim()
-                                val openRouter = openRouterKey.trim()
-                                if (google.isNotEmpty() && google.any { it.isWhitespace() }) {
-                                    settingsError = "The Google Cloud key contains whitespace."
-                                } else if (openRouter.isNotEmpty() && openRouter.any { it.isWhitespace() }) {
-                                    settingsError = "The OpenRouter key contains whitespace."
-                                } else {
-                                    settingsSaving = true
-                                    settingsError = null
-                                    coroutineScope.launch {
-                                        try {
-                                            withContext(Dispatchers.IO) {
-                                                val edit = settings.edit()
-                                                    .remove("default_tags")
-                                                    .putString("google_tts_voice", selectedVoiceName)
-                                                if (google.isBlank()) edit.remove(GOOGLE_KEY_PREF)
-                                                else edit.putString(GOOGLE_KEY_PREF, EncryptedSecretStore.encrypt(google))
-                                                if (openRouter.isBlank()) edit.remove(TranslationService.OPENROUTER_KEY_PREF)
-                                                else edit.putString(
-                                                    TranslationService.OPENROUTER_KEY_PREF,
-                                                    EncryptedSecretStore.encrypt(openRouter),
-                                                )
-                                                check(edit.commit()) { "Could not persist settings." }
-                                                if (google.isBlank() && openRouter.isBlank()) {
-                                                    runCatching { EncryptedSecretStore.removeKey() }
+                    }
+                }
+            }
+            if (showSettings) {
+                Dialog(
+                    onDismissRequest = { if (!settingsSaving) showSettings = false },
+                    properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+                ) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background,
+                    ) {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().statusBarsPadding()
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                TextButton(
+                                    enabled = !settingsSaving,
+                                    onClick = { showSettings = false },
+                                ) { Text("Back") }
+                                Text(
+                                    "Settings",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                TextButton(
+                                    enabled = !settingsLoading && !settingsSaving,
+                                    onClick = saveSettings,
+                                ) { Text(if (settingsSaving) "Saving…" else "Save") }
+                            }
+                            Column(
+                                modifier = Modifier.fillMaxWidth().weight(1f)
+                                    .navigationBarsPadding()
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                Text("AnkiDroid", style = MaterialTheme.typography.titleMedium)
+                                when {
+                                    !ankiDroidInstalled -> Text(
+                                        "AnkiDroid not detected. Install it before setting up export.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                    !apiPermissionGranted -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text("AnkiDroid detected. Grant API permission to continue setup.")
+                                        Button(enabled = !isSubmitting, onClick = {
+                                            apiPermissionLauncher.launch(ANKIDROID_READ_WRITE_PERMISSION)
+                                        }) { Text("Grant AnkiDroid API permission") }
+                                    }
+                                    else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        if (setupLoading) Text("Loading note types and decks…")
+                                        setupError?.let {
+                                            Text(it)
+                                            TextButton(onClick = { setupReload++ }) { Text("Retry") }
+                                        }
+                                        Text("Note type", style = MaterialTheme.typography.titleSmall)
+                                        Box {
+                                            OutlinedButton(
+                                                onClick = { showModelMenu = true },
+                                                enabled = !settingsLoading && !settingsSaving && noteTypes.isNotEmpty(),
+                                            ) {
+                                                Text(selectedModel?.name ?: if (selectedModelId == null) "Choose note type" else "Previously selected note type unavailable")
+                                            }
+                                            DropdownMenu(
+                                                expanded = showModelMenu,
+                                                onDismissRequest = { showModelMenu = false },
+                                            ) {
+                                                noteTypes.forEach { model ->
+                                                    DropdownMenuItem(
+                                                        text = { Text(model.name) },
+                                                        onClick = { selectedModelId = model.id; showModelMenu = false },
+                                                    )
                                                 }
                                             }
-                                            showSettings = false
-                                        } catch (cancelled: CancellationException) {
-                                            throw cancelled
-                                        } catch (_: Exception) {
-                                            settingsError = "Settings could not be saved. Keys were not stored in plain text."
-                                        } finally {
-                                            settingsSaving = false
+                                        }
+                                        selectedModel?.let { model ->
+                                            AnkiFieldContract.mapToModelOrder(model.fields, emptyMap()).errors
+                                                .forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+                                        }
+                                        Text("Destination deck", style = MaterialTheme.typography.titleSmall)
+                                        Box {
+                                            OutlinedButton(
+                                                onClick = { showDeckMenu = true },
+                                                enabled = !settingsLoading && !settingsSaving && decks.isNotEmpty(),
+                                            ) {
+                                                Text(selectedDeck?.name ?: if (selectedDeckId == null) "Choose destination deck" else "Previously selected deck unavailable")
+                                            }
+                                            DropdownMenu(
+                                                expanded = showDeckMenu,
+                                                onDismissRequest = { showDeckMenu = false },
+                                            ) {
+                                                decks.forEach { deck ->
+                                                    DropdownMenuItem(
+                                                        text = { Text(deck.name) },
+                                                        onClick = { selectedDeckId = deck.id; showDeckMenu = false },
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        if (!setupLoading && setupError == null && noteTypes.isEmpty()) {
+                                            Text("No note types available in AnkiDroid.")
+                                        }
+                                        if (!setupLoading && setupError == null && decks.isEmpty()) {
+                                            Text("No existing decks available in AnkiDroid.")
                                         }
                                     }
                                 }
-                            },
-                        ) { Text(if (settingsSaving) "Saving…" else "Save settings") }
-                    },
-                    dismissButton = {
-                        TextButton(
-                            enabled = !settingsSaving,
-                            onClick = { showSettings = false },
-                        ) { Text("Cancel") }
-                    },
-                )
-            }
+                                Text("Google Cloud", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "One API key for sentence speech and translation. It is encrypted with " +
+                                        "Android Keystore, stays on this device, and is sent only to Google Cloud " +
+                                        "in an authentication header, never in a URL.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                Text(
+                                    "Project setup: enable billing, enable the Cloud Text-to-Speech API and the " +
+                                        "Cloud Translation API, and restrict this key to those two APIs. Entering or " +
+                                        "saving the key sends no request.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                if (settingsLoading) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                        Text("Loading saved settings…")
+                                    }
+                                }
+                                OutlinedTextField(
+                                    value = googleKey,
+                                    onValueChange = { googleKey = it },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text("Google Cloud API key") },
+                                    visualTransformation = if (googleKeyVisible) VisualTransformation.None
+                                        else PasswordVisualTransformation(),
+                                    singleLine = true,
+                                    enabled = !settingsLoading && !settingsSaving,
+                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Checkbox(
+                                        checked = googleKeyVisible,
+                                        onCheckedChange = { googleKeyVisible = it },
+                                        enabled = !settingsLoading && !settingsSaving,
+                                    )
+                                    Text("Show key")
+                                }
+                                Text(
+                                    if (settings.contains(GoogleCloudCredential.PREF)) {
+                                        "Key saved for speech and translation."
+                                    } else {
+                                        "No key saved. Local preparation works; speech and translation need a key."
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                Text("Speech · Cloud Text-to-Speech", style = MaterialTheme.typography.titleSmall)
+                                Text("Sentence voice", style = MaterialTheme.typography.bodyMedium)
+                                when {
+                                    cloudVoicesLoading -> Row(verticalAlignment = Alignment.CenterVertically) {
+                                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                        Text("  Listing Japanese Chirp 3 HD voices…")
+                                    }
+                                    cloudVoicesError != null -> Text(
+                                        buildString {
+                                            append(cloudVoicesError)
+                                            if (cloudVoicesCached && cloudVoices.isNotEmpty()) {
+                                                append(" Showing the cached list, which is not fresh verification.")
+                                            }
+                                        },
+                                        color = MaterialTheme.colorScheme.error,
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                    cloudVoices.isEmpty() && settings.contains(GoogleCloudCredential.PREF) && voiceListAttempted ->
+                                        Text("No Japanese Chirp 3 HD voices were returned.", style = MaterialTheme.typography.bodySmall)
+                                    cloudVoices.isEmpty() && settings.contains(GoogleCloudCredential.PREF) ->
+                                        Text(
+                                            "Voice listing not checked yet. Refresh voices to validate speech access.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                }
+                                Box {
+                                    OutlinedButton(
+                                        onClick = { showVoiceMenu = true },
+                                        enabled = !settingsLoading && !settingsSaving && cloudVoices.isNotEmpty(),
+                                    ) {
+                                        val voice = cloudVoices.firstOrNull { it.name == selectedVoiceName }
+                                        Text(voice?.let { "${it.displayName} · ${it.name}" }
+                                            ?: if (selectedVoiceName.isBlank()) "Choose sentence voice"
+                                            else "Saved voice not in this list")
+                                    }
+                                    DropdownMenu(
+                                        expanded = showVoiceMenu,
+                                        onDismissRequest = { showVoiceMenu = false },
+                                        modifier = Modifier.heightIn(max = 320.dp),
+                                    ) {
+                                        cloudVoices.forEach { voice ->
+                                            DropdownMenuItem(
+                                                text = { Text("${voice.displayName} · ${voice.name}") },
+                                                onClick = {
+                                                    selectedVoiceName = voice.name
+                                                    showVoiceMenu = false
+                                                },
+                                            )
+                                        }
+                                    }
+                                }
+                                if (selectedVoiceName.isNotBlank() && cloudVoices.isNotEmpty() &&
+                                    cloudVoices.none { it.name == selectedVoiceName }
+                                ) {
+                                    Text(
+                                        "The saved voice is no longer listed. Choose another voice before generating sentence audio.",
+                                        color = MaterialTheme.colorScheme.error,
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                }
+                                TextButton(
+                                    enabled = !cloudVoicesLoading && !settingsSaving && settings.contains(GoogleCloudCredential.PREF),
+                                    onClick = { voiceRefresh++ },
+                                ) { Text("Refresh voices") }
+                                if (!settings.contains(GoogleCloudCredential.PREF) && googleKey.isNotBlank()) {
+                                    Text("Save the key, then refresh voices.", style = MaterialTheme.typography.bodySmall)
+                                }
+                                Text(
+                                    "Changing the voice invalidates sentence audio only. Voice listing does not " +
+                                        "synthesize or bill any speech.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                Text("Audio cache", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "Reusable sentence and word audio: ${formatCacheSize(audioCacheBytes)}. " +
+                                        "The current draft's audio is kept outside this cache.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                TextButton(
+                                    enabled = !audioCacheBusy && !settingsSaving,
+                                    onClick = {
+                                        audioCacheBusy = true
+                                        audioCacheMessage = null
+                                        coroutineScope.launch {
+                                            try {
+                                                val remaining = withContext(Dispatchers.IO) {
+                                                    reusableAudioCache.clear()
+                                                    reusableAudioCache.sizeBytes()
+                                                }
+                                                audioCacheBytes = remaining
+                                                audioCacheMessage = "Audio cache cleared. Draft audio is unaffected."
+                                            } catch (_: Exception) {
+                                                audioCacheMessage = "The audio cache could not be cleared."
+                                            } finally {
+                                                audioCacheBusy = false
+                                            }
+                                        }
+                                    },
+                                ) { Text(if (audioCacheBusy) "Clearing…" else "Clear audio cache") }
+                                audioCacheMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                                Text("Translation · Cloud Translation Basic", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "Google Cloud Translation Basic — default neural (NMT), Japanese → English. " +
+                                        "Fixed path: no model or provider choice.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                val testedTranslation = translationTestResult
+                                when {
+                                    translationTestRunning -> Row(verticalAlignment = Alignment.CenterVertically) {
+                                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                        Text("  Testing translation…")
+                                    }
+                                    testedTranslation is TranslationResult.Ready -> Text(
+                                        "Test passed. Sample 「$TRANSLATION_TEST_SAMPLE」 → ${testedTranslation.text}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                    testedTranslation is TranslationResult.Failed -> Text(
+                                        testedTranslation.message,
+                                        color = MaterialTheme.colorScheme.error,
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                    else -> Text(
+                                        "Translation not tested in this session.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                }
+                                TextButton(
+                                    enabled = !translationTestRunning && !settingsSaving &&
+                                        settings.contains(GoogleCloudCredential.PREF),
+                                    onClick = {
+                                        translationTestRunning = true
+                                        translationTestResult = null
+                                        coroutineScope.launch {
+                                            try {
+                                                translationTestResult = withContext(Dispatchers.IO) {
+                                                    translationService.translate(TRANSLATION_TEST_SAMPLE)
+                                                }
+                                            } finally {
+                                                translationTestRunning = false
+                                            }
+                                        }
+                                    },
+                                ) { Text(if (translationTestRunning) "Testing…" else "Test translation") }
+                                Text(
+                                    "The test sends one disclosed sample sentence and may be billable. A failed or " +
+                                        "empty translation blocks Send; Retry keeps manual corrections. Voice listing " +
+                                        "validates speech access only, not translation access or speech quality.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                settingsError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                                Text("Sources", style = MaterialTheme.typography.titleMedium)
+                                TextButton(onClick = { showSettings = false; showSources = true }) {
+                                    Text("Sources & licenses")
+                                }
+                                }
+                            }
+                        }
+                    }
+                }
             if (showSources) {
                 AlertDialog(
                     onDismissRequest = { showSources = false },
@@ -2183,22 +2419,14 @@ class MainActivity : ComponentActivity() {
                 settingsSaving = false
                 settingsError = null
                 googleKeyVisible = false
-                openRouterKeyVisible = false
+                translationTestResult = null
+                translationTestRunning = false
                 try {
-                    val google = withContext(Dispatchers.IO) {
-                        runCatching { EncryptedSecretStore.decrypt(settings.getString(GOOGLE_KEY_PREF, null)) }
+                    val google = withContext(Dispatchers.IO) { GoogleCloudCredential.load(settings) }
+                    googleKey = google.getOrNull().orEmpty()
+                    if (google.isFailure) {
+                        settingsError = "The saved Google Cloud key could not be opened. Enter it again."
                     }
-                    val openRouter = withContext(Dispatchers.IO) {
-                        runCatching {
-                            EncryptedSecretStore.decrypt(
-                                settings.getString(TranslationService.OPENROUTER_KEY_PREF, null),
-                            )
-                        }
-                    }
-                    googleKey = google.getOrElse { "" }
-                    openRouterKey = openRouter.getOrElse { "" }
-                    if (google.isFailure) settingsError = "The saved Google Cloud key could not be opened. Enter it again."
-                    if (openRouter.isFailure) settingsError = "The saved OpenRouter key could not be opened. Enter it again."
                     selectedVoiceName = settings.getString("google_tts_voice", "").orEmpty()
                     cloudVoices = decodeVoices(settings.getString(VOICE_CACHE_PREF, null))
                     cloudVoicesCached = cloudVoices.isNotEmpty()
@@ -2212,20 +2440,20 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            // Obsolete pre-shared-key OpenRouter ciphertext is deleted once per launch. It is never
+            // read as a Google key; the shared key, drafts, and media are untouched.
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                withContext(Dispatchers.IO) { GoogleCloudCredential.removeObsoleteOpenRouterStorage(settings) }
+            }
+
             androidx.compose.runtime.LaunchedEffect(showSettings, voiceRefresh) {
-                if (!showSettings || !settings.contains(GOOGLE_KEY_PREF)) return@LaunchedEffect
+                if (!showSettings || !settings.contains(GoogleCloudCredential.PREF)) return@LaunchedEffect
                 if (voiceRefresh == 0 && cloudVoices.isNotEmpty()) return@LaunchedEffect
                 cloudVoicesLoading = true
                 cloudVoicesError = null
+                voiceListAttempted = true
                 try {
-                    val provider = GoogleChirpSpeechProvider(
-                        credential = {
-                            runCatching {
-                                EncryptedSecretStore.decrypt(settings.getString(GOOGLE_KEY_PREF, null))
-                            }.getOrNull()
-                        },
-                    )
-                    val voices = withContext(Dispatchers.IO) { provider.listVoices() }
+                    val voices = withContext(Dispatchers.IO) { speechProvider.listVoices() }
                     cloudVoices = voices
                     cloudVoicesCached = false
                     settings.edit().putString(VOICE_CACHE_PREF, encodeVoices(voices)).apply()
@@ -2253,7 +2481,8 @@ class MainActivity : ComponentActivity() {
 
             androidx.compose.runtime.LaunchedEffect(
                 editor.text, editor.selection, target, vocabulary, vocabularyReading, pitchAccentText, pitchHtmlText, definition,
-                sentenceReading, definitionManuallyEdited, dependentFieldsStale, translationDraft, translationAttemptedSentence,
+                sentenceReading, readingCorrections, definitionManuallyEdited, dependentFieldsStale, translationDraft,
+                translationAttemptedSentence,
                 notes, tags, selectedModelId, selectedDeckId, selectedDictionaryEntryId, selectedSenseIndices, completedSubmission,
             ) {
                 if (completedSubmission != null) return@LaunchedEffect
@@ -2272,6 +2501,7 @@ class MainActivity : ComponentActivity() {
                     .putBoolean("definition_manual_stale", dependentFieldsStale && definitionManuallyEdited)
                     .remove("dependent_fields_stale")
                     .putString("sentence_reading", sentenceReading)
+                    .putString("sentence_reading_corrections", SentenceReadings.encode(readingCorrections))
                     .remove("leave_sentence_target_unannotated")
                     .remove("leave_vocabulary_unannotated")
                     .putString("translation", translation)
@@ -2300,7 +2530,6 @@ class MainActivity : ComponentActivity() {
                     .putLong("deck_id", selectedDeckId ?: -1)
                     .putLong("dictionary_entry_id", selectedDictionaryEntryId ?: -1)
                     .putStringSet("dictionary_sense_indices", selectedSenseIndices.mapTo(mutableSetOf()) { it.toString() })
-                    .remove("sentence_furigana_corrections")
                     .apply()
             }
 
@@ -2431,7 +2660,7 @@ class MainActivity : ComponentActivity() {
                 when {
                     showSettings -> if (!settingsSaving) showSettings = false
                     showSources -> showSources = false
-                    showDictionarySheet -> showDictionarySheet = false
+                    showDictionarySheet -> dismissDictionarySheet()
                     showOcrSheet -> showOcrSheet = false
                     route == AppRoute.Review -> {
                         generationStarted = false
@@ -2578,6 +2807,14 @@ class MainActivity : ComponentActivity() {
                                 onNotesChange = { text -> if (!submissionLocked) notes = text },
                                 tokens = japaneseTokens,
                                 onSelectToken = { span -> if (!submissionLocked) selectTarget(span) },
+                                correctableReadings = if (frozenForDisplay == null) correctableReadings else emptyList(),
+                                onCorrectReading = { row, reading -> applyReadingCorrection(row.span, reading) },
+                                readingCorrectionError = readingCorrectionError,
+                                onVocabularyReadingChange = { raw -> applyVocabularyReading(raw) },
+                                vocabularyReadingError = vocabularyReadingError,
+                                vocabularyAudioProgress = nhkProgress?.describe(),
+                                vocabularyAudioProgressFraction = nhkProgress?.fraction,
+                                onCancelVocabularyAudio = if (nhkProgress == null) null else ({ nhkCancelRequested.set(true) }),
                                 definitionSenses = selectedDictionaryEntry?.senses ?: emptyList(),
                                 selectedSenseIndices = selectedSenseIndices,
                                 onToggleSense = { index, checked ->
@@ -2842,9 +3079,16 @@ class MainActivity : ComponentActivity() {
                                 Text("$displayVocabulary · $displayVocabularyReading", style = MaterialTheme.typography.titleSmall)
                             }
                             if (frozenForDisplay == null && dictionaryEntries.size > 1 && selectedDictionaryEntry == null) {
+                                Text(
+                                    "No dictionary entry is selected, so this word stays unresolved.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
                                 OutlinedButton(enabled = !submissionLocked, onClick = { showDictionarySheet = true }) {
                                     Text("Choose dictionary entry")
                                 }
+                            }
+                            if (frozenForDisplay == null && vocabularyReadingError != null) {
+                                Text(vocabularyReadingError!!, style = MaterialTheme.typography.bodyMedium)
                             }
                             if (frozenForDisplay == null) {
                                 when {
@@ -3357,7 +3601,7 @@ class MainActivity : ComponentActivity() {
                 if (showDictionarySheet && target?.textIn(editor.text) != null && dictionaryEntries.size > 1 &&
                     selectedDictionaryEntry == null
                 ) {
-                    ModalBottomSheet(onDismissRequest = { showDictionarySheet = false }) {
+                    ModalBottomSheet(onDismissRequest = { dismissDictionarySheet() }) {
                         Column(
                             Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState())
                                 .padding(horizontal = 20.dp, vertical = 8.dp),
@@ -3379,6 +3623,8 @@ class MainActivity : ComponentActivity() {
                                             definitionProvenanceKnown = true
                                         }
                                         pitchAccentText = ""
+                                        vocabularyReadingError = null
+                                        pitchIndexError = null
                                         if (definitionManuallyEdited && definition.isNotBlank()) dependentFieldsStale = true
                                         vocabulary = entry.expression
                                         vocabularyReading = entry.reading
@@ -3508,6 +3754,7 @@ private fun clearPersistedDraft(preferences: SharedPreferences, draftDirectory: 
     val draftKeys = listOf(
         "sentence", "selection_start", "selection_end", "target_start", "target_end",
         "vocabulary", "vocabulary_reading", "pitch_accent", "definition", "definition_manual_stale", "sentence_reading",
+        "sentence_reading_corrections",
         "leave_sentence_target_unannotated", "leave_vocabulary_unannotated", "dependent_fields_stale",
         "definition_manual", "definition_manual_stale", "translation", "translation_sentence", "translation_source",
         "translation_manual", "translation_stale", "translation_pending", "translation_error",

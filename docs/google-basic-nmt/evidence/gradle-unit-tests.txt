@@ -1,0 +1,7 @@
+gradle-tests 153
+gradle-failures 0
+gradle-errors 0
+BUILD SUCCESSFUL in 28s
+debug APK:
+-rw-r--r-- 1 hermes hermes 548139889 Oct 21 05:29 app/build/outputs/apk/debug/app-debug.apk
+ca0b06ec1935e62d6081d8c90d163685b208f35fada187d9b547cf55d1681b9c  app/build/outputs/apk/debug/app-debug.apk

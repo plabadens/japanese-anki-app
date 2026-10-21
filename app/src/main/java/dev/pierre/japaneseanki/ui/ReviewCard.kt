@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,6 +31,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -64,6 +66,7 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import dev.pierre.japaneseanki.DictionarySense
+import dev.pierre.japaneseanki.CorrectableReading
 import dev.pierre.japaneseanki.FuriganaSpan
 import dev.pierre.japaneseanki.JapaneseToken
 import dev.pierre.japaneseanki.PitchAccent
@@ -126,6 +129,14 @@ internal fun ReviewCard(
     definitionSenses: List<DictionarySense> = emptyList(),
     selectedSenseIndices: Set<Int> = emptySet(),
     onToggleSense: (Int, Boolean) -> Unit = { _, _ -> },
+    correctableReadings: List<CorrectableReading> = emptyList(),
+    onCorrectReading: (CorrectableReading, String) -> Boolean = { _, _ -> false },
+    readingCorrectionError: String? = null,
+    onVocabularyReadingChange: (String) -> Boolean = { false },
+    vocabularyReadingError: String? = null,
+    vocabularyAudioProgress: String? = null,
+    vocabularyAudioProgressFraction: Float? = null,
+    onCancelVocabularyAudio: (() -> Unit)? = null,
     generatingFields: Set<String> = emptySet(),
     sentenceAudio: ReviewAudioPresentation = ReviewAudioPresentation.Unavailable,
     vocabularyAudio: ReviewAudioPresentation = ReviewAudioPresentation.Unavailable,
@@ -152,6 +163,9 @@ internal fun ReviewCard(
 ) {
     var editingField by remember { mutableStateOf<String?>(null) }
     var notesExpanded by remember { mutableStateOf(false) }
+    var correctingSpan by remember { mutableStateOf<CorrectableReading?>(null) }
+    var readingDraft by remember { mutableStateOf("") }
+    var vocabularyReadingDraft by remember(vocabularyReading) { mutableStateOf(vocabularyReading) }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
@@ -188,7 +202,7 @@ internal fun ReviewCard(
                 }
             }
             ReviewFieldRow(
-                "Sentence", onEdit = onEdit, editingEnabled = editingEnabled,
+                "Sentence", onEdit = { editingField = "Sentence" }, editingEnabled = editingEnabled,
                 audio = sentenceAudio, onToggleAudio = onToggleSentenceAudio, onRetryAudio = onRetrySentenceAudio,
             ) {
                 val parts = reviewSentenceParts(sentence, target, sentenceReading, furigana)
@@ -279,6 +293,35 @@ internal fun ReviewCard(
                             .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp)).padding(10.dp),
                         style = MaterialTheme.typography.bodySmall,
                     )
+                }
+                vocabularyReadingError?.let { message ->
+                    Text(message, style = MaterialTheme.typography.bodySmall)
+                }
+                if (vocabularyAudioProgress != null) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        if (vocabularyAudioProgressFraction != null) {
+                            LinearProgressIndicator(
+                                progress = { vocabularyAudioProgressFraction },
+                                modifier = Modifier.fillMaxWidth().semantics {
+                                    stateDescription = "Downloading ${(vocabularyAudioProgressFraction * 100).toInt()} percent"
+                                },
+                            )
+                        } else {
+                            LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth().semantics { stateDescription = "Downloading" },
+                            )
+                        }
+                        Text(vocabularyAudioProgress, style = MaterialTheme.typography.bodySmall)
+                        if (onCancelVocabularyAudio != null) {
+                            TextButton(
+                                onClick = onCancelVocabularyAudio,
+                                modifier = Modifier.heightIn(min = 48.dp),
+                            ) { Text("Cancel download") }
+                        }
+                    }
                 }
             }
             ReviewFieldRow("Definition", onEdit = { editingField = "Definition" }, editingEnabled = editingEnabled, generating = "Definition" in generatingFields) { Text(definition.ifBlank { "Add a definition" }, style = MaterialTheme.typography.bodyLarge) }
@@ -392,7 +435,11 @@ internal fun ReviewCard(
     }
     editingField?.let { field ->
         ModalBottomSheet(onDismissRequest = { editingField = null }) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                Modifier.fillMaxWidth().heightIn(max = 520.dp).verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
                 when (field) {
                     "Image" -> {
                         Text("Edit image", style = MaterialTheme.typography.titleLarge)
@@ -402,6 +449,65 @@ internal fun ReviewCard(
                         if (!imageRemovable) {
                             Text("This draft came from a photo, so it keeps an image.", style = MaterialTheme.typography.bodySmall)
                         }
+                    }
+                    "Sentence" -> {
+                        Text("Edit sentence", style = MaterialTheme.typography.titleLarge)
+                        Text(
+                            "Correct the reading of one kanji span. The sentence itself is never changed.",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        if (correctableReadings.isEmpty()) {
+                            Text("No kanji span needs a reading.", style = MaterialTheme.typography.bodyMedium)
+                        }
+                        correctableReadings.forEach { row ->
+                            val active = correctingSpan?.span == row.span
+                            if (active) {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedTextField(
+                                        value = readingDraft,
+                                        onValueChange = { readingDraft = it },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        singleLine = true,
+                                        label = { Text("Reading for ${row.surface} (kana)") },
+                                    )
+                                    readingCorrectionError?.let { message ->
+                                        Text(message, style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Button(
+                                            onClick = {
+                                                if (onCorrectReading(row, readingDraft)) correctingSpan = null
+                                            },
+                                            modifier = Modifier.heightIn(min = 48.dp),
+                                        ) { Text("Done") }
+                                        TextButton(
+                                            onClick = { correctingSpan = null },
+                                            modifier = Modifier.heightIn(min = 48.dp),
+                                        ) { Text("Cancel") }
+                                    }
+                                }
+                            } else {
+                                OutlinedButton(
+                                    onClick = {
+                                        correctingSpan = row
+                                        readingDraft = row.reading
+                                    },
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                                ) {
+                                    Text(
+                                        if (row.reading.isBlank()) {
+                                            "${row.surface} · no reading yet"
+                                        } else {
+                                            "${row.surface} · ${row.reading}"
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                        TextButton(
+                            onClick = { editingField = null; onEdit() },
+                            modifier = Modifier.heightIn(min = 48.dp),
+                        ) { Text("Edit sentence or target") }
                     }
                     "Word" -> {
                         Text("Edit word", style = MaterialTheme.typography.titleLarge)
@@ -423,6 +529,28 @@ internal fun ReviewCard(
                         TextButton(onClick = { editingField = null; onEdit() }, modifier = Modifier.heightIn(min = 48.dp)) {
                             Text("Select a multi-word phrase instead")
                         }
+                        Text("Vocabulary reading", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "Changing the reading re-resolves the dictionary entry, pitch and recording. A reading with no matching entry blocks Send.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        OutlinedTextField(
+                            value = vocabularyReadingDraft,
+                            onValueChange = { vocabularyReadingDraft = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { Text("Vocabulary reading (kana)") },
+                        )
+                        vocabularyReadingError?.let { message ->
+                            Text(message, style = MaterialTheme.typography.bodySmall)
+                        }
+                        Button(
+                            onClick = {
+                                if (onVocabularyReadingChange(vocabularyReadingDraft)) editingField = null
+                            },
+                            enabled = vocabularyReadingDraft.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        ) { Text("Apply reading") }
                     }
                     "Definition" -> {
                         Text("Edit definition", style = MaterialTheme.typography.titleLarge)
