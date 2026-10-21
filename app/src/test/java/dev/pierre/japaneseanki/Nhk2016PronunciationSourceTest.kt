@@ -184,6 +184,113 @@ class Nhk2016PronunciationSourceTest {
         } finally { root.deleteRecursively() }
     }
 
+    @Test fun freshDownloadReadsTheIndexOnceAndAnswersFromThatScan() {
+        val root = Files.createTempDirectory("nhk-source-single-pass").toFile()
+        try {
+            val index = """{"headwords":{"犬":["20170616125903.ogg"],"猫":["20170616125901.ogg"]}}""".toByteArray()
+            var indexRequests = 0
+            val reads = mutableListOf<String>()
+            val source = Nhk2016PronunciationSource(
+                File(root, "index"),
+                { it.text },
+                readIndexText = { file -> reads += file.name; file.readText(Charsets.UTF_8) },
+                connectionFactory = { url ->
+                    if (url.path.endsWith("index.json")) {
+                        indexRequests++
+                        FakeConnection(url, index)
+                    } else {
+                        FakeConnection(url, validOgg())
+                    }
+                },
+            )
+
+            source.synthesize(AudioSynthesisRequest(AudioItem.VOCABULARY, "猫", 0, "entry"), File(root, "cat.ogg"))
+
+            // The fresh download answers the lookup inside its own validation pass: one download,
+            // one read (of the temporary file), and no re-read of the index just published.
+            assertEquals(1, indexRequests)
+            assertEquals(1, reads.size)
+            assertTrue(reads.single().endsWith(".json"))
+            assertTrue(File(root, "index/nhk-2016-b0207d240f0f.json").isFile)
+
+            source.synthesize(AudioSynthesisRequest(AudioItem.VOCABULARY, "犬", 0, "entry"), File(root, "dog.ogg"))
+
+            // Later lookups still scan the published index once, with no new download.
+            assertEquals(1, indexRequests)
+            assertEquals(listOf("nhk-2016-b0207d240f0f.json"), reads.drop(1))
+        } finally { root.deleteRecursively() }
+    }
+
+    @Test fun freshDownloadWithMalformedLaterContentPublishesNothing() {
+        val root = Files.createTempDirectory("nhk-source-late-malformed").toFile()
+        try {
+            val documents = listOf(
+                """{"headwords":{"猫":["20170616125901.ogg"],"犬":["20170616125902.ogg"]""",
+                """{"headwords":{"猫":["20170616125901.ogg"],"犬":["20170616125902.mp3"]}}""",
+            )
+            documents.forEach { document ->
+                val source = Nhk2016PronunciationSource(File(root, "index"), { it.text }) { url ->
+                    FakeConnection(url, if (url.path.endsWith("index.json")) document.toByteArray() else validOgg())
+                }
+                val failure = runCatching {
+                    source.synthesize(
+                        AudioSynthesisRequest(AudioItem.VOCABULARY, "猫", 0, "entry"),
+                        File(root, "cat.ogg"),
+                    )
+                }
+                assertTrue(failure.isFailure)
+                assertFalse(File(root, "index/nhk-2016-b0207d240f0f.json").exists())
+                assertFalse(File(root, "cat.ogg").exists())
+            }
+        } finally { root.deleteRecursively() }
+    }
+
+    @Test fun oversizedIndexAbortsBeforePublication() {
+        val root = Files.createTempDirectory("nhk-source-oversized").toFile()
+        try {
+            // One byte over the 64 MB ceiling, streamed without allocating the document.
+            val oversizedBytes = 64L * 1024 * 1024 + 1
+            val source = Nhk2016PronunciationSource(File(root, "index"), { "猫" }) { url ->
+                if (url.path.endsWith("index.json")) RepeatingConnection(url, oversizedBytes)
+                else FakeConnection(url, validOgg())
+            }
+            val failure = runCatching {
+                source.synthesize(AudioSynthesisRequest(AudioItem.VOCABULARY, "猫", 0, "entry"), File(root, "cat.ogg"))
+            }
+            assertTrue(failure.isFailure)
+            assertFalse(File(root, "index/nhk-2016-b0207d240f0f.json").exists())
+            assertFalse(File(root, "cat.ogg").exists())
+            // The oversized download is not left behind as a partial index or scratch file.
+            assertEquals(emptyList<String>(), leftovers(root))
+        } finally { root.deleteRecursively() }
+    }
+
+    @Test fun failedPublicationLeavesNoIndexAndNoRecording() {
+        val root = Files.createTempDirectory("nhk-source-publish-failure").toFile()
+        try {
+            // A directory at the destination path makes the atomic move fail after validation.
+            val blocker = File(root, "index/nhk-2016-b0207d240f0f.json")
+            blocker.mkdirs()
+            File(blocker, "keep").writeText("not an index")
+            val index = indexJsonWithHeadwords(2).toByteArray()
+            val source = Nhk2016PronunciationSource(File(root, "index"), { "猫" }) { url ->
+                FakeConnection(url, if (url.path.endsWith("index.json")) index else validOgg())
+            }
+            val failure = runCatching {
+                source.synthesize(AudioSynthesisRequest(AudioItem.VOCABULARY, "猫", 0, "entry"), File(root, "cat.ogg"))
+            }
+            assertTrue(failure.isFailure)
+            assertTrue(blocker.isDirectory)
+            assertTrue(File(blocker, "keep").isFile)
+            assertFalse(File(root, "cat.ogg").exists())
+            assertEquals(emptyList<String>(), leftovers(root))
+        } finally { root.deleteRecursively() }
+    }
+
+    /** Scratch files (`.{uuid}.json` downloads) that a failed attempt should never leave behind. */
+    private fun leftovers(root: File): List<String> =
+        File(root, "index").listFiles()?.filter { it.name.startsWith(".") }?.map { it.name }.orEmpty()
+
     private fun indexJsonWithHeadwords(count: Int): String = buildString {
         append("{\"meta\":{\"version\":2},\"headwords\":{")
         repeat(count) { append("\"dummy$it\":[\"20170616125901.ogg\"],") }
@@ -199,6 +306,26 @@ class Nhk2016PronunciationSourceTest {
         page.write(1) // one-byte page body
         page.write(0) // page body
         return page.toByteArray()
+    }
+
+    /** Emits [length] filler bytes without materialising the document in memory. */
+    private class RepeatingConnection(url: URL, private val length: Long) : HttpURLConnection(url) {
+        override fun getResponseCode() = HTTP_OK
+        override fun getContentLengthLong() = length
+        override fun getInputStream(): InputStream = object : InputStream() {
+            private var remaining = length
+            override fun read(): Int = if (remaining-- > 0) ' '.code else -1
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                if (remaining <= 0) return -1
+                val count = minOf(len.toLong(), remaining).toInt()
+                b.fill(' '.code.toByte(), off, off + count)
+                remaining -= count
+                return count
+            }
+        }
+        override fun connect() = Unit
+        override fun disconnect() = Unit
+        override fun usingProxy() = false
     }
 
     private class FakeConnection(

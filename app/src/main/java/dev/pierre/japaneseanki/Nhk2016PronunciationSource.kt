@@ -50,6 +50,7 @@ class Nhk2016PronunciationSource(
     private val spellingFor: (AudioSynthesisRequest) -> String = { it.text },
     private val onIndexProgress: (NhkIndexProgress?) -> Unit = {},
     private val isIndexFetchCancelled: () -> Boolean = { false },
+    private val readIndexText: (File) -> String = { it.readText(Charsets.UTF_8) },
     private val connectionFactory: (URL) -> HttpURLConnection = { it.openConnection() as HttpURLConnection },
 ) : AudioProvider {
     /** Serialises the one-off 37 MB index download; a second word waits instead of fetching again. */
@@ -101,16 +102,22 @@ class Nhk2016PronunciationSource(
     private fun recordingFor(spelling: String): String? = synchronized(indexLock) {
         if (!dataDirectory.exists() && !dataDirectory.mkdirs()) throw IOException("NHK index storage is unavailable")
         val index = File(dataDirectory, "nhk-2016-b0207d240f0f.json")
-        if (!index.isFile || index.length() !in 1..MAX_INDEX_BYTES) downloadIndex(index)
-        try {
-            IndexHeadwords(index.readText(Charsets.UTF_8)).recordings(spelling)?.firstOrNull()
-        } catch (_: IllegalArgumentException) {
-            index.delete()
-            throw IOException("NHK pronunciation index is invalid")
+        if (!index.isFile || index.length() !in 1..MAX_INDEX_BYTES) {
+            // A fresh download answers this lookup inside its own validation pass; the result is
+            // released only after the index has been published atomically, so there is no second
+            // read of the file we just wrote.
+            downloadIndex(index, spelling)
+        } else {
+            try {
+                IndexHeadwords(readIndexText(index)).recording(spelling)
+            } catch (_: IllegalArgumentException) {
+                index.delete()
+                throw IOException("NHK pronunciation index is invalid")
+            }
         }
     }
 
-    private fun downloadIndex(destination: File) {
+    private fun downloadIndex(destination: File, spelling: String): String? {
         val temporary = File(dataDirectory, ".${UUID.randomUUID()}.json")
         val connection = connectionFactory(URL("$RAW_ROOT/index.json"))
         var published = -PROGRESS_STEP_BYTES
@@ -138,8 +145,11 @@ class Nhk2016PronunciationSource(
                 }
             } }
             onIndexProgress(NhkIndexProgress(total, expected ?: total))
-            IndexHeadwords(temporary.readText(Charsets.UTF_8)).validate()
+            // One pass validates every headword and filename while capturing the requested
+            // recording; the published index is then used without a second read or scan.
+            val recording = IndexHeadwords(readIndexText(temporary)).recording(spelling)
             Files.move(temporary.toPath(), destination.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            return recording
         } catch (error: IOException) {
             throw error
         } catch (error: Exception) {
@@ -164,57 +174,101 @@ class Nhk2016PronunciationSource(
     }
 }
 
-/** Narrow JSON reader for the source's top-level `headwords: { spelling: [filename, ...] }` map. */
+/**
+ * Narrow JSON reader for the source's top-level `headwords: { spelling: [filename, ...] }` map.
+ *
+ * Every lookup walks and validates the whole document - a malformed headword after the requested
+ * one still fails the lookup - but it retains only the requested spelling's first recording. Key
+ * names and recording filenames are compared/validated in place while decoding, so a scan does
+ * not allocate one string per headword.
+ */
 internal class IndexHeadwords(private val json: String) {
-    fun recordings(spelling: String): List<String>? = JsonCursor(json).readIndex(spelling)
+    /** First recording for [spelling], or `null` when the document has no such headword. */
+    fun recording(spelling: String): String? = JsonCursor(json).readIndex(spelling)
+
+    /** Validates the whole document without retaining anything. */
     fun validate() { JsonCursor(json).readIndex(null) }
 }
 
 private class JsonCursor(private val input: String) {
     private var position = 0
 
-    fun readIndex(targetSpelling: String?): List<String>? {
+    fun readIndex(targetSpelling: String?): String? {
         expect('{')
-        var headwords: List<String>? = null
+        var recording: String? = null
         var foundHeadwords = false
         while (!consume('}')) {
             val name = string()
             expect(':')
             if (name == "headwords") {
                 foundHeadwords = true
-                headwords = readHeadwords(targetSpelling)
+                recording = readHeadwords(targetSpelling)
             } else skipValue()
             if (!consume(',')) { expect('}'); break }
         }
         whitespace()
         if (position != input.length || !foundHeadwords) invalid()
-        return headwords
+        return recording
     }
 
-    private fun readHeadwords(targetSpelling: String?): List<String>? {
-        var matchingRecordings: List<String>? = null
+    /**
+     * The last duplicate headword key wins, matching the previous reader; an empty recording list
+     * leaves any earlier match in place. Only the first filename of the winning key is retained.
+     */
+    private fun readHeadwords(targetSpelling: String?): String? {
+        var matchingRecording: String? = null
         expect('{')
         while (!consume('}')) {
-            val spelling = string()
+            val isTarget = if (targetSpelling == null) {
+                skipString()
+                false
+            } else {
+                stringEquals(targetSpelling)
+            }
             expect(':'); expect('[')
-            val recordings = ArrayList<String>()
+            var firstRecording: String? = null
             while (!consume(']')) {
-                val recording = string()
-                if (!recording.matches(Regex("[0-9]{14}\\.ogg"))) invalid()
-                recordings += recording
+                val recording = recordingName(retain = isTarget)
+                if (recording != null && firstRecording == null) firstRecording = recording
                 if (!consume(',')) { expect(']'); break }
             }
-            if (spelling == targetSpelling && recordings.isNotEmpty()) matchingRecordings = recordings
+            if (isTarget && firstRecording != null) matchingRecording = firstRecording
             if (!consume(',')) { expect('}'); break }
         }
-        return matchingRecordings
+        return matchingRecording
+    }
+
+    /** Validates `[0-9]{14}\.ogg` on the decoded characters, allocating only when [retain]. */
+    private fun recordingName(retain: Boolean): String? {
+        expect('"')
+        val builder = if (retain) StringBuilder(RECORDING_NAME_LENGTH) else null
+        var index = 0
+        var valid = true
+        while (true) {
+            val code = nextStringChar()
+            if (code == END_OF_STRING) {
+                if (!valid || index != RECORDING_NAME_LENGTH) invalid()
+                return builder?.toString()
+            }
+            if (valid) {
+                val accepted = when (index) {
+                    in 0 until 14 -> code in '0'.code..'9'.code
+                    14 -> code == '.'.code
+                    15 -> code == 'o'.code
+                    else -> code == 'g'.code
+                }
+                if (!accepted) valid = false
+            }
+            builder?.append(code.toChar())
+            index++
+        }
     }
 
     private fun skipValue() {
         whitespace()
         when (peek()) {
-            '"' -> string()
-            '{' -> { expect('{'); while (!consume('}')) { string(); expect(':'); skipValue(); if (!consume(',')) { expect('}'); break } } }
+            '"' -> skipString()
+            '{' -> { expect('{'); while (!consume('}')) { skipString(); expect(':'); skipValue(); if (!consume(',')) { expect('}'); break } } }
             '[' -> { expect('['); while (!consume(']')) { skipValue(); if (!consume(',')) { expect(']'); break } } }
             else -> while (position < input.length && input[position] !in ",]} \t\r\n") position++
         }
@@ -223,27 +277,61 @@ private class JsonCursor(private val input: String) {
     private fun string(): String {
         expect('"')
         val result = StringBuilder()
-        while (position < input.length) {
-            val char = input[position++]
-            when (char) {
-                '"' -> return result.toString()
-                '\\' -> {
-                    if (position >= input.length) invalid()
-                    when (val escape = input[position++]) {
-                        '"', '\\', '/' -> result.append(escape)
-                        'b' -> result.append('\b')
-                        'f' -> result.append('\u000c')
-                        'n' -> result.append('\n')
-                        'r' -> result.append('\r')
-                        't' -> result.append('\t')
-                        'u' -> { if (position + 4 > input.length) invalid(); result.append(input.substring(position, position + 4).toIntOrNull(16)?.toChar() ?: invalid()); position += 4 }
-                        else -> invalid()
-                    }
-                }
-                else -> { if (char.code < 0x20) invalid(); result.append(char) }
+        while (true) {
+            val code = nextStringChar()
+            if (code == END_OF_STRING) return result.toString()
+            result.append(code.toChar())
+        }
+    }
+
+    private fun skipString() {
+        expect('"')
+        while (nextStringChar() != END_OF_STRING) {
+            // Validation only: nothing is retained.
+        }
+    }
+
+    private fun stringEquals(target: String): Boolean {
+        expect('"')
+        var index = 0
+        var equal = true
+        while (true) {
+            val code = nextStringChar()
+            if (code == END_OF_STRING) return equal && index == target.length
+            if (equal) {
+                if (index < target.length && target[index].code == code) index++ else equal = false
             }
         }
-        invalid()
+    }
+
+    /** Decodes one character of the current string literal, or [END_OF_STRING] at its closing quote. */
+    private fun nextStringChar(): Int {
+        if (position >= input.length) invalid()
+        return when (val char = input[position++]) {
+            '"' -> END_OF_STRING
+            '\\' -> {
+                if (position >= input.length) invalid()
+                when (val escape = input[position++]) {
+                    '"', '\\', '/' -> escape.code
+                    'b' -> '\b'.code
+                    'f' -> '\u000c'.code
+                    'n' -> '\n'.code
+                    'r' -> '\r'.code
+                    't' -> '\t'.code
+                    'u' -> {
+                        if (position + 4 > input.length) invalid()
+                        val code = input.substring(position, position + 4).toIntOrNull(16) ?: invalid()
+                        position += 4
+                        code
+                    }
+                    else -> invalid()
+                }
+            }
+            else -> {
+                if (char.code < 0x20) invalid()
+                char.code
+            }
+        }
     }
 
     private fun expect(char: Char) { whitespace(); if (position >= input.length || input[position++] != char) invalid() }
@@ -251,4 +339,9 @@ private class JsonCursor(private val input: String) {
     private fun peek(): Char { whitespace(); if (position >= input.length) invalid(); return input[position] }
     private fun whitespace() { while (position < input.length && input[position] in " \t\r\n") position++ }
     private fun invalid(): Nothing = throw IllegalArgumentException("Invalid pronunciation index")
+
+    private companion object {
+        const val END_OF_STRING = -1
+        const val RECORDING_NAME_LENGTH = 18
+    }
 }
