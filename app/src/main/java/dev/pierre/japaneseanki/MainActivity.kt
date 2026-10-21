@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -41,9 +42,9 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -88,6 +89,7 @@ import dev.pierre.japaneseanki.speech.SpeechException
 import dev.pierre.japaneseanki.speech.decodeVoices
 import dev.pierre.japaneseanki.speech.encodeVoices
 import dev.pierre.japaneseanki.speech.sentenceHintSpans
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -2947,19 +2949,41 @@ class MainActivity : ComponentActivity() {
                             if (cameraPermissionGranted) {
                                 cameraError?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                                 val cameraController = dev.pierre.japaneseanki.ui.rememberCameraController()
-                                val screenWidth = LocalConfiguration.current.screenWidthDp.dp
-                                val viewfinderHeight = screenWidth * (4f / 3f)
-                                dev.pierre.japaneseanki.ui.CameraViewfinder(
-                                    controller = cameraController,
-                                    modifier = Modifier.requiredWidth(screenWidth).height(viewfinderHeight),
-                                )
-                                dev.pierre.japaneseanki.ui.CameraShutterRow(
-                                    controller = cameraController,
-                                    enabled = !submissionLocked,
-                                    outputDirectory = File(filesDir, "draft").apply { mkdirs() },
-                                    onCaptured = { file -> cameraError = null; requestPhoto(file) },
-                                    onError = { message -> cameraError = message },
-                                )
+                                val configuration = LocalConfiguration.current
+                                val landscape = configuration.screenWidthDp > configuration.screenHeightDp
+                                val shutter: @Composable (Modifier) -> Unit = { shutterModifier ->
+                                    dev.pierre.japaneseanki.ui.CameraShutterRow(
+                                        controller = cameraController,
+                                        enabled = !submissionLocked,
+                                        outputDirectory = File(filesDir, "draft").apply { mkdirs() },
+                                        onCaptured = { file -> cameraError = null; requestPhoto(file) },
+                                        onError = { message -> cameraError = message },
+                                        modifier = shutterModifier,
+                                    )
+                                }
+                                if (landscape) {
+                                    // A 4:3 frame is height-limited in landscape; putting the shutter
+                                    // below it would push it off-screen, so it sits beside the frame.
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        dev.pierre.japaneseanki.ui.CameraViewfinder(
+                                            controller = cameraController,
+                                            modifier = Modifier
+                                                .height(dev.pierre.japaneseanki.ui.landscapeViewfinderHeightDp(configuration.screenHeightDp).dp)
+                                                .aspectRatio(4f / 3f),
+                                        )
+                                        shutter(Modifier.width(110.dp))
+                                    }
+                                } else {
+                                    dev.pierre.japaneseanki.ui.CameraViewfinder(
+                                        controller = cameraController,
+                                        modifier = Modifier.fillMaxWidth().aspectRatio(3f / 4f),
+                                    )
+                                    shutter(Modifier.fillMaxWidth())
+                                }
                                 OutlinedButton(
                                     enabled = !submissionLocked,
                                     onClick = {
