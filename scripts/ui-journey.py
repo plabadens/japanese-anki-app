@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Small UI-driving harness for the API-37 emulator acceptance run.
 
-Run it inside `nix develop` (adb comes from the pinned Android SDK). Every
-subcommand is one bounded action so a journey can be replayed step by step and
-its evidence captured:
+Run it inside `nix develop` (the pinned Android SDK supplies `adb`). Every device
+command goes through `scripts/emulator-adb` (or `$EMULATOR_ADB` when the flake
+installed the helper), which resolves one emulator serial and rejects physical
+devices. Every subcommand is one bounded action so a journey can be replayed step
+by step and its evidence captured:
 
     scripts/ui-journey.py theme dark
     scripts/ui-journey.py size 360x828
@@ -19,19 +21,19 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
+import uuid
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-SERIAL = os.environ.get("ANDROID_SERIAL", "emulator-5554")
 PACKAGE = "dev.pierre.japaneseanki"
-DUMP_PATH = "/sdcard/window_dump.xml"
-LOCAL_DUMP = Path("/tmp/ui-journey-dump.xml")
+ADB_HELPER = Path(os.environ.get("EMULATOR_ADB", Path(__file__).with_name("emulator-adb"))).resolve()
 
 
 def adb(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["adb", "-s", SERIAL, *args],
+        [str(ADB_HELPER), "run", *args],
         check=check,
         capture_output=True,
         text=True,
@@ -44,7 +46,7 @@ def shell(*args: str, check: bool = True) -> str:
 
 def screencap(path: str) -> None:
     result = subprocess.run(
-        ["adb", "-s", SERIAL, "exec-out", "screencap", "-p"],
+        [str(ADB_HELPER), "run", "exec-out", "screencap", "-p"],
         check=True,
         capture_output=True,
     )
@@ -53,9 +55,23 @@ def screencap(path: str) -> None:
 
 
 def dump_xml() -> ET.Element:
-    shell("uiautomator", "dump", DUMP_PATH)
-    adb("pull", DUMP_PATH, str(LOCAL_DUMP))
-    return ET.parse(LOCAL_DUMP).getroot()
+    scratch_dir = os.environ.get("TMPDIR") or None
+    remote_dump = f"/sdcard/ui-journey-{uuid.uuid4().hex}.xml"
+    with tempfile.TemporaryDirectory(prefix="ui-journey-", dir=scratch_dir) as temporary:
+        local_dump = Path(temporary) / "window_dump.xml"
+        # uiautomator exits 0 even when it cannot dump a hierarchy, so check its
+        # output instead of letting the following pull fail with a bare exit status.
+        # --compressed is also the form that works on the API-37 image, where a plain
+        # `uiautomator dump` returns "null root node returned by UiTestAutomationBridge".
+        dumped = adb("shell", "uiautomator", "dump", "--compressed", remote_dump, check=False)
+        if "dumped to" not in dumped.stdout:
+            detail = (dumped.stdout + dumped.stderr).strip() or "(no output)"
+            raise RuntimeError(f"uiautomator dump failed for {remote_dump}: {detail}")
+        adb("pull", remote_dump, str(local_dump))
+        try:
+            return ET.parse(local_dump).getroot()
+        finally:
+            adb("shell", "rm", "-f", remote_dump, check=False)
 
 
 def nodes(root: ET.Element):

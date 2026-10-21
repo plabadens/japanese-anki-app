@@ -9,6 +9,7 @@ Verified at `2026-10-14T14:23:17+02:00` (host clock). This is runner-readiness e
 - Primary checkout: `/srv/hermes/workspace/japanese-anki-app`.
 - Existing AVD: `japanese-anki-pixel7-api35`, Pixel 7, 1080×2400, 420 dpi, Google APIs, x86_64, API 35.
 - ADB serial: `emulator-5554`, default TCP ADB server. Unset `ADB_SERVER_SOCKET` for direct ADB calls; always specify the serial.
+- Current tooling (`2026-10-21`) replaces direct `adb` calls: `scripts/emulator-adb run <adb args>` pins the emulator serial, rejects physical-device serials and conflicting selectors, and unsets `ADB_SERVER_SOCKET` itself. `scripts/emulator.sh` and `scripts/ui-journey.py` both use it.
 - Emulator: 37.1.11.0. KVM is accessible.
 - The emulator was left running. At final verification, process 2974829 had survived tool-call boundaries for over five minutes; ADB reported `device` and `sys.boot_completed=1`.
 - APK installed successfully from `.worktrees/t_10338bf0/app/build/outputs/apk/debug/app-debug.apk`, built from implementation commit `3ac8ad887d01d9947d283c9db034a4d686ab5487`.

@@ -56,20 +56,59 @@
         GRADLE_OPTS = "-Dorg.gradle.native=false";
       };
 
+      emulatorAdb = pkgs.writeShellApplication {
+        name = "emulator-adb";
+        runtimeInputs = [ pkgs.coreutils ];
+        text = builtins.readFile ./scripts/emulator-adb;
+      };
+
       emulatorWrapper = pkgs.writeShellApplication {
         name = "japanese-anki-emulator";
-        runtimeInputs = [ pkgs.coreutils pkgs.gnugrep pkgs.gnused ];
+        runtimeInputs = [ pkgs.coreutils pkgs.gnugrep pkgs.gnused emulatorAdb ];
         text = builtins.readFile ./scripts/emulator.sh;
         runtimeEnv = {
           ANDROID_SDK_ROOT = sdkRoot;
+          EMULATOR_ADB = "${emulatorAdb}/bin/emulator-adb";
         };
+      };
+
+      # Explicit APK inputs: root build files, the version catalog, and app sources.
+      # `app/build` is deliberately excluded — only `app/src` is source, and a
+      # checkout carrying Gradle outputs must not feed them into the sandbox build.
+      apkSource = pkgs.lib.fileset.toSource {
+        root = ./.;
+        fileset = pkgs.lib.fileset.unions [
+          ./app/build.gradle.kts
+          ./app/src
+          ./build.gradle.kts
+          ./gradle
+          ./gradle.properties
+          ./settings.gradle.kts
+        ];
+      };
+
+      coreCheckSource = pkgs.lib.fileset.toSource {
+        root = ./.;
+        fileset = pkgs.lib.fileset.unions [
+          ./app/src/main/assets/dictionary.sqlite.gz
+          ./app/src/main/java
+          ./app/src/test/java
+          ./datasets/jmdict/JMdict_e.gz
+          ./datasets/kanjium/accents.txt
+          ./scripts/build_dictionary.py
+          ./scripts/package_unidic.py
+          ./scripts/test-build-dictionary.py
+          ./scripts/test-core.sh
+          ./scripts/test-dictionary-asset.py
+          ./scripts/test-package-unidic.py
+        ];
       };
 
       mkAndroidApk = { apkPath, outputName, task }:
         pkgs.stdenv.mkDerivation (finalAttrs: {
           pname = "japanese-anki-card-creator";
           version = "0.1.0";
-          src = self;
+          src = apkSource;
 
           nativeBuildInputs = [ jdk pkgs.gradle ];
           buildInputs = [ android.androidsdk ];
@@ -116,7 +155,7 @@
       coreTests = pkgs.runCommand "japanese-anki-core-tests" {
         nativeBuildInputs = [ jdk pkgs.gradle pkgs.python3 ];
       } ''
-        cp -r ${self} source
+        cp -r ${coreCheckSource} source
         chmod -R u+w source
         cd source
         python3 scripts/test-build-dictionary.py
@@ -138,6 +177,7 @@
 
       devShells.${system}.default = pkgs.mkShell (toolchainEnv // {
         packages = [ jdk pkgs.gradle android.androidsdk android.platform-tools pkgs.git pkgs.python3 ];
+        EMULATOR_ADB = "${emulatorAdb}/bin/emulator-adb";
         JAVA_HOME = jdk.home;
         LANG = "C.UTF-8";
         LC_ALL = "C.UTF-8";
