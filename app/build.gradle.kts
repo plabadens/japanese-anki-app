@@ -98,8 +98,6 @@ if (System.getenv("IN_GRADLE_UPDATE_DEPS") == "1") {
             configuration.dependencies.removeAll {
                 it is ProjectDependency && it.path == project.path
             }
-            // No instrumented tests currently need this configuration.
-            if ("AndroidTest" in configuration.name) configuration.isCanBeResolved = false
         }
     }
 }
@@ -117,4 +115,6 @@ dependencies {
     debugImplementation(platform(libs.androidx.compose.bom))
     debugImplementation(libs.androidx.compose.ui.tooling)
     testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
 }
