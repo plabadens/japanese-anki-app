@@ -29,6 +29,15 @@ class TargetSelectionTest {
         token(11, 12),
     )
 
+    private val punctuated = tokens.dropLast(1) + JapaneseToken(
+        span = TargetSpan(11, 12),
+        surface = "。",
+        lemma = "。",
+        surfaceReading = "",
+        lemmaReading = "",
+        partOfSpeech = "補助記号-句点",
+    )
+
     @Test
     fun extendingRightAddsTheNextTokenAndKeepsTheOccurrenceContiguous() {
         val extended = extendSpan(tokens, TargetSpan(4, 5), SpanEdge.Right)
@@ -80,5 +89,19 @@ class TargetSelectionTest {
     fun spanSurfaceReportsOnlyAlignedSelections() {
         assertEquals("本を", spanSurface(tokens, TargetSpan(4, 6)))
         assertNull("a span that starts mid-token is not a pill selection", spanSurface(tokens, TargetSpan(2, 5)))
+    }
+
+    @Test
+    fun extendingPastTheLastWordDoesNotSelectPunctuation() {
+        assertNull(extendSpan(punctuated, TargetSpan(6, 11), SpanEdge.Right))
+    }
+
+    @Test
+    fun punctuationIsAttachedToThePreviousPillAndStaysOutOfItsSpan() {
+        val pills = targetPills(punctuated)
+
+        assertEquals(listOf("図書館", "で", "本", "を", "読みました。"), pills.map { it.label })
+        assertEquals("読みました", pills.last().token.surface)
+        assertEquals(TargetSpan(6, 11), pills.last().token.span)
     }
 }

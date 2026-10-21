@@ -1174,7 +1174,9 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            androidx.compose.runtime.LaunchedEffect(analyzerReady, editor.text, analysisRetry, draftGeneration, submissionLocked) {
+            androidx.compose.runtime.LaunchedEffect(
+                analyzerReady, editor.text, analysisRetry, draftGeneration, submissionLocked, dictionaryReady,
+            ) {
                 if (currentSubmissionLocked.value) return@LaunchedEffect
                 val callbackGeneration = draftGeneration
                 if (!analyzerReady || editor.text.isBlank()) {
@@ -1186,7 +1188,14 @@ class MainActivity : ComponentActivity() {
                 tokenizationError = null
                 try {
                     kotlinx.coroutines.delay(150)
-                    val analyzed = withContext(Dispatchers.IO) { offlineAnalyzer.analyze(editor.text) }
+                    val analyzed = withContext(Dispatchers.IO) {
+                        val raw = offlineAnalyzer.analyze(editor.text)
+                        groupTokens(raw) { candidate ->
+                            dictionaryReady && runCatching {
+                                offlineDictionary.search(candidate, limit = 1).isNotEmpty()
+                            }.getOrDefault(false)
+                        }
+                    }
                     if (!asyncDraftIsCurrent(callbackGeneration)) return@LaunchedEffect
                     japaneseTokens = analyzed
                 } catch (cancelled: CancellationException) {

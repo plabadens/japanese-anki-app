@@ -102,3 +102,6 @@ internal fun katakanaToHiragana(reading: String): String = buildString(reading.l
         )
     }
 }
+
+/** Punctuation is part of the sentence, never a selectable target word. */
+internal fun JapaneseToken.isPunctuationToken(): Boolean = partOfSpeech.startsWith("補助記号")

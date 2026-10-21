@@ -62,6 +62,7 @@ internal fun TargetScreen(
     hasMoreEntries: Boolean = false,
     onLoadMoreEntries: (() -> Unit)? = null,
 ) {
+    val pills = targetPills(tokens)
     Column(modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
@@ -71,7 +72,7 @@ internal fun TargetScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (tokens.isEmpty()) {
+            if (pills.isEmpty()) {
                 Text(
                     when {
                         tokensLoading -> "Analyzing the sentence…"
@@ -86,12 +87,12 @@ internal fun TargetScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    tokens.forEach { token ->
-                        WordPill(
-                            surface = token.surface,
-                            selected = selectedSpan == token.span,
+                    pills.forEach { pill ->
+                        TargetPillItem(
+                            pill = pill,
+                            selected = selectedSpan == pill.token.span,
                             enabled = !locked,
-                            onClick = { onSelectSpan(token.span) },
+                            onClick = { onSelectSpan(pill.token.span) },
                         )
                     }
                 }
@@ -229,8 +230,42 @@ private fun SpanControls(
 }
 
 @Composable
+private fun TargetPillItem(
+    pill: TargetPill,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        if (pill.prefix.isNotEmpty()) TargetPunctuation(pill.prefix)
+        WordPill(
+            surface = pill.token.surface,
+            spokenSurface = pill.token.surface,
+            selected = selected,
+            enabled = enabled,
+            onClick = onClick,
+        )
+        if (pill.suffix.isNotEmpty()) TargetPunctuation(pill.suffix)
+    }
+}
+
+/** Punctuation stays beside its word but outside the selectable pill and its outline. */
+@Composable
+private fun TargetPunctuation(value: String) {
+    Text(
+        value,
+        style = MaterialTheme.typography.headlineMedium.copy(
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Normal,
+        ),
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+}
+
+@Composable
 private fun WordPill(
     surface: String,
+    spokenSurface: String = surface,
     selected: Boolean,
     enabled: Boolean,
     onClick: () -> Unit,
@@ -251,7 +286,7 @@ private fun WordPill(
         modifier = Modifier
             .padding(if (selected) 0.dp else 2.dp)
             .semantics {
-                contentDescription = "Word $surface"
+                contentDescription = "Word $spokenSurface"
                 stateDescription = if (selected) "Selected target" else "Not selected"
             },
     ) {
