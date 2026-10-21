@@ -58,6 +58,19 @@ test('photo happy path is pure and exports the browser/CommonJS API', () => {
   assert.equal(s.hasPhoto, false); assert.equal(s.submission, null);
 });
 
+test('word-pill selection retains keyboard boundaries without obsolete handle plumbing', () => {
+  const study = fs.readFileSync(path.join(__dirname, 'study.js'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, 'study.css'), 'utf8');
+  assert.match(study, /function stepBoundary\(/, 'Shift+arrow selection keeps token boundaries');
+  assert.match(study, /e\.shiftKey&&s\.selection/, 'the sentence group still extends a selected span');
+  for (const deadCode of [/function positionHandles\(/, /function offsetAtPoint\(/,
+    /caretPositionFromPoint|caretRangeFromPoint/, /data-handle/, /data-selection-box/,
+    /activeHandle/, /addEventListener\(['"]resize['"]/]) {
+    assert.doesNotMatch(study, deadCode);
+  }
+  assert.doesNotMatch(css, /selection-handle|selection-help|data-handle/);
+});
+
 function legacy() {
   const archived = path.join(__dirname, 'history', 'previous-study', 'flow.template.html');
   const source = fs.readFileSync(fs.existsSync(archived) ? archived : path.join(__dirname, 'flow.template.html'), 'utf8');

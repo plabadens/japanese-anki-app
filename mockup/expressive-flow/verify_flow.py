@@ -527,7 +527,8 @@ class Suite:
         self.reset("entries")
         self.b.key("Escape")
         self.token("図書館")
-        self.check("tappable word pills replace handles", True, self.dom("p.querySelectorAll('button.word-pill').length>0 && !p.querySelector('[data-handle]')"))
+        self.check("tappable word pills replace selection handles", True,
+                   self.dom("p.querySelectorAll('button.word-pill').length>0 && !p.querySelector('[data-handle],.selection-handle')"))
         self.check("no range dropdowns", 0, self.dom("p.querySelectorAll('select').length"))
         # Extend three-character 図書館 across particle + 本 with real key events.
         self.b.focus('[data-sentence-run]')

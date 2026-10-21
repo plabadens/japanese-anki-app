@@ -105,7 +105,7 @@
     return result.join('');
   }
   function sentenceChooser(s) {
-    return `<div class="sentence-box" data-selection-box><div class="sentence-run" lang="ja" tabindex="0" role="group" aria-label="Japanese word pills. Tap a word to select. Drag across words or use Shift plus arrows to extend a span." data-sentence-run>${sentenceMarkup(s)}</div></div>`;
+    return `<div class="sentence-box"><div class="sentence-run" lang="ja" tabindex="0" role="group" aria-label="Japanese word pills. Tap a word to select. Drag across words or use Shift plus arrows to extend a span." data-sentence-run>${sentenceMarkup(s)}</div></div>`;
   }
   function target(s) {
     const entry=selected(s), entries=M.entriesFor(s);
@@ -226,35 +226,23 @@
     }
     return `<div class="overlay" data-backdrop><section class="sheet" role="dialog" aria-modal="true" aria-label="${escape(title)}"><div class="sheet-drag" aria-hidden="true"></div><div class="sheet-title"><h3>${title}</h3><button class="icon-button" data-action="close-sheet" aria-label="Close">${icon('close')}</button></div>${u.error?`<p class="field-error" role="alert">${escape(u.error)}</p>`:''}${body}</section></div>`;
   }
-  function positionHandles(id,selection=null) {
-    const p=document.querySelector(`[data-phone="${id}"]`),box=p?.querySelector('[data-selection-box]');
-    if(!box)return;
-    const mark=box.querySelector('mark'),rects=mark?[...mark.getClientRects()].filter(r=>r.width>0):[];
-    if(!rects.length)return;
-    const b=box.getBoundingClientRect();
-    for(const [name,r,x] of [['start',rects[0],rects[0].left],['end',rects.at(-1),rects.at(-1).right]]) {
-      const h=box.querySelector(`[data-handle="${name}"]`);
-      if(h){h.style.left=`${Math.max(16,Math.min(b.width-16,x-b.left))}px`;h.style.top=`${r.bottom-b.top}px`;}
-    }
-  }
   function render(id) {
     const s=phones[id],u=ui(id),p=document.querySelector(`[data-phone="${id}"]`);
     if(!p||!s)return;
     const active=document.activeElement,had=p.contains(active);
     const previousOverlay=p.dataset.overlay,previousStage=p.dataset.stage,scroll=p.querySelector('.main')?.scrollTop||0;
-    const activeAction=had?active.dataset.action:null,activeHandle=had?active.dataset.handle:null;
+    const activeAction=had?active.dataset.action:null;
     p.dataset.theme=theme;p.dataset.stage=s.stage;p.dataset.status=s.status;p.dataset.overlay=u.overlay||'';
     const body=s.submission==='uncertain'||s.status==='uncertain'?review(s):s.stage==='preparing'?preparing(s):s.stage==='review'?review(s):s.stage==='target'?target(s):input(s);
     p.innerHTML=toolbar(s)+body+'<div class="gesture-inset" aria-hidden="true"></div>'+overlay(s)+(u.toast?`<div class="toast" role="status">${escape(u.toast)}</div>`:'');
     p.querySelector('.main')?.scrollTo(0,previousStage===s.stage?scroll:0);
-    positionHandles(id);
     if(u.overlay) {
       p.querySelectorAll(':scope>.main,:scope>.toolbar,:scope>.footer-actions').forEach(e=>e.inert=true);
       if(previousOverlay!==u.overlay||had)p.querySelector('.sheet-title button,.full-photo button')?.focus({preventScroll:true});
     } else if(previousOverlay && u.returnFocus) {
       p.querySelector(u.returnFocus)?.focus({preventScroll:true});
     } else if(had) {
-      const replacement=activeHandle?p.querySelector(`[data-handle="${activeHandle}"]`):activeAction?p.querySelector(`[data-action="${activeAction}"]`):p.querySelector('[data-sentence-run]');
+      const replacement=activeAction?p.querySelector(`[data-action="${activeAction}"]`):p.querySelector('[data-sentence-run]');
       replacement?.focus({preventScroll:true});
     }
   }
@@ -398,16 +386,6 @@
     scenario=name;
   }
   function scenarioDescription(){return ({'type-empty':'An empty writing canvas, with no image placeholder.','type':'Typed input keeps the photograph optional.','regions':'Choose readable excerpts only when OCR has several plausible regions.','entries':'The noun and counter remain separate dictionary identities.','generating':'Preparing is a transition, not an unfinished Review.','failed':'Retry generation without discarding the source or selection.','missing':'A dataset miss is not a network error.','counter':'The chosen counter meaning is retained, even when pronunciation is unavailable.','span':'Word pills preserve the exact contiguous span, including when no entry matches.','readings':'Current readings and listed pronunciations are directly correctable.','uncertain':'The submitted snapshot is read-only. Back cannot reopen Send.'})[scenario]||'';}
-  function offsetAtPoint(id,x,y) {
-    const run=document.querySelector(`[data-phone="${id}"] [data-sentence-run]`);
-    if(!run)return null;
-    const caret=document.caretPositionFromPoint?.(x,y);
-    const range=caret?null:document.caretRangeFromPoint?.(x,y);
-    const node=caret?.offsetNode||range?.startContainer,offset=caret?.offset??range?.startOffset;
-    if(!node||!run.contains(node))return null;
-    const textRange=document.createRange();textRange.setStart(run,0);textRange.setEnd(node,offset);
-    return Math.min(phones[id].sentence.length,textRange.toString().length);
-  }
   function stepBoundary(s,which,delta) {
     if(!s.selection)return null;
     const boundaries=[0,...s.tokens.map(t=>t.end)];
@@ -473,11 +451,6 @@
       if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}
       else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}
     }
-    const handle=e.target.closest('[data-handle]');
-    if(handle&&['ArrowLeft','ArrowRight'].includes(e.key)) {
-      e.preventDefault();const range=stepBoundary(s,handle.dataset.handle,e.key==='ArrowLeft'?-1:1);
-      if(range)selectSpan(id,range.start,range.end,false);return;
-    }
     if(e.target.matches('[data-sentence-run]')&&['ArrowLeft','ArrowRight','Enter',' '].includes(e.key)) {
       e.preventDefault();
       if(e.shiftKey&&s.selection){const range=stepBoundary(s,'end',e.key==='ArrowLeft'?-1:1);if(range)selectSpan(id,range.start,range.end,false);return;}
@@ -509,7 +482,6 @@
     scale=scale===1?2:1;document.body.classList.toggle('large-type',scale===2);document.getElementById('size-toggle').setAttribute('aria-pressed',scale===2);Object.keys(phones).forEach(render);
   });
   document.getElementById('photo-toggle').addEventListener('click',()=>setPhotoVariant(photoVariant === 'landscape' ? 'portrait' : 'landscape'));
-  addEventListener('resize',()=>Object.keys(phones).forEach(id=>positionHandles(id)));
   addEventListener('popstate',()=>{if(phones.live)action('live','back');});
   window.designStudy={apiVersion:2,model:M,get phones(){return phones;},get local(){return local;},get theme(){return theme;},get textScale(){return scale;},get photoVariant(){return photoVariant;},
     setView(name){view=name;mount();},setScenario(name){seedScenario(name);view='states';mount();},
