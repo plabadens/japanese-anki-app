@@ -6,7 +6,6 @@ import androidx.camera.core.ImageCaptureException
 import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,7 +32,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -122,28 +120,7 @@ internal fun CameraViewfinder(controller: LifecycleCameraController, modifier: M
                         .background(Color.Black.copy(alpha = 0.6f)),
                 )
             }
-            Canvas(Modifier.fillMaxSize()) {
-                val top = insetY.toPx()
-                val bottom = size.height - insetY.toPx()
-                val left = insetX.toPx()
-                val right = size.width - insetX.toPx()
-                val margin = 10.dp.toPx()
-                val arm = 24.dp.toPx()
-                val stroke = 2.5.dp.toPx()
-                val color = Color.White.copy(alpha = 0.85f)
-                // Top-left
-                drawLine(color, Offset(left + margin, top + margin), Offset(left + margin + arm, top + margin), strokeWidth = stroke)
-                drawLine(color, Offset(left + margin, top + margin), Offset(left + margin, top + margin + arm), strokeWidth = stroke)
-                // Top-right
-                drawLine(color, Offset(right - margin, top + margin), Offset(right - margin - arm, top + margin), strokeWidth = stroke)
-                drawLine(color, Offset(right - margin, top + margin), Offset(right - margin, top + margin + arm), strokeWidth = stroke)
-                // Bottom-left
-                drawLine(color, Offset(left + margin, bottom - margin), Offset(left + margin + arm, bottom - margin), strokeWidth = stroke)
-                drawLine(color, Offset(left + margin, bottom - margin), Offset(left + margin, bottom - margin - arm), strokeWidth = stroke)
-                // Bottom-right
-                drawLine(color, Offset(right - margin, bottom - margin), Offset(right - margin - arm, bottom - margin), strokeWidth = stroke)
-                drawLine(color, Offset(right - margin, bottom - margin), Offset(right - margin, bottom - margin - arm), strokeWidth = stroke)
-            }
+            // The study shows the photo frame itself, with no corner-bracket overlay.
         }
     }
 }

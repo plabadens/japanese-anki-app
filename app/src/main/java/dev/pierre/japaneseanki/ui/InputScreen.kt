@@ -18,12 +18,17 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
@@ -57,6 +62,8 @@ internal fun InputScreen(
     onRetryOcr: () -> Unit = {},
     imageAttached: Boolean = false,
     imageStatus: String? = null,
+    imageFailed: Boolean = false,
+    onRetryImage: () -> Unit = {},
 ) {
     // One camera controller for the preview and the shutter: binding two to the same lifecycle
     // would make the second steal the first's session.
@@ -108,7 +115,19 @@ internal fun InputScreen(
                 }
             }
             imageStatus?.let { status ->
-                Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        status,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (imageFailed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    // v0.3 offered an explicit retry for a failed photo; re-picking is not a
+                    // recovery path the user should have to discover.
+                    if (imageFailed) {
+                        TextButton(enabled = enabled, onClick = onRetryImage) { Text("Retry photo") }
+                    }
+                }
             }
         }
         if (captureMode == "Photo") {
@@ -146,6 +165,26 @@ internal fun InputScreen(
     }
 }
 
+/**
+ * CameraX fills `cameraInfo` asynchronously after the controller binds, so the flash control has
+ * to wait for it instead of reading a single nullable snapshot during composition. The wait runs
+ * off the main thread: asking the controller for camera info can block on CameraX initialisation,
+ * which ANRs the UI if it happens during composition.
+ */
+@Composable
+private fun rememberFlashAvailability(controller: androidx.camera.view.LifecycleCameraController): Boolean {
+    var available by remember(controller) { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(controller) {
+        available = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            runCatching {
+                controller.initializationFuture.get(10, java.util.concurrent.TimeUnit.SECONDS)
+                controller.cameraInfo?.hasFlashUnit() == true
+            }.getOrDefault(false)
+        }
+    }
+    return available
+}
+
 @Composable
 private fun PhotoPane(
     modifier: Modifier = Modifier,
@@ -165,6 +204,8 @@ private fun PhotoPane(
         }
         return
     }
+    val hasFlash = rememberFlashAvailability(controller)
+    var flashOn by remember { mutableStateOf(false) }
     Box(modifier, contentAlignment = Alignment.Center) {
         CameraViewfinder(
             controller = controller,
@@ -172,6 +213,34 @@ private fun PhotoPane(
                 .fillMaxSize()
                 .clip(RoundedCornerShape(28.dp)),
         )
+        if (hasFlash) {
+            Surface(
+                onClick = {
+                    flashOn = !flashOn
+                    controller.imageCaptureFlashMode = if (flashOn) {
+                        androidx.camera.core.ImageCapture.FLASH_MODE_ON
+                    } else {
+                        androidx.camera.core.ImageCapture.FLASH_MODE_OFF
+                    }
+                },
+                enabled = enabled,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(12.dp)
+                    .size(48.dp)
+                    .semantics {
+                        contentDescription = "Flash"
+                        stateDescription = if (flashOn) "On" else "Off"
+                    },
+                shape = androidx.compose.foundation.shape.CircleShape,
+                color = Color.Black.copy(alpha = 0.55f),
+                contentColor = Color.White,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    FlowIcons.Flash(Modifier.size(24.dp))
+                }
+            }
+        }
     }
 }
 

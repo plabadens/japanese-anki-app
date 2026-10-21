@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -58,6 +59,8 @@ internal fun TargetScreen(
     modifier: Modifier = Modifier,
     locked: Boolean = false,
     tokensLoading: Boolean = false,
+    hasMoreEntries: Boolean = false,
+    onLoadMoreEntries: (() -> Unit)? = null,
 ) {
     Column(modifier.fillMaxWidth()) {
         Column(
@@ -92,6 +95,14 @@ internal fun TargetScreen(
                         )
                     }
                 }
+            }
+            if (selectedSpan != null) {
+                SpanControls(
+                    target = selectedSpan,
+                    tokens = tokens,
+                    enabled = !locked,
+                    onSpanChange = onSelectSpan,
+                )
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -144,6 +155,13 @@ internal fun TargetScreen(
                     )
                 }
             }
+            if (hasMoreEntries && onLoadMoreEntries != null) {
+                TextButton(
+                    onClick = onLoadMoreEntries,
+                    enabled = !locked,
+                    modifier = Modifier.heightIn(min = 48.dp),
+                ) { Text("Load more dictionary matches") }
+            }
         }
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
@@ -161,6 +179,55 @@ internal fun TargetScreen(
     }
 }
 
+/**
+ * Boundary adjustment for a contiguous selection: extend or trim one word at a time. The study
+ * reaches the same spans by dragging across pills; labelled controls keep it operable with
+ * TalkBack and switch access (SPEC.md §4.3.3).
+ */
+@Composable
+private fun SpanControls(
+    target: TargetSpan,
+    tokens: List<JapaneseToken>,
+    enabled: Boolean,
+    onSpanChange: (TargetSpan) -> Unit,
+) {
+    val surface = spanSurface(tokens, target).orEmpty()
+    val extendLeft = extendSpan(tokens, target, SpanEdge.Left)
+    val extendRight = extendSpan(tokens, target, SpanEdge.Right)
+    val trimLeft = trimSpan(tokens, target, SpanEdge.Left)
+    val trimRight = trimSpan(tokens, target, SpanEdge.Right)
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            if (surface.isBlank()) "Selection" else "Selected: $surface",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(
+                enabled = enabled && extendLeft != null,
+                onClick = { extendLeft?.let(onSpanChange) },
+                modifier = Modifier.heightIn(min = 48.dp),
+            ) { Text("◀ Extend") }
+            TextButton(
+                enabled = enabled && extendRight != null,
+                onClick = { extendRight?.let(onSpanChange) },
+                modifier = Modifier.heightIn(min = 48.dp),
+            ) { Text("Extend ▶") }
+            if (trimLeft != null || trimRight != null) {
+                TextButton(
+                    enabled = enabled,
+                    onClick = { (trimLeft ?: trimRight)?.let(onSpanChange) },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                ) { Text("Trim") }
+            }
+        }
+    }
+}
+
 @Composable
 private fun WordPill(
     surface: String,
@@ -173,8 +240,10 @@ private fun WordPill(
         onClick = onClick,
         enabled = enabled,
         shape = shape,
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-        contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+        // The study keeps the pill's own surface tint and marks selection with a 2 dp primary
+        // outline, so the word stays legible and selection is not colour-only.
+        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
+        contentColor = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface,
         border = BorderStroke(
             if (selected) 2.dp else 1.dp,
             if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,

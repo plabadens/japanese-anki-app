@@ -18,7 +18,12 @@ sealed interface OcrSetupStatus {
     data class Error(val message: String) : OcrSetupStatus
 }
 
-data class JapaneseOcrResult(val text: String, val blocks: List<OcrBlock>)
+data class JapaneseOcrResult(
+    val text: String,
+    val blocks: List<OcrBlock>,
+    val sourceWidth: Int = 0,
+    val sourceHeight: Int = 0,
+)
 
 /** Uses the bundled ML Kit Japanese model; recognition itself does not download a model or use network. */
 class JapaneseOcr(@Suppress("UNUSED_PARAMETER") context: Context) {
@@ -59,7 +64,7 @@ class JapaneseOcr(@Suppress("UNUSED_PARAMETER") context: Context) {
                         )
                     }
                     setupStatus = OcrSetupStatus.Ready
-                    JapaneseOcrResult(result.text, blocks)
+                    JapaneseOcrResult(result.text, blocks, sourceWidth, sourceHeight)
                 } finally {
                     recognizer.close()
                 }

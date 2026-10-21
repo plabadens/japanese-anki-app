@@ -34,6 +34,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -152,6 +154,12 @@ internal enum class FlowStep(val label: String) {
 }
 
 /**
+ * Widest the portrait composition may become. A rotated or tablet window keeps the study's
+ * single-column composition centred instead of stretching its photo slot and sentence.
+ */
+internal val AppContentMaxWidth = 520.dp
+
+/**
  * Compact three-segment progress bar: completed segments filled, current outlined and filled,
  * remaining segments empty. It is the only step indicator in the portrait composition.
  */
@@ -164,6 +172,11 @@ internal fun FlowProgress(current: FlowStep, modifier: Modifier = Modifier) {
             .fillMaxWidth()
             .semantics {
                 contentDescription = "Step ${current.ordinal + 1} of ${FlowStep.entries.size}: ${current.label}"
+                progressBarRangeInfo = ProgressBarRangeInfo(
+                    current = (current.ordinal + 1).toFloat(),
+                    range = 1f..FlowStep.entries.size.toFloat(),
+                    steps = FlowStep.entries.size - 1,
+                )
             },
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -198,25 +211,32 @@ internal fun FlowTopBar(
     title: String,
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
+    onClose: (() -> Unit)? = null,
     onSettings: (() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (onBack != null) {
-            IconButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = "Back" }) {
-                FlowIcons.Back(Modifier.size(24.dp))
-            }
-        } else {
-            Box(Modifier.size(12.dp))
+        when {
+            onBack != null -> IconButton(
+                onClick = onBack,
+                modifier = Modifier.semantics { contentDescription = "Back" },
+            ) { FlowIcons.Back(Modifier.size(24.dp)) }
+
+            onClose != null -> IconButton(
+                onClick = onClose,
+                modifier = Modifier.semantics { contentDescription = "Discard draft" },
+            ) { FlowIcons.Close(Modifier.size(22.dp)) }
+
+            else -> Box(Modifier.size(12.dp))
         }
         Text(
             title,
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier
                 .weight(1f)
-                .padding(start = if (onBack == null) 4.dp else 0.dp),
+                .padding(start = if (onBack == null && onClose == null) 4.dp else 0.dp),
         )
         if (onSettings != null) {
             IconButton(onClick = onSettings, modifier = Modifier.semantics { contentDescription = "Settings" }) {
@@ -404,5 +424,38 @@ internal object FlowIcons {
             tint, Offset(size.width * 0.42f, size.height * 0.74f), Offset(size.width * 0.82f, size.height * 0.28f),
             stroke, StrokeCap.Round,
         )
+    }
+
+    @Composable
+    fun Close(modifier: Modifier = Modifier, tint: Color = LocalContentColor.current) = Canvas(modifier) {
+        val stroke = 2.dp.toPx()
+        val inset = 0.26f
+        drawLine(
+            tint, Offset(size.width * inset, size.height * inset),
+            Offset(size.width * (1 - inset), size.height * (1 - inset)), stroke, StrokeCap.Round,
+        )
+        drawLine(
+            tint, Offset(size.width * (1 - inset), size.height * inset),
+            Offset(size.width * inset, size.height * (1 - inset)), stroke, StrokeCap.Round,
+        )
+    }
+
+    /** Filled bolt used by the camera flash control in the study's Input view. */
+    @Composable
+    fun Flash(modifier: Modifier = Modifier, tint: Color = Color.White) = Canvas(modifier) {
+        val points = listOf(
+            Offset(size.width * 0.58f, size.height * 0.06f),
+            Offset(size.width * 0.24f, size.height * 0.55f),
+            Offset(size.width * 0.46f, size.height * 0.55f),
+            Offset(size.width * 0.40f, size.height * 0.94f),
+            Offset(size.width * 0.76f, size.height * 0.44f),
+            Offset(size.width * 0.53f, size.height * 0.44f),
+        )
+        val path = androidx.compose.ui.graphics.Path().apply {
+            moveTo(points.first().x, points.first().y)
+            points.drop(1).forEach { lineTo(it.x, it.y) }
+            close()
+        }
+        drawPath(path, tint)
     }
 }

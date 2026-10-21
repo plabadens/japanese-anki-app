@@ -6,7 +6,7 @@ material3 = "1.4.0"
 activity-compose = "1.11.0"
 junit = "4.13.2"
 tesseract4android = "4.9.0"
-camerax = "1.5.0"
+camerax = "1.5.1"
 heifwriter = "1.1.0"
 
 [libraries]

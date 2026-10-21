@@ -62,8 +62,8 @@ import dev.pierre.japaneseanki.CorrectableReading
 import dev.pierre.japaneseanki.DictionarySense
 import dev.pierre.japaneseanki.FuriganaSpan
 import dev.pierre.japaneseanki.JapaneseToken
+import dev.pierre.japaneseanki.OcrBounds
 import dev.pierre.japaneseanki.PitchAccent
-import dev.pierre.japaneseanki.PitchDiagramScale
 import dev.pierre.japaneseanki.PitchPatternDiagram
 import dev.pierre.japaneseanki.TargetSpan
 import java.io.File
@@ -117,6 +117,13 @@ internal fun focalCropOffsets(
     return Triple(scale, dx, dy)
 }
 
+/** Vertical focal fraction (0 = top) for a photo slot centred on a recognised text block. */
+internal fun ocrFocusFraction(bounds: OcrBounds, sourceHeight: Int): Float {
+    if (sourceHeight <= 0 || bounds.bottom <= bounds.top) return 0.5f
+    val center = (bounds.top + bounds.bottom) / 2f
+    return (center / sourceHeight).coerceIn(0f, 1f)
+}
+
 /**
  * Review is a composed learning artifact, not a field form:
  * photo → continuous Japanese/ruby → translation directly beneath → vocabulary/pitch/definition.
@@ -141,7 +148,7 @@ internal fun ReviewCard(
     pitchInfoExpanded: Boolean,
     onTogglePitchInfo: () -> Unit,
     onEdit: () -> Unit,
-    onAddTag: () -> Unit,
+    onTagsChange: (String) -> Unit = {},
     onChooseImage: () -> Unit = {},
     onRemoveImage: () -> Unit = {},
     imageRemovable: Boolean = true,
@@ -155,6 +162,8 @@ internal fun ReviewCard(
     correctableReadings: List<CorrectableReading> = emptyList(),
     onCorrectReading: (CorrectableReading, String) -> Boolean = { _, _ -> false },
     readingCorrectionError: String? = null,
+    definitionStale: Boolean = false,
+    onAcknowledgeDefinition: () -> Unit = {},
     onVocabularyReadingChange: (String) -> Boolean = { false },
     vocabularyReadingError: String? = null,
     vocabularyAudioProgress: String? = null,
@@ -186,6 +195,10 @@ internal fun ReviewCard(
     imageFocalY: Float = 0.5f,
     deckLabel: String = "",
     onChooseDeck: (() -> Unit)? = null,
+    sendHint: String? = null,
+    pitchAlternativeAccents: List<Int> = emptyList(),
+    selectedPitchAccent: Int? = null,
+    onSelectPitch: (Int) -> Unit = {},
 ) {
     var editing by remember { mutableStateOf(false) }
     var editingField by remember { mutableStateOf<String?>(null) }
@@ -193,6 +206,7 @@ internal fun ReviewCard(
     var readingDraft by remember { mutableStateOf("") }
     var vocabularyReadingDraft by remember(vocabularyReading) { mutableStateOf(vocabularyReading) }
     var notesDraft by remember(notes) { mutableStateOf(notes) }
+    var tagsDraft by remember(tags) { mutableStateOf(tags.joinToString(" ")) }
     var photoExpanded by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize()) {
@@ -279,10 +293,9 @@ internal fun ReviewCard(
                         ReviewAudioButton("Word", vocabularyAudio, onToggleVocabularyAudio, onRetryVocabularyAudio)
                     }
                     pitch?.let {
-                        PitchPatternDiagram(
-                            pitch = it,
-                            scale = PitchDiagramScale.Compact,
-                        )
+                        // The study sets the contour at learning scale, with 22 sp katakana
+                        // morae labels beneath it.
+                        PitchPatternDiagram(pitch = it)
                     } ?: Text(
                         "No pitch pattern is available for this reading.",
                         style = MaterialTheme.typography.bodyMedium,
@@ -304,6 +317,21 @@ internal fun ReviewCard(
                             )
                         }
                     }
+                    if (editing && editingEnabled && pitchAlternativeAccents.size > 1) {
+                        Text(
+                            "Source-listed pitch patterns",
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            pitchAlternativeAccents.forEach { accent ->
+                                if (accent == selectedPitchAccent) {
+                                    Button(onClick = { onSelectPitch(accent) }) { Text("Accent $accent") }
+                                } else {
+                                    OutlinedButton(onClick = { onSelectPitch(accent) }) { Text("Accent $accent") }
+                                }
+                            }
+                        }
+                    }
                     if (vocabularyReadingError != null) {
                         Text(
                             vocabularyReadingError,
@@ -312,7 +340,22 @@ internal fun ReviewCard(
                         )
                     }
                     Text(definition.ifBlank { "No definition yet." }, style = MaterialTheme.typography.bodyLarge)
+                    if (definitionStale) {
+                        Text(
+                            "The sentence, target or dictionary entry changed after you edited this meaning.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        TextButton(
+                            onClick = onAcknowledgeDefinition,
+                            modifier = Modifier.heightIn(min = 48.dp),
+                        ) { Text("I've reviewed this meaning") }
+                    }
                     if (editing && editingEnabled) {
+                        TextButton(
+                            onClick = { editingField = "Word" },
+                            modifier = Modifier.heightIn(min = 48.dp),
+                        ) { Text("Change word or reading") }
                         TextButton(
                             onClick = { editingField = "Definition" },
                             modifier = Modifier.heightIn(min = 48.dp),
@@ -349,7 +392,7 @@ internal fun ReviewCard(
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     tags.filter(String::isNotBlank).forEach { tag ->
                         androidx.compose.material3.AssistChip(
-                            onClick = onAddTag,
+                            onClick = { editing = true },
                             label = { Text(tag) },
                             modifier = Modifier.semantics { contentDescription = "Tag $tag" },
                         )
@@ -367,6 +410,13 @@ internal fun ReviewCard(
                     label = { Text("Notes (optional)") },
                     minLines = 2,
                 )
+                OutlinedTextField(
+                    value = tagsDraft,
+                    onValueChange = { tagsDraft = it; onTagsChange(it) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Tags (optional)") },
+                    singleLine = true,
+                )
             }
 
             Row(
@@ -380,7 +430,7 @@ internal fun ReviewCard(
                 ) { Text(if (editing) "Done editing" else "Edit") }
                 IconButton(
                     enabled = editingEnabled,
-                    onClick = onAddTag,
+                    onClick = { editing = true },
                     modifier = Modifier.size(48.dp).semantics { contentDescription = "Add tag" },
                 ) { Icon(MaterialSymbols.Add, contentDescription = null, modifier = Modifier.size(20.dp)) }
                 Spacer(Modifier.weight(1f))
@@ -397,11 +447,20 @@ internal fun ReviewCard(
         ) {
             sendPresentation?.let { presentation ->
                 when (presentation) {
-                    ReviewSendPresentation.Ready -> FlowPrimaryButton(
-                        text = "Send to AnkiDroid",
-                        onClick = { onSend?.invoke() },
-                        enabled = onSend != null,
-                    )
+                    ReviewSendPresentation.Ready -> Column {
+                        if (sendHint != null) {
+                            Text(
+                                sendHint,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        FlowPrimaryButton(
+                            text = "Send to AnkiDroid",
+                            onClick = { onSend?.invoke() },
+                            enabled = onSend != null,
+                        )
+                    }
                     ReviewSendPresentation.Sending -> Button(
                         onClick = {},
                         enabled = false,
