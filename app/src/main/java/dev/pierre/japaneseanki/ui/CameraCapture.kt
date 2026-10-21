@@ -68,6 +68,17 @@ internal fun rememberCameraController(): LifecycleCameraController {
 }
 
 /**
+ * Height the landscape camera frame may use: the screen height minus the capture header, screen
+ * padding and system bars. The 4:3 frame is height-limited in landscape, so deriving it from the
+ * screen *width* (as portrait does) pushed the shutter row off-screen and cropped the preview.
+ */
+internal fun landscapeViewfinderHeightDp(screenHeightDp: Int): Int =
+    (screenHeightDp - LANDSCAPE_CHROME_DP).coerceAtLeast(MIN_LANDSCAPE_FRAME_DP)
+
+internal const val LANDSCAPE_CHROME_DP = 150
+internal const val MIN_LANDSCAPE_FRAME_DP = 120
+
+/**
  * The live preview itself: an upright 3:4, corner-bracketed frame. The caller gives it an
  * edge-to-edge box with height = width * 4/3; any extra space is letterboxed, matching mockup 06.
  */
@@ -78,7 +89,9 @@ internal fun CameraViewfinder(controller: LifecycleCameraController, modifier: M
             factory = { ctx ->
                 PreviewView(ctx).apply {
                     this.controller = controller
-                    scaleType = PreviewView.ScaleType.FILL_CENTER
+                    // FIT_CENTER keeps the whole captured frame visible; FILL_CENTER cropped the
+                    // preview whenever the preview aspect differed from the 4:3 capture aspect.
+                    scaleType = PreviewView.ScaleType.FIT_CENTER
                 }
             },
             modifier = Modifier.fillMaxSize(),
