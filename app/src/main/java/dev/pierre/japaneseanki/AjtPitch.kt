@@ -101,6 +101,15 @@ internal class AjtPitchIndex internal constructor(
             }
         }
 
+        /**
+         * True when the packaged AJT index asset exists in either packaging form. Used to tell
+         * "the app shipped without the index" apart from "the index is there but could not be
+         * installed or opened", which are different failures for the user.
+         */
+        fun hasBundledAsset(context: Context): Boolean =
+            runCatching { context.assets.open(ASSET_NAME).use { } }.isSuccess ||
+                runCatching { context.assets.open(GZIP_ASSET_NAME).use { } }.isSuccess
+
         private fun install(context: Context, target: File) {
             val temporary = File(context.filesDir, ".${target.name}.tmp")
             temporary.delete()

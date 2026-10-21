@@ -28,11 +28,15 @@ java -cp "$gradle_lib/*" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler \
   app/src/main/java/dev/pierre/japaneseanki/DraftAudioIdentity.kt \
   app/src/main/java/dev/pierre/japaneseanki/AudioProvider.kt \
   app/src/main/java/dev/pierre/japaneseanki/AudioGeneration.kt \
+  app/src/main/java/dev/pierre/japaneseanki/DraftAudioStore.kt \
+  app/src/main/java/dev/pierre/japaneseanki/DraftAudioController.kt \
   app/src/main/java/dev/pierre/japaneseanki/Nhk2016PronunciationSource.kt \
   app/src/main/java/dev/pierre/japaneseanki/PitchAccent.kt \
   app/src/main/java/dev/pierre/japaneseanki/AjtPitchHtml.kt \
   app/src/main/java/dev/pierre/japaneseanki/GoogleApiError.kt \
   app/src/main/java/dev/pierre/japaneseanki/TranslationService.kt \
+  app/src/main/java/dev/pierre/japaneseanki/GoogleHttp.kt \
+  app/src/main/java/dev/pierre/japaneseanki/HtmlEntityDecoder.kt \
   app/src/main/java/dev/pierre/japaneseanki/speech/MiniJson.kt \
   app/src/main/java/dev/pierre/japaneseanki/speech/SentenceSpeech.kt \
   app/src/main/java/dev/pierre/japaneseanki/speech/GoogleSpeech.kt \
@@ -46,12 +50,18 @@ java -cp "$gradle_lib/*" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler \
   app/src/test/java/dev/pierre/japaneseanki/VocabularyReadingsTest.kt \
   app/src/test/java/dev/pierre/japaneseanki/DraftAudioIdentityTest.kt \
   app/src/test/java/dev/pierre/japaneseanki/Nhk2016PronunciationSourceTest.kt \
+  app/src/test/java/dev/pierre/japaneseanki/IndexHeadwordsTest.kt \
+  app/src/test/java/dev/pierre/japaneseanki/AudioFixtures.kt \
+  app/src/test/java/dev/pierre/japaneseanki/AudioReliabilityTest.kt \
+  app/src/test/java/dev/pierre/japaneseanki/DraftAudioStoreTest.kt \
+  app/src/test/java/dev/pierre/japaneseanki/DraftAudioControllerTest.kt \
   app/src/test/java/dev/pierre/japaneseanki/PitchAccentTest.kt \
   app/src/test/java/dev/pierre/japaneseanki/speech/SpeechTest.kt \
   app/src/test/java/dev/pierre/japaneseanki/speech/ReadingHintCorrectionTest.kt \
   app/src/test/java/dev/pierre/japaneseanki/JapaneseMorphologyTest.kt \
   app/src/test/java/dev/pierre/japaneseanki/OcrCandidateSelectionTest.kt \
-  app/src/test/java/dev/pierre/japaneseanki/TranslationServiceTest.kt
+  app/src/test/java/dev/pierre/japaneseanki/TranslationServiceTest.kt \
+  app/src/test/java/dev/pierre/japaneseanki/GoogleHttpTest.kt
 
 java -cp "$classes:$runtime_cp" org.junit.runner.JUnitCore \
   dev.pierre.japaneseanki.TargetSpanTest \
@@ -62,10 +72,15 @@ java -cp "$classes:$runtime_cp" org.junit.runner.JUnitCore \
   dev.pierre.japaneseanki.VocabularyReadingsTest \
   dev.pierre.japaneseanki.DraftAudioIdentityTest \
   dev.pierre.japaneseanki.Nhk2016PronunciationSourceTest \
+  dev.pierre.japaneseanki.IndexHeadwordsTest \
+  dev.pierre.japaneseanki.AudioReliabilityTest \
+  dev.pierre.japaneseanki.DraftAudioStoreTest \
+  dev.pierre.japaneseanki.DraftAudioControllerTest \
   dev.pierre.japaneseanki.PitchAccentTest \
   dev.pierre.japaneseanki.speech.ReadingHintCorrectionTest \
   dev.pierre.japaneseanki.speech.SpeechHintBuilderTest \
   dev.pierre.japaneseanki.speech.GoogleSpeechProviderTest \
   dev.pierre.japaneseanki.JapaneseMorphologyTest \
   dev.pierre.japaneseanki.OcrCandidateSelectionTest \
-  dev.pierre.japaneseanki.TranslationServiceTest
+  dev.pierre.japaneseanki.TranslationServiceTest \
+  dev.pierre.japaneseanki.GoogleHttpTest

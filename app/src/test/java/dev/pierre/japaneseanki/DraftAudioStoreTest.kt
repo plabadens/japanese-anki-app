@@ -112,6 +112,7 @@ class DraftAudioStoreTest {
             val lease = ownership.acquire(leasedFile, AudioFileOwner.IMPORT)
             val stagingOrphan = File(paths.staging, "word-0-1-abcd.ogg").also { AudioFixtures.ogg(it) }
             val stagingLeased = File(paths.staging, "sentence-0-2-efgh.mp3").also { AudioFixtures.mp3(it) }
+            val stagingUnknown = File(paths.staging, "notes.txt").also { it.writeText("keep me too") }
             val workerLease = ownership.acquire(stagingLeased, AudioFileOwner.WORKER)
 
             val report = store.sweep(listOf(protectedFile.absolutePath, "", "   ", "/not/a/real/path"))
@@ -124,8 +125,10 @@ class DraftAudioStoreTest {
             assertTrue(report.protectedFiles.contains(stagingLeased.name))
             assertTrue(report.retainedUnknown.contains(unknown.name))
             assertTrue(report.retainedUnknown.contains(image.name))
+            assertTrue(report.retainedUnknown.contains(stagingUnknown.name))
             assertTrue("unknown file kept", unknown.isFile)
             assertTrue("image kept", image.isFile)
+            assertTrue("unknown staging file kept", stagingUnknown.isFile)
             assertTrue("protected audio kept", protectedFile.isFile)
             assertTrue("leased audio kept", leasedFile.isFile)
             assertTrue("leased staging kept", stagingLeased.isFile)

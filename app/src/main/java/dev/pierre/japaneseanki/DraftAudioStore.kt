@@ -322,6 +322,10 @@ class DraftAudioFileStore(
                 continue
             }
             if (!candidate.isFile) continue
+            if (!isRecognizedStagingAudio(candidate.name)) {
+                retainedUnknown += candidate.name
+                continue
+            }
             if (canonical.path in protected || ownership.isLeased(canonical)) {
                 protectedFiles += candidate.name
                 continue
@@ -360,6 +364,8 @@ class DraftAudioFileStore(
     private fun isRecognizedDraftAudio(name: String): Boolean =
         CANONICAL_NAME.matches(name) || LEGACY_NAME.matches(name) || TEMPORARY_NAME.containsMatchIn(name)
 
+    private fun isRecognizedStagingAudio(name: String): Boolean = STAGING_NAME.matches(name)
+
     private fun isSymlink(file: File): Boolean = runCatching { java.nio.file.Files.isSymbolicLink(file.toPath()) }.getOrDefault(true)
 
     private fun isInside(child: File, parent: File): Boolean =
@@ -374,5 +380,12 @@ class DraftAudioFileStore(
 
         /** Partial files left by earlier copy/rename implementations. */
         val TEMPORARY_NAME = Regex("^\\..*\\.tmp(\\.[A-Za-z0-9]+)?$")
+
+        /**
+         * `sentence-<epoch>-<attempt>-<suffix>.<ext>`: the name shape [beginAttempt] creates
+         * (the production suffix is a UUID). Anything else under the staging root belongs to
+         * someone else and is never deleted.
+         */
+        val STAGING_NAME = Regex("(sentence|word)-[0-9]+-[0-9]+-[A-Za-z0-9-]+\\.(wav|ogg|mp3)")
     }
 }

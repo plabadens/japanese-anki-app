@@ -551,4 +551,59 @@ class DraftAudioControllerTest {
             fixture.close()
         }
     }
+
+    @Test
+    fun invalidationIsNotRetiredWhenTheCommitFails() {
+        val fixture = Fixture()
+        try {
+            val persistence = MapPersistence()
+            val controller = readyBoth(fixture, persistence)
+            val old = (controller.state(AudioItem.SENTENCE) as DraftAudioState.Ready).file
+
+            persistence.failWrites = true
+            controller.setInput(fixture.input(AudioItem.SENTENCE, "sentence-b", text = "別の文"))
+
+            assertTrue(controller.state(AudioItem.SENTENCE) is DraftAudioState.NeedsContinue)
+            assertTrue("a failed commit leaves an orphan, never a dangling reference", old.file().isFile)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @Test
+    fun discardKeepsAcceptedFilesWhenTheStateCommitFails() {
+        val fixture = Fixture()
+        try {
+            val persistence = MapPersistence()
+            val controller = readyBoth(fixture, persistence)
+            val sentence = (controller.state(AudioItem.SENTENCE) as DraftAudioState.Ready).file
+            val word = (controller.state(AudioItem.VOCABULARY) as DraftAudioState.Ready).file
+
+            persistence.failWrites = true
+            assertEquals(emptyList<DraftAudioRetirement>(), controller.discard())
+
+            assertTrue("nothing is deleted before the empty state is durable", sentence.file().isFile)
+            assertTrue(word.file().isFile)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @Test
+    fun clearDropsTheInputAndRetiresTheAcceptedFile() {
+        val fixture = Fixture()
+        try {
+            val controller = readyBoth(fixture, MapPersistence())
+            val word = (controller.state(AudioItem.VOCABULARY) as DraftAudioState.Ready).file
+
+            assertTrue(controller.clear(AudioItem.VOCABULARY))
+
+            assertEquals(DraftAudioState.Idle, controller.state(AudioItem.VOCABULARY))
+            assertNull("a cleared item cannot be continued", controller.confirm(AudioItem.VOCABULARY))
+            assertFalse("the retired recording is gone", word.file().exists())
+            assertTrue(controller.state(AudioItem.SENTENCE) is DraftAudioState.Ready)
+        } finally {
+            fixture.close()
+        }
+    }
 }

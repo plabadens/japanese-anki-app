@@ -15,6 +15,15 @@ val packageUniDic = tasks.register<Copy>("packageUniDicRuntime") {
     from(unidicRuntimeArchive)
     into(layout.buildDirectory.dir("generated/unidicAssets"))
     rename { "unidic-cwj-3.1.1.zip" }
+    // The pinned archive comes from the read-only Nix store, and Copy preserves that mode.
+    // A repeated `--rerun-tasks` build then cannot overwrite its own output ("Permission
+    // denied"), so clear the bit on the stale destination and publish a writable file.
+    doFirst {
+        val stale = layout.buildDirectory.file("generated/unidicAssets/unidic-cwj-3.1.1.zip")
+            .get().asFile
+        if (stale.exists()) stale.setWritable(true)
+    }
+    filePermissions { unix("rw-r--r--") }
 }
 
 android {

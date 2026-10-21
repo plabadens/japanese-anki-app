@@ -195,8 +195,12 @@ class DraftAudioController(
             else -> DraftAudioState.NeedsContinue(input.identity)
         }
         states[input.item] = next
-        persistLocked()
-        if (previous is DraftAudioState.Ready && next !is DraftAudioState.Ready) retireAfterCommit(previous.file)
+        val persisted = persistLocked()
+        // Retire only once the invalidation is durable: a failed commit must leave an orphan
+        // file, never a persisted reference to audio that has been deleted.
+        if (persisted && previous is DraftAudioState.Ready && next !is DraftAudioState.Ready) {
+            retireAfterCommit(previous.file)
+        }
         next != previous
     }
 
@@ -367,8 +371,26 @@ class DraftAudioController(
         inputs.clear()
         for (item in AudioItem.entries) states[item] = DraftAudioState.Idle
         protectedAtRestore = emptySet()
-        persistLocked()
+        // A failed commit leaves the files as orphans for the startup sweep; deleting first
+        // would leave persisted references pointing at nothing.
+        if (!persistLocked()) return emptyList()
         accepted.map { store.retire(it) }
+    }
+
+    /**
+     * Drops one item's declared input and accepted state, for a configuration change that leaves
+     * no valid input at all (unresolved vocabulary, rejected reading). Retirement is gated on the
+     * state commit, exactly like [setInput].
+     */
+    fun clear(item: AudioItem): Boolean = synchronized(gate) {
+        if (disposed || frozen != null) return false
+        val previous = states[item] ?: DraftAudioState.Idle
+        val hadInput = inputs.remove(item) != null
+        nextAttemptId++
+        states[item] = DraftAudioState.Idle
+        val persisted = persistLocked()
+        if (persisted && previous is DraftAudioState.Ready) retireAfterCommit(previous.file)
+        hadInput || previous !is DraftAudioState.Idle
     }
 
     /** Stops all later acceptance. Files are left to ownership-aware retirement/sweep. */

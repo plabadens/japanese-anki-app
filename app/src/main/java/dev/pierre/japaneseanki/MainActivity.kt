@@ -114,23 +114,72 @@ private const val WORD_AUDIO_RECEIPT_FILENAME = "word_audio_receipt_filename"
 private const val WORD_AUDIO_RECEIPT_SIZE = "word_audio_receipt_size"
 private const val WORD_AUDIO_RECEIPT_MODIFIED = "word_audio_receipt_modified"
 
-/** Filename of a previously imported, still-identical media item, or null. */
-private fun importedReceipt(
-    preferences: SharedPreferences,
-    pathKey: String,
-    filenameKey: String,
-    sizeKey: String,
-    modifiedKey: String,
-    file: File?,
-    sanitize: (String) -> String?,
-): String? {
-    if (file == null || !file.isFile) return null
-    val stat = runCatching { MediaIdentity.fromFile(file) }.getOrNull() ?: return null
-    if (preferences.getString(pathKey, null) != stat.path ||
-        preferences.getLong(sizeKey, -1L) != stat.size ||
-        preferences.getLong(modifiedKey, -1L) != stat.modified
-    ) return null
-    return preferences.getString(filenameKey, null)?.let(sanitize)
+/** SharedPreferences adapter for [DraftAudioController]: commit, never apply. */
+private class SharedPreferencesDraftAudioPersistence(
+    private val preferences: SharedPreferences,
+) : DraftAudioPersistence {
+    override fun read(key: String): String? = preferences.getString(key, null)
+
+    override fun write(changes: Map<String, String?>): Boolean {
+        val editor = preferences.edit()
+        for ((key, value) in changes) {
+            if (value == null) editor.remove(key) else editor.putString(key, value)
+        }
+        return editor.commit()
+    }
+}
+
+private val IMAGE_RECEIPT_KEYS = ImportedReceiptKeys(
+    path = IMAGE_RECEIPT_PATH,
+    filename = IMAGE_RECEIPT_FILENAME,
+    size = IMAGE_RECEIPT_SIZE,
+    modified = IMAGE_RECEIPT_MODIFIED,
+)
+
+private val SENTENCE_AUDIO_RECEIPT_KEYS = ImportedReceiptKeys(
+    path = SENTENCE_AUDIO_RECEIPT_PATH,
+    filename = SENTENCE_AUDIO_RECEIPT_FILENAME,
+    size = SENTENCE_AUDIO_RECEIPT_SIZE,
+    modified = SENTENCE_AUDIO_RECEIPT_MODIFIED,
+)
+
+private val WORD_AUDIO_RECEIPT_KEYS = ImportedReceiptKeys(
+    path = WORD_AUDIO_RECEIPT_PATH,
+    filename = WORD_AUDIO_RECEIPT_FILENAME,
+    size = WORD_AUDIO_RECEIPT_SIZE,
+    modified = WORD_AUDIO_RECEIPT_MODIFIED,
+)
+
+/** Persisted receipt identity, read without touching the file system. */
+private fun receiptIdentity(preferences: SharedPreferences, keys: ImportedReceiptKeys): MediaIdentity? =
+    preferences.getString(keys.path, null)?.let { path ->
+        MediaIdentity(path, preferences.getLong(keys.size, -1L), preferences.getLong(keys.modified, -1L))
+    }
+
+/** Every preference key the draft-audio controller owns, for a full draft reset. */
+private fun draftAudioPreferenceKeys(): List<String> = buildList {
+    add(DraftAudioPreferences.VERSION)
+    add(DraftAudioPreferences.EPOCH)
+    for (item in AudioItem.entries) {
+        add(DraftAudioPreferences.identity(item))
+        add(DraftAudioPreferences.status(item))
+        add(DraftAudioPreferences.path(item))
+        add(DraftAudioPreferences.format(item))
+        add(DraftAudioPreferences.size(item))
+        add(DraftAudioPreferences.modified(item))
+        add(DraftAudioPreferences.frozenPath(item))
+    }
+}
+
+private fun pitchUnavailableMessage(failure: AjtPitchFailure): String = when (failure) {
+    AjtPitchFailure.MISSING_INDEX ->
+        "The bundled AJT pitch index is missing; pitch-dependent notes cannot be mined."
+    AjtPitchFailure.EMPTY_INDEX ->
+        "The AJT pitch index contains no records; pitch-dependent notes cannot be mined."
+    AjtPitchFailure.INVALID_INDEX ->
+        "The AJT pitch index is unusable and was discarded; tap Retry to reinstall it."
+    AjtPitchFailure.OPEN_FAILED ->
+        "The AJT pitch index could not be opened; tap Retry to reinstall it."
 }
 
 /** Per-item audio state for the current draft revision. */
@@ -139,13 +188,24 @@ internal data class DraftAudio(
     val generating: Boolean = false,
     val error: String? = null,
     val identity: String = "",
+    val needsContinue: Boolean = false,
 ) {
     fun presentation(): ReviewAudioPresentation = when {
         generating -> ReviewAudioPresentation.Generating
         path != null -> ReviewAudioPresentation.Ready
         error != null -> ReviewAudioPresentation.Failed(error)
+        needsContinue -> ReviewAudioPresentation.Failed("Tap Generate to create this audio.")
         else -> ReviewAudioPresentation.Unavailable
     }
+}
+
+/** UI view of the controller's per-item state; the controller stays the only source of truth. */
+private fun DraftAudioState.toDraftAudio(): DraftAudio = when (this) {
+    DraftAudioState.Idle -> DraftAudio()
+    is DraftAudioState.NeedsContinue -> DraftAudio(identity = identity, needsContinue = true)
+    is DraftAudioState.Generating -> DraftAudio(generating = true, identity = identity)
+    is DraftAudioState.Ready -> DraftAudio(path = file.path, identity = identity)
+    is DraftAudioState.Failed -> DraftAudio(error = message, identity = identity)
 }
 
 enum class AppRoute { Capture, Target, Review }
@@ -192,8 +252,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var offlineDictionary: OfflineDictionary
     private lateinit var offlineAnalyzer: OfflineJapaneseAnalyzer
     private lateinit var japaneseOcr: JapaneseOcr
-    private var ajtPitchIndex: AjtPitchIndex? = null
+    private lateinit var ajtPitchRepository: AjtPitchRepository
     private var audioPlayer: MediaPlayer? = null
+    private var audioLease: AudioFileLease? = null
 
     private fun stopAudioPlayback() {
         audioPlayer?.runCatching {
@@ -201,6 +262,8 @@ class MainActivity : ComponentActivity() {
             release()
         }
         audioPlayer = null
+        audioLease?.close()
+        audioLease = null
     }
 
     override fun onDestroy() {
@@ -216,6 +279,7 @@ class MainActivity : ComponentActivity() {
         offlineDictionary = sharedDictionary(this)
         offlineAnalyzer = OfflineJapaneseAnalyzer.shared(this)
         japaneseOcr = JapaneseOcr()
+        ajtPitchRepository = AjtPitchRepository.shared(this)
         val preferences = getSharedPreferences("draft", MODE_PRIVATE)
         val settings = getSharedPreferences("settings", MODE_PRIVATE)
         if (preferences.getString(SubmissionRecoveryKeys.STATUS, null) == "done") {
@@ -420,6 +484,8 @@ class MainActivity : ComponentActivity() {
             }
             var pitchCandidates by remember { mutableStateOf<List<AjtPitchRecord>>(emptyList()) }
             var pitchLookupLoading by remember { mutableStateOf(false) }
+            // Observable, process-wide AJT availability: a late Ready or a retry re-keys the query.
+            val ajtAvailability by ajtPitchRepository.availability.collectAsState()
             var noteTypes by remember { mutableStateOf<List<AnkiNoteType>>(emptyList()) }
             var decks by remember { mutableStateOf<List<AnkiDeck>>(emptyList()) }
             var setupLoading by remember { mutableStateOf(false) }
@@ -434,22 +500,132 @@ class MainActivity : ComponentActivity() {
             }
             var captureMode by remember { mutableStateOf(preferences.getString("capture_mode", "Photo") ?: "Photo") }
             var generationStarted by remember { mutableStateOf(false) }
-            var sentenceAudio by remember {
-                mutableStateOf(
-                    DraftAudio(
-                        path = preferences.getString("sentence_audio_path", null)?.takeIf { File(it).isFile },
-                    ),
-                )
-            }
-            var wordAudio by remember {
-                mutableStateOf(
-                    DraftAudio(
-                        path = preferences.getString("word_audio_path", null)?.takeIf { File(it).isFile },
-                    ),
-                )
-            }
-            var audioRetry by remember { mutableStateOf(0) }
             var playingAudio by remember { mutableStateOf<AudioItem?>(null) }
+            var audioPlaybackErrors by remember { mutableStateOf<Map<AudioItem, String>>(emptyMap()) }
+            var audioConfigErrors by remember { mutableStateOf<Map<AudioItem, String>>(emptyMap()) }
+            var audioInputRevision by remember { mutableStateOf(0L) }
+            var audioControllerGeneration by remember { mutableStateOf(0L) }
+
+            val speechProvider: SentenceSpeechProvider = remember {
+                GoogleChirpSpeechProvider(
+                    credential = { GoogleCloudCredential.read(settings) },
+                )
+            }
+            val nhkProgressFlow = remember { MutableStateFlow<NhkIndexProgress?>(null) }
+            val nhkProgress by nhkProgressFlow.collectAsState()
+            val nhkCancelRequested = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
+            val recordedWordSource = remember {
+                Nhk2016PronunciationSource(
+                    dataDirectory = File(filesDir, "nhk-recordings"),
+                    onIndexProgress = { nhkProgressFlow.value = it },
+                    isIndexFetchCancelled = { nhkCancelRequested.get() },
+                )
+            }
+            val reusableAudioCache = remember { ReusableAudioCache(File(cacheDir, "audio")) }
+            val draftAudioDirectory = remember { File(filesDir, "draft").apply { mkdirs() } }
+            // Finals stay direct children of filesDir/draft (FileProvider + Anki import root);
+            // staging is private and outside the exported directory.
+            val draftAudioStore = remember {
+                DraftAudioFileStore(
+                    finalsDirectory = draftAudioDirectory,
+                    stagingDirectory = File(filesDir, "audio-staging"),
+                )
+            }
+            val audioPersistence = remember { SharedPreferencesDraftAudioPersistence(preferences) }
+            val audioController = remember(audioControllerGeneration) {
+                DraftAudioController(
+                    store = draftAudioStore,
+                    persistence = audioPersistence,
+                    cache = reusableAudioCache,
+                    synthesize = { input, destination ->
+                        when (val payload = input.providerPayload) {
+                            is SentenceSpeechRequest -> speechProvider.synthesize(payload, destination)
+                            is AudioSynthesisRequest -> recordedWordSource.synthesize(payload, destination)
+                            else -> throw IllegalStateException(
+                                "No audio provider is configured for this draft item.",
+                            )
+                        }
+                        Unit
+                    },
+                    legacyPaths = mapOf(
+                        AudioItem.SENTENCE to preferences.getString("sentence_audio_path", null),
+                        AudioItem.VOCABULARY to preferences.getString("word_audio_path", null),
+                    ),
+                )
+            }
+            androidx.compose.runtime.DisposableEffect(audioController) {
+                onDispose { audioController.dispose() }
+            }
+            var audioSnapshot by remember(audioController) { mutableStateOf(audioController.snapshot()) }
+            val currentWordIdentity = rememberUpdatedState(
+                DraftAudioIdentity.word(
+                    selectedDictionaryEntry?.takeIf {
+                        it.id == selectedDictionaryEntryId && it.expression == vocabulary && it.reading == vocabularyReading
+                    }?.id,
+                    vocabulary,
+                    vocabularyReading,
+                ),
+            )
+            // A reading, sentence or voice change invalidates the sentence recording; a vocabulary
+            // reading change also re-resolves the word recording through its own identity.
+            val currentSentenceIdentity = rememberUpdatedState(
+                DraftAudioIdentity.sentence(
+                    editor.text,
+                    target,
+                    sentenceReading,
+                    sentenceFurigana,
+                    selectedVoiceName,
+                ),
+            )
+
+            fun audioView(item: AudioItem): DraftAudio {
+                audioConfigErrors[item]?.let { return DraftAudio(error = it) }
+                audioPlaybackErrors[item]?.let { return DraftAudio(error = it) }
+                return (audioSnapshot.items[item] ?: DraftAudioState.Idle).toDraftAudio()
+            }
+
+            fun audioReady(item: AudioItem, identity: String): Boolean {
+                if (audioConfigErrors[item] != null || audioPlaybackErrors[item] != null) return false
+                val state = audioSnapshot.items[item] as? DraftAudioState.Ready ?: return false
+                return state.identity == identity && state.file.isIntact()
+            }
+
+            fun runAudioAttempt(attempt: DraftAudioAttempt?) {
+                if (attempt == null) return
+                audioSnapshot = audioController.snapshot()
+                coroutineScope.launch {
+                    withContext(Dispatchers.IO) { audioController.runAttempt(attempt) }
+                    audioSnapshot = audioController.snapshot()
+                }
+            }
+
+            // One pass over both owned roots, ownership-based, before any new generation. Only
+            // recognised draft audio nobody references (and no live preference names) is deleted.
+            androidx.compose.runtime.LaunchedEffect(audioController) {
+                withContext(Dispatchers.IO) {
+                    val report = draftAudioStore.sweep(
+                        audioController.protectedPaths(
+                            listOfNotNull(
+                                preferences.getString("sentence_audio_path", null),
+                                preferences.getString("word_audio_path", null),
+                                preferences.getString(SubmissionRecoveryKeys.SENTENCE_AUDIO_PATH, null),
+                                preferences.getString(SubmissionRecoveryKeys.WORD_AUDIO_PATH, null),
+                                preferences.getString(DraftAudioPreferences.frozenPath(AudioItem.SENTENCE), null),
+                                preferences.getString(DraftAudioPreferences.frozenPath(AudioItem.VOCABULARY), null),
+                            ),
+                        ),
+                    )
+                    Log.i(
+                        "DraftAudio",
+                        "retired=${report.deleted.size} kept=${report.protectedFiles.size} " +
+                            "unknown=${report.retainedUnknown.size} failed=${report.failures.size}",
+                    )
+                }
+            }
+
+            val sentenceAudio = audioView(AudioItem.SENTENCE)
+            val wordAudio = audioView(AudioItem.VOCABULARY)
+
             var route by remember {
                 mutableStateOf(
                     AppRoute.entries.firstOrNull { it.name == preferences.getString("route", null) }
@@ -599,10 +775,15 @@ class MainActivity : ComponentActivity() {
                 selectedDictionaryEntryId = null
                 selectedSenseIndices = emptySet()
                 generationStarted = false
-                sentenceAudio = DraftAudio()
-                wordAudio = DraftAudio()
                 playingAudio = null
+                audioPlaybackErrors = emptyMap()
+                audioConfigErrors = emptyMap()
                 stopAudioPlayback()
+                // Release any Send freeze first: a retained freeze blocks discard by design.
+                audioController.releaseFreeze(retainFiles = false)
+                audioController.discard()
+                audioControllerGeneration++
+                audioSnapshot = audioController.snapshot()
                 preferences.edit()
                     .remove(SENTENCE_AUDIO_RECEIPT_PATH)
                     .remove(SENTENCE_AUDIO_RECEIPT_FILENAME)
@@ -908,10 +1089,10 @@ class MainActivity : ComponentActivity() {
                     val preparedDictionary = withContext(Dispatchers.IO) { offlineDictionary.prepare() }
                     if (!asyncSetupIsCurrent(callbackGeneration)) return@LaunchedEffect
                     dictionaryInfo = preparedDictionary
-                    ajtPitchIndex = withContext(Dispatchers.IO) { AjtPitchIndex.open(applicationContext) }
-                    if (ajtPitchIndex == null) {
-                        pitchIndexError = "The AJT pitch index could not be opened; pitch-dependent notes cannot be mined."
-                    }
+                    val availability = withContext(Dispatchers.IO) { ajtPitchRepository.prepare() }
+                    if (!asyncSetupIsCurrent(callbackGeneration)) return@LaunchedEffect
+                    pitchIndexError = (availability as? AjtPitchAvailability.Unavailable)
+                        ?.let { pitchUnavailableMessage(it.failure) }
                     dictionaryReady = true
                 } catch (cancelled: CancellationException) {
                     throw cancelled
@@ -969,7 +1150,8 @@ class MainActivity : ComponentActivity() {
                 pitchHtmlText = null
                 pitchCandidates = emptyList()
                 pitchIndexError = "Choose a dictionary entry to resolve this word."
-                wordAudio = DraftAudio()
+                audioController.clear(AudioItem.VOCABULARY)
+                audioSnapshot = audioController.snapshot()
             }
 
             fun dismissDictionarySheet() {
@@ -989,7 +1171,8 @@ class MainActivity : ComponentActivity() {
                     corrected,
                 )
                 if (match == null) {
-                    wordAudio = DraftAudio()
+                    audioController.clear(AudioItem.VOCABULARY)
+                    audioSnapshot = audioController.snapshot()
                     pitchAccentText = ""
                     pitchHtmlText = null
                     pitchCandidates = emptyList()
@@ -1015,7 +1198,8 @@ class MainActivity : ComponentActivity() {
                     return true
                 }
                 // The recording belongs to the previous reading/entry; re-resolve it.
-                wordAudio = DraftAudio()
+                audioController.clear(AudioItem.VOCABULARY)
+                audioSnapshot = audioController.snapshot()
                 pitchAccentText = ""
                 pitchHtmlText = null
                 pitchCandidates = emptyList()
@@ -1052,8 +1236,8 @@ class MainActivity : ComponentActivity() {
                     readingCorrections = SentenceReadings.correct(readingCorrections, editor.text, span, corrected)
                 }
                 // Any sentence-reading change invalidates the sentence recording and its hints.
-                sentenceAudio = DraftAudio()
-                preferences.edit().remove("sentence_audio_path").apply()
+                audioController.clear(AudioItem.SENTENCE)
+                audioSnapshot = audioController.snapshot()
                 return true
             }
 
@@ -1160,7 +1344,9 @@ class MainActivity : ComponentActivity() {
                         val raw = offlineAnalyzer.analyze(editor.text)
                         groupTokens(raw) { candidate ->
                             dictionaryReady && runCatching {
-                                offlineDictionary.search(candidate, limit = 1).isNotEmpty()
+                                // One bound existence probe; the readiness gate and the
+                                // exception-to-false policy are unchanged.
+                                offlineDictionary.hasEntry(candidate)
                             }.getOrDefault(false)
                         }
                     }
@@ -1211,49 +1397,14 @@ class MainActivity : ComponentActivity() {
                 )?.takeIf(String::isNotBlank) ?: return@LaunchedEffect
             }
 
-            val speechProvider: SentenceSpeechProvider = remember {
-                GoogleChirpSpeechProvider(
-                    credential = { GoogleCloudCredential.read(settings) },
-                )
-            }
-            val nhkProgressFlow = remember { MutableStateFlow<NhkIndexProgress?>(null) }
-            val nhkProgress by nhkProgressFlow.collectAsState()
-            val nhkCancelRequested = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
-            val recordedWordSource = remember {
-                Nhk2016PronunciationSource(
-                    dataDirectory = File(filesDir, "nhk-recordings"),
-                    onIndexProgress = { nhkProgressFlow.value = it },
-                    isIndexFetchCancelled = { nhkCancelRequested.get() },
-                )
-            }
-            val reusableAudioCache = remember { ReusableAudioCache(File(cacheDir, "audio")) }
-            val draftAudioDirectory = remember { File(filesDir, "draft").apply { mkdirs() } }
-            val currentWordIdentity = rememberUpdatedState(
-                DraftAudioIdentity.word(
-                    selectedDictionaryEntry?.takeIf {
-                        it.id == selectedDictionaryEntryId && it.expression == vocabulary && it.reading == vocabularyReading
-                    }?.id,
-                    vocabulary,
-                    vocabularyReading,
-                ),
-            )
-            // A reading, sentence or voice change invalidates the sentence recording; a vocabulary
-            // reading change also re-resolves the word recording through its own identity.
-            val currentSentenceIdentity = rememberUpdatedState(
-                DraftAudioIdentity.sentence(
-                    editor.text,
-                    target,
-                    sentenceReading,
-                    sentenceFurigana,
-                    selectedVoiceName,
-                ),
-            )
-
-            fun playAudio(item: AudioItem, path: String) {
+            fun playAudio(item: AudioItem, file: DraftAudioFile) {
                 stopAudioPlayback()
+                audioPlaybackErrors = audioPlaybackErrors - item
+                // A playback lease keeps retirement from deleting the file under the player.
+                val lease = draftAudioStore.lease(file, AudioFileOwner.PLAYBACK)
                 val player = MediaPlayer()
                 try {
-                    player.setDataSource(path)
+                    player.setDataSource(file.path)
                     player.setOnCompletionListener {
                         playingAudio = null
                         stopAudioPlayback()
@@ -1261,203 +1412,159 @@ class MainActivity : ComponentActivity() {
                     player.prepare()
                     player.start()
                     audioPlayer = player
+                    audioLease = lease
                     playingAudio = item
                 } catch (_: Exception) {
+                    lease.close()
                     player.release()
                     playingAudio = null
-                    if (item == AudioItem.SENTENCE) {
-                        sentenceAudio = sentenceAudio.copy(path = null, error = "This sentence audio could not be played.")
-                    } else {
-                        wordAudio = wordAudio.copy(path = null, error = "This word recording could not be played.")
-                    }
+                    audioPlaybackErrors = audioPlaybackErrors + (
+                        item to if (item == AudioItem.SENTENCE) {
+                            "This sentence audio could not be played."
+                        } else {
+                            "This word recording could not be played."
+                        }
+                        )
                 }
             }
 
+            fun audioReadyFile(item: AudioItem): DraftAudioFile? =
+                (audioSnapshot.items[item] as? DraftAudioState.Ready)?.file
+
+            fun audioActionLabel(item: AudioItem): String =
+                if (audioSnapshot.items[item] is DraftAudioState.NeedsContinue) "Generate" else "Retry"
+
+            /** The single user-authorized audio action: Generate, Retry, or repair a playback failure. */
+            fun onAudioAction(item: AudioItem) {
+                when {
+                    audioPlaybackErrors.containsKey(item) -> {
+                        audioPlaybackErrors = audioPlaybackErrors - item
+                        audioReadyFile(item)?.let { playAudio(item, it) }
+                    }
+                    audioConfigErrors.containsKey(item) -> {
+                        audioConfigErrors = audioConfigErrors - item
+                        audioInputRevision++
+                    }
+                    else -> runAudioAttempt(audioController.confirm(item) ?: audioController.retry(item))
+                }
+            }
+
+            // Declares the current inputs. Generation stays an explicit user action, so
+            // recomposition, navigation and a restored draft never call a provider.
             androidx.compose.runtime.LaunchedEffect(
-                generationStarted, route, submissionLocked, audioRetry,
+                generationStarted, route, submissionLocked, audioInputRevision,
                 currentSentenceIdentity.value, currentWordIdentity.value,
             ) {
-                if (!generationStarted || submissionLocked) return@LaunchedEffect
-                val identity = currentSentenceIdentity.value
-                val wordIdentity = currentWordIdentity.value
-                val needSentence = sentenceAudio.identity != identity ||
-                    sentenceAudio.path?.let(::File)?.isFile != true
-                val needWord = wordAudio.identity != wordIdentity ||
-                    wordAudio.path?.let(::File)?.isFile != true
-                if (!needSentence && !needWord) return@LaunchedEffect
-                if ((needSentence && sentenceAudio.generating) || (needWord && wordAudio.generating)) {
-                    return@LaunchedEffect
-                }
+                if (!generationStarted || submissionLocked || route != AppRoute.Review) return@LaunchedEffect
 
                 val sentenceText = editor.text.trim()
-                val selectedTarget = target ?: return@LaunchedEffect
-                if (selectedTarget.textIn(editor.text) == null) return@LaunchedEffect
-                val entryId = selectedDictionaryEntryId
-                val entry = selectedDictionaryEntry?.takeIf {
-                    it.id == entryId && it.expression == vocabulary && it.reading == vocabularyReading
-                }
+                val selectedTarget = target
                 val cachedVoices = decodeVoices(settings.getString(VOICE_CACHE_PREF, null))
                 val voice = cachedVoices.firstOrNull { it.name == selectedVoiceName }
                     ?: selectedVoiceName.takeIf(String::isNotBlank)?.let {
                         CloudVoice(it, it.substringAfterLast('-'), listOf("ja-JP"), null)
                     }
-
-                val hintSpans = sentenceHintSpans(sentenceText, selectedTarget, sentenceReading, sentenceFurigana)
-                val hintResult = ReadingHintBuilder.build(sentenceText, hintSpans)
-
-                if (needSentence) sentenceAudio = sentenceAudio.copy(generating = true, error = null)
-                if (needWord) {
-                    nhkCancelRequested.set(false)
-                    wordAudio = wordAudio.copy(generating = true, error = null)
-                }
-
-                if (!needSentence) {
-                    // The current sentence recording and voice already match the prepared inputs.
-                } else if (voice == null) {
-                    sentenceAudio = sentenceAudio.copy(
-                        generating = false, path = null, identity = identity,
-                        error = if (!settings.contains(GoogleCloudCredential.PREF)) {
-                            "Add your Google Cloud API key and choose a sentence voice in Settings."
-                        } else {
-                            "Choose a sentence voice in Settings."
-                        },
+                val hintResult = if (selectedTarget != null && selectedTarget.textIn(editor.text) != null) {
+                    ReadingHintBuilder.build(
+                        sentenceText,
+                        sentenceHintSpans(sentenceText, selectedTarget, sentenceReading, sentenceFurigana),
                     )
-                } else if (hintResult is HintResult.Impossible) {
-                    sentenceAudio = sentenceAudio.copy(generating = false, path = null, identity = identity,
-                        error = hintResult.reason)
-                } else {
-                    val hints = (hintResult as HintResult.Ready).hints
+                } else null
+
+                if (selectedTarget != null && sentenceText.isNotEmpty() &&
+                    voice != null && hintResult is HintResult.Ready
+                ) {
+                    audioConfigErrors = audioConfigErrors - AudioItem.SENTENCE
                     val request = SentenceSpeechRequest(
                         text = sentenceText,
                         voice = voice,
-                        hints = hints,
+                        hints = hintResult.hints,
                     )
-                    val key = AudioCacheKey(
-                        source = "google-chirp3-hd",
-                        text = sentenceText,
-                        voice = voice.name,
-                        rate = request.speakingRate.toFloat(),
-                        hintIdentity = ReadingHintBuilder.cacheFragment(hints),
+                    audioController.setInput(
+                        DraftAudioInput(
+                            item = AudioItem.SENTENCE,
+                            identity = currentSentenceIdentity.value,
+                            text = sentenceText,
+                            revision = 0,
+                            cacheKey = AudioCacheKey(
+                                source = "google-chirp3-hd",
+                                text = sentenceText,
+                                voice = voice.name,
+                                rate = request.speakingRate.toFloat(),
+                                hintIdentity = ReadingHintBuilder.cacheFragment(hintResult.hints),
+                            ),
+                            expectedFormat = AudioFormat.MP3,
+                            providerPayload = request,
+                        ),
                     )
-                    coroutineScope.launch {
-                        try {
-                            val completed = withContext(Dispatchers.IO) {
-                                val cached = reusableAudioCache.get(key)
-                                if (cached != null && runCatching { AudioFileValidator.requireSupported(cached) }.isSuccess) {
-                                    cached
-                                } else {
-                                    val produced = speechProvider.synthesize(
-                                        request,
-                                        File(draftAudioDirectory, "sentence-${System.currentTimeMillis()}.mp3"),
-                                    )
-                                    AudioFileValidator.requireSupported(produced)
-                                    reusableAudioCache.put(key, produced)
-                                    produced
-                                }
-                            }
-                            val draftCopy = withContext(Dispatchers.IO) {
-                                val destination = File(
-                                    draftAudioDirectory,
-                                    "sentence-${java.util.UUID.randomUUID()}.mp3",
-                                )
-                                reusableAudioCache.copyToActiveDraft(
-                                    key, draftAudioDirectory, destination.name,
-                                ).also {
-                                    val completed = File(draftAudioDirectory, destination.name)
-                                    preferences.edit().putString("sentence_audio_path", completed.absolutePath).apply()
-                                }
-                            }
-                            if (currentSentenceIdentity.value == identity) {
-                                sentenceAudio = DraftAudio(path = draftCopy.absolutePath, identity = identity)
-                            } else {
-                                draftCopy.delete()
-                            }
-                        } catch (cancelled: CancellationException) {
-                            throw cancelled
-                        } catch (error: SpeechException) {
-                            if (currentSentenceIdentity.value == identity) {
-                                sentenceAudio = DraftAudio(
-                                    error = error.message ?: "Sentence speech failed.",
-                                    identity = identity,
-                                )
-                            }
-                        } catch (_: Exception) {
-                            if (currentSentenceIdentity.value == identity) {
-                                sentenceAudio = DraftAudio(
-                                    error = "Sentence speech failed. Tap Retry to try the same voice again.",
-                                    identity = identity,
-                                )
-                            }
+                } else {
+                    // Configuration errors stay on the screen: they are not provider failures
+                    // and must not be presented as retryable generation attempts.
+                    val sentenceConfigError = when {
+                        sentenceText.isEmpty() || selectedTarget == null -> null
+                        voice == null -> if (!settings.contains(GoogleCloudCredential.PREF)) {
+                            "Add your Google Cloud API key and choose a sentence voice in Settings."
+                        } else {
+                            "Choose a sentence voice in Settings."
                         }
+                        hintResult is HintResult.Impossible -> hintResult.reason
+                        else -> null
+                    }
+                    audioConfigErrors = if (sentenceConfigError == null) {
+                        audioConfigErrors - AudioItem.SENTENCE
+                    } else {
+                        audioConfigErrors + (AudioItem.SENTENCE to sentenceConfigError)
+                    }
+                    if (sentenceText.isEmpty()) {
+                        audioController.clear(AudioItem.SENTENCE)
                     }
                 }
 
-                if (!needWord) {
-                    // The current recorded word already matches the resolved entry and reading.
-                } else if (entry == null) {
-                    wordAudio = DraftAudio(
-                        error = "Select a dictionary entry before generating word audio.",
-                        identity = wordIdentity,
-                    )
-                } else {
-                    coroutineScope.launch {
-                        try {
-                            val recorded = withContext(Dispatchers.IO) {
-                                val wordKey = AudioCacheKey(
-                                    source = "nhk-2016",
-                                    text = vocabulary,
-                                    voice = "NHK-2016",
-                                    rate = 1f,
-                                    entryIdentity = "$entryId|${entry.expression}|${entry.reading}",
-                                )
-                                val cached = reusableAudioCache.get(wordKey)
-                                if (cached != null && runCatching { AudioFileValidator.requireSupported(cached) }.isSuccess) {
-                                    cached
-                                } else {
-                                    val produced = recordedWordSource.synthesize(
-                                        AudioSynthesisRequest(
-                                            item = AudioItem.VOCABULARY,
-                                            text = vocabulary,
-                                            revision = 0,
-                                            entryIdentity = "$entryId|${entry.expression}|${entry.reading}",
-                                        ),
-                                        File(draftAudioDirectory, "word-${System.currentTimeMillis()}.ogg"),
-                                    )
-                                    AudioFileValidator.requireSupported(produced)
-                                    reusableAudioCache.put(wordKey, produced)
-                                    produced
-                                }
-                            }
-                            val extension = recorded.extension.lowercase().ifBlank { "ogg" }
-                            val destination = File(draftAudioDirectory, "word-${java.util.UUID.randomUUID()}.$extension")
-                            withContext(Dispatchers.IO) {
-                                recorded.copyTo(destination, overwrite = true)
-                                AudioFileValidator.requireSupported(destination)
-                            }
-                            preferences.edit().putString("word_audio_path", destination.absolutePath).apply()
-                            if (currentWordIdentity.value == wordIdentity) {
-                                wordAudio = DraftAudio(path = destination.absolutePath, identity = wordIdentity)
-                            } else {
-                                destination.delete()
-                            }
-                        } catch (cancelled: CancellationException) {
-                            throw cancelled
-                        } catch (error: Exception) {
-                            if (currentWordIdentity.value == wordIdentity) {
-                                val cancelledDownload = error.message.orEmpty().contains("cancelled", ignoreCase = true)
-                                wordAudio = DraftAudio(
-                                    error = if (cancelledDownload) {
-                                        "The NHK pronunciation index download was cancelled. Tap Retry to continue."
-                                    } else {
-                                        "No matching NHK recording is available for this word."
-                                    },
-                                    identity = wordIdentity,
-                                )
-                            }
-                        }
-                    }
+                val entryId = selectedDictionaryEntryId
+                val entry = selectedDictionaryEntry?.takeIf {
+                    it.id == entryId && it.expression == vocabulary && it.reading == vocabularyReading
                 }
+                if (entry == null || vocabulary.isBlank()) {
+                    // An unresolved word can never be sent, and its old recording must not survive
+                    // the change that invalidated it.
+                    audioConfigErrors = if (entry == null && vocabulary.isNotBlank()) {
+                        audioConfigErrors + (
+                            AudioItem.VOCABULARY to "Select a dictionary entry before generating word audio."
+                            )
+                    } else {
+                        audioConfigErrors - AudioItem.VOCABULARY
+                    }
+                    audioController.clear(AudioItem.VOCABULARY)
+                } else {
+                    audioConfigErrors = audioConfigErrors - AudioItem.VOCABULARY
+                    val entryIdentity = "$entryId|${entry.expression}|${entry.reading}"
+                    audioController.setInput(
+                        DraftAudioInput(
+                            item = AudioItem.VOCABULARY,
+                            identity = currentWordIdentity.value,
+                            text = vocabulary,
+                            revision = 0,
+                            entryIdentity = entryIdentity,
+                            cacheKey = AudioCacheKey(
+                                source = "nhk-2016",
+                                text = vocabulary,
+                                voice = "NHK-2016",
+                                rate = 1f,
+                                entryIdentity = entryIdentity,
+                            ),
+                            expectedFormat = AudioFormat.OGG,
+                            providerPayload = AudioSynthesisRequest(
+                                item = AudioItem.VOCABULARY,
+                                text = vocabulary,
+                                revision = 0,
+                                entryIdentity = entryIdentity,
+                            ),
+                        ),
+                    )
+                }
+                audioSnapshot = audioController.snapshot()
             }
+
 
             androidx.compose.runtime.LaunchedEffect(dictionaryReady, target, editor.text, dictionaryRetry, japaneseTokens, draftGeneration, submissionLocked) {
                 if (currentSubmissionLocked.value) return@LaunchedEffect
@@ -1535,18 +1642,22 @@ class MainActivity : ComponentActivity() {
 
             androidx.compose.runtime.LaunchedEffect(
                 dictionaryReady, selectedDictionaryEntryId, selectedDictionaryEntry, vocabulary, vocabularyReading,
-                target, editor.text, dictionaryRetry, draftGeneration, submissionLocked,
+                target, editor.text, dictionaryRetry, draftGeneration, submissionLocked, ajtAvailability,
             ) {
                 if (currentSubmissionLocked.value) return@LaunchedEffect
                 val callbackGeneration = draftGeneration
                 val entry = selectedDictionaryEntry?.takeIf {
                     it.id == selectedDictionaryEntryId && it.expression == vocabulary && it.reading == vocabularyReading
                 }
-                if (!dictionaryReady || entry == null || vocabulary.isBlank() || vocabularyReading.isBlank()) {
+                if (!dictionaryReady || entry == null || vocabulary.isBlank() || vocabularyReading.isBlank() ||
+                    ajtAvailability !is AjtPitchAvailability.Ready
+                ) {
                     pitchCandidates = emptyList()
                     pitchAccentText = ""
                     pitchHtmlText = null
                     pitchLookupLoading = false
+                    pitchIndexError = (ajtAvailability as? AjtPitchAvailability.Unavailable)
+                        ?.let { pitchUnavailableMessage(it.failure) }
                     return@LaunchedEffect
                 }
                 pitchAccentText = ""
@@ -1554,13 +1665,8 @@ class MainActivity : ComponentActivity() {
                 pitchCandidates = emptyList()
                 pitchLookupLoading = true
                 try {
-                    val index = ajtPitchIndex
-                    if (index == null) {
-                        pitchIndexError = "The AJT pitch index is unavailable; this word cannot be mined."
-                        return@LaunchedEffect
-                    }
                     val candidates = withContext(Dispatchers.IO) {
-                        index.pitch(entry.expression, entry.reading)
+                        ajtPitchRepository.pitch(entry.expression, entry.reading)
                     }.filter { PitchAccent.create(entry.reading, it.accent, it.html) != null }
                     if (!asyncDraftIsCurrent(callbackGeneration)) return@LaunchedEffect
                     pitchCandidates = candidates
@@ -2154,41 +2260,34 @@ class MainActivity : ComponentActivity() {
                 )
             }
 
-            val processedImageIdentity = processedImagePath?.let { path ->
-                runCatching { File(path).takeIf(File::isFile)?.let(MediaIdentity::fromFile) }.getOrNull()
-            }
-            val imageReceiptFilename = if (
-                processedImageIdentity != null &&
-                preferences.getString(IMAGE_RECEIPT_PATH, null) == processedImageIdentity.path &&
-                preferences.getLong(IMAGE_RECEIPT_SIZE, -1L) == processedImageIdentity.size &&
-                preferences.getLong(IMAGE_RECEIPT_MODIFIED, -1L) == processedImageIdentity.modified
-            ) {
-                preferences.getString(IMAGE_RECEIPT_FILENAME, null)
-                    ?.let(AnkiMediaImporter::sanitizeFilename)
-            } else null
+            val processedImageIdentity = liveMediaIdentity(processedImagePath?.let(::File))
+            val imageReceiptFilename = importedReceiptFromPreferences(
+                preferences,
+                IMAGE_RECEIPT_KEYS,
+                processedImageIdentity,
+                AnkiMediaImporter::sanitizeFilename,
+            )
             val imageAttached = noteImagePath != null
-            val sentenceAudioReceipt = importedReceipt(
+            // The controller's Ready metadata is exactly what was published, so these receipts
+            // need no extra stat: one identity per item, computed once.
+            fun audioMediaIdentity(item: AudioItem): MediaIdentity? =
+                (audioSnapshot.items[item] as? DraftAudioState.Ready)
+                    ?.let { state -> MediaIdentity(state.file.path, state.file.size, state.file.modified) }
+
+            val sentenceAudioReceipt = importedReceiptFromPreferences(
                 preferences,
-                SENTENCE_AUDIO_RECEIPT_PATH,
-                SENTENCE_AUDIO_RECEIPT_FILENAME,
-                SENTENCE_AUDIO_RECEIPT_SIZE,
-                SENTENCE_AUDIO_RECEIPT_MODIFIED,
-                sentenceAudio.path?.let(::File),
+                SENTENCE_AUDIO_RECEIPT_KEYS,
+                audioMediaIdentity(AudioItem.SENTENCE),
                 AnkiMediaImporter::sanitizeAudioFilename,
             )
-            val wordAudioReceipt = importedReceipt(
+            val wordAudioReceipt = importedReceiptFromPreferences(
                 preferences,
-                WORD_AUDIO_RECEIPT_PATH,
-                WORD_AUDIO_RECEIPT_FILENAME,
-                WORD_AUDIO_RECEIPT_SIZE,
-                WORD_AUDIO_RECEIPT_MODIFIED,
-                wordAudio.path?.let(::File),
+                WORD_AUDIO_RECEIPT_KEYS,
+                audioMediaIdentity(AudioItem.VOCABULARY),
                 AnkiMediaImporter::sanitizeAudioFilename,
             )
-            val sentenceAudioReady = sentenceAudio.path?.let(::File)?.isFile == true &&
-                sentenceAudio.identity == currentSentenceIdentity.value && !sentenceAudio.generating
-            val wordAudioReady = wordAudio.path?.let(::File)?.isFile == true &&
-                wordAudio.identity == currentWordIdentity.value && !wordAudio.generating
+            val sentenceAudioReady = audioReady(AudioItem.SENTENCE, currentSentenceIdentity.value)
+            val wordAudioReady = audioReady(AudioItem.VOCABULARY, currentWordIdentity.value)
             val imagePending = imageAttached && imageProcessing
             val imageReady = if (imageAttached) {
                 !imagePending && imageError == null && processedImagePath?.let(::File)?.isFile == true
@@ -2246,14 +2345,15 @@ class MainActivity : ComponentActivity() {
                 AnkiFieldContract.mapToModelOrder(it.fields, effectiveFrozenFields ?: fieldsByName.orEmpty())
             }
             val frozenReceiptReady = restoredFrozenForUi?.let { snapshot ->
-                snapshot.importedFilename == null || (
-                    snapshot.media != null &&
-                        preferences.getString(IMAGE_RECEIPT_PATH, null) == snapshot.media.path &&
-                        preferences.getLong(IMAGE_RECEIPT_SIZE, -1L) == snapshot.media.size &&
-                        preferences.getLong(IMAGE_RECEIPT_MODIFIED, -1L) == snapshot.media.modified &&
-                        preferences.getString(IMAGE_RECEIPT_FILENAME, null) == snapshot.importedFilename &&
-                        (!File(snapshot.media.path).exists() ||
-                            runCatching { MediaIdentity.fromFile(File(snapshot.media.path)) == snapshot.media }.getOrDefault(false))
+                val localFile = snapshot.media?.let { File(it.path) }
+                val localExists = localFile?.exists() == true
+                frozenImagePermitsImport(
+                    importedFilename = snapshot.importedFilename,
+                    frozenIdentity = snapshot.media,
+                    receiptIdentity = receiptIdentity(preferences, IMAGE_RECEIPT_KEYS),
+                    receiptFilename = preferences.getString(IMAGE_RECEIPT_FILENAME, null),
+                    localFileExists = localExists,
+                    localIdentity = if (localExists) liveMediaIdentity(localFile) else null,
                 )
             } ?: true
             val sendImageReady = if (frozenRetryReady) frozenReceiptReady else imageReady
@@ -2261,8 +2361,7 @@ class MainActivity : ComponentActivity() {
                 (if (frozenRetryReady) effectiveFrozenFields != null else fieldsByName != null && validationErrors.isEmpty()) &&
                 effectiveMapping?.isValid == true && sendImageReady && frozenDestinationReady &&
                 (frozenRetryReady || pitch != null) &&
-                (frozenRetryReady || (sentenceAudioReady && wordAudioReady &&
-                    sentenceAudio.error == null && wordAudio.error == null)) &&
+                (frozenRetryReady || (sentenceAudioReady && wordAudioReady)) &&
                 (frozenRetryReady || (!dictionaryLoading && !dictionarySearchLoading)) &&
                 setupLoadedSuccessfully && !setupLoading && setupError == null && !recoveryRequired &&
                 !isSubmitting && !duplicateBlocked
@@ -2980,30 +3079,26 @@ class MainActivity : ComponentActivity() {
                                         },
                                         sentenceAudio = sentenceAudio.presentation(),
                                         vocabularyAudio = wordAudio.presentation(),
+                                        sentenceAudioAction = audioActionLabel(AudioItem.SENTENCE),
+                                        vocabularyAudioAction = audioActionLabel(AudioItem.VOCABULARY),
                                         onToggleSentenceAudio = {
                                             if (playingAudio == AudioItem.SENTENCE) {
                                                 stopAudioPlayback()
                                                 playingAudio = null
                                             } else {
-                                                sentenceAudio.path?.let { playAudio(AudioItem.SENTENCE, it) }
+                                                audioReadyFile(AudioItem.SENTENCE)?.let { playAudio(AudioItem.SENTENCE, it) }
                                             }
                                         },
-                                        onRetrySentenceAudio = {
-                                            sentenceAudio = DraftAudio()
-                                            audioRetry++
-                                        },
+                                        onRetrySentenceAudio = { onAudioAction(AudioItem.SENTENCE) },
                                         onToggleVocabularyAudio = {
                                             if (playingAudio == AudioItem.VOCABULARY) {
                                                 stopAudioPlayback()
                                                 playingAudio = null
                                             } else {
-                                                wordAudio.path?.let { playAudio(AudioItem.VOCABULARY, it) }
+                                                audioReadyFile(AudioItem.VOCABULARY)?.let { playAudio(AudioItem.VOCABULARY, it) }
                                             }
                                         },
-                                        onRetryVocabularyAudio = {
-                                            wordAudio = DraftAudio()
-                                            audioRetry++
-                                        },
+                                        onRetryVocabularyAudio = { onAudioAction(AudioItem.VOCABULARY) },
                                         notes = displayNotes,
                                         tags = displayTags.split(Regex("\\s+")).filter(String::isNotBlank),
                                         imagePath = frozenForDisplay?.media?.path ?: noteImagePath,
@@ -3215,6 +3310,21 @@ class MainActivity : ComponentActivity() {
                             val fields = restoredFrozen?.modelFields?.zip(restoredFrozen.orderedFields)?.toMap()
                                 ?: fieldsByName ?: return@submitAction
                             val tagSet = restoredFrozen?.tags ?: AnkiFieldContract.parseTags(tags)
+                            // Freeze both audio items before any import: the files are pinned by
+                            // leases and the identities are immutable from here on. A restored
+                            // frozen Send already owns its audio, so it is not frozen twice.
+                            val frozenAudio = if (restoredFrozen != null) null else {
+                                when (val freeze = audioController.freezeForSend()) {
+                                    is DraftAudioFreeze.Frozen -> freeze.snapshot
+                                    is DraftAudioFreeze.Incomplete -> {
+                                        submitMessage =
+                                            "Wait for or retry the missing audio before sending."
+                                        return@submitAction
+                                    }
+                                    DraftAudioFreeze.Disposed -> return@submitAction
+                                }
+                            }
+                            audioSnapshot = audioController.snapshot()
                             publishedFrozenSnapshot = restoredFrozen ?: modelMapping?.takeIf { it.isValid }?.let { mapping ->
                                 FrozenSubmission(
                                     revision = nextSubmissionRevision(
@@ -3274,63 +3384,77 @@ class MainActivity : ComponentActivity() {
                                             SubmissionOutcome("duplicate", duplicateId)
                                         } else {
                                             val frozen = if (restoredFrozen != null) {
-                                                check(restoredFrozen.importedFilename == null ||
-                                                    (restoredFrozen.media != null &&
-                                                        preferences.getString(IMAGE_RECEIPT_PATH, null) == restoredFrozen.media.path &&
-                                                        preferences.getLong(IMAGE_RECEIPT_SIZE, -1L) == restoredFrozen.media.size &&
-                                                        preferences.getLong(IMAGE_RECEIPT_MODIFIED, -1L) == restoredFrozen.media.modified &&
-                                                        preferences.getString(IMAGE_RECEIPT_FILENAME, null) == restoredFrozen.importedFilename &&
-                                                        (!File(restoredFrozen.media.path).exists() ||
-                                                            MediaIdentity.fromFile(File(restoredFrozen.media.path)) == restoredFrozen.media))
+                                                val localFile = restoredFrozen.media?.let { File(it.path) }
+                                                val localExists = localFile?.exists() == true
+                                                check(
+                                                    frozenImagePermitsImport(
+                                                        importedFilename = restoredFrozen.importedFilename,
+                                                        frozenIdentity = restoredFrozen.media,
+                                                        receiptIdentity = receiptIdentity(preferences, IMAGE_RECEIPT_KEYS),
+                                                        receiptFilename = preferences.getString(IMAGE_RECEIPT_FILENAME, null),
+                                                        localFileExists = localExists,
+                                                        localIdentity = if (localExists) liveMediaIdentity(localFile) else null,
+                                                    ),
                                                 ) { "The frozen media receipt is unavailable; resolve the pending Send manually." }
                                                 restoredFrozen
                                             } else {
                                                 val includeImage = imageAttached && !imageProcessing
-                                                val receiptPath = preferences.getString(IMAGE_RECEIPT_PATH, null)
-                                                val receiptFilename = preferences.getString(IMAGE_RECEIPT_FILENAME, null)
-                                                    ?.let(AnkiMediaImporter::sanitizeFilename)
                                                 val processed = if (includeImage) {
                                                     processedImagePath?.let(::File)?.takeIf(File::isFile)
                                                 } else null
                                                 if (includeImage) check(processed != null) {
                                                     "The selected image is not ready for import."
                                                 }
-                                                val media = processed?.let(MediaIdentity::fromFile)
-                                                val imported = if (includeImage && media != null &&
-                                                    receiptPath == media.path &&
-                                                    preferences.getLong(IMAGE_RECEIPT_SIZE, -1L) == media.size &&
-                                                    preferences.getLong(IMAGE_RECEIPT_MODIFIED, -1L) == media.modified &&
-                                                    receiptFilename != null
-                                                ) receiptFilename else null
-                                                val sentenceFile = sentenceAudio.path?.let(::File)?.takeIf(File::isFile)
-                                                    ?: error("Sentence audio is not ready for import.")
-                                                val wordFile = wordAudio.path?.let(::File)?.takeIf(File::isFile)
-                                                    ?: error("Word audio is not ready for import.")
-                                                val sentenceImported = importedReceipt(
-                                                    preferences, SENTENCE_AUDIO_RECEIPT_PATH, SENTENCE_AUDIO_RECEIPT_FILENAME,
-                                                    SENTENCE_AUDIO_RECEIPT_SIZE, SENTENCE_AUDIO_RECEIPT_MODIFIED,
-                                                    sentenceFile, AnkiMediaImporter::sanitizeAudioFilename,
+                                                // One stat per phase: this identity is reused for the
+                                                // receipt lookup and the frozen snapshot.
+                                                val media = liveMediaIdentity(processed)
+                                                val imported = if (includeImage) {
+                                                    importedReceiptFromPreferences(
+                                                        preferences,
+                                                        IMAGE_RECEIPT_KEYS,
+                                                        media,
+                                                        AnkiMediaImporter::sanitizeFilename,
+                                                    )
+                                                } else null
+                                                val frozenFiles = frozenAudio
+                                                    ?: error("Draft audio was not frozen for this Send.")
+                                                val sentenceEntry =
+                                                    frozenFiles.files.getValue(AudioItem.SENTENCE)
+                                                val wordEntry =
+                                                    frozenFiles.files.getValue(AudioItem.VOCABULARY)
+                                                val sentenceFile = sentenceEntry.file()
+                                                val wordFile = wordEntry.file()
+                                                val sentenceMedia = MediaIdentity(
+                                                    sentenceEntry.path, sentenceEntry.size, sentenceEntry.modified,
+                                                )
+                                                val wordMedia = MediaIdentity(
+                                                    wordEntry.path, wordEntry.size, wordEntry.modified,
+                                                )
+                                                val sentenceImported = importedReceiptFromPreferences(
+                                                    preferences, SENTENCE_AUDIO_RECEIPT_KEYS, sentenceMedia,
+                                                    AnkiMediaImporter::sanitizeAudioFilename,
                                                 ) ?: gateway.importAudio(sentenceFile).also { filename ->
-                                                    val stat = MediaIdentity.fromFile(sentenceFile)
-                                                    preferences.edit()
-                                                        .putString(SENTENCE_AUDIO_RECEIPT_PATH, stat.path)
-                                                        .putString(SENTENCE_AUDIO_RECEIPT_FILENAME, filename)
-                                                        .putLong(SENTENCE_AUDIO_RECEIPT_SIZE, stat.size)
-                                                        .putLong(SENTENCE_AUDIO_RECEIPT_MODIFIED, stat.modified)
-                                                        .commit()
+                                                    check(
+                                                        preferences.edit()
+                                                            .putString(SENTENCE_AUDIO_RECEIPT_PATH, sentenceMedia.path)
+                                                            .putString(SENTENCE_AUDIO_RECEIPT_FILENAME, filename)
+                                                            .putLong(SENTENCE_AUDIO_RECEIPT_SIZE, sentenceMedia.size)
+                                                            .putLong(SENTENCE_AUDIO_RECEIPT_MODIFIED, sentenceMedia.modified)
+                                                            .commit(),
+                                                    ) { "Could not save the sentence audio receipt." }
                                                 }
-                                                val wordImported = importedReceipt(
-                                                    preferences, WORD_AUDIO_RECEIPT_PATH, WORD_AUDIO_RECEIPT_FILENAME,
-                                                    WORD_AUDIO_RECEIPT_SIZE, WORD_AUDIO_RECEIPT_MODIFIED,
-                                                    wordFile, AnkiMediaImporter::sanitizeAudioFilename,
+                                                val wordImported = importedReceiptFromPreferences(
+                                                    preferences, WORD_AUDIO_RECEIPT_KEYS, wordMedia,
+                                                    AnkiMediaImporter::sanitizeAudioFilename,
                                                 ) ?: gateway.importAudio(wordFile).also { filename ->
-                                                    val stat = MediaIdentity.fromFile(wordFile)
-                                                    preferences.edit()
-                                                        .putString(WORD_AUDIO_RECEIPT_PATH, stat.path)
-                                                        .putString(WORD_AUDIO_RECEIPT_FILENAME, filename)
-                                                        .putLong(WORD_AUDIO_RECEIPT_SIZE, stat.size)
-                                                        .putLong(WORD_AUDIO_RECEIPT_MODIFIED, stat.modified)
-                                                        .commit()
+                                                    check(
+                                                        preferences.edit()
+                                                            .putString(WORD_AUDIO_RECEIPT_PATH, wordMedia.path)
+                                                            .putString(WORD_AUDIO_RECEIPT_FILENAME, filename)
+                                                            .putLong(WORD_AUDIO_RECEIPT_SIZE, wordMedia.size)
+                                                            .putLong(WORD_AUDIO_RECEIPT_MODIFIED, wordMedia.modified)
+                                                            .commit(),
+                                                    ) { "Could not save the word audio receipt." }
                                                 }
                                                 val baseDraft = noteDraft.copy(
                                                     imageFilename = imported,
@@ -3365,10 +3489,10 @@ class MainActivity : ComponentActivity() {
                                                     importedFilename = imported,
                                                     noteId = null,
                                                     sentenceAudio = FrozenAudioItem(
-                                                        MediaIdentity.fromFile(sentenceFile), sentenceImported,
+                                                        sentenceMedia, sentenceImported,
                                                     ),
                                                     wordAudio = FrozenAudioItem(
-                                                        MediaIdentity.fromFile(wordFile), wordImported,
+                                                        wordMedia, wordImported,
                                                     ),
                                                 )
                                                 check(preferences.edit().putLong(
@@ -3455,6 +3579,8 @@ class MainActivity : ComponentActivity() {
                                     }
                                     when (outcome.status) {
                                         "duplicate" -> {
+                                            audioController.releaseFreeze(retainFiles = false)
+                                            audioSnapshot = audioController.snapshot()
                                             frozenRetryReady = false
                                             recoveryPhase = null
                                             duplicateBlocked = true
@@ -3463,6 +3589,10 @@ class MainActivity : ComponentActivity() {
                                             submitMessage = "Blocked: a note with this sentence and vocabulary lemma already exists."
                                         }
                                         "created" -> {
+                                            // The note is verified: nothing needs the frozen files
+                                            // any more, so release them (clearDraft then discards).
+                                            audioController.releaseFreeze(retainFiles = false)
+                                            audioSnapshot = audioController.snapshot()
                                             completedSubmission = publishedFrozenSnapshot ?: readFrozenSubmission(preferences)
                                             frozenRetryReady = false
                                             recoveryRequired = false
@@ -3472,6 +3602,8 @@ class MainActivity : ComponentActivity() {
                                             submitMessage = "Note sent to AnkiDroid."
                                         }
                                         else -> {
+                                            audioController.releaseFreeze(retainFiles = false)
+                                            audioSnapshot = audioController.snapshot()
                                             frozenRetryReady = false
                                             recoveryPhase = null
                                             submitMessage = "AnkiDroid did not add the note. You can safely review and retry."
@@ -3480,6 +3612,8 @@ class MainActivity : ComponentActivity() {
                                 } catch (cancelled: CancellationException) {
                                     throw cancelled
                                 } catch (error: AnkiProviderDefiniteInsertException) {
+                                    audioController.releaseFreeze(retainFiles = false)
+                                    audioSnapshot = audioController.snapshot()
                                     clearPendingSubmission(preferences)
                                     publishedFrozenSnapshot = null
                                     recoveryRequired = false
@@ -3492,6 +3626,10 @@ class MainActivity : ComponentActivity() {
                                         preferences.getString(SubmissionRecoveryKeys.STATUS, null),
                                     )
                                     if (phase != null) {
+                                        // Uncertain Send: keep the frozen files and their leases so
+                                        // recovery can still see the audio this draft promised.
+                                        audioController.releaseFreeze(retainFiles = true)
+                                        audioSnapshot = audioController.snapshot()
                                         recoveryPhase = phase
                                         recoveryRequired = true
                                         frozenRetryReady = false
@@ -3503,8 +3641,12 @@ class MainActivity : ComponentActivity() {
                                             SubmissionPhase.DESTINATION_VERIFIED -> "The note's destination was verified; recovery will finalize it without inserting again."
                                         }
                                     } else if (imageAttached) {
+                                        audioController.releaseFreeze(retainFiles = false)
+                                        audioSnapshot = audioController.snapshot()
                                         submitMessage = "Could not import the selected image. The draft was kept; retry or remove the image."
                                     } else {
+                                        audioController.releaseFreeze(retainFiles = false)
+                                        audioSnapshot = audioController.snapshot()
                                         submitMessage = "Could not send the note. Check AnkiDroid API access and retry."
                                     }
                                 } finally {
@@ -3712,7 +3854,7 @@ private fun clearPersistedDraft(preferences: SharedPreferences, draftDirectory: 
         SubmissionRecoveryKeys.MEDIA_PATH, SubmissionRecoveryKeys.MEDIA_SIZE,
         SubmissionRecoveryKeys.MEDIA_MODIFIED, SubmissionRecoveryKeys.IMPORTED_FILENAME,
         SubmissionRecoveryKeys.NOTE_ID,
-    )
+    ) + draftAudioPreferenceKeys()
     preferences.edit().also { editor -> draftKeys.forEach(editor::remove) }.commit()
 }
 

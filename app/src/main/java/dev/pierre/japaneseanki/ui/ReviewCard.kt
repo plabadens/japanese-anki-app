@@ -174,6 +174,8 @@ internal fun ReviewCard(
     onRetrySentenceAudio: (() -> Unit)? = null,
     onToggleVocabularyAudio: (() -> Unit)? = null,
     onRetryVocabularyAudio: (() -> Unit)? = null,
+    sentenceAudioAction: String = "Retry",
+    vocabularyAudioAction: String = "Retry",
     translationError: String? = null,
     translationStale: Boolean = false,
     translationSuggestion: String? = null,
@@ -248,7 +250,14 @@ internal fun ReviewCard(
                     furigana = furigana,
                     modifier = Modifier.weight(1f),
                 )
-                ReviewAudioButton("Sentence", sentenceAudio, onToggleSentenceAudio, onRetrySentenceAudio, small = true)
+                ReviewAudioButton(
+                    "Sentence",
+                    sentenceAudio,
+                    onToggleSentenceAudio,
+                    onRetrySentenceAudio,
+                    actionLabel = sentenceAudioAction,
+                    small = true,
+                )
             }
             if (editing && editingEnabled) {
                 TextButton(onClick = { editingField = "Sentence" }, modifier = Modifier.heightIn(min = 48.dp)) {
@@ -282,7 +291,13 @@ internal fun ReviewCard(
                                 )
                             }
                         }
-                        ReviewAudioButton("Word", vocabularyAudio, onToggleVocabularyAudio, onRetryVocabularyAudio)
+                        ReviewAudioButton(
+                            "Word",
+                            vocabularyAudio,
+                            onToggleVocabularyAudio,
+                            onRetryVocabularyAudio,
+                            actionLabel = vocabularyAudioAction,
+                        )
                     }
                     pitch?.let {
                         // The study sets the contour at learning scale, with 22 sp katakana
@@ -824,6 +839,7 @@ private fun ReviewAudioButton(
     audio: ReviewAudioPresentation,
     onToggle: (() -> Unit)?,
     onRetry: (() -> Unit)?,
+    actionLabel: String = "Retry",
     small: Boolean = false,
 ) {
     val size = if (small) 44.dp else 48.dp
@@ -886,7 +902,7 @@ private fun ReviewAudioButton(
             if (failureExpanded) {
                 Text(audio.message, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
                 onRetry?.let { retry ->
-                    TextButton(onClick = retry, modifier = Modifier.heightIn(min = 48.dp)) { Text("Retry") }
+                    TextButton(onClick = retry, modifier = Modifier.heightIn(min = 48.dp)) { Text(actionLabel) }
                 }
             }
         }

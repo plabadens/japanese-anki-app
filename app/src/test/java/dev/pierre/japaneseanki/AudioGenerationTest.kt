@@ -70,25 +70,4 @@ class AudioGenerationTest {
         }
     }
 
-    @Test
-    fun revisionedResultOnlyAcceptsCurrentRevision() {
-        val result = RevisionedAudioResult()
-        val first = AudioRequestIdentity(AudioItem.SENTENCE, 1, "一文")
-        assertTrue(result.beginIfNeeded(first))
-        assertTrue(result.state is AudioGenerationState.Generating)
-        val second = AudioRequestIdentity(AudioItem.SENTENCE, 2, "二文")
-        assertTrue(result.beginIfNeeded(second))
-        assertTrue(result.state is AudioGenerationState.Generating)
-        assertEquals(second, (result.state as AudioGenerationState.Generating).request)
-    }
-
-    @Test
-    fun failedRequestRequiresExplicitRetry() {
-        val result = RevisionedAudioResult()
-        val request = AudioRequestIdentity(AudioItem.VOCABULARY, 3, "悪逆", "entry-1")
-        result.beginIfNeeded(request, afterProcessRestart = true)
-        assertTrue(result.state is AudioGenerationState.Failed)
-        assertTrue(result.retry(request))
-        assertTrue(result.state is AudioGenerationState.Generating)
-    }
 }

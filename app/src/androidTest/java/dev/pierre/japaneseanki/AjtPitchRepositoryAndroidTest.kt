@@ -26,7 +26,7 @@ class AjtPitchRepositoryAndroidTest {
 
     @Test
     fun bundledIndexKeepsSourceOrderAndSuppliedMarkup() {
-        val repository = AjtPitchRepository { AjtPitchIndex.open(context) }
+        val repository = AjtPitchRepository(openStore = { AjtPitchIndex.open(context) })
         try {
             assertEquals(AjtPitchAvailability.Ready, repository.prepare())
             // Successful preparation is idempotent: a draft reset must not reopen or replace it.
@@ -66,7 +66,7 @@ class AjtPitchRepositoryAndroidTest {
             )
         }
         val handle = AjtPitchIndex(openReadOnly(file), file)
-        val repository = AjtPitchRepository { handle }
+        val repository = AjtPitchRepository(openStore = { handle })
 
         assertEquals(AjtPitchAvailability.Unavailable(AjtPitchFailure.EMPTY_INDEX), repository.prepare())
         assertEquals(AjtPitchAvailability.Unavailable(AjtPitchFailure.EMPTY_INDEX), repository.availability.value)
@@ -80,9 +80,9 @@ class AjtPitchRepositoryAndroidTest {
         val file = temporaryDatabase("wrong-schema") { database ->
             database.execSQL("CREATE TABLE something_else (value TEXT NOT NULL)")
         }
-        val repository = AjtPitchRepository {
-            if (file.isFile) AjtPitchIndex(openReadOnly(file), file) else null
-        }
+        val repository = AjtPitchRepository(
+            openStore = { if (file.isFile) AjtPitchIndex(openReadOnly(file), file) else null },
+        )
 
         assertEquals(AjtPitchAvailability.Unavailable(AjtPitchFailure.INVALID_INDEX), repository.prepare())
         // probe() discards the installed copy, so an explicit retry reinstalls from the asset
@@ -98,7 +98,7 @@ class AjtPitchRepositoryAndroidTest {
             val file = temporaryDatabase("wrong-schema-$index") { database ->
                 database.execSQL("CREATE TABLE something_else (value TEXT NOT NULL)")
             }
-            val repository = AjtPitchRepository { AjtPitchIndex(openReadOnly(file), file) }
+            val repository = AjtPitchRepository(openStore = { AjtPitchIndex(openReadOnly(file), file) })
             assertEquals(AjtPitchAvailability.Unavailable(AjtPitchFailure.INVALID_INDEX), repository.prepare())
             repository.close()
         }

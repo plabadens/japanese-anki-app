@@ -31,6 +31,15 @@ sealed interface AjtPitchAvailability {
  * is why there is no reference counting and no close/query race.
  */
 class AjtPitchRepository internal constructor(
+    /**
+     * Whether the bundled index asset exists at all; distinguishes missing from unopenable.
+     * Defaults to "missing": a handle that failed to open is reported as MISSING_INDEX unless the
+     * caller can prove the asset ships, which is what the pre-repository behaviour did. The
+     * production singleton passes [AjtPitchIndex.hasBundledAsset].
+     *
+     * Declared first so the trailing lambda at the call sites still means [openStore].
+     */
+    private val assetPresent: () -> Boolean = { false },
     private val openStore: () -> AjtPitchStore?,
 ) {
     private val lock = Any()
@@ -58,7 +67,9 @@ class AjtPitchRepository internal constructor(
                 throw cancelled
             } catch (_: Exception) {
                 return fail(AjtPitchFailure.OPEN_FAILED)
-            } ?: return fail(AjtPitchFailure.MISSING_INDEX)
+            } ?: return fail(
+                if (assetPresent()) AjtPitchFailure.OPEN_FAILED else AjtPitchFailure.MISSING_INDEX,
+            )
 
             val usable = try {
                 opened.probe()
@@ -124,7 +135,10 @@ class AjtPitchRepository internal constructor(
             // Capture the application context once: the opener must not retain an activity.
             val application = context.applicationContext
             return synchronized(this) {
-                shared ?: AjtPitchRepository { AjtPitchIndex.open(application) }.also { shared = it }
+                shared ?: AjtPitchRepository(
+                    assetPresent = { AjtPitchIndex.hasBundledAsset(application) },
+                    openStore = { AjtPitchIndex.open(application) },
+                ).also { shared = it }
             }
         }
 
