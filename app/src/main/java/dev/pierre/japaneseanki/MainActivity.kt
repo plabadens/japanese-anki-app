@@ -28,6 +28,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -55,6 +56,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.darkColorScheme
@@ -78,13 +80,14 @@ import dev.pierre.japaneseanki.speech.GoogleChirpSpeechProvider
 import dev.pierre.japaneseanki.speech.HintResult
 import dev.pierre.japaneseanki.speech.ReadingHint
 import dev.pierre.japaneseanki.speech.ReadingHintBuilder
-import dev.pierre.japaneseanki.speech.ReadingHintSpan
 import dev.pierre.japaneseanki.speech.SentenceSpeechProvider
 import dev.pierre.japaneseanki.speech.SentenceSpeechRequest
 import dev.pierre.japaneseanki.speech.SpeechException
 import dev.pierre.japaneseanki.speech.decodeVoices
 import dev.pierre.japaneseanki.speech.encodeVoices
+import dev.pierre.japaneseanki.speech.sentenceHintSpans
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -258,6 +261,7 @@ class MainActivity : ComponentActivity() {
             }
             var vocabulary by remember { mutableStateOf(preferences.getString("vocabulary", "").orEmpty()) }
             var vocabularyReading by remember { mutableStateOf(preferences.getString("vocabulary_reading", "").orEmpty()) }
+            var vocabularyReadingError by remember { mutableStateOf<String?>(null) }
             var pitchAccentText by remember { mutableStateOf(preferences.getString("pitch_accent", "").orEmpty()) }
             var pitchHtmlText by remember { mutableStateOf(preferences.getString("pitch_html", null)) }
             var pitchIndexError by remember { mutableStateOf<String?>(null) }
@@ -268,6 +272,15 @@ class MainActivity : ComponentActivity() {
             var definitionManuallyEdited by remember { mutableStateOf(preferences.getBoolean("definition_manual", false)) }
             var definitionProvenanceKnown by remember { mutableStateOf(preferences.contains("definition_manual")) }
             var sentenceReading by remember { mutableStateOf(preferences.getString("sentence_reading", "").orEmpty()) }
+            var readingCorrections by remember {
+                mutableStateOf(
+                    SentenceReadings.decode(
+                        preferences.getString("sentence_reading_corrections", null),
+                        preferences.getString("sentence", "").orEmpty(),
+                    ),
+                )
+            }
+            var readingCorrectionError by remember { mutableStateOf<String?>(null) }
             var dependentFieldsStale by remember {
                 mutableStateOf(preferences.getBoolean("definition_manual_stale", false) &&
                     preferences.getBoolean("definition_manual", false))
@@ -385,7 +398,20 @@ class MainActivity : ComponentActivity() {
             var tokenizationError by remember { mutableStateOf<String?>(null) }
             var analysisRetry by remember { mutableStateOf(0) }
             var japaneseTokens by remember { mutableStateOf<List<JapaneseToken>>(emptyList()) }
-            val sentenceFurigana = sentenceFuriganaSpans(editor.text, japaneseTokens, target)
+            val sentenceFurigana = SentenceReadings.effective(
+                editor.text,
+                japaneseTokens,
+                target,
+                sentenceReading,
+                readingCorrections,
+            )
+            val correctableReadings = SentenceReadings.correctable(
+                editor.text,
+                japaneseTokens,
+                target,
+                sentenceReading,
+                readingCorrections,
+            )
             val analyzedTarget = target?.let { resolveAnalyzedLemma(japaneseTokens, it) }
             var dictionaryEntries by remember { mutableStateOf<List<DictionaryEntry>>(emptyList()) }
             var dictionarySearchLoading by remember { mutableStateOf(false) }
@@ -639,12 +665,14 @@ class MainActivity : ComponentActivity() {
                     dictionaryEntries = emptyList()
                     pitchAccentText = ""
                 }
-                target = selected
-                if (selected != null && sentenceReading.isBlank()) {
-                    sentenceReading = resolveSurfaceReading(
-                        editor.text, japaneseTokens, selected,
-                    ).orEmpty()
+                if (selected != previousTarget) {
+                    // The reading belongs to the selected occurrence; a new target must never
+                    // inherit the previous target's reading.
+                    sentenceReading = selected?.let { span ->
+                        resolveSurfaceReading(editor.text, japaneseTokens, span)
+                    }.orEmpty()
                 }
+                target = selected
                 if (selected != null && vocabulary.isBlank()) {
                     val surface = selected.textIn(editor.text).orEmpty()
                     val lemma = resolveAnalyzedLemma(japaneseTokens, selected)
@@ -927,6 +955,119 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            // Nothing from a previous word may survive an unresolved dictionary choice.
+            fun clearUnresolvedVocabulary() {
+                val unresolved = VocabularyResolution.unresolved()
+                vocabulary = unresolved.vocabulary
+                vocabularyReading = unresolved.reading
+                vocabularyReadingError = null
+                definition = unresolved.definition
+                definitionManuallyEdited = false
+                definitionProvenanceKnown = true
+                dependentFieldsStale = false
+                selectedDictionaryEntry = null
+                selectedDictionaryEntryId = null
+                selectedSenseIndices = unresolved.senseIndices
+                pitchAccentText = unresolved.pitchAccent
+                pitchHtmlText = null
+                pitchCandidates = emptyList()
+                pitchIndexError = "Choose a dictionary entry to resolve this word."
+                wordAudio = DraftAudio()
+            }
+
+            fun dismissDictionarySheet() {
+                showDictionarySheet = false
+                if (VocabularyResolution.isUnresolved(dictionaryEntries.size, selectedDictionaryEntry?.id)) {
+                    clearUnresolvedVocabulary()
+                }
+            }
+
+            /** A corrected vocabulary reading re-resolves entry, pitch and recording identity. */
+            fun applyVocabularyReading(raw: String): Boolean {
+                if (submissionLocked) return false
+                val corrected = VocabularyReadings.normalize(raw)
+                val match = VocabularyReadings.selectEntry(
+                    dictionaryEntries.map { ReadingCandidate(it.id, it.expression, it.reading) },
+                    vocabulary,
+                    corrected,
+                )
+                if (match == null) {
+                    wordAudio = DraftAudio()
+                    pitchAccentText = ""
+                    pitchHtmlText = null
+                    pitchCandidates = emptyList()
+                    // Never display a pronunciation that no dictionary entry supports.
+                    vocabularyReading = ""
+                    vocabularyReadingError = if (corrected.isEmpty()) {
+                        "Enter the reading in kana."
+                    } else if (dictionaryEntries.isEmpty()) {
+                        "No dictionary entry is loaded for this word yet."
+                    } else {
+                        "No dictionary entry for ${vocabulary.ifBlank { "this word" }} is read ${corrected}. Pick a listed reading."
+                    }
+                    selectedDictionaryEntry = null
+                    selectedDictionaryEntryId = null
+                    selectedSenseIndices = emptySet()
+                    pitchIndexError = "No pitch pattern can be resolved for this reading."
+                    return false
+                }
+                val entry = dictionaryEntries.first { it.id == match.id }
+                vocabularyReadingError = null
+                if (vocabularyReading == entry.reading && selectedDictionaryEntry?.id == entry.id) {
+                    // Already resolved to this entry and reading: nothing to invalidate.
+                    return true
+                }
+                // The recording belongs to the previous reading/entry; re-resolve it.
+                wordAudio = DraftAudio()
+                pitchAccentText = ""
+                pitchHtmlText = null
+                pitchCandidates = emptyList()
+                pitchIndexError = null
+                vocabularyReading = entry.reading
+                if (selectedDictionaryEntry?.id != entry.id) {
+                    selectedDictionaryEntry = entry
+                    selectedDictionaryEntryId = entry.id
+                    val senses = if (entry.senses.isEmpty()) emptySet() else setOf(0)
+                    selectedSenseIndices = senses
+                    definition = senses.sorted().mapNotNull { index ->
+                        entry.senses.getOrNull(index)?.glosses?.joinToString("; ")
+                    }.joinToString("\n")
+                    definitionManuallyEdited = false
+                    definitionProvenanceKnown = true
+                }
+                return true
+            }
+
+            /** Correct one kanji span's reading without editing the sentence (SPEC §4.5). */
+            fun applyReadingCorrection(span: TargetSpan, reading: String): Boolean {
+                if (submissionLocked) return false
+                val rejection = SentenceReadings.rejection(editor.text, span, reading)
+                if (rejection != null) {
+                    readingCorrectionError = rejection
+                    return false
+                }
+                readingCorrectionError = null
+                val corrected = SentenceReadings.normalizeReading(reading)
+                if (span == target) {
+                    if (sentenceReading == corrected) return true
+                    sentenceReading = corrected
+                } else {
+                    readingCorrections = SentenceReadings.correct(readingCorrections, editor.text, span, corrected)
+                }
+                // Any sentence-reading change invalidates the sentence recording and its hints.
+                sentenceAudio = DraftAudio()
+                preferences.edit().remove("sentence_audio_path").apply()
+                return true
+            }
+
+            // Typing in the sentence can shift the spans a correction was stored against.
+            androidx.compose.runtime.LaunchedEffect(editor.text) {
+                val stale = readingCorrections.filter { it.span.textIn(editor.text) != it.surface }
+                if (stale.isNotEmpty()) {
+                    readingCorrections = readingCorrections.filter { it.span.textIn(editor.text) == it.surface }
+                }
+            }
+
             androidx.compose.runtime.LaunchedEffect(
                 editor.text, translationRequestRevision, translationRetry, translationAutoAllowed, submissionLocked,
                 generationStarted,
@@ -1029,7 +1170,7 @@ class MainActivity : ComponentActivity() {
 
             androidx.compose.runtime.LaunchedEffect(
                 target, editor.text, japaneseTokens, vocabulary, vocabularyReading,
-                dependentFieldsStale,
+                vocabularyReadingError, dependentFieldsStale,
             ) {
                 if (submissionLocked) return@LaunchedEffect
                 val targetSpan = target ?: return@LaunchedEffect
@@ -1038,7 +1179,10 @@ class MainActivity : ComponentActivity() {
                 val shouldResolveSurface = vocabulary.isBlank() ||
                     (!dependentFieldsStale && vocabulary == targetText)
                 if (shouldResolveSurface) vocabulary = resolved.expression
-                if ((shouldResolveSurface || vocabulary == resolved.expression) && vocabularyReading.isBlank() &&
+                // A rejected reading correction stays unresolved; do not silently restore a
+                // different pronunciation over the user's attempt.
+                if (vocabularyReadingError == null &&
+                    (shouldResolveSurface || vocabulary == resolved.expression) && vocabularyReading.isBlank() &&
                     containsKanji(resolved.expression)
                 ) vocabularyReading = resolved.reading
             }
@@ -1066,23 +1210,37 @@ class MainActivity : ComponentActivity() {
                     },
                 )
             }
-            val recordedWordSource = remember { Nhk2016PronunciationSource(File(filesDir, "nhk-recordings")) }
+            val nhkProgressFlow = remember { MutableStateFlow<NhkIndexProgress?>(null) }
+            val nhkProgress by nhkProgressFlow.collectAsState()
+            val nhkCancelRequested = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
+            val recordedWordSource = remember {
+                Nhk2016PronunciationSource(
+                    dataDirectory = File(filesDir, "nhk-recordings"),
+                    onIndexProgress = { nhkProgressFlow.value = it },
+                    isIndexFetchCancelled = { nhkCancelRequested.get() },
+                )
+            }
             val reusableAudioCache = remember { ReusableAudioCache(File(cacheDir, "audio")) }
             val draftAudioDirectory = remember { File(filesDir, "draft").apply { mkdirs() } }
             val currentWordIdentity = rememberUpdatedState(
-                listOf(
-                    editor.text,
-                    target?.start ?: -1,
-                    target?.end ?: -1,
+                DraftAudioIdentity.word(
+                    selectedDictionaryEntry?.takeIf {
+                        it.id == selectedDictionaryEntryId && it.expression == vocabulary && it.reading == vocabularyReading
+                    }?.id,
                     vocabulary,
                     vocabularyReading,
-                    sentenceReading,
-                    sentenceFurigana.joinToString(";") { "${it.span.start}:${it.span.end}:${it.reading}" },
-                ).joinToString("\u0000"),
+                ),
             )
-            // A voice change invalidates the sentence recording only; the word recording is unaffected.
+            // A reading, sentence or voice change invalidates the sentence recording; a vocabulary
+            // reading change also re-resolves the word recording through its own identity.
             val currentSentenceIdentity = rememberUpdatedState(
-                currentWordIdentity.value + "\u0000" + selectedVoiceName,
+                DraftAudioIdentity.sentence(
+                    editor.text,
+                    target,
+                    sentenceReading,
+                    sentenceFurigana,
+                    selectedVoiceName,
+                ),
             )
 
             fun playAudio(item: AudioItem, path: String) {
@@ -1127,7 +1285,7 @@ class MainActivity : ComponentActivity() {
 
                 val sentenceText = editor.text.trim()
                 val selectedTarget = target ?: return@LaunchedEffect
-                val targetSurface = selectedTarget.textIn(editor.text) ?: return@LaunchedEffect
+                if (selectedTarget.textIn(editor.text) == null) return@LaunchedEffect
                 val entryId = selectedDictionaryEntryId
                 val entry = selectedDictionaryEntry?.takeIf {
                     it.id == entryId && it.expression == vocabulary && it.reading == vocabularyReading
@@ -1138,18 +1296,14 @@ class MainActivity : ComponentActivity() {
                         CloudVoice(it, it.substringAfterLast('-'), listOf("ja-JP"), null)
                     }
 
-                val hintSpans = buildList {
-                    sentenceFurigana.forEach { span ->
-                        add(ReadingHintSpan(span.span.start, span.span.end, span.surface, span.reading))
-                    }
-                    if (containsKanji(targetSurface)) {
-                        add(ReadingHintSpan(selectedTarget.start, selectedTarget.end, targetSurface, sentenceReading))
-                    }
-                }
+                val hintSpans = sentenceHintSpans(sentenceText, selectedTarget, sentenceReading, sentenceFurigana)
                 val hintResult = ReadingHintBuilder.build(sentenceText, hintSpans)
 
                 if (needSentence) sentenceAudio = sentenceAudio.copy(generating = true, error = null)
-                if (needWord) wordAudio = wordAudio.copy(generating = true, error = null)
+                if (needWord) {
+                    nhkCancelRequested.set(false)
+                    wordAudio = wordAudio.copy(generating = true, error = null)
+                }
 
                 if (!needSentence) {
                     // The current sentence recording and voice already match the prepared inputs.
@@ -1282,10 +1436,15 @@ class MainActivity : ComponentActivity() {
                             }
                         } catch (cancelled: CancellationException) {
                             throw cancelled
-                        } catch (_: Exception) {
+                        } catch (error: Exception) {
                             if (currentWordIdentity.value == wordIdentity) {
+                                val cancelledDownload = error.message.orEmpty().contains("cancelled", ignoreCase = true)
                                 wordAudio = DraftAudio(
-                                    error = "No matching NHK recording is available for this word.",
+                                    error = if (cancelledDownload) {
+                                        "The NHK pronunciation index download was cancelled. Tap Retry to continue."
+                                    } else {
+                                        "No matching NHK recording is available for this word."
+                                    },
                                     identity = wordIdentity,
                                 )
                             }
@@ -1350,7 +1509,12 @@ class MainActivity : ComponentActivity() {
                                 }.joinToString("\n")
                             }
                         }
-                        if (entries.size > 1 && entry == null) showDictionarySheet = true
+                        if (VocabularyResolution.isUnresolved(entries.size, entry?.id)) {
+                            // Several entries compete and none is chosen: clear the previous word
+                            // before the chooser is shown, so dismissing it cannot show stale data.
+                            clearUnresolvedVocabulary()
+                            showDictionarySheet = true
+                        }
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
@@ -2253,7 +2417,8 @@ class MainActivity : ComponentActivity() {
 
             androidx.compose.runtime.LaunchedEffect(
                 editor.text, editor.selection, target, vocabulary, vocabularyReading, pitchAccentText, pitchHtmlText, definition,
-                sentenceReading, definitionManuallyEdited, dependentFieldsStale, translationDraft, translationAttemptedSentence,
+                sentenceReading, readingCorrections, definitionManuallyEdited, dependentFieldsStale, translationDraft,
+                translationAttemptedSentence,
                 notes, tags, selectedModelId, selectedDeckId, selectedDictionaryEntryId, selectedSenseIndices, completedSubmission,
             ) {
                 if (completedSubmission != null) return@LaunchedEffect
@@ -2272,6 +2437,7 @@ class MainActivity : ComponentActivity() {
                     .putBoolean("definition_manual_stale", dependentFieldsStale && definitionManuallyEdited)
                     .remove("dependent_fields_stale")
                     .putString("sentence_reading", sentenceReading)
+                    .putString("sentence_reading_corrections", SentenceReadings.encode(readingCorrections))
                     .remove("leave_sentence_target_unannotated")
                     .remove("leave_vocabulary_unannotated")
                     .putString("translation", translation)
@@ -2300,7 +2466,6 @@ class MainActivity : ComponentActivity() {
                     .putLong("deck_id", selectedDeckId ?: -1)
                     .putLong("dictionary_entry_id", selectedDictionaryEntryId ?: -1)
                     .putStringSet("dictionary_sense_indices", selectedSenseIndices.mapTo(mutableSetOf()) { it.toString() })
-                    .remove("sentence_furigana_corrections")
                     .apply()
             }
 
@@ -2431,7 +2596,7 @@ class MainActivity : ComponentActivity() {
                 when {
                     showSettings -> if (!settingsSaving) showSettings = false
                     showSources -> showSources = false
-                    showDictionarySheet -> showDictionarySheet = false
+                    showDictionarySheet -> dismissDictionarySheet()
                     showOcrSheet -> showOcrSheet = false
                     route == AppRoute.Review -> {
                         generationStarted = false
@@ -2578,6 +2743,14 @@ class MainActivity : ComponentActivity() {
                                 onNotesChange = { text -> if (!submissionLocked) notes = text },
                                 tokens = japaneseTokens,
                                 onSelectToken = { span -> if (!submissionLocked) selectTarget(span) },
+                                correctableReadings = if (frozenForDisplay == null) correctableReadings else emptyList(),
+                                onCorrectReading = { row, reading -> applyReadingCorrection(row.span, reading) },
+                                readingCorrectionError = readingCorrectionError,
+                                onVocabularyReadingChange = { raw -> applyVocabularyReading(raw) },
+                                vocabularyReadingError = vocabularyReadingError,
+                                vocabularyAudioProgress = nhkProgress?.describe(),
+                                vocabularyAudioProgressFraction = nhkProgress?.fraction,
+                                onCancelVocabularyAudio = if (nhkProgress == null) null else ({ nhkCancelRequested.set(true) }),
                                 definitionSenses = selectedDictionaryEntry?.senses ?: emptyList(),
                                 selectedSenseIndices = selectedSenseIndices,
                                 onToggleSense = { index, checked ->
@@ -2842,9 +3015,16 @@ class MainActivity : ComponentActivity() {
                                 Text("$displayVocabulary · $displayVocabularyReading", style = MaterialTheme.typography.titleSmall)
                             }
                             if (frozenForDisplay == null && dictionaryEntries.size > 1 && selectedDictionaryEntry == null) {
+                                Text(
+                                    "No dictionary entry is selected, so this word stays unresolved.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
                                 OutlinedButton(enabled = !submissionLocked, onClick = { showDictionarySheet = true }) {
                                     Text("Choose dictionary entry")
                                 }
+                            }
+                            if (frozenForDisplay == null && vocabularyReadingError != null) {
+                                Text(vocabularyReadingError!!, style = MaterialTheme.typography.bodyMedium)
                             }
                             if (frozenForDisplay == null) {
                                 when {
@@ -3357,7 +3537,7 @@ class MainActivity : ComponentActivity() {
                 if (showDictionarySheet && target?.textIn(editor.text) != null && dictionaryEntries.size > 1 &&
                     selectedDictionaryEntry == null
                 ) {
-                    ModalBottomSheet(onDismissRequest = { showDictionarySheet = false }) {
+                    ModalBottomSheet(onDismissRequest = { dismissDictionarySheet() }) {
                         Column(
                             Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState())
                                 .padding(horizontal = 20.dp, vertical = 8.dp),
@@ -3379,6 +3559,8 @@ class MainActivity : ComponentActivity() {
                                             definitionProvenanceKnown = true
                                         }
                                         pitchAccentText = ""
+                                        vocabularyReadingError = null
+                                        pitchIndexError = null
                                         if (definitionManuallyEdited && definition.isNotBlank()) dependentFieldsStale = true
                                         vocabulary = entry.expression
                                         vocabularyReading = entry.reading
@@ -3508,6 +3690,7 @@ private fun clearPersistedDraft(preferences: SharedPreferences, draftDirectory: 
     val draftKeys = listOf(
         "sentence", "selection_start", "selection_end", "target_start", "target_end",
         "vocabulary", "vocabulary_reading", "pitch_accent", "definition", "definition_manual_stale", "sentence_reading",
+        "sentence_reading_corrections",
         "leave_sentence_target_unannotated", "leave_vocabulary_unannotated", "dependent_fields_stale",
         "definition_manual", "definition_manual_stale", "translation", "translation_sentence", "translation_source",
         "translation_manual", "translation_stale", "translation_pending", "translation_error",
