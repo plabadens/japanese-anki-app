@@ -60,11 +60,11 @@ A clean checkout must build and run its tests using documented commands inside `
 | Pitch and phonetic marks | AJT Japanese's pinned bundled pitch data, locally indexed with original annotations (§5) |
 | Word recording | Pinned NHK-2016 index and its recordings (§6) |
 | Sentence TTS | Google Cloud Chirp 3 HD, with phonetic hints and a cloud-listed Japanese voice selected in Settings (§6) |
-| Translation | OpenRouter, one selected text model and fixed translation prompt (§7) |
+| Translation | Google Cloud Translation Basic v2, default neural machine translation (NMT), Japanese → English (§7) |
 | Image export | Android platform lossy WebP, at most 1080 px on the long edge (§7) |
 | Export | Supported AnkiDroid Android API/content provider |
 
-Use one provider path per operation, with reuse of valid cached results. Settings discovers voices within Google Chirp 3 HD. Translation uses one deployment-selected OpenRouter text model. An unavailable service fails visibly and preserves the draft.
+Use one provider path per operation, with reuse of valid cached results. Settings discovers voices within Google Chirp 3 HD. Translation uses Google Cloud Translation Basic's default NMT model. Speech and translation share one runtime Google Cloud API key. An unavailable service fails visibly and preserves the draft.
 
 Bundle full UniDic and Japanese/English JMdict coverage with searchable local indexes. These resources must work after installation without network access. Initial local unpacking may show progress but must not freeze the UI.
 
@@ -145,13 +145,13 @@ Blocked or uncertain submission retains the same content with actionable recover
 
 ### 4.7 Setup and incoming content
 
-Settings contains existing note type/deck selection, separate Google Cloud TTS and OpenRouter translation credential entry/validation, a **Sentence voice** selector, cache clearing, and Sources/Licenses. The translation model is shown read-only; the sentence voice is user-selectable within Chirp 3 HD. First-note tags start empty; subsequent notes start with last-sent tags.
+Settings contains existing note type/deck selection, one **Google Cloud API key** entry shared by speech and translation, separate service validation/status, a **Sentence voice** selector, cache clearing, and Sources/Licenses. Show **Google Cloud Translation Basic — default neural (NMT)** read-only; the sentence voice is user-selectable within Chirp 3 HD. First-note tags start empty; subsequent notes start with last-sent tags.
 
 Fetch voices from Google Cloud `GET /v1/voices?languageCode=ja-JP`, then filter to Japanese-capable Chirp 3 HD voices. Populate a native Material selector from returned names/IDs; do not hardcode a voice catalogue or include other TTS families. Show friendly names plus useful returned metadata, retain the exact voice ID, and save the explicit selection. Expose loading, empty, authentication, and retry states with a Refresh action. Retain the last fetched list for offline display, clearly marked as cached when refresh fails; do not present it as fresh verification. A first-time fetch failure with no cached list leaves selection unavailable.
 
 Keep the saved selection through a refresh failure. If a successful refresh no longer lists that voice, require reselection before new synthesis; never silently pick another. Changing the saved voice invalidates only sentence audio (§10), not translation, readings, word recordings, or image. Voice listing is a separate metadata operation and must not automatically synthesize paid previews.
 
-AnkiDroid detection/API permission and required-field validation must succeed before export. Missing Google or OpenRouter credentials need not block local preparation, but block the corresponding generation. Validate the services separately; an OpenRouter key cannot authenticate Google Cloud. Keep setup/errors discoverable before the user invests in a note.
+AnkiDroid detection/API permission and required-field validation must succeed before export. A missing Google Cloud API key need not block local preparation, but blocks speech and translation requests. Setup uses one Google Cloud project with billing and both the Cloud Text-to-Speech API and Cloud Translation API enabled; restrict the shared key to those APIs. Validate the services separately and show which service has an authentication, API-enablement, billing, or quota problem when the response identifies it. Voice listing validates speech access only, not synthesis quality or translation access. A translation check is an explicit, potentially billable action using a disclosed sample sentence; entering a key alone must not trigger paid requests. Keep setup/errors discoverable before the user invests in a note.
 
 Text shares enter Type preparation; a single shared image follows Photo preparation. Neither guesses a target or sends automatically. Confirm before replacing a nonempty draft; declining preserves it. No broad clipboard or library permission, URL scraping, or multi-item share workflow.
 
@@ -233,9 +233,11 @@ No crop editor, per-note quality slider, or multi-codec policy. A thumbnail crop
 
 ### 7.2 Translation
 
-Use one selected OpenRouter text model with a fixed prompt for faithful Japanese-to-English sentence translation. Use the OpenRouter credential, separately from Google Cloud TTS authentication. Send the sentence and selected dictionary meaning only where useful; never the photograph or private Notes. Treat source text as data, not instructions.
+Use **Google Cloud Translation Basic v2 with its default neural machine translation (NMT) model** for faithful Japanese-to-English sentence translation. Call `POST https://translation.googleapis.com/language/translate/v2` with the current sentence as `q`, `source = ja`, `target = en`, `format = text`, and `model = nmt` explicitly. Authenticate with the same runtime Google Cloud API key used for sentence speech, sent in the `X-Goog-Api-Key` header (§11).
 
-Select/pin the model against representative short mining sentences before release (§15). Require a nonempty translation; empty/refused/failed output blocks export. The translation is editable through Edit. Preserve manual corrections according to §10.
+Send only the original sentence text for translation; dictionary senses, reading hints, photographs, and private Notes remain outside the translation payload. Keep the selected dictionary meaning in the vocabulary definition. Translation consumes plain text, with no prompt or user-selectable model. Treat response text as untrusted plain text and safely serialize it for Anki export.
+
+Evaluate NMT against representative short mining sentences before release (§15), including ambiguous vocabulary, omitted subjects, colloquial language, and names. The app does not claim that translation is constrained to the user-selected dictionary sense. Require one nonempty English translation for the submitted sentence; malformed, empty, or failed output blocks export. The translation is editable through Edit. Preserve manual corrections according to §10. Keep request serialization, bounded response handling, sanitized errors, and injected transport tests separate from Compose; retry retains the same NMT path.
 
 ### 7.3 Notes and tags
 
@@ -309,14 +311,14 @@ Use a small lifecycle: **Prepare → Generate → Review → Send** with retaine
 | Edit | Recompute/invalidate |
 |---|---|
 | Sentence | Target validity, sentence readings, translation, sentence audio; re-resolve affected vocabulary |
-| Target/entry/reading | Vocabulary definition/reading/pitch/recording and sentence highlight; recheck affected translation/target ruby |
-| Meaning | Definition and meaning-dependent translation |
+| Target/entry/reading | Vocabulary definition/reading/pitch/recording and sentence highlight; recheck affected target ruby; translation remains valid if sentence text is unchanged |
+| Meaning | Definition only; sentence-only translation remains valid |
 | Sentence reading correction | Its ruby and phonetic hints; invalidate sentence audio and require deliberate regeneration |
 | Pitch alternative | Pitch output and recording pitch-consistency check |
 | Image | Processed image only; not sentence/OCR |
 | Notes/tags | No generation |
 | Sentence voice change in Settings | Sentence audio only; regenerate deliberately with new voice and existing hints |
-| Translation model deployment change | Translation only |
+| Translation request-contract version change | Translation only |
 
 Do not start billable work on every keystroke. Source-changing edits return to Prepare; Continue deliberately rebuilds affected results. Reuse unchanged valid results. Cancel/ignore obsolete completions and never play/export mismatched audio.
 
@@ -325,9 +327,9 @@ Before applying a source change that invalidates manual corrections, explain whi
 ## 11. Privacy and diagnostics
 
 - Photographs remain on the device through capture, OCR, processing, and draft storage; the app may import them into the local AnkiDroid collection. AnkiDroid's user-controlled sync is outside this app. Never upload photos to OCR/LLM services or diagnostics.
-- Google Cloud receives sentence text and phonetic hints for synthesis; OpenRouter receives only text needed for translation; recording hosts receive necessary lookup/download requests. No private Notes, credentials in URLs, raw-media logs, or unrelated network processing.
+- Google Cloud Text-to-Speech receives sentence text and phonetic hints for synthesis; Google Cloud Translation receives only sentence text for translation; recording hosts receive necessary lookup/download requests. No private Notes, credentials in URLs, raw-media logs, or unrelated network processing.
 - No app analytics, ads, clipboard surveillance, automatic log upload, or private-content diagnostic upload. SDK-default diagnostic traffic is permitted only if it excludes user content and credentials; document selected versions and check behavior. Local text logs alone do not establish remote transmission.
-- Store Google Cloud and OpenRouter credentials separately at runtime using Android Keystore-backed protection. Send credentials only to their intended service, in authentication headers, and do not forward them across redirects. Never commit credentials, place them in Nix inputs/APKs, display them in errors, or log them. Exclude credentials, drafts, and media from backup/cloud restore.
+- Store one shared Google Cloud API key at runtime using Android Keystore-backed protection. Supply it only to the intended Google Cloud Text-to-Speech and Translation endpoints, in authentication headers, and do not forward it across redirects. Never commit credentials, place them in Nix inputs/APKs, display them in errors, or log them. Exclude credentials, drafts, and media from backup/cloud restore.
 - Use HTTPS, bounded downloads/timeouts, and file-format validation. Request camera/AnkiDroid permissions normally; use the system photo picker rather than broad storage access.
 - Log dictionary/reading/pitch/recording misses in a bounded local diagnostic log: operation, source/version, spelling/reading, and reason. Distinguish missing record, ambiguous/unverified match, network/authentication failure, and invalid media. Ordinary local text is permitted; credentials and image/audio bytes are not. No telemetry service or analytics dashboard.
 
@@ -370,7 +372,7 @@ Record the tested revision, fixture, environment, actual result, and evidence fo
 | R11 | AJT HTML pitch parity | Golden fixtures cover zero, final drop, long/contracted morae, accent ≥10, nasalization and devoicing; source and final Anki rendering agree |
 | R12 | Recorded pronunciation | Correct spelling/reading/file; no synthesized substitution; missing/corrupt/unverified-match policy exercised; no unsupported pitch-match claim |
 | R13 | Chirp 3 HD speech and phonetic hints | Outbound request includes current yomigana hints and exact chosen voice; audition ambiguity, inflection, repeated spellings with different readings, corrections, counters, and kana-only input; no spoken markup/omissions/additions; rejected hints never trigger unhinted fallback; ≤USD 5/month estimate documented |
-| R14 | Translation | Faithful current English translation from the sole model; failures block; manual corrections survive retry; photo/Notes not sent |
+| R14 | Translation | Basic v2 request explicitly sets Japanese → English, plain text, and NMT; shared key is in the authentication header, not the URL; only sentence text is sent; representative live translations assessed; failures block; manual corrections survive retry; meaning-only edits preserve translation |
 | R15 | Offline/auth/quota/timeout/interruption | Specific retained failure, no provider/model switch, explicit Retry only, unchanged valid results reused |
 | R16 | Generation race or process death | Durable work restored; no automatic billable restart; obsolete responses cannot attach or change exported notes |
 | R17 | Image processing | Orientation/full frame, max 1080 long edge/no upscale, WebP/metadata removal, measured size/readability, decodable Android and Anki output |
@@ -383,20 +385,21 @@ Record the tested revision, fixture, environment, actual result, and evidence fo
 | R24 | Successful export | Required fields, phonetic markup, image/audio, tags, and actual destination verified; confirmed success alone resets to fresh capture |
 | R25 | Repeated Send, partial import, uncertain insertion | Serialized sends, durable receipts, no blind reinsert, no recovery card moves/deletions, manual repair/read-only recheck where needed |
 | R26 | Cache/storage failures | Draft media protected, cache bounded, no deletion of Anki media, interrupted writes/storage exhaustion preserve durable work |
-| R27 | Privacy and lookup diagnostics | No photo upload, secret/media-byte logs, private-content telemetry, or backup leakage; Google/OpenRouter credentials remain isolated and are not forwarded across redirects; bounded local miss logs distinguish source misses from service failures |
+| R27 | Privacy and lookup diagnostics | No photo upload, secret/media-byte logs, private-content telemetry, or backup leakage; one protected shared Google key reaches only intended speech/translation endpoints and is not forwarded across redirects; bounded local miss logs distinguish source misses from service failures |
 | R28 | Cloud voice selector | Google Japanese Chirp 3 HD results populate Settings; loading/empty/failure/refresh/cached states work; exact selection persists; missing saved voice requires reselection; change invalidates only sentence audio and does not trigger paid synthesis |
 | R29 | Modular speech boundary | Fake provider/transport tests cover voice listing/filtering, structured hint generation, actual request serialization, audio validation, auth/quota/timeouts/cancellation, and hint-aware cache identity without Compose or live credentials |
+| R30 | Shared Google Cloud setup | One credential entry supplies both adapters; service checks/status remain separate; disabled API/auth/billing/quota failures are actionable without discarding the key or draft; local preparation works without a key; key entry triggers no paid request |
 
 ## 15. Delivery and verification policy
 
 Deliver an installable v0.3 APK, a checksum, installation/setup instructions, screenshots, and an acceptance report with explicit PASS, FAIL, and NOT RUN results. Configure credentials through app Settings after installation; do not embed developer credentials.
 
-Google credentials are not required for APK delivery. Exercise credential entry, request serialization, voice-list filtering/state, synthesis/error handling, and cache behavior with controlled transport/provider tests. Without credentials, report live Google listing, synthesis, and listening assessment as **NOT RUN**. Controlled-response tests support integration evidence but do not substitute for live-service verification. Missing in-app credentials block only the operations that require them, not local preparation.
+The Google Cloud API key is not required for APK delivery. Exercise shared credential entry/access, separate service validation, translation request/response/error handling, voice-list filtering/state, synthesis/error handling, and cache behavior with controlled transport/provider tests. Without credentials, report live Google listing, synthesis, listening assessment, and translation quality as **NOT RUN**. Controlled-response tests support integration evidence but do not substitute for live-service verification. Missing in-app credentials block only the operations that require them, not local preparation.
 
 Required verification areas:
 
 1. **Linguistic data and rendering:** source licensing/attribution, derived-index fidelity, complete readings, Kotlin serialization fixtures, recording reading/accent matching, and reference-template rendering of nasalization/devoicing and pitch contours.
-2. **Cloud operations:** Google Chirp 3 HD hint/voice/MP3 contracts, separate credential handling, and one pinned OpenRouter translation model/prompt. Assess live pronunciation and translation quality when the corresponding credentials are available; clearly distinguish it from controlled-response evidence. No provider substitution or unhinted retry.
+2. **Cloud operations:** Google Chirp 3 HD hint/voice/MP3 contracts, one protected shared API key with per-service validation, and Cloud Translation Basic v2 default NMT Japanese-to-English requests. Assess live pronunciation and translation quality when the key is available and the corresponding service is enabled; clearly distinguish it from controlled-response evidence. No provider substitution or unhinted retry.
 3. **Images:** orientation, full-frame bounds, 1080 px limit, WebP quality 75, metadata removal, readability, and AnkiDroid rendering on realistic image fixtures.
 4. **Platform and export:** Nix build/tests, both ABI packages, API-37 x86_64 runtime, AnkiDroid fields/media/destination, duplicate checks, and interrupted-submission recovery.
 5. **Interaction and privacy:** responsive local preparation, usable Compose workflow, accessibility, durable drafts, SDK diagnostics, secret protection, and local-photo processing.
@@ -413,5 +416,6 @@ This document is the product contract for v0.3.
 - [Bundled ML Kit Japanese OCR](https://developers.google.com/ml-kit/vision/text-recognition/v2/android).
 - [Android bitmap compression](https://developer.android.com/reference/android/graphics/Bitmap.CompressFormat#WEBP_LOSSY).
 - [Google Chirp 3 HD](https://docs.cloud.google.com/text-to-speech/docs/chirp3-hd), [cloud voice listing](https://docs.cloud.google.com/text-to-speech/docs/reference/rest/v1/voices/list), [synthesis input](https://docs.cloud.google.com/text-to-speech/docs/reference/rest/v1/SynthesisInput), and [Japanese yomigana encoding](https://cloud.google.com/python/docs/reference/texttospeech/latest/google.cloud.texttospeech_v1.types.CustomPronunciationParams.PhoneticEncoding).
+- [Cloud Translation Basic v2 translate method](https://docs.cloud.google.com/translate/docs/reference/rest/v2/translate), [translation authentication](https://docs.cloud.google.com/translate/docs/authentication), and [Google Cloud API-key restrictions](https://docs.cloud.google.com/api-keys/docs/add-restrictions-api-keys).
 - [AnkiDroid integration reference](https://github.com/ankidroid/Anki-Android/tree/ebcf8e0e34921628b9b8a496c66ffd4adbb3705f/api).
 - [Material Design 3](https://m3.material.io/).
