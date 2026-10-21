@@ -146,6 +146,92 @@ private fun SharedPreferences.Editor.putFrozenAudioItem(item: FrozenAudioItem, k
 private fun validMediaIdentity(identity: MediaIdentity?): Boolean = identity != null &&
     identity.path.isNotBlank() && identity.size >= 0L && identity.modified >= 0L
 
+/**
+ * The four persisted keys of one imported-media receipt. The image slot and each audio slot own
+ * a key set; the matcher never assumes which slot it is looking at.
+ */
+internal data class ImportedReceiptKeys(
+    val path: String,
+    val filename: String,
+    val size: String,
+    val modified: String,
+)
+
+/**
+ * LIVE imported-receipt match: the imported filename to reuse, or null when the media must be
+ * imported again.
+ *
+ * Matches only when the saved receipt and the identity computed right now are the same media —
+ * same canonical path, same size, same mtime — and the saved filename survives [sanitize].
+ * Pure by contract: it touches no file, so a caller that already holds the identity pays for
+ * exactly one stat, and a caller with no identity matches nothing instead of silently re-stating.
+ */
+internal fun matchImportedReceipt(
+    savedIdentity: MediaIdentity?,
+    savedFilename: String?,
+    currentMediaIdentity: MediaIdentity?,
+    sanitize: (String) -> String?,
+): String? {
+    if (!validMediaIdentity(savedIdentity) || savedIdentity != currentMediaIdentity) return null
+    val filename = savedFilename?.let(sanitize) ?: return null
+    return filename.takeIf { it.isNotBlank() }
+}
+
+/**
+ * Preferences adapter over [matchImportedReceipt], for callers that read a receipt rather than
+ * hold one. It reads only the three identity values and the filename under [keys]; the caller
+ * supplies [currentMediaIdentity] so this never stats. Legacy or half-written receipts resolve
+ * to the -1 defaults and cannot match a real identity.
+ *
+ * Integrator wiring: image and audio slots pass their own [ImportedReceiptKeys] and their own
+ * sanitizer ([AnkiMediaImporter.sanitizeFilename] vs. [AnkiMediaImporter.sanitizeAudioFilename]).
+ */
+internal fun importedReceiptFromPreferences(
+    preferences: SharedPreferences,
+    keys: ImportedReceiptKeys,
+    currentMediaIdentity: MediaIdentity?,
+    sanitize: (String) -> String?,
+): String? = matchImportedReceipt(
+    savedIdentity = preferences.getString(keys.path, null)?.let { path ->
+        MediaIdentity(path, preferences.getLong(keys.size, -1L), preferences.getLong(keys.modified, -1L))
+    },
+    savedFilename = preferences.getString(keys.filename, null),
+    currentMediaIdentity = currentMediaIdentity,
+    sanitize = sanitize,
+)
+
+/**
+ * Identity of a live media file for receipt matching: null when it is missing, not a regular
+ * file, or cannot be stat'ed. Call once per validation phase and reuse the value.
+ */
+internal fun liveMediaIdentity(file: File?): MediaIdentity? {
+    if (file == null || !file.isFile) return null
+    return runCatching { MediaIdentity.fromFile(file) }.getOrNull()
+}
+
+/**
+ * FROZEN image receipt policy, deliberately separate from the LIVE matcher above. A frozen
+ * snapshot's image was already imported into AnkiDroid, so a local export that has since been
+ * deleted may still be submitted; a local file that still exists must still be exactly the
+ * frozen media. The receipt must name the frozen identity and the frozen filename verbatim.
+ *
+ * Pure: the caller reports whether the local file exists and, when it does, its identity.
+ */
+internal fun frozenImagePermitsImport(
+    importedFilename: String?,
+    frozenIdentity: MediaIdentity?,
+    receiptIdentity: MediaIdentity?,
+    receiptFilename: String?,
+    localFileExists: Boolean,
+    localIdentity: MediaIdentity?,
+): Boolean = when {
+    importedFilename == null -> true
+    !validMediaIdentity(frozenIdentity) -> false
+    receiptIdentity != frozenIdentity || receiptFilename != importedFilename -> false
+    !localFileExists -> true
+    else -> localIdentity == frozenIdentity
+}
+
 internal enum class AudioReceiptValidation {
     NO_RECEIPT,
     VALID,
