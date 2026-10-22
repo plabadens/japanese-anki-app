@@ -1,5 +1,9 @@
 package dev.pierre.japaneseanki.speech
 
+import dev.pierre.japaneseanki.JapaneseToken
+import dev.pierre.japaneseanki.ReadingCorrection
+import dev.pierre.japaneseanki.TargetSpan
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -296,5 +300,44 @@ class GoogleSpeechProviderTest {
         val voices = listOf(voice)
         assertEquals(voices, decodeVoices(encodeVoices(voices)))
         assertEquals(emptyList<CloudVoice>(), decodeVoices("garbage"))
+    }
+}
+
+class SentenceHintSpansTest {
+    private fun token(start: Int, end: Int, surface: String, reading: String) = JapaneseToken(
+        span = TargetSpan(start, end),
+        surface = surface,
+        lemma = surface,
+        surfaceReading = reading,
+        lemmaReading = reading,
+        partOfSpeech = "名詞",
+    )
+
+    @Test
+    fun unresolvedKanjiRemainsInSentenceHintsAndBlocksGeneration() {
+        val sentence = "昨日は猫"
+        val hints = sentenceHintSpans(
+            sentence,
+            listOf(token(0, 2, "昨日", "きのう"), token(2, 3, "は", "は"), token(3, 4, "猫", "")),
+            emptyList(),
+        )
+
+        assertEquals(listOf("昨日", "猫"), hints.map(ReadingHintSpan::surface))
+        assertEquals("", hints.last().reading)
+        assertTrue(ReadingHintBuilder.build(sentence, hints) is HintResult.Impossible)
+    }
+
+    @Test
+    fun readingCorrectionReplacesOnlyItsSentenceOccurrence() {
+        val sentence = "猫は猫"
+        val tokens = listOf(token(0, 1, "猫", "ねこ"), token(1, 2, "は", "は"), token(2, 3, "猫", ""))
+        val hints = sentenceHintSpans(
+            sentence,
+            tokens,
+            listOf(ReadingCorrection(TargetSpan(2, 3), "猫", "ねこ")),
+        )
+
+        assertEquals(listOf(0, 2), hints.map(ReadingHintSpan::start))
+        assertEquals(HintResult.Ready(listOf(ReadingHint("猫", "ねこ"))), ReadingHintBuilder.build(sentence, hints))
     }
 }

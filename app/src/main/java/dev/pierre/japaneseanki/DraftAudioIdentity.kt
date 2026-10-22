@@ -1,5 +1,7 @@
 package dev.pierre.japaneseanki
 
+import dev.pierre.japaneseanki.speech.ReadingHintSpan
+
 /**
  * Identities that decide whether a retained audio file still matches the draft (SPEC §10).
  *
@@ -7,6 +9,18 @@ package dev.pierre.japaneseanki
  * reading correction changes the word recording (its entry, pitch and NHK recording identity).
  */
 internal object DraftAudioIdentity {
+    /** Identity of the sentence request, independent of the selected vocabulary occurrence. */
+    fun sentenceRequest(
+        sentence: String,
+        hints: List<ReadingHintSpan>,
+        voiceName: String,
+    ): String = listOf(
+        sentence,
+        hints.sortedBy { it.start }
+            .joinToString(";") { "${it.start}:${it.end}:${it.surface}:${it.reading}" },
+        voiceName,
+    ).joinToString("\u0000")
+
     fun sentence(
         sentence: String,
         target: TargetSpan?,
