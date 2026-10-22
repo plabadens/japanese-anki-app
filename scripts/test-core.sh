@@ -13,10 +13,65 @@ mkdir -p build
 classes="$(mktemp -d build/core-tests.XXXXXX)"
 trap 'rm -rf "$classes"' EXIT
 
-# The Gradle distribution already carries Kotlin and JUnit; avoid resolving
-# Android Gradle Plugin artifacts just to test the platform-independent core.
+# The Gradle distribution already carries Kotlin; avoid resolving Android
+# Gradle Plugin artifacts just to test the platform-independent core. Its
+# Kotlin version moves with Gradle, so discover it instead of pinning a
+# version that the next upgrade will silently invalidate.
+#
+# Gradle 9 no longer ships JUnit or Hamcrest in its lib directory, so those
+# come from the project's own dependency cache. JUnit is a declared test
+# dependency, so the jars are present after any unit-test run.
 unset JAVA_TOOL_OPTIONS || true
-runtime_cp="$gradle_lib/kotlin-stdlib-2.0.21.jar:$gradle_lib/annotations-24.0.1.jar:$gradle_lib/junit-4.13.2.jar:$gradle_lib/hamcrest-core-1.3.jar"
+
+newest_match() {
+  local pattern="$1"
+  local matches
+  shopt -s nullglob
+  matches=( $pattern )
+  shopt -u nullglob
+  (( ${#matches[@]} )) || return 0
+  printf '%s\n' "${matches[@]}" | sort -V | tail -n 1
+}
+
+# Find a Gradle module cache holding the project's test dependencies. The
+# build and this gate can run with different HOME values, so try the explicit
+# override, the usual per-user location, then walk up from the checkout: the
+# cache is usually an ancestor directory's .gradle.
+module_cache=""
+for candidate in "${TEST_CORE_GRADLE_USER_HOME:-}" "${GRADLE_USER_HOME:-}" "$HOME/.gradle"; do
+  [[ -n "$candidate" && -d "$candidate/caches/modules-2" ]] || continue
+  module_cache="$candidate/caches/modules-2/files-2.1"
+  break
+done
+if [[ -z "$module_cache" ]]; then
+  walk="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+  while [[ "$walk" != "/" && -n "$walk" ]]; do
+    if [[ -d "$walk/.gradle/caches/modules-2/files-2.1" ]]; then
+      module_cache="$walk/.gradle/caches/modules-2/files-2.1"
+      break
+    fi
+    walk="$(dirname "$walk")"
+  done
+fi
+
+stdlib="$(newest_match "$gradle_lib/kotlin-stdlib-*.jar")"
+annotations="$(newest_match "$gradle_lib/annotations-*.jar")"
+junit="$(newest_match "${module_cache:-/nonexistent}/junit/junit/*/*/junit-*.jar")"
+hamcrest="$(newest_match "${module_cache:-/nonexistent}/org.hamcrest/hamcrest-core/*/*/hamcrest-core-*.jar")"
+
+for required in "$stdlib" "$annotations" "$junit" "$hamcrest"; do
+  if [[ -z "$required" || ! -f "$required" ]]; then
+    echo "test-core: cannot assemble the test classpath." >&2
+    echo "  kotlin-stdlib: ${stdlib:-missing} (from $gradle_lib)" >&2
+    echo "  annotations:   ${annotations:-missing} (from $gradle_lib)" >&2
+    echo "  junit:         ${junit:-missing} (from $module_cache)" >&2
+    echo "  hamcrest:      ${hamcrest:-missing} (from $module_cache)" >&2
+    echo "If JUnit or Hamcrest is missing, run one Gradle unit-test task to populate the cache." >&2
+    exit 1
+  fi
+done
+
+runtime_cp="$stdlib:$annotations:$junit:$hamcrest"
 java -cp "$gradle_lib/*" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler \
   -no-stdlib -no-reflect -classpath "$runtime_cp" -d "$classes" \
   app/src/main/java/dev/pierre/japaneseanki/TargetSpan.kt \
