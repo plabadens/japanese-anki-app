@@ -23,6 +23,78 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.hypot
+
+internal data class PitchDiagramPoint(val x: Float, val y: Float)
+
+internal data class PitchDiagramConnector(
+    val fromCenter: PitchDiagramPoint,
+    val start: PitchDiagramPoint,
+    val toCenter: PitchDiagramPoint,
+    val end: PitchDiagramPoint,
+)
+
+internal data class PitchDiagramGeometry(
+    val centers: List<PitchDiagramPoint>,
+    val connectors: List<PitchDiagramConnector>,
+    val markerRadiusPx: Float,
+    val hollowMarkerCenterlineRadiusPx: Float,
+    val lineWidthPx: Float,
+) {
+    val solidMarkerRadiusPx: Float get() = markerRadiusPx
+    val startAt: PitchDiagramPoint? get() = connectors.firstOrNull()?.start ?: centers.firstOrNull()
+    val endAt: PitchDiagramPoint? get() = connectors.lastOrNull()?.end ?: centers.lastOrNull()
+}
+
+/** Geometry shared by rendering and JVM tests; connectors stop at each marker's outer edge. */
+internal fun pitchDiagramGeometry(
+    highLevels: List<Boolean>,
+    blockWidthPx: Float,
+    gapPx: Float,
+    highY: Float,
+    lowY: Float,
+    markerRadiusPx: Float,
+    lineWidthPx: Float,
+): PitchDiagramGeometry {
+    require(blockWidthPx > 0f && gapPx >= 0f)
+    require(markerRadiusPx > lineWidthPx / 2f && lineWidthPx > 0f)
+
+    val centers = highLevels.mapIndexed { index, high ->
+        PitchDiagramPoint(
+            x = blockWidthPx / 2f + index * (blockWidthPx + gapPx),
+            y = if (high) highY else lowY,
+        )
+    }
+    val clippedRadius = markerRadiusPx + lineWidthPx / 2f
+    val connectors = centers.zipWithNext().map { (from, to) ->
+        val dx = to.x - from.x
+        val dy = to.y - from.y
+        val distance = hypot(dx.toDouble(), dy.toDouble()).toFloat()
+        require(distance > 2f * clippedRadius) { "Pitch mora markers overlap." }
+        val unitX = dx / distance
+        val unitY = dy / distance
+        PitchDiagramConnector(
+            fromCenter = from,
+            start = PitchDiagramPoint(from.x + unitX * clippedRadius, from.y + unitY * clippedRadius),
+            toCenter = to,
+            end = PitchDiagramPoint(to.x - unitX * clippedRadius, to.y - unitY * clippedRadius),
+        )
+    }
+    return PitchDiagramGeometry(
+        centers = centers,
+        connectors = connectors,
+        markerRadiusPx = markerRadiusPx,
+        hollowMarkerCenterlineRadiusPx = markerRadiusPx - lineWidthPx / 2f,
+        lineWidthPx = lineWidthPx,
+    )
+}
+
+/** Katakana is a display-only convention for the diagram; source readings remain untouched. */
+internal fun pitchDiagramLabel(mora: String): String = buildString(mora.length) {
+    mora.forEach { char ->
+        append(if (char in '\u3041'..'\u3096') char + 0x60 else char)
+    }
+}
 
 /**
  * Source-backed pitch contour: katakana morae joined by straight lines with the study's
@@ -34,12 +106,12 @@ internal fun PitchPatternDiagram(pitch: PitchAccent, modifier: Modifier = Modifi
     val pitchColor = pitchColor(pitch.patternKind)
     val blockWidth = 28.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
     val gap = 3.dp
-    val tailWidth = 12.dp
     val chartHeight = 32.dp
-    val totalWidth = blockWidth * pitch.morae.size + gap * (pitch.morae.size - 1) + tailWidth
-    val dotRadius = 4.5.dp
+    val totalWidth = blockWidth * pitch.morae.size + gap * (pitch.morae.size - 1).coerceAtLeast(0)
+    val markerRadius = 4.5.dp
     val lineWidth = 2.dp
-    val description = pitch.accessibilityDescription()
+    val labels = pitch.morae.map(::pitchDiagramLabel)
+    val description = pitch.accessibilityDescription(labels)
 
     Column(
         modifier = modifier.horizontalScroll(rememberScrollState()),
@@ -51,58 +123,60 @@ internal fun PitchPatternDiagram(pitch: PitchAccent, modifier: Modifier = Modifi
                 .height(chartHeight)
                 .semantics { contentDescription = description },
         ) {
-            val blockPx = blockWidth.toPx()
-            val gapPx = gap.toPx()
-            val tailPx = tailWidth.toPx()
-            val highY = size.height * 0.27f
-            val lowY = size.height * 0.73f
             if (pitch.morae.isEmpty()) return@Canvas
-            val centers = pitch.highLevels.mapIndexed { index, high ->
-                Offset(
-                    x = blockPx / 2 + index * (blockPx + gapPx),
-                    y = if (high) highY else lowY,
+            val geometry = pitchDiagramGeometry(
+                highLevels = pitch.highLevels,
+                blockWidthPx = blockWidth.toPx(),
+                gapPx = gap.toPx(),
+                highY = size.height * 0.27f,
+                lowY = size.height * 0.73f,
+                markerRadiusPx = markerRadius.toPx(),
+                lineWidthPx = lineWidth.toPx(),
+            )
+            geometry.connectors.forEach { connector ->
+                drawLine(
+                    color = pitchColor,
+                    start = Offset(connector.start.x, connector.start.y),
+                    end = Offset(connector.end.x, connector.end.y),
+                    strokeWidth = geometry.lineWidthPx,
+                    cap = StrokeCap.Butt,
                 )
             }
-            val tailY = if (pitch.accentPosition == pitch.morae.size) lowY else centers.last().y
-            val points = centers + Offset(x = centers.last().x + tailPx, y = tailY)
-            points.zipWithNext().forEach { (start, end) ->
-                drawLine(pitchColor, start, end, strokeWidth = lineWidth.toPx(), cap = StrokeCap.Round)
-            }
-            centers.forEachIndexed { index, center ->
+            geometry.centers.forEachIndexed { index, center ->
+                val point = Offset(center.x, center.y)
                 if (pitchDotIsHollow(isSourceBackedNasalMora = index in pitch.marks.nasalMorae)) {
-                    // A source-backed nasal mora is a ring, not a filled dot; a ring reads the
-                    // same on any card tint, unlike punching a hole with a guessed background.
+                    // The ring's outer radius equals a solid marker's radius.
                     drawCircle(
                         pitchColor,
-                        radius = dotRadius.toPx(),
-                        center = center,
-                        style = Stroke(width = lineWidth.toPx()),
+                        radius = geometry.hollowMarkerCenterlineRadiusPx,
+                        center = point,
+                        style = Stroke(width = geometry.lineWidthPx),
                     )
                 } else {
-                    drawCircle(pitchColor, radius = dotRadius.toPx(), center = center)
+                    drawCircle(pitchColor, radius = geometry.solidMarkerRadiusPx, center = point)
                 }
                 if (index in pitch.marks.devoicedMorae) {
                     // Devoiced is a separate source fact from nasalization: a small cross.
-                    val arm = dotRadius.toPx() * 0.8f
+                    val arm = geometry.markerRadiusPx * 0.8f
                     drawLine(
                         pitchColor,
                         Offset(center.x - arm, center.y),
                         Offset(center.x + arm, center.y),
-                        strokeWidth = lineWidth.toPx(),
+                        strokeWidth = geometry.lineWidthPx,
                     )
                     drawLine(
                         pitchColor,
                         Offset(center.x, center.y - arm),
                         Offset(center.x, center.y + arm),
-                        strokeWidth = lineWidth.toPx(),
+                        strokeWidth = geometry.lineWidthPx,
                     )
                 }
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-            pitch.morae.forEach { mora ->
+            labels.forEach { label ->
                 Text(
-                    mora,
+                    label,
                     modifier = Modifier.width(blockWidth),
                     color = MaterialTheme.colorScheme.onSurface,
                     fontSize = 22.sp,
@@ -115,8 +189,7 @@ internal fun PitchPatternDiagram(pitch: PitchAccent, modifier: Modifier = Modifi
     }
 }
 
-internal fun pitchDotIsHollow(isSourceBackedNasalMora: Boolean): Boolean =
-    isSourceBackedNasalMora
+internal fun pitchDotIsHollow(isSourceBackedNasalMora: Boolean): Boolean = isSourceBackedNasalMora
 
 @Composable
 private fun pitchColor(pattern: PitchPatternKind): Color {
@@ -129,14 +202,14 @@ private fun pitchColor(pattern: PitchPatternKind): Color {
     }
 }
 
-private fun PitchAccent.accessibilityDescription(): String {
+private fun PitchAccent.accessibilityDescription(labels: List<String>): String {
     val drop = when {
         accentPosition == 0 -> "no drop within the word"
         accentPosition == morae.size -> "drops after the final mora"
         else -> "drops after mora $accentPosition"
     }
     val markText = marksNarration().let { if (it.isEmpty()) "" else ", $it" }
-    return "${morae.joinToString(" ")}$markText, reading $reading, pitch $drop"
+    return "${labels.joinToString(" ")}$markText, reading $reading, pitch $drop"
 }
 
 private fun PitchAccent.marksNarration(): String = buildList {

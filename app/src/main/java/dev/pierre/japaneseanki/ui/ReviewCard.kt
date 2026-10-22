@@ -3,6 +3,7 @@ package dev.pierre.japaneseanki.ui
 import android.graphics.Matrix
 import android.net.Uri
 import android.widget.ImageView
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -22,16 +23,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -45,7 +43,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -76,6 +78,7 @@ internal sealed interface ReviewSendPresentation {
 /** Presentation-only state supplied by the owner of sentence and vocabulary audio requests. */
 internal sealed interface ReviewAudioPresentation {
     data object Unavailable : ReviewAudioPresentation
+    data object NeedsPreparation : ReviewAudioPresentation
     data object Ready : ReviewAudioPresentation
     data object Playing : ReviewAudioPresentation
     data object Generating : ReviewAudioPresentation
@@ -84,11 +87,36 @@ internal sealed interface ReviewAudioPresentation {
 
 internal fun reviewAudioControlLabel(field: String, audio: ReviewAudioPresentation): String = when (audio) {
     ReviewAudioPresentation.Unavailable -> "$field audio unavailable"
+    ReviewAudioPresentation.NeedsPreparation -> "Prepare $field audio"
     ReviewAudioPresentation.Ready -> "Play $field audio"
-    ReviewAudioPresentation.Playing -> "Pause $field audio"
+    ReviewAudioPresentation.Playing -> "Stop $field audio"
     ReviewAudioPresentation.Generating -> "Generating $field audio"
     is ReviewAudioPresentation.Failed -> "Explain unavailable $field audio"
 }
+
+internal enum class ReviewEditableField { Notes, Tags }
+
+internal fun reviewEditableFields(editing: Boolean, editingEnabled: Boolean): Set<ReviewEditableField> =
+    if (editing && editingEnabled) ReviewEditableField.entries.toSet() else emptySet()
+
+/** Callback surface for Review's only editable fields. */
+internal class ReviewFieldCallbacks(
+    private val onNotesChange: (String) -> Unit,
+    private val onTagsChange: (String) -> Unit,
+) {
+    fun update(field: ReviewEditableField, value: String) {
+        when (field) {
+            ReviewEditableField.Notes -> onNotesChange(value)
+            ReviewEditableField.Tags -> onTagsChange(value)
+        }
+    }
+}
+
+internal const val ReviewPreparationActionLabel = "Edit preparation"
+internal val ReviewAudioControlSize = 56.dp
+
+internal fun reviewTranslationProgressLabel(pending: Boolean): String? =
+    if (pending) "Translating…" else null
 
 /** Height of the Review context photo slot in the portrait composition. */
 internal val ReviewPhotoHeight = 144.dp
@@ -123,11 +151,12 @@ internal fun ocrFocusFraction(bounds: OcrBounds, sourceHeight: Int): Float {
 }
 
 /**
- * Review is a composed learning artifact, not a field form:
- * photo → continuous Japanese/ruby → translation directly beneath → vocabulary/pitch/definition.
+ * Review is a composed learning artifact. Preparation owns all content corrections; only notes
+ * and tags remain editable here.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
+@Suppress("UNUSED_PARAMETER") // Legacy MainActivity arguments are inert until the integration call site is narrowed.
 internal fun ReviewCard(
     sentence: String,
     target: TargetSpan,
@@ -146,12 +175,39 @@ internal fun ReviewCard(
     pitchInfoExpanded: Boolean,
     onTogglePitchInfo: () -> Unit,
     onEdit: () -> Unit,
-    onTagsChange: (String) -> Unit = {},
+    onTagsChange: (String) -> Unit,
+    onNotesChange: (String) -> Unit,
+    editingEnabled: Boolean = true,
+    translationPending: Boolean = false,
+    translationError: String? = null,
+    translationStale: Boolean = false,
+    onRetryTranslation: (() -> Unit)? = null,
+    sentenceAudio: ReviewAudioPresentation = ReviewAudioPresentation.Unavailable,
+    vocabularyAudio: ReviewAudioPresentation = ReviewAudioPresentation.Unavailable,
+    onToggleSentenceAudio: (() -> Unit)? = null,
+    onRetrySentenceAudio: (() -> Unit)? = null,
+    onToggleVocabularyAudio: (() -> Unit)? = null,
+    onRetryVocabularyAudio: (() -> Unit)? = null,
+    sentenceAudioAction: String = "Retry",
+    vocabularyAudioAction: String = "Retry",
+    sendPresentation: ReviewSendPresentation? = null,
+    onSend: (() -> Unit)? = null,
+    onSendStatusAction: (() -> Unit)? = null,
+    sendStatusContent: @Composable () -> Unit = {},
+    imageFocalY: Float = 0.5f,
+    sendHint: String? = null,
+    // Deprecated caller inputs retained temporarily so this component branch remains buildable
+    // before MainActivity's integration-owned call-site cleanup. None expose Review controls.
+    generatingFields: Set<String> = emptySet(),
+    translationSuggestion: String? = null,
+    translationEditable: Boolean = false,
+    onTranslationChange: (String) -> Unit = {},
+    onKeepMyTranslation: () -> Unit = {},
+    onUseTranslationSuggestion: () -> Unit = {},
     onChooseImage: () -> Unit = {},
     onRemoveImage: () -> Unit = {},
     imageRemovable: Boolean = true,
     onDefinitionChange: (String) -> Unit = {},
-    onNotesChange: (String) -> Unit = {},
     tokens: List<JapaneseToken> = emptyList(),
     onSelectToken: (TargetSpan) -> Unit = {},
     definitionSenses: List<DictionarySense> = emptyList(),
@@ -167,44 +223,20 @@ internal fun ReviewCard(
     vocabularyAudioProgress: String? = null,
     vocabularyAudioProgressFraction: Float? = null,
     onCancelVocabularyAudio: (() -> Unit)? = null,
-    generatingFields: Set<String> = emptySet(),
-    sentenceAudio: ReviewAudioPresentation = ReviewAudioPresentation.Unavailable,
-    vocabularyAudio: ReviewAudioPresentation = ReviewAudioPresentation.Unavailable,
-    onToggleSentenceAudio: (() -> Unit)? = null,
-    onRetrySentenceAudio: (() -> Unit)? = null,
-    onToggleVocabularyAudio: (() -> Unit)? = null,
-    onRetryVocabularyAudio: (() -> Unit)? = null,
-    sentenceAudioAction: String = "Retry",
-    vocabularyAudioAction: String = "Retry",
-    translationError: String? = null,
-    translationStale: Boolean = false,
-    translationSuggestion: String? = null,
-    translationEditable: Boolean = true,
-    editingEnabled: Boolean = true,
-    onTranslationChange: (String) -> Unit = {},
-    onRetryTranslation: () -> Unit = {},
-    onKeepMyTranslation: () -> Unit = {},
-    onUseTranslationSuggestion: () -> Unit = {},
-    sendPresentation: ReviewSendPresentation? = null,
-    onSend: (() -> Unit)? = null,
-    onSendStatusAction: (() -> Unit)? = null,
-    sendStatusContent: @Composable () -> Unit = {},
-    imageFocalY: Float = 0.5f,
     deckLabel: String = "",
     onChooseDeck: (() -> Unit)? = null,
-    sendHint: String? = null,
     pitchAlternativeAccents: List<Int> = emptyList(),
     selectedPitchAccent: Int? = null,
     onSelectPitch: (Int) -> Unit = {},
 ) {
     var editing by remember { mutableStateOf(false) }
-    var editingField by remember { mutableStateOf<String?>(null) }
-    var correctingSpan by remember { mutableStateOf<CorrectableReading?>(null) }
-    var readingDraft by remember { mutableStateOf("") }
-    var vocabularyReadingDraft by remember(vocabularyReading) { mutableStateOf(vocabularyReading) }
     var notesDraft by remember(notes) { mutableStateOf(notes) }
     var tagsDraft by remember(tags) { mutableStateOf(tags.joinToString(" ")) }
     var photoExpanded by remember { mutableStateOf(false) }
+    val editableFields = reviewEditableFields(editing, editingEnabled)
+    val fieldCallbacks = remember(onNotesChange, onTagsChange) {
+        ReviewFieldCallbacks(onNotesChange, onTagsChange)
+    }
 
     Column(Modifier.fillMaxSize()) {
         Column(
@@ -222,24 +254,6 @@ internal fun ReviewCard(
                     focusY = imageFocalY,
                     onExpand = { photoExpanded = true },
                 )
-                if (editing && editingEnabled) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(onClick = onChooseImage, modifier = Modifier.heightIn(min = 48.dp)) { Text("Replace photo") }
-                        TextButton(
-                            enabled = imageRemovable,
-                            onClick = onRemoveImage,
-                            modifier = Modifier.heightIn(min = 48.dp),
-                        ) { Text("Remove photo") }
-                        if (!imageRemovable) {
-                            Text(
-                                "A photo-origin draft keeps its photo.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.align(Alignment.CenterVertically),
-                            )
-                        }
-                    }
-                }
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -251,31 +265,20 @@ internal fun ReviewCard(
                     modifier = Modifier.weight(1f),
                 )
                 ReviewAudioButton(
-                    "Sentence",
-                    sentenceAudio,
-                    onToggleSentenceAudio,
-                    onRetrySentenceAudio,
+                    field = "Sentence",
+                    audio = sentenceAudio,
+                    onToggle = onToggleSentenceAudio,
+                    onRetry = onRetrySentenceAudio,
                     actionLabel = sentenceAudioAction,
-                    small = true,
                 )
-            }
-            if (editing && editingEnabled) {
-                TextButton(onClick = { editingField = "Sentence" }, modifier = Modifier.heightIn(min = 48.dp)) {
-                    Text("Fix sentence reading")
-                }
             }
 
             TranslationBlock(
                 translation = translation,
-                pending = "Translation" in generatingFields,
+                pending = translationPending || "Translation" in generatingFields,
                 error = translationError,
                 stale = translationStale,
-                suggestion = translationSuggestion,
-                editable = translationEditable && editing && editingEnabled,
-                onChange = onTranslationChange,
                 onRetry = onRetryTranslation,
-                onKeepMine = onKeepMyTranslation,
-                onUseSuggestion = onUseTranslationSuggestion,
             )
 
             FlowCard(Modifier.padding(top = 8.dp)) {
@@ -292,16 +295,15 @@ internal fun ReviewCard(
                             }
                         }
                         ReviewAudioButton(
-                            "Word",
-                            vocabularyAudio,
-                            onToggleVocabularyAudio,
-                            onRetryVocabularyAudio,
+                            field = "Word",
+                            audio = vocabularyAudio,
+                            onToggle = onToggleVocabularyAudio,
+                            onRetry = onRetryVocabularyAudio,
                             actionLabel = vocabularyAudioAction,
                         )
                     }
                     pitch?.let {
-                        // The study sets the contour at learning scale, with 22 sp katakana
-                        // morae labels beneath it.
+                        // Labels are katakana; the underlying source reading and HTML stay intact.
                         PitchPatternDiagram(pitch = it)
                     } ?: Text(
                         "No pitch pattern is available for this reading.",
@@ -315,111 +317,59 @@ internal fun ReviewCard(
                         if (pitchInfoExpanded) {
                             Text(
                                 if (pitch == null) {
-                                    "This reading has no source-listed pattern. Send stays blocked until it is corrected."
+                                    "This reading has no source-listed pattern. Return to preparation to correct the reading."
                                 } else {
-                                    "More than one source pattern is listed for this reading; the first is shown. Choose another under Edit."
+                                    "More than one source pattern is listed for this reading. Choose another during preparation."
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer,
                             )
                         }
                     }
-                    if (editing && editingEnabled && pitchAlternativeAccents.size > 1) {
-                        Text(
-                            "Source-listed pitch patterns",
-                            style = MaterialTheme.typography.labelLarge,
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            pitchAlternativeAccents.forEach { accent ->
-                                if (accent == selectedPitchAccent) {
-                                    Button(onClick = { onSelectPitch(accent) }) { Text("Accent $accent") }
-                                } else {
-                                    OutlinedButton(onClick = { onSelectPitch(accent) }) { Text("Accent $accent") }
-                                }
-                            }
-                        }
-                    }
-                    if (vocabularyReadingError != null) {
-                        Text(
-                            vocabularyReadingError,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
                     Text(definition.ifBlank { "No definition yet." }, style = MaterialTheme.typography.bodyLarge)
                     if (definitionStale) {
                         Text(
-                            "The sentence, target or dictionary entry changed after you edited this meaning.",
+                            "The meaning is for earlier input. Return to preparation to review it.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error,
                         )
-                        TextButton(
-                            onClick = onAcknowledgeDefinition,
-                            modifier = Modifier.heightIn(min = 48.dp),
-                        ) { Text("I've reviewed this meaning") }
-                    }
-                    if (editing && editingEnabled) {
-                        TextButton(
-                            onClick = { editingField = "Word" },
-                            modifier = Modifier.heightIn(min = 48.dp),
-                        ) { Text("Change word or reading") }
-                        TextButton(
-                            onClick = { editingField = "Definition" },
-                            modifier = Modifier.heightIn(min = 48.dp),
-                        ) { Text("Edit meaning") }
-                    }
-                    if (vocabularyAudioProgress != null) {
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            if (vocabularyAudioProgressFraction != null) {
-                                LinearProgressIndicator(
-                                    progress = { vocabularyAudioProgressFraction },
-                                    modifier = Modifier.fillMaxWidth().semantics {
-                                        stateDescription = "Downloading ${(vocabularyAudioProgressFraction * 100).toInt()} percent"
-                                    },
-                                )
-                            } else {
-                                LinearProgressIndicator(
-                                    modifier = Modifier.fillMaxWidth().semantics { stateDescription = "Downloading" },
-                                )
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(vocabularyAudioProgress, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                                if (onCancelVocabularyAudio != null) {
-                                    TextButton(onClick = onCancelVocabularyAudio, modifier = Modifier.heightIn(min = 48.dp)) {
-                                        Text("Cancel")
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
             }
 
-            if (tags.isNotEmpty()) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    tags.filter(String::isNotBlank).forEach { tag ->
-                        androidx.compose.material3.AssistChip(
-                            onClick = { editing = true },
-                            label = { Text(tag) },
-                            modifier = Modifier.semantics { contentDescription = "Tag $tag" },
-                        )
+            if (editableFields.isEmpty()) {
+                if (tags.isNotEmpty()) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        tags.filter(String::isNotBlank).forEach { tag ->
+                            AssistChip(
+                                onClick = { editing = true },
+                                enabled = editingEnabled,
+                                label = { Text(tag) },
+                                modifier = Modifier.semantics { contentDescription = "Tag $tag" },
+                            )
+                        }
                     }
                 }
-            }
-            if (notes.isNotBlank()) {
-                Text(notes, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            if (editing && editingEnabled) {
+                if (notes.isNotBlank()) {
+                    Text(notes, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else {
                 OutlinedTextField(
                     value = notesDraft,
-                    onValueChange = { notesDraft = it; onNotesChange(it) },
+                    onValueChange = { value ->
+                        notesDraft = value
+                        fieldCallbacks.update(ReviewEditableField.Notes, value)
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("Notes (optional)") },
                     minLines = 2,
                 )
                 OutlinedTextField(
                     value = tagsDraft,
-                    onValueChange = { tagsDraft = it; onTagsChange(it) },
+                    onValueChange = { value ->
+                        tagsDraft = value
+                        fieldCallbacks.update(ReviewEditableField.Tags, value)
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("Tags (optional)") },
                     singleLine = true,
@@ -432,19 +382,15 @@ internal fun ReviewCard(
             ) {
                 TextButton(
                     enabled = editingEnabled,
+                    onClick = { onEdit() },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                ) { Text(ReviewPreparationActionLabel) }
+                Spacer(Modifier.weight(1f))
+                TextButton(
+                    enabled = editingEnabled,
                     onClick = { editing = !editing },
                     modifier = Modifier.heightIn(min = 48.dp),
-                ) { Text(if (editing) "Done editing" else "Edit") }
-                IconButton(
-                    enabled = editingEnabled,
-                    onClick = { editing = true },
-                    modifier = Modifier.size(48.dp).semantics { contentDescription = "Add tag" },
-                ) { Icon(MaterialSymbols.Add, contentDescription = null, modifier = Modifier.size(20.dp)) }
-                Spacer(Modifier.weight(1f))
-                TextButton(onClick = { onChooseDeck?.invoke() }, enabled = onChooseDeck != null && editingEnabled) {
-                    Text("Deck · ${deckLabel.ifBlank { "Choose" }}", style = MaterialTheme.typography.bodyMedium)
-                    FlowIcons.ChevronDown(Modifier.size(16.dp))
-                }
+                ) { Text(if (editing) "Done" else "Edit notes & tags") }
             }
         }
 
@@ -497,110 +443,6 @@ internal fun ReviewCard(
     if (photoExpanded && imagePath != null) {
         FullPhotoDialog(imagePath) { photoExpanded = false }
     }
-
-    editingField?.let { field ->
-        ModalBottomSheet(onDismissRequest = { editingField = null }) {
-            Column(
-                Modifier.fillMaxWidth().heightIn(max = 640.dp).verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                when (field) {
-                    "Sentence" -> {
-                        Text("Sentence reading", style = MaterialTheme.typography.titleLarge)
-                        Text(
-                            "Correct the reading of one kanji span. The sentence text never changes.",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        if (correctableReadings.isEmpty()) {
-                            Text("No kanji span needs a reading.", style = MaterialTheme.typography.bodyMedium)
-                        }
-                        correctableReadings.forEach { row ->
-                            val active = correctingSpan?.span == row.span
-                            if (active) {
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    OutlinedTextField(
-                                        value = readingDraft,
-                                        onValueChange = { readingDraft = it },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        singleLine = true,
-                                        label = { Text("Reading for ${row.surface} (kana)") },
-                                    )
-                                    readingCorrectionError?.let { message ->
-                                        Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                                    }
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Button(
-                                            onClick = { if (onCorrectReading(row, readingDraft)) correctingSpan = null },
-                                            modifier = Modifier.heightIn(min = 48.dp),
-                                        ) { Text("Done") }
-                                        TextButton(onClick = { correctingSpan = null }, modifier = Modifier.heightIn(min = 48.dp)) {
-                                            Text("Cancel")
-                                        }
-                                    }
-                                }
-                            } else {
-                                OutlinedButton(
-                                    onClick = { correctingSpan = row; readingDraft = row.reading },
-                                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                                ) {
-                                    Text(if (row.reading.isBlank()) "${row.surface} · no reading yet" else "${row.surface} · ${row.reading}")
-                                }
-                            }
-                        }
-                        TextButton(onClick = { editingField = null; onEdit() }, modifier = Modifier.heightIn(min = 48.dp)) {
-                            Text("Change sentence or target")
-                        }
-                    }
-                    "Definition" -> {
-                        Text("Edit meaning", style = MaterialTheme.typography.titleLarge)
-                        if (definitionSenses.isNotEmpty()) {
-                            Text("Select the applicable senses:", style = MaterialTheme.typography.titleSmall)
-                            definitionSenses.forEachIndexed { index, sense ->
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Checkbox(
-                                        checked = index in selectedSenseIndices,
-                                        onCheckedChange = { checked -> onToggleSense(index, checked) },
-                                    )
-                                    Column {
-                                        Text(sense.glosses.joinToString("; "))
-                                        if (sense.partsOfSpeech.isNotEmpty()) {
-                                            Text(
-                                                sense.partsOfSpeech.joinToString(", "),
-                                                style = MaterialTheme.typography.bodySmall,
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        OutlinedTextField(
-                            value = definition,
-                            onValueChange = onDefinitionChange,
-                            modifier = Modifier.fillMaxWidth(),
-                            minLines = 2,
-                            label = { Text("Definition") },
-                        )
-                        Button(onClick = { editingField = null }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                            Text("Done")
-                        }
-                    }
-                    "Word" -> WordSheet(
-                        tokens = tokens,
-                        target = target,
-                        onSelectToken = { onSelectToken(it); editingField = null },
-                        vocabularyReading = vocabularyReading,
-                        vocabularyReadingDraft = vocabularyReadingDraft,
-                        onVocabularyReadingDraft = { vocabularyReadingDraft = it },
-                        onApplyReading = { if (onVocabularyReadingChange(vocabularyReadingDraft)) editingField = null },
-                        vocabularyReadingError = vocabularyReadingError,
-                        pitchHasAlternatives = pitchHasAlternatives,
-                        onEditSentence = { editingField = null; onEdit() },
-                    )
-                }
-            }
-        }
-    }
 }
 
 @Composable
@@ -640,21 +482,12 @@ private fun ReviewPhotoSlot(
                 },
                 modifier = Modifier.fillMaxSize(),
             )
-            Box(
-                Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(8.dp)
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Color.Black.copy(alpha = 0.45f))
-                    .semantics { contentDescription = "View whole photo" }
-                    .then(Modifier),
-            ) {
-                androidx.compose.material3.IconButton(
-                    onClick = onExpand,
-                    modifier = Modifier.size(40.dp).semantics { contentDescription = "View whole photo" },
-                ) { FlowIcons.Expand(Modifier.size(20.dp)) }
-            }
+            IconButton(
+                onClick = onExpand,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp).size(48.dp)
+                    .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(24.dp))
+                    .semantics { contentDescription = "View whole photo" },
+            ) { FlowIcons.Expand(Modifier.size(22.dp)) }
         } else {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 if (imageStatus?.startsWith("Preparing", ignoreCase = true) == true) {
@@ -686,7 +519,7 @@ private fun FullPhotoDialog(imagePath: String, onDismiss: () -> Unit) {
                 update = { it.setImageURI(Uri.fromFile(File(imagePath))) },
                 modifier = Modifier.fillMaxSize(),
             )
-            androidx.compose.material3.IconButton(
+            IconButton(
                 onClick = onDismiss,
                 modifier = Modifier.align(Alignment.TopEnd).padding(16.dp).size(48.dp)
                     .semantics { contentDescription = "Close photo" },
@@ -740,18 +573,11 @@ private fun SentenceWithRuby(
                     },
                     modifier = Modifier
                         .then(
-                            if (part.highlighted) {
-                                Modifier.background(highlightColor, RoundedCornerShape(3.dp))
-                            } else {
-                                Modifier
-                            },
+                            if (part.highlighted) Modifier.background(highlightColor, RoundedCornerShape(3.dp))
+                            else Modifier,
                         )
                         .then(
-                            if (part.unresolvedKanji) {
-                                Modifier.drawDottedUnderline(unresolvedColor)
-                            } else {
-                                Modifier
-                            },
+                            if (part.unresolvedKanji) Modifier.drawDottedUnderline(unresolvedColor) else Modifier,
                         ),
                     softWrap = false,
                 )
@@ -779,36 +605,25 @@ private fun TranslationBlock(
     pending: Boolean,
     error: String?,
     stale: Boolean,
-    suggestion: String?,
-    editable: Boolean,
-    onChange: (String) -> Unit,
-    onRetry: () -> Unit,
-    onKeepMine: () -> Unit,
-    onUseSuggestion: () -> Unit,
+    onRetry: (() -> Unit)?,
 ) {
-    if (editable) {
-        OutlinedTextField(
-            value = translation,
-            onValueChange = onChange,
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text("Sentence translation") },
-            minLines = 2,
-        )
-    } else {
+    Text("Sentence translation", style = MaterialTheme.typography.labelLarge)
+    if (translation.isNotBlank()) {
+        Text(translation, style = MaterialTheme.typography.bodyLarge)
+    } else if (!pending) {
         Text(
-            when {
-                translation.isNotBlank() -> translation
-                pending -> "Translating…"
-                else -> "Translation is required before Send."
-            },
+            "Translation is required before Send.",
             style = MaterialTheme.typography.bodyLarge,
-            color = if (translation.isNotBlank()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
-    if (pending && translation.isBlank()) {
+    reviewTranslationProgressLabel(pending)?.let { label ->
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-            Text("Translating…", style = MaterialTheme.typography.bodySmall)
+            CircularProgressIndicator(
+                Modifier.size(16.dp).semantics { stateDescription = label },
+                strokeWidth = 2.dp,
+            )
+            Text(label, style = MaterialTheme.typography.bodySmall)
         }
     }
     error?.let { message ->
@@ -819,17 +634,17 @@ private fun TranslationBlock(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
-            TextButton(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) { Text("Retry") }
+            onRetry?.let { retry ->
+                TextButton(onClick = retry, modifier = Modifier.heightIn(min = 48.dp)) { Text("Retry") }
+            }
         }
     }
     if (stale) {
-        Text("Your text is for the previous sentence.", style = MaterialTheme.typography.bodySmall)
-        Row {
-            TextButton(onClick = onKeepMine, modifier = Modifier.heightIn(min = 48.dp)) { Text("Keep my text") }
-            if (suggestion != null) {
-                TextButton(onClick = onUseSuggestion, modifier = Modifier.heightIn(min = 48.dp)) { Text("Use new suggestion") }
-            }
-        }
+        Text(
+            "Your translation is for earlier input. Return to preparation to review it.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
     }
 }
 
@@ -839,46 +654,62 @@ private fun ReviewAudioButton(
     audio: ReviewAudioPresentation,
     onToggle: (() -> Unit)?,
     onRetry: (() -> Unit)?,
-    actionLabel: String = "Retry",
-    small: Boolean = false,
+    actionLabel: String,
 ) {
-    val size = if (small) 44.dp else 48.dp
+    val controlSize = ReviewAudioControlSize
     var failureExpanded by remember(audio) { mutableStateOf(false) }
     when (audio) {
         ReviewAudioPresentation.Unavailable -> Box(
-            Modifier.size(size).semantics {
+            Modifier.size(controlSize).semantics {
                 contentDescription = reviewAudioControlLabel(field, audio)
                 stateDescription = "Unavailable"
             },
             contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                MaterialSymbols.ErrorOutline,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            AudioControlGlyph(playing = false, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(32.dp))
         }
-        ReviewAudioPresentation.Ready, ReviewAudioPresentation.Playing -> if (onToggle == null) {
-            Box(Modifier.size(size), contentAlignment = Alignment.Center) {}
-        } else {
-            IconButton(
-                onClick = onToggle,
-                modifier = Modifier.size(size).semantics {
-                    contentDescription = reviewAudioControlLabel(field, audio)
-                    stateDescription = if (audio == ReviewAudioPresentation.Playing) "Playing" else "Ready"
-                },
-            ) {
-                Icon(
-                    if (audio == ReviewAudioPresentation.Playing) MaterialSymbols.Pause else MaterialSymbols.Play,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.primary,
-                )
+        ReviewAudioPresentation.NeedsPreparation -> Box(
+            Modifier.size(controlSize).semantics {
+                contentDescription = reviewAudioControlLabel(field, audio)
+                stateDescription = "Needs preparation"
+            },
+            contentAlignment = Alignment.Center,
+        ) {
+            AudioControlGlyph(playing = false, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(32.dp))
+        }
+        ReviewAudioPresentation.Ready, ReviewAudioPresentation.Playing -> {
+            if (onToggle == null) {
+                Box(
+                    Modifier.size(controlSize).semantics {
+                        contentDescription = reviewAudioControlLabel(field, audio)
+                        stateDescription = if (audio == ReviewAudioPresentation.Playing) "Playing" else "Ready"
+                    },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    AudioControlGlyph(
+                        playing = audio == ReviewAudioPresentation.Playing,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(32.dp),
+                    )
+                }
+            } else {
+                IconButton(
+                    onClick = onToggle,
+                    modifier = Modifier.size(controlSize).semantics {
+                        contentDescription = reviewAudioControlLabel(field, audio)
+                        stateDescription = if (audio == ReviewAudioPresentation.Playing) "Playing" else "Ready"
+                    },
+                ) {
+                    AudioControlGlyph(
+                        playing = audio == ReviewAudioPresentation.Playing,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(32.dp),
+                    )
+                }
             }
         }
         ReviewAudioPresentation.Generating -> Box(
-            Modifier.size(size).semantics {
+            Modifier.size(controlSize).semantics {
                 contentDescription = reviewAudioControlLabel(field, audio)
                 stateDescription = "In progress"
             },
@@ -887,7 +718,7 @@ private fun ReviewAudioButton(
         is ReviewAudioPresentation.Failed -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
             IconButton(
                 onClick = { failureExpanded = !failureExpanded },
-                modifier = Modifier.size(size).semantics {
+                modifier = Modifier.size(controlSize).semantics {
                     contentDescription = reviewAudioControlLabel(field, audio)
                     stateDescription = if (failureExpanded) "Expanded" else "Collapsed"
                 },
@@ -895,7 +726,7 @@ private fun ReviewAudioButton(
                 Icon(
                     MaterialSymbols.ErrorOutline,
                     contentDescription = null,
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.size(26.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -910,63 +741,44 @@ private fun ReviewAudioButton(
 }
 
 @Composable
-private fun WordSheet(
-    tokens: List<JapaneseToken>,
-    target: TargetSpan,
-    onSelectToken: (TargetSpan) -> Unit,
-    vocabularyReading: String,
-    vocabularyReadingDraft: String,
-    onVocabularyReadingDraft: (String) -> Unit,
-    onApplyReading: () -> Unit,
-    vocabularyReadingError: String?,
-    pitchHasAlternatives: Boolean,
-    onEditSentence: () -> Unit,
-) {
-    Text("Change word", style = MaterialTheme.typography.titleLarge)
-    Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        tokens.forEach { token ->
-            val selected = token.span == target
-            if (selected) {
-                Button(onClick = { onSelectToken(token.span) }, modifier = Modifier.heightIn(min = 48.dp)) {
-                    Text(token.surface)
-                }
-            } else {
-                OutlinedButton(onClick = { onSelectToken(token.span) }, modifier = Modifier.heightIn(min = 48.dp)) {
-                    Text(token.surface)
-                }
-            }
+private fun AudioControlGlyph(playing: Boolean, color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val speaker = Path().apply {
+            moveTo(size.width * 0.08f, size.height * 0.39f)
+            lineTo(size.width * 0.30f, size.height * 0.39f)
+            lineTo(size.width * 0.54f, size.height * 0.18f)
+            lineTo(size.width * 0.54f, size.height * 0.82f)
+            lineTo(size.width * 0.30f, size.height * 0.61f)
+            lineTo(size.width * 0.08f, size.height * 0.61f)
+            close()
+        }
+        drawPath(speaker, color)
+        if (playing) {
+            drawRect(
+                color,
+                topLeft = Offset(size.width * 0.69f, size.height * 0.36f),
+                size = Size(size.width * 0.20f, size.height * 0.28f),
+            )
+        } else {
+            val waveStroke = Stroke(width = size.minDimension * 0.065f, cap = StrokeCap.Round)
+            drawArc(
+                color = color,
+                startAngle = -55f,
+                sweepAngle = 110f,
+                useCenter = false,
+                topLeft = Offset(size.width * 0.39f, size.height * 0.30f),
+                size = Size(size.width * 0.38f, size.height * 0.40f),
+                style = waveStroke,
+            )
+            drawArc(
+                color = color,
+                startAngle = -55f,
+                sweepAngle = 110f,
+                useCenter = false,
+                topLeft = Offset(size.width * 0.39f, size.height * 0.15f),
+                size = Size(size.width * 0.58f, size.height * 0.70f),
+                style = waveStroke,
+            )
         }
     }
-    TextButton(onClick = onEditSentence, modifier = Modifier.heightIn(min = 48.dp)) {
-        Text("Select a multi-word phrase instead")
-    }
-    Text("Vocabulary reading", style = MaterialTheme.typography.titleSmall)
-    Text(
-        "Changing the reading re-resolves the dictionary entry, pitch and recording. A reading with no matching entry blocks Send.",
-        style = MaterialTheme.typography.bodySmall,
-    )
-    OutlinedTextField(
-        value = vocabularyReadingDraft,
-        onValueChange = onVocabularyReadingDraft,
-        modifier = Modifier.fillMaxWidth(),
-        singleLine = true,
-        label = { Text("Vocabulary reading (kana)") },
-    )
-    vocabularyReadingError?.let { message ->
-        Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-    }
-    if (pitchHasAlternatives) {
-        Text(
-            "Other pitch patterns for this reading are available from the pitch control on Review.",
-            style = MaterialTheme.typography.bodySmall,
-        )
-    }
-    Button(
-        onClick = onApplyReading,
-        enabled = vocabularyReadingDraft.isNotBlank(),
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-    ) { Text("Apply reading") }
 }
