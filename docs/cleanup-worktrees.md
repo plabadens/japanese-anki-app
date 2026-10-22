@@ -31,13 +31,13 @@ Pass 1 = before → after the first prune (base `main`). Pass 2 = after the
 
 | Measure | Before | After pass 1 | After pass 2 | Note |
 | --- | --- | --- | --- | --- |
-| Registered worktrees | 91 | 55 | **50** | 41 removed in total |
-| Local branches | 96 | 61 | **54** | 42 removed in total |
+| Registered worktrees | 91 | 55 | **48** | 43 removed in total |
+| Local branches | 96 | 61 | **53** | 43 removed in total |
 | `du -sh .worktrees` | 226G | 132G | **127G** | 99G reclaimed |
 | Filesystem used | 293G | 196G | **196G** | 97G reclaimed on the volume |
 | `du -sh .git` | 190M | 184M | 184M | refs only; no `gc`, no history rewrite |
 
-The remaining 127G is 50 live worktrees, each with its own Gradle/CMake build
+The remaining 126G is 48 live worktrees, each with its own Gradle/CMake build
 tree. Their branches carry work that is not on the integration branch (see
 below); their build directories are regenerable and can be removed separately
 without touching a branch.
@@ -127,6 +127,37 @@ already has.
 After the worktree is gone the branch is deleted with `git branch -D`; every one
 of these tips is reachable from `main`, so the commits survive.
 
+## Rejected — removed without merging
+
+`japanese-anki-app/t_bd3ce676-verify-and-fix-camera-capture-and-real-i` (2 commits,
+tip `5535223`) implemented an *orientation-aware viewfinder, landscape shutter and
+uncropped preview*. Pierre rejected it on 2026-10-22 as a mistake.
+
+The distinction that matters, because the words are close:
+
+- **Required** (`SPEC.md` §4): "orientation-aware capture" and "landscape captures
+  and picked/shared landscape images are stored orientation-corrected and displayed
+  correctly in the portrait composition", plus the rule that rotating to landscape,
+  capturing and rotating back must preserve the photo and draft **without switching
+  the interface to a landscape composition**.
+- **Rejected** (this branch): making the camera surface itself follow the device —
+  a landscape viewfinder and a relocated shutter. That breaks the contract's fixed
+  full-width portrait viewfinder with a stable shutter row, and the interface is
+  portrait-only by rule.
+
+The required half was already met: `ImageDecoder` applies EXIF orientation when
+decoding (`ImageMediaProcessor`, `JapaneseOcr`), and `MainActivity` restores the
+draft from saved state after the activity is recreated. So the branch added a
+forbidden behaviour on top of a requirement that was already satisfied.
+
+Archived rather than silently dropped, in case a future agent rediscovers it:
+
+- `/srv/hermes/archive/japanese-anki-pruned-20261022/t_bd3ce676-rejected-camera-rotation.patch`
+- `…/t_bd3ce676-commits.txt` — the two commit SHAs
+
+Do not merge it. If rotation is ever reported as broken, fix the *media and state*
+requirements above; do not reintroduce a rotating viewfinder.
+
 ## The five dirty worktrees — archived, then removed in pass 2
 
 The first pass refused all five because their trees were not clean. They were
@@ -155,12 +186,12 @@ cleanup — and are kept by `--keep`, not by the on-main-tip rule (see above). T
 script treats *any* branch whose commit equals main's tip as an alias, so a future
 merge train is protected without editing the script, but only until `main` moves.
 
-## Branches carrying work absent from the integration branch (kept — 45)
+## Branches carrying work absent from the integration branch (kept — 44)
 
-None of these are provably merged into `dev` or provably superseded, so all 45 stay.
+None of these are provably merged into `dev` or provably superseded, so all 44 stay.
 Most are the v0.2 checklist plan that the v0.3/v0.4 redesign replaced; keeping them
 costs a ref and a branch label, and deleting one would cost a fix if the judgement
-is ever wrong. The ones worth a human decision are listed at the end of this section.
+is ever wrong. `t_bd3ce676` was the one branch judged and rejected — see above.
 "Conflicts" is the conflict count from `git merge-tree --write-tree main <branch>`
 — a high count means the branch no longer applies to the current tree.
 
@@ -242,8 +273,8 @@ in `dev`.
 | `t_6ef76557` reading correction fix | 1 | 5 | **Needs a look** — targeted reading correction / unresolved-vocabulary reset; main has `SentenceReadings.kt` but I could not prove the fix is there. |
 | `t_c8c8b1b1` reading correction evidence | 1 | 0 | Duplicate of the above as documentation (11 files), applies cleanly. Salvage if the fix is wanted. |
 | `t_e58cbdc9` disabled send button | 4 | 0 | **Possibly needed** — main gates actions via `actionsEnabled`, but this branch's "look disabled" state is not provably present. Applies cleanly. |
-| `t_bd3ce676` camera orientation fix | 2 | 2 | **Possibly needed** — orientation-aware viewfinder / landscape handling; `ui/CameraCapture.kt` on main has no orientation logic at all. Applies with 2 conflicts. |
-| `t_b5634e0b` camera OCR run | 3 | 2 | Stale and **dirty** — evidence bundle around `t_bd3ce676`; keep until that fix is decided. |
+| `t_bd3ce676` camera orientation | 2 | 2 | **Rejected by Pierre (2026-10-22)** — a landscape viewfinder contradicts the portrait-only composition in `SPEC.md` §4. Removal recorded above. |
+| `t_b5634e0b` camera OCR run | 3 | 2 | Evidence bundle around `t_bd3ce676`, which is rejected; no independent value. |
 | `t_1474969d` disable CCT telemetry | 35 | 29 | Stale — main no longer uses Custom Tabs anywhere in `app/src`, so the component this hardens does not exist. |
 | `wt/t_0e0e1a8d` v0.2 checklist map | 1 | 0 | Stale but **dirty** (`docs/v0.2-implementation-checklist.md` modified) — the doc is absent from main; salvage candidate if the mapping is still wanted. |
 | `wt/t_fd0fc5ca` unit-8 manifest | 1 | 0 | Stale — 272-line integration manifest for the replaced review hub. |
