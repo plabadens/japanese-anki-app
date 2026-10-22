@@ -16,6 +16,7 @@ data class ManualNoteDraft(
     val imageFilename: String? = null,
     val notes: String = "",
     val sentenceFurigana: List<FuriganaSpan> = emptyList(),
+    val vocabularyPartOfSpeech: List<String> = emptyList(),
 ) {
     fun validationErrors(): List<String> = buildList {
         val targetText = target?.textIn(sentence)
@@ -72,6 +73,7 @@ data class ManualNoteDraft(
             "VocabKanji" to AnkiFieldSerializer.plainText(vocabulary),
             "VocabFurigana" to vocabFurigana,
             "VocabDef" to AnkiFieldSerializer.definition(definition.split(Regex("\\r\\n|\\n|\\r"))),
+            "VocabPartOfSpeech" to AnkiFieldSerializer.plainText(vocabularyPartOfSpeech.joinToString(", ")),
             "VocabPitch" to pitch?.takeIf { it.reading == vocabularyReading.trim() }?.fieldMarkup.orEmpty(),
             "VocabAudio" to vocabularyAudioFilename?.let { AnkiFieldSerializer.audioReference(it) }.orEmpty(),
             "Image" to imageFilename?.let { AnkiFieldSerializer.imageReference(it) }.orEmpty(),

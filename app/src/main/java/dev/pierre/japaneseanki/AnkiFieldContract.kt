@@ -28,6 +28,8 @@ object AnkiFieldContract {
         "fm_seen_words",
     )
 
+    val optionalFields = listOf("VocabPartOfSpeech")
+
     fun mapToModelOrder(
         modelFields: List<String>,
         valuesByName: Map<String, String>,
@@ -44,7 +46,7 @@ object AnkiFieldContract {
 
         return FieldMapping(
             modelFields.map { field ->
-                if (field in requiredFields) valuesByName[field].orEmpty() else ""
+                if (field in requiredFields || field in optionalFields) valuesByName[field].orEmpty() else ""
             },
             emptyList(),
         )

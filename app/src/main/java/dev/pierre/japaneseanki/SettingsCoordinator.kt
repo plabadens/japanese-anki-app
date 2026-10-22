@@ -132,6 +132,7 @@ internal class SettingsCoordinator(
     /** Explicit Reload only. Opening the screen separately requests once when a usable key exists. */
     fun reloadVoices(): VoiceLoadRequest? = synchronized(lock) {
         checkOpened()
+        if (saveError != null) return@synchronized null
         beginVoiceRequestLocked()
     }
 

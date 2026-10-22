@@ -254,7 +254,7 @@ internal fun SettingsScreen(
                 )
             }
             TextButton(
-                enabled = state.googleKey.isNotBlank() && !state.voiceCatalog.loading && !state.loading,
+                enabled = state.credentialStored && !state.voiceCatalog.loading && !state.loading,
                 onClick = onReloadVoices,
                 modifier = Modifier.semantics { contentDescription = "Reload voices" },
             ) { Text("Reload voices") }

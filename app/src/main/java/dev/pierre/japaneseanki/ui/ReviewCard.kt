@@ -171,6 +171,8 @@ internal fun ReviewCard(
     tags: List<String>,
     imagePath: String?,
     imageStatus: String?,
+    ocrChoicesAvailable: Boolean = false,
+    onReopenOcrChooser: () -> Unit = {},
     pitchHasAlternatives: Boolean,
     pitchInfoExpanded: Boolean,
     onTogglePitchInfo: () -> Unit,
@@ -247,6 +249,13 @@ internal fun ReviewCard(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            if (ocrChoicesAvailable) {
+                TextButton(
+                    enabled = editingEnabled,
+                    onClick = onReopenOcrChooser,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Choose text from photo") }
+            }
             if (imagePath != null || imageStatus != null) {
                 ReviewPhotoSlot(
                     imagePath = imagePath,
