@@ -1,72 +1,114 @@
 # Toolchain upgrade notes
 
-**How to use it:** REFERENCE. Deferred toolchain work and the reasons it is deferred. Read before
-proposing a toolchain change; do not perform the AGP migration as a side effect of another task.
+**How to use it:** REFERENCE. This records the verified AGP 9.4.1/Gradle 9.7.1 stack, build results, and remaining warnings for dependent work.
 
-Deferred build-toolchain work that is deliberately not done yet. Each item records
-why it is deferred and what must be verified before the change is made.
+## Android Gradle Plugin 9.4.1 / Gradle 9.7.1 — verified upgrade
 
-## Android Gradle Plugin 9.x (do this later, on purpose)
+**Status:** applied on the toolchain-upgrade branch; this is a build-only change.
+No screens, strings, navigation, onboarding, AnkiDroid gateway, or application
+behaviour were changed.
 
-**Status:** deferred. The project is pinned to AGP 8.13.2 and Gradle 8.14.4
-(`gradle/libs.versions.toml`, `flake.nix`).
+**Resolved and tested tuple:**
 
-**Why it matters:** `app/build.gradle.kts` sets `compileSdk = 37`, `targetSdk = 37`
-and `minSdk = 35` as required by `SPEC.md` §2. AGP 8.13.2 was tested up to API
-level 36.1, so every build prints:
+| Component | Previous | Current | Reason |
+| --- | --- | --- | --- |
+| Android Gradle Plugin | 8.13.2 | 9.4.1 | Stable AGP 9 release that supports compile/target API 37 and supplies the public Material3 1.5 beta's required AGP generation. |
+| Gradle | 8.14.4 | 9.7.1 (`pkgs.gradle_9`) | AGP 9.4 requires Gradle 9.6 or newer; the pinned nixpkgs `gradle_9` is 9.7.1. |
+| Kotlin Android plugin | 2.2.20 external plugin | AGP built-in Kotlin 2.2.10 | AGP 9 has built-in Kotlin; remove `org.jetbrains.kotlin.android` instead of loading two Kotlin integrations. Keep the Compose compiler plugin aligned at 2.2.10. |
+| Compose BOM | 2025.09.00 | 2026.09.00 | Provides the Compose 1.12 line required by Material3 1.5.0-beta02; Gradle resolves Compose UI to 1.12.1. |
+| Material3 | 1.4.0 | 1.5.0-beta02 | Required public Expressive APIs; dependency insight selects beta02 over the BOM's 1.4.0 constraint. |
+| activity-compose | 1.11.0 | 1.11.0 | Left unchanged: it already resolves with the selected Compose graph and passed compilation; no evidence justified a higher version. |
+| JDK | 17 | 17 | Existing pinned JDK meets the AGP/Gradle requirements. |
 
+This is the **minimum verified tuple for the approved API contract**, not a claim
+that every earlier AGP/Compose combination was exhaustively tested. The old
+AGP 8.13.2 + Material3 1.4.0 graph failed to compile the required public APIs;
+Material3 1.5.0-beta02 resolves and compiles with this stable AGP/Gradle 9 stack.
+`app/src/test/java/dev/pierre/japaneseanki/Material3ExpressiveApiCompileSmoke.kt`
+remains in the unit-test source set and references `MaterialExpressiveTheme`,
+`MotionScheme.standard()`, `MotionScheme.expressive()`, and `ButtonGroup` with the
+required opt-in. This is a compile check, not reflection or an API-token scan.
+
+**AGP 9 migration kept narrow:** removed the external Kotlin Android plugin and
+legacy `kotlinOptions` target setting (Java target remains 17); retained existing
+namespace, build features, lint, packaging and R8/D8 configuration. The dependency
+cache was regenerated with `scripts/update-gradle-deps.sh`. The Nix build outputs
+are `.#debugApk` (x86_64) and `.#apk` (arm64-v8a); both sandbox builds and their outputs are documented in the verification section below.
+
+**Warnings, not papered over:** the old AGP compileSdk-37 and D8 API-37 warnings
+are gone. The pinned NDK 27.2 still warns that API 37 exceeds its supported API
+35 and substitutes 35 for native build configuration. The Nix SDK AAPT2 override
+still emits AGP's experimental-option warning. Existing Kotlin deprecation and
+native dependency/toolchain warnings remain. No warning was suppressed and the
+SDK target was not lowered. The API-37 x86_64 emulator was already attached when
+checked (`emulator-5554`), so install/launch smoke verification was not run to
+avoid taking a busy shared device lane.
+
+**Verification command in the pinned Nix development shell:**
+
+```sh
+nix develop --command gradle --no-daemon --max-workers=1 -Dorg.gradle.jvmargs='-Xmx2g -Dfile.encoding=UTF-8' --console=plain testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
 ```
-WARNING: We recommend using a newer Android Gradle plugin to use compile SDK version 37.0
-This Android Gradle plugin (8.13.2) was tested up to compile SDK version 36.1.
+
+This dev-shell command passed. The report at
+`app/build/reports/tests/testDebugUnitTest/index.html` records **322 tests, 0
+failures, 0 skipped, 100% successful** — the same count as the pre-upgrade
+baseline. No behavioural test was changed; the only test-source addition is the
+compile-only Expressive API tripwire above.
+
+## Completed dependency-lock and sandbox verification
+
+The final lock was regenerated after selecting the final version tuple with
+`scripts/update-gradle-deps.sh` (the generated fetch-deps update script completed
+successfully). Then both Nix APK derivations built inside the sandbox, each with
+`testDebugUnitTest` as its check task, bounded to one Nix job/core and one Gradle
+worker:
+
+```sh
+nix build --no-link --print-out-paths --max-jobs 1 --option cores 1 .#debugApk
+# exit 0: /nix/store/lgnkjk4iwpq6sywkx4g056cyqpwxl6iv-japanese-anki-card-creator-0.1.0
+nix store ls --recursive /nix/store/lgnkjk4iwpq6sywkx4g056cyqpwxl6iv-japanese-anki-card-creator-0.1.0
+# ./japanese-anki-0.4-x86_64-debug.apk
+
+nix build --no-link --print-out-paths --max-jobs 1 --option cores 1 .#apk
+# exit 0: /nix/store/fg5j2v5zm5gfxh7a7qwmzvilrz67s6nv-japanese-anki-card-creator-0.1.0
+nix store ls --recursive /nix/store/fg5j2v5zm5gfxh7a7qwmzvilrz67s6nv-japanese-anki-card-creator-0.1.0
+# ./japanese-anki-0.4-arm64-v8a-unsigned.apk
 ```
 
-That is a warning about untested *tooling* paths (resource merging, lint, R8,
-manifest handling for API 37) — not a runtime problem, and the app uses no
-API-37-only platform features. The build still produces a working APK.
+This validates the refreshed Nix Gradle dependency lock against both the debug
+x86_64 and release arm64-v8a build graphs; the store outputs contain the expected
+ABI-specific APKs. The API-37 x86_64 emulator install/launch check was **NOT RUN**:
+`adb devices -l` found `emulator-5554` already attached, so the shared device lane
+was left untouched.
 
-**When to revisit:** before the first release that depends on API 37 platform
-features, or when AGP 9.x is the current stable that the pinned nixpkgs provides.
+Resolved plugin/dependency evidence from the same Nix-pinned environment:
 
-**What the upgrade requires (verify each, do not assume):**
+```text
+Gradle: 9.7.1; JDK: 17.0.20.1+1-nixos
+Resolved plugin [id: 'com.android.application', version: '9.4.1', apply: false]
+Resolved plugin [id: 'org.jetbrains.kotlin.plugin.compose', version: '2.2.10', apply: false]
+androidx.compose.material3:material3:1.5.0-beta02
+  Selected over the Compose BOM's material3:1.4.0 constraint
+androidx.compose.ui:ui:1.12.1
+androidx.activity:activity-compose:1.11.0
+```
 
-- AGP 9.4 advertises a maximum API level of 37; AGP 9.0 still caps at 36.1, so the
-  specific 9.x minor matters.
-- Gradle **9.6.0 or newer** for AGP 9.4 (AGP 9.0 needs Gradle 9.1.0+). The flake
-  currently pins Gradle 8.14.4, so `flake.nix`, `nix/gradle/deps.json` and any
-  `gradle/*` configuration must move together.
-- AGP 9 breaking changes to check against this codebase: non-final `R` class in
-  application modules by default, `targetSdk` defaulting to `compileSdk`, Kotlin
-  Gradle plugin pairing, and build-feature default changes.
-- Regenerate the Gradle dependency lock (`scripts/update-gradle-deps.sh`) and
-  re-verify the Nix build outputs (`.#debugApk`, `.#apk`) and the full gate set in
-  `docs/BEST-PRACTICES.md` §5.
-- Re-run the full unit-test suite and the on-device/emulator checks for the
-  AnkiDroid provider, media import and native library loading.
+`dependencyInsight` for Material3, Compose UI and activity-compose and Gradle's
+`--info help` plugin-resolution log all completed successfully.
 
-**Interim option (not currently applied):** the warning can be silenced with
-`android.suppressUnsupportedCompileSdk=37.0` in `gradle.properties`. It changes
-nothing except the message, so it is only worth adding if the warning becomes
-noise in CI. AndroidX itself uses this pattern.
+**Warnings still present:** AGP 9.4.1 no longer emits the prior compileSdk-37
+recommendation and D8 API-37 support warning. NDK 27.2 still warns that API 37 is
+above its max API 35 and uses 35 for native configuration; the Nix AAPT2 override
+is marked experimental; Gradle 9.7 reports deprecated build features that will be
+incompatible with Gradle 10; existing Kotlin/CMake/native dependency warnings
+remain. None were suppressed and SDK levels were not lowered.
 
 ## Gradle dependency cache coverage
 
-**Status:** resolved for the APK the project ships in this pass. `nix build .#apk`
-and `nix build .#debugApk` complete inside the sandbox (assemble plus
-`testDebugUnitTest`) by resolving Maven artifacts through the Nix Gradle MITM
-cache, so the first build needs network access. Rebuilds are not byte-identical and
-nothing here claims they are. What remains open: the lock was populated for the
-configurations exercised by `testDebugUnitTest`/`assembleDebug`/`assembleRelease`;
-if a later change pulls new artifacts the sandbox build fails until
-`./scripts/update-gradle-deps.sh` refreshes the lock. The historical gap was the
-missing ML Kit artifacts
-`com.google.mlkit:text-recognition-japanese:16.0.1` and
-`com.google.mlkit:translate:17.0.3` (and `com.android.tools.lint:lint-gradle`
-for lint tasks, which the shipped build does not run). Refresh and validate the lock using
-`scripts/update-gradle-deps.sh` in an environment where the configured Maven
-repositories are reachable, with both `testDebugUnitTest assembleDebug` and
-`assembleRelease` represented in the captured configurations. Do not treat a
-successful build from a warm Gradle cache as proof of the Nix dependency lock
-or offline reproducibility.
+These cache-coverage notes are historical context. The current toolchain upgrade,
+refreshed dependency lock, and successful sandbox builds are documented in the
+verification section above.
 
 ## Nix Android AAPT2 selection
 
