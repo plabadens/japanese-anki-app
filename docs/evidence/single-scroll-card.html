@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; color: var(--foreground); background: transparent;
+         font-family: var(--app-font, system-ui, sans-serif); }
+  .wrap { display: flex; gap: 22px; align-items: flex-start; flex-wrap: wrap; }
+  .col { width: 288px; }
+  .cap { font-size: 11px; letter-spacing: .05em; text-transform: uppercase;
+         color: var(--muted-foreground); margin: 0 0 8px 2px; }
+  .cap b { color: var(--foreground); text-transform: none; letter-spacing: 0;
+           font-size: 12px; font-weight: 600; }
+  .phone { border: 1px solid var(--border); border-radius: 22px; background: var(--card);
+           padding: 12px 12px 14px; }
+  .bar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .bar .t { font-size: 15px; font-weight: 600; flex: 1; }
+  .g { width: 16px; height: 16px; opacity: .65; }
+  .view { border-radius: 12px; background: color-mix(in srgb, var(--foreground) 88%, transparent);
+          aspect-ratio: 3 / 4; display: grid; place-items: center; }
+  .view .shutter { width: 52px; height: 52px; border-radius: 50%;
+                   box-shadow: inset 0 0 0 3px rgba(255,255,255,.95), inset 0 0 0 5px rgba(0,0,0,.25);
+                   background: rgba(255,255,255,.85); }
+  .sect { position: relative; padding-left: 22px; margin-bottom: 12px; }
+  .sect > .n { position: absolute; left: 0; top: 2px; width: 15px; height: 15px; border-radius: 50%;
+               font-size: 9px; font-weight: 700; display: grid; place-items: center;
+               border: 1px solid var(--border); color: var(--muted-foreground); }
+  .photo { height: 92px; border-radius: 10px; overflow: hidden;
+           background: repeating-linear-gradient(180deg,
+             color-mix(in srgb, var(--foreground) 8%, transparent) 0 3px,
+             color-mix(in srgb, var(--foreground) 3%, transparent) 3px 9px); }
+  .sent { font-size: 19px; line-height: 1.9; letter-spacing: .01em; }
+  .tok { padding: 9px 0; }
+  .tok.sel { background: color-mix(in srgb, var(--accent) 16%, transparent);
+             box-shadow: inset 0 -2px 0 0 var(--accent); border-radius: 3px; }
+  .tr { font-size: 14px; line-height: 1.5; color: color-mix(in srgb, var(--foreground) 82%, transparent); }
+  .wordcard { border: 1px solid var(--border); border-radius: 12px; padding: 10px 11px;
+              background: color-mix(in srgb, var(--foreground) 4%, transparent); }
+  .hw { font-size: 26px; font-weight: 600; }
+  .hw small { font-size: 11px; font-weight: 400; color: var(--muted-foreground); margin-left: 5px; }
+  .pitch { margin: 8px 0 6px; }
+  .def { font-size: 13px; line-height: 1.45; }
+  .sp { float: right; width: 30px; height: 30px; border-radius: 50%;
+        border: 1px solid var(--border); display: grid; place-items: center; font-size: 12px; }
+  .quiet { font-size: 12px; color: var(--muted-foreground); display: flex; gap: 14px; }
+  .quiet span { text-decoration: none; }
+  .foot { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px; }
+  .cta { height: 40px; border-radius: 20px; background: var(--accent); color: #fff;
+         display: grid; place-items: center; font-size: 13px; font-weight: 600; }
+  .cta.off { background: color-mix(in srgb, var(--foreground) 10%, transparent);
+             color: color-mix(in srgb, var(--foreground) 45%, transparent); }
+  .fnote { font-size: 10px; color: var(--muted-foreground); text-align: center; margin-top: 5px; }
+  .legend { font-size: 12px; line-height: 1.65; color: var(--muted-foreground); margin: 0; padding-left: 15px; }
+  .legend b { color: var(--foreground); font-weight: 600; }
+  .spacer { height: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="col">
+    <p class="cap">State 1 — <b>camera</b></p>
+    <div class="phone">
+      <div class="bar">
+        <span class="g">◀</span><span class="t">Capture</span><span class="g">⚙</span>
+      </div>
+      <div class="view"><div class="shutter"></div></div>
+      <div style="display:flex; justify-content:space-between; padding:8px 4px 0;
+                  font-size:11px; color:var(--muted-foreground)">
+        <span>Gallery</span><span style="opacity:.45">—</span>
+      </div>
+    </div>
+    <p class="legend" style="margin-top:10px">
+      Nothing else. One press and this surface stops being a camera and becomes the card.
+      No navigation, no mode strip, no title change mid-flight.
+    </p>
+  </div>
+
+  <div class="col">
+    <p class="cap">State 2 — <b>the card</b> (one scroll, grows downward)</p>
+    <div class="phone">
+      <div class="bar">
+        <span class="g">◀</span><span class="t">Card</span><span class="g">⚙</span>
+      </div>
+
+      <div class="sect"><span class="n">1</span>
+        <div class="photo"></div>
+      </div>
+
+      <div class="sect"><span class="n">2</span>
+        <p class="sent" style="margin:0">
+          <span class="tok">図書館</span><span class="tok">で</span><span class="tok sel">本</span><span class="tok">を</span><span class="tok">読みました</span><span class="tok">。</span>
+        </p>
+      </div>
+
+      <div class="sect"><span class="n">3</span>
+        <p class="tr" style="margin:0">I read a book at the library.</p>
+      </div>
+
+      <div class="sect"><span class="n">4</span>
+        <div class="wordcard">
+          <span class="sp">▶</span>
+          <div class="hw">本 <small>ほん</small></div>
+          <div class="pitch">
+            <svg width="120" height="30" viewBox="0 0 120 30">
+              <circle cx="14" cy="20" r="4" fill="currentColor" opacity=".75"/>
+              <path d="M14 20 L34 20" stroke="currentColor" stroke-width="2" opacity=".75"/>
+              <circle cx="34" cy="20" r="4" fill="currentColor" opacity=".75"/>
+              <path d="M34 20 L52 10" stroke="currentColor" stroke-width="2" opacity=".75"/>
+              <circle cx="52" cy="10" r="4" fill="none" stroke="currentColor" stroke-width="2" opacity=".75"/>
+            </svg>
+          </div>
+          <div class="def">book; volume</div>
+        </div>
+      </div>
+
+      <div class="sect"><span class="n">5</span>
+        <div class="quiet"><span>Add note</span><span>Add tags</span></div>
+      </div>
+
+      <div class="foot">
+        <div class="cta">Send to AnkiDroid</div>
+        <div class="fnote">pinned · disabled with one reason until the card is ready</div>
+      </div>
+    </div>
+    <ol class="legend" style="margin-top:10px">
+      <li><b>Photo</b> + <b>sentence</b>: appear together when OCR commits. The sentence is the
+        content, not a heading.</li>
+      <li><b>Translation</b>: fills its own reserved line. It is a reading aid, so it can run on
+        capture.</li>
+      <li><b>Word card</b>: expands in place <i>under the sentence</i> on tap — nothing below it
+        jumps, because the space is reserved and inserted at the word, not appended at the bottom.</li>
+      <li><b>Note / tags</b>: quiet, appear with the word card, not before.</li>
+      <li><b>Send</b>: pinned outside the scroll. Never off-screen, never surprised.</li>
+    </ol>
+  </div>
+
+</div>
+</body>
+</html>

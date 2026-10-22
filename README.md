@@ -13,7 +13,7 @@ Mission: **get everything right the first time, without unnecessary choices.**
 
 | Document | What it gives you |
 |---|---|
-| [docs/sentence-mining-flow.md](docs/sentence-mining-flow.md) | **AUTHORITATIVE for the UI** — the approved screen-and-copy contract: every view, string, state and choreography (progress A) |
+| [docs/card-flow-contract.md](docs/card-flow-contract.md) | **AUTHORITATIVE for the UI** — the approved Capture → Card contract: every view, string, state and choreography |
 | [SPEC.md](SPEC.md) | **AUTHORITATIVE** — what the app must do: behaviour, contracts, acceptance criteria R01–R39 |
 | [docs/DESIGN.md](docs/DESIGN.md) | **AUTHORITATIVE** — what it should feel like: intent, tone, visual language |
 | [docs/BEST-PRACTICES.md](docs/BEST-PRACTICES.md) | **AUTHORITATIVE** — how work is done: modules, conventions, gates, commits, evidence |

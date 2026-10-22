@@ -336,11 +336,11 @@ Rules:
   export call stay off the composition thread, and obsolete analysis is cancelled rather than
   queued.
 - When implementing UI, the authority is the approved
-  [screen-and-copy contract](sentence-mining-flow.md), not the HTML study. Inventory visible,
+  [Capture → Card contract](card-flow-contract.md), not the HTML study. Inventory visible,
   accessibility and notification strings against its catalogue IDs, and assert both the presence of
-  required UI and the absence of removed UI. A missing required element is an failure; an element the
-  contract removed — the step tracker, a preparation page, per-field spinners, a repair workbench —
-  is also a failure. Pixel parity is not required; structure and hierarchy are. The study in
+  required UI and the absence of removed UI. A missing required element is a failure; an element the
+  contract removed — the Target and Review screens, the step tracker, a preparation page, per-field
+  spinners, a repair workbench, the pitch-alternative picker — is also a failure. Pixel parity is not required; structure and hierarchy are. The study in
   `mockup/expressive-flow/` is decision history and must not be used to justify restoring removed
   elements.
 - Validate on the real build (emulator, light/dark, 200 % text, Back, rotation) before calling UI
