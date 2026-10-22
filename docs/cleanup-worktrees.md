@@ -6,31 +6,53 @@ safe to delete, and the removal plan. The repeatable tool is
 
 ## Status
 
-Audit and tooling: **complete**. Removal: **not yet applied**. The destructive
-step needs interactive approval, which the automated session could not obtain, so
-the tree is still at the numbers in the "Before" column. Applying is one command:
+Audit, tooling and removal: **complete**. The prune ran with interactive approval;
+every number below is measured, not projected. Re-running the tool now reports
+"Nothing to remove", which is the idempotence check.
 
 ```bash
-./scripts/prune-worktrees.sh          # dry run, prints the same plan
+./scripts/prune-worktrees.sh          # dry run, prints the plan and changes nothing
 ./scripts/prune-worktrees.sh --apply  # removes it
 ```
 
 ## Before / after
 
-| Measure | Before | After `--apply` |
-| --- | --- | --- |
-| Registered worktrees | 90 | 54 |
-| — under `.worktrees/` | 88 | 53 |
-| — stale detached (`.tmp-nix/prep-baseline`) | 1 | 0 |
-| Local branches | 93 | 58 |
-| `du -sh .worktrees` | 228G | not reclaimable until applied |
-| `du -sh .git` | 190M | unchanged (no `gc`, no history rewrite) |
+| Measure | Before | After | Note |
+| --- | --- | --- | --- |
+| Registered worktrees | 91 | **55** | 38 removed (37 branches + 1 detached) |
+| — under `.worktrees/` | 88 | 54 | |
+| — stale detached (`.tmp-nix/prep-baseline`) | 1 | 0 | HEAD was already on main |
+| Local branches | 96 | **61** | 7 merged into main, 52 carrying work, 2 aliases |
+| `du -sh .worktrees` | 226G | **132G** | 94G reclaimed |
+| Filesystem used | 293G | **196G** | 97G reclaimed on the whole volume |
+| `du -sh .git` | 190M | 184M | refs only; no `gc`, no history rewrite |
 
-"After" is arithmetic from the plan below (90 − 36 worktrees, 93 − 35 branches),
-not a measurement; re-run `git worktree list --porcelain | grep -c '^worktree '`
-and `git branch | wc -l` after applying to confirm. `.git` does not shrink
-because branch deletion only removes refs; that is intentional — this cleanup
-does not touch history.
+The remaining 132G is 55 live worktrees, each with its own Gradle/CMake build
+tree. They are kept because their branches carry work that is not on main (see
+below); their build directories are regenerable and can be removed separately
+without touching a branch.
+
+`.git` barely shrinks because deleting a branch only drops a ref; the objects stay
+until a prune/gc, which is deliberate — this cleanup does not touch history.
+
+### What went wrong, and what changed because of it
+
+The first `--apply` also deleted the two merge-train aliases,
+`…/t_3264cf90-…` and `…/t_132e540a-…`, which the plan protected. Cause: the tool
+protected a ref only while *its commit equalled `main`'s tip*. The commit that
+landed this cleanup moved `main`, so the aliases instantly became ordinary
+ancestors of `main` — merged, clean, and removable. No commits were lost (both
+pointed into `main`'s history) and both refs were recreated at `6860951`, but the
+protection rule was wrong: it protected an accident of timing rather than a name.
+
+The script now also protects `backup/*` and accepts repeatable `--keep <glob>`.
+Because an alias is only recognisable while it equals `main`, keeping one across a
+`main` advance requires the explicit form:
+
+```bash
+./scripts/prune-worktrees.sh --apply \
+  --keep 'japanese-anki-app/t_3264cf90*' --keep 'japanese-anki-app/t_132e540a*'
+```
 
 ## How each branch was classified
 
@@ -54,10 +76,10 @@ patch-identical commits, which is why only one branch qualifies as superseded.
 Worktrees were additionally screened with `git -C <path> status --porcelain`.
 13 of 90 have local state; none of them were touched.
 
-## Planned for removal — 35 branches, 36 worktrees (pending `--apply`)
+## Removed — 35 branches, 36 worktrees
 
-34 branches whose tip is an ancestor of `main` (merged through the v0.3/v0.4
-merge trains) and whose worktree is clean:
+34 branches whose tip was an ancestor of `main` (merged through the v0.3/v0.4
+merge trains) and whose worktree was clean:
 
 ```
 t_02b1be7a t_04784186 t_05478257 t_1a52fb6f t_1d52647b t_1eb7d549 t_2592aa66
@@ -97,11 +119,12 @@ or re-run the script once they are empty. The script refuses them automatically.
 
 ## Protected — never candidates
 
-`main`, `dev` (`origin/dev`, 6 commits ahead of main), the two local merge-train
-aliases sitting on main's tip (`…/t_3264cf90-…`, `…/t_132e540a-…`),
-`backup/pre-v0.3-integration`, and all remote-tracking refs. The script treats
-*any* branch whose commit equals main's tip as an alias, so a future merge train
-is protected without editing the script.
+`main`, `dev` (`origin/dev`, 6 commits ahead of main), `backup/*`, and all
+remote-tracking refs. The two local merge-train aliases
+(`…/t_3264cf90-…`, `…/t_132e540a-…`) sit on `6860951` — main's tip before this
+cleanup — and are kept by `--keep`, not by the on-main-tip rule (see above). The
+script treats *any* branch whose commit equals main's tip as an alias, so a future
+merge train is protected without editing the script, but only until `main` moves.
 
 ## Branches carrying work absent from main (kept — 48)
 

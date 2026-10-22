@@ -15,8 +15,13 @@
 # modifications and untracked-but-not-ignored files abort that worktree; ignored
 # build output does not count and is discarded by `git worktree remove --force`.
 #
-# Protected: main, dev, backup/pre-v0.3-integration, every branch sitting on
-# main's tip (the local merge-train aliases), and all remote-tracking refs.
+# Protected: main, dev, backup/*, every branch sitting on main's tip (local merge-train
+# aliases), every branch matching a --keep glob, and all remote-tracking refs.
+#
+# A merge-train alias is only recognisable while its tip equals main's. As soon as a
+# commit lands on main the alias looks like any other merged branch, so pass
+#   --keep 'japanese-anki-app/t_3264cf90*' --keep 'japanese-anki-app/t_132e540a*'
+# for refs that exist as labels rather than as work.
 #
 # Exit status: 0 on success (whether or not there was work), 2 on misuse.
 set -euo pipefail
@@ -24,22 +29,43 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 apply=0
-case "${1:-}" in
-  "") ;;
-  --apply) apply=1 ;;
-  -h|--help) sed -n '2,24p' "${BASH_SOURCE[0]}"; exit 0 ;;
-  *) echo "usage: $0 [--apply]" >&2; exit 2 ;;
-esac
+keep_globs=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --apply) apply=1 ;;
+    --keep) shift; [ $# -gt 0 ] || { echo "--keep needs a branch or glob" >&2; exit 2; }
+            keep_globs+=("$1") ;;
+    --keep=*) keep_globs+=("${1#--keep=}") ;;
+    -h|--help) awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "${BASH_SOURCE[0]}"; exit 0 ;;
+    *) echo "usage: $0 [--apply] [--keep <branch-or-glob>]..." >&2; exit 2 ;;
+  esac
+  shift
+done
 
 main_ref=main
 main_tip="$(git rev-parse --verify "${main_ref}^{commit}")"
 root="$(git rev-parse --show-toplevel)"
 
+is_kept_by_glob() {
+  local branch="$1" glob
+  for glob in "${keep_globs[@]:-}"; do
+    [ -n "$glob" ] || continue
+    # shellcheck disable=SC2053  # glob is intentional
+    [[ "$branch" == $glob ]] && return 0
+  done
+  return 1
+}
+
 is_protected() {
-  case "$1" in
-    main | dev | backup/pre-v0.3-integration) return 0 ;;
+  local branch="$1"
+  case "$branch" in
+    main | dev | backup/*) return 0 ;;
   esac
-  [ "$(git rev-parse "$1")" = "$main_tip" ]
+  is_kept_by_glob "$branch" && return 0
+  # A merge-train alias is only identifiable while it still equals main's tip. Once
+  # main advances it looks like any other merged branch, so pass --keep for refs that
+  # exist as labels rather than as work.
+  [ "$(git rev-parse "$branch")" = "$main_tip" ]
 }
 
 # branch -> worktree path ("" when the branch is not checked out anywhere)
