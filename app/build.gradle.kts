@@ -2,7 +2,6 @@ import org.gradle.api.artifacts.ProjectDependency
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
 
@@ -109,7 +108,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
 
     externalNativeBuild {
@@ -126,7 +124,7 @@ if (System.getenv("IN_GRADLE_UPDATE_DEPS") == "1") {
         isCanBeResolved = true
         isCanBeConsumed = false
     }
-    dependencies.add("releaseLintForLock", "com.android.tools.lint:lint-gradle:31.13.2") // AGP 8.13.2
+    dependencies.add("releaseLintForLock", "com.android.tools.lint:lint-gradle:32.4.1") // AGP 9.4.1
 
     afterEvaluate {
         configurations.filter { it.isCanBeResolved }.forEach { configuration ->

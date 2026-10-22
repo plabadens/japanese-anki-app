@@ -1,0 +1,721 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Japanese Anki</string>
+    <string name="back">Back</string>
+    <string name="close">Close</string>
+    <string name="settings">Settings</string>
+    <string name="downloads">Downloads</string>
+    <string name="next">Next</string>
+    <string name="finish">Finish</string>
+    <string name="done">Done</string>
+    <string name="cancel">Cancel</string>
+    <string name="retry">Retry</string>
+    <string name="dictionary">Dictionary</string>
+    <string name="download_size">Download size: %1$s</string>
+    <string name="download">Download</string>
+    <string name="downloading">Downloading…</string>
+    <string name="byte_progress">%1$s of %2$s</string>
+    <string name="verifying">Verifying…</string>
+    <string name="installing">Installing…</string>
+    <string name="ready">Ready</string>
+    <string name="waiting_wifi">Waiting for Wi-Fi</string>
+    <string name="paused">Paused</string>
+    <string name="pause">Pause</string>
+    <string name="resume">Resume</string>
+    <string name="use_app">Use app while setup runs</string>
+    <string name="finish_setup">Finish setup</string>
+    <string name="restart_download">The download will start over.</string>
+    <string name="download_notification">Dictionary download</string>
+    <string name="dictionary_ready">Dictionary ready</string>
+    <string name="camera">Camera</string>
+    <string name="camera_purpose">Capture Japanese text with your camera.</string>
+    <string name="allow_camera">Allow camera</string>
+    <string name="use_typing">Use typing</string>
+    <string name="gallery">Gallery</string>
+    <string name="take_photo">Take photo</string>
+    <string name="type">Type</string>
+    <string name="sentence">Japanese sentence</string>
+    <string name="attach_photo">Attach photo</string>
+    <string name="remove_photo">Remove photo</string>
+    <string name="view_photo">View photo</string>
+    <string name="photo">Photo</string>
+    <string name="choose_word">Choose word</string>
+    <string name="resume_draft">Resume draft</string>
+    <string name="choose_sentence">Choose sentence</string>
+    <string name="reading_photo">Reading text…</string>
+    <string name="edit_sentence">Edit sentence</string>
+    <string name="choose_meaning">Choose meaning</string>
+    <string name="change_meaning">Change meaning</string>
+    <string name="expand_definition">View full definition</string>
+    <string name="definition">Definition</string>
+    <string name="play_sentence">Play sentence audio</string>
+    <string name="play_word">Play word audio</string>
+    <string name="stop_audio">Stop audio</string>
+    <string name="pitch_flat">Flat pitch</string>
+    <string name="pitch_drop">Pitch falls after mora %1$d.</string>
+    <string name="pitch_devoiced">Devoiced mora %1$d.</string>
+    <string name="pitch_nasal">Nasal mora %1$d.</string>
+    <string name="add_note">Add note</string>
+    <string name="edit_note">Edit note</string>
+    <string name="note">Note</string>
+    <string name="add_tags">Add tags</string>
+    <string name="edit_tags">Edit tags</string>
+    <string name="tags">Tags</string>
+    <string name="tag_input">Add a tag</string>
+    <string name="remove_tag">Remove %1$s</string>
+    <string name="send">Send to AnkiDroid</string>
+    <string name="sending">Sending…</string>
+    <string name="sent">Added to AnkiDroid</string>
+    <string name="check_anki">Check AnkiDroid</string>
+    <string name="checking_anki">Checking AnkiDroid…</string>
+    <string name="anki">AnkiDroid</string>
+    <string name="connect_anki">Connect AnkiDroid</string>
+    <string name="open_anki">Open AnkiDroid</string>
+    <string name="install_anki">Install AnkiDroid</string>
+    <string name="setup_later">Set up later</string>
+    <string name="connected">Connected</string>
+    <string name="not_connected">Not connected</string>
+    <string name="note_type">Note type</string>
+    <string name="deck">Deck</string>
+    <string name="audio">Audio</string>
+    <string name="google_key">Google Cloud API key</string>
+    <string name="key_required">Enter a Google Cloud API key.</string>
+    <string name="show_key">Show API key</string>
+    <string name="hide_key">Hide API key</string>
+    <string name="sentence_voice">Sentence voice</string>
+    <string name="reload_voices">Reload voices</string>
+    <string name="loading_voices">Loading voices…</string>
+    <string name="loading_audio">Preparing audio</string>
+    <string name="default_tags">Default tags</string>
+    <string name="clear_cache">Clear cache</string>
+    <string name="clear_cache_title">Clear cache?</string>
+    <string name="clear_cache_body">Your current draft and saved notes will be kept.</string>
+    <string name="cache_cleared">Cache cleared</string>
+    <string name="sources">Sources and licenses</string>
+    <string name="use_mobile_title">Use mobile data?</string>
+    <string name="use_mobile">Use mobile data</string>
+    <string name="wait_wifi">Wait for Wi-Fi</string>
+    <string name="replace_title">Replace this draft?</string>
+    <string name="replace_body">Your current draft will be discarded.</string>
+    <string name="replace">Replace</string>
+    <string name="keep_draft">Keep draft</string>
+
+    <string name="card">Card</string>
+    <string name="card_word_selected_state">Selected</string>
+    <string name="card_word_not_selected_state">Not selected</string>
+    <string name="card_hint_word">Tap a word to build this card.</string>
+    <string name="card_hint_preparing">Preparing pronunciation…</string>
+    <string name="update_card">Update card</string>
+    <string name="torch">Torch</string>
+
+    <string name="camera_denied">Camera access is off.</string>
+    <string name="open_settings">Open settings</string>
+    <string name="camera_failed">Could not take the photo.</string>
+    <string name="photo_import_failed">Could not open this photo.</string>
+    <string name="ocr_empty">No readable Japanese text found.</string>
+    <string name="ocr_failed">Could not read the photo.</string>
+    <string name="analysis_failed">Could not analyze this sentence.</string>
+    <string name="sentence_reading_unresolved">Could not resolve this sentence’s reading.</string>
+    <string name="dictionary_needed">Finish dictionary setup.</string>
+    <string name="audio_setup_needed">Finish audio setup.</string>
+    <string name="dictionary_failed">Could not download the dictionary.</string>
+    <string name="dictionary_invalid">Could not verify the dictionary download.</string>
+    <string name="dictionary_install_failed">Could not install the dictionary.</string>
+    <string name="storage_full">Not enough storage to install the dictionary.</string>
+    <string name="no_entry">No dictionary match for this word.</string>
+    <string name="reading_unresolved">Could not resolve this word’s reading.</string>
+    <string name="no_pitch">No pitch pattern found for this word.</string>
+    <string name="no_recording">No recording found for this word.</string>
+    <string name="recording_failed">Could not download the word audio.</string>
+    <string name="speech_failed">Could not create the sentence audio.</string>
+    <string name="translation_failed">Could not translate this sentence.</string>
+    <string name="preparation_interrupted">Card preparation was interrupted.</string>
+    <string name="playback_failed">Could not play this audio.</string>
+    <string name="offline">No internet connection.</string>
+    <string name="key_rejected">API key not accepted.</string>
+    <string name="speech_service_disabled">Enable Text-to-Speech for this Google Cloud project.</string>
+    <string name="translation_service_disabled">Enable Translation for this Google Cloud project.</string>
+    <string name="billing_required">Check billing for this Google Cloud project.</string>
+    <string name="quota_reached">The service limit was reached. Try again later.</string>
+    <string name="speech_input_rejected">This sentence could not be used for audio.</string>
+    <string name="voices_failed">Could not load voices.</string>
+    <string name="voices_empty">No compatible Japanese voices found.</string>
+    <string name="voice_unavailable">Choose an available sentence voice.</string>
+    <string name="cached_voices">Saved voices · offline</string>
+    <string name="save_failed">Could not save your changes.</string>
+    <string name="draft_save_failed">Could not save this draft.</string>
+    <string name="cache_failed">Could not clear the cache.</string>
+    <string name="anki_missing">Install AnkiDroid to send this card.</string>
+    <string name="anki_permission">Allow access to AnkiDroid to send this card.</string>
+    <string name="destination_needed">Choose a note type and deck in Settings.</string>
+    <string name="model_incompatible">This note type cannot hold the required card content.</string>
+    <string name="duplicate">This sentence and word are already in this deck.</string>
+    <string name="duplicate_check_failed">Could not check for an existing note.</string>
+    <string name="sentence_audio_import_failed">Could not copy the sentence audio to AnkiDroid.</string>
+    <string name="word_audio_import_failed">Could not copy the word audio to AnkiDroid.</string>
+    <string name="photo_copy_failed">Could not copy the photo to AnkiDroid.</string>
+    <string name="note_insert_failed">Could not add the note to AnkiDroid.</string>
+    <string name="send_uncertain">The note may already be in AnkiDroid.</string>
+    <string name="destination_mismatch">The note is not in the selected deck.</string>
+    <string name="verification_failed">Could not confirm the note in AnkiDroid.</string>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <string name="legacy_capture_add_photo_optional">Add photo (optional)</string>
+    <string name="legacy_capture_camera_access_is_needed_to_take_a_photo_ty">Camera access is needed to take a photo. Typing and the gallery still work.</string>
+    <string name="legacy_capture_change_photo">Change photo</string>
+    <string name="legacy_capture_choose_the_text_region">Choose the text region</string>
+    <string name="legacy_capture_discard_draft">Discard draft</string>
+    <string name="legacy_capture_discard_this_draft">Discard this draft?</string>
+    <string name="legacy_capture_keep_working">Keep working</string>
+    <string name="legacy_capture_reading_the_photo_on_this_device">Reading the photo on this device…</string>
+    <string name="legacy_capture_replace_current_draft">Replace current draft?</string>
+    <string name="legacy_capture_retry_ocr">Retry OCR</string>
+    <string name="legacy_capture_retry_photo">Retry photo</string>
+    <string name="legacy_capture_review_choices">Review choices</string>
+    <string name="legacy_capture_text_choices_are_ready">Text choices are ready.</string>
+    <string name="legacy_capture_the_current_draft_will_be_replaced_by_text">The current draft will be replaced by text from this photo.</string>
+    <string name="legacy_capture_the_current_draft_will_be_replaced_by_the">The current draft will be replaced by the shared text.</string>
+    <string name="legacy_capture_the_sentence_target_photo_and_any_generate">The sentence, target, photo and any generated results will be deleted. This cannot be undone.</string>
+    <string name="legacy_capture_this_draft_is_already_empty">This draft is already empty.</string>
+    <string name="legacy_capture_type_the_japanese_sentence">Type the Japanese sentence</string>
+    <string name="card_already_in_ankidroid">Already in AnkiDroid</string>
+    <string name="card_analyzing_the_sentence">Analyzing the sentence…</string>
+    <string name="card_blocked">Blocked:</string>
+    <string name="card_choose_dictionary_entry">Choose dictionary entry</string>
+    <string name="card_choose_text_from_photo">Choose text from photo</string>
+    <string name="card_copy">✕</string>
+    <string name="card_edit_and_recheck">Edit and recheck</string>
+    <string name="card_edit_notes_tags">Edit notes &amp; tags</string>
+    <string name="card_edit_preparation_corrections">Edit preparation corrections</string>
+    <string name="card_edit_sentence">\ \ Edit sentence</string>
+    <string name="card_hide_preparation_corrections">Hide preparation corrections</string>
+    <string name="card_i_checked_clear_frozen_recovery">I checked; clear frozen recovery</string>
+    <string name="card_i_checked_configure_destination">I checked; configure destination</string>
+    <string name="card_i_checked_resolve_outcome">I checked; resolve outcome</string>
+    <string name="card_keep_this_meaning">Keep this meaning</string>
+    <string name="card_load_more_dictionary_matches">Load more dictionary matches</string>
+    <string name="card_meaning">Meaning</string>
+    <string name="card_more_than_one_source_pattern_is_listed_for">More than one source pattern is listed for this reading. Choose another during preparation.</string>
+    <string name="card_no_definition_yet">No definition yet.</string>
+    <string name="card_no_words_are_available_yet_edit_the_senten">No words are available yet. Edit the sentence to prepare the selection.</string>
+    <string name="card_notes_optional">Notes (optional)</string>
+    <string name="card_open_matching_note_in_ankidroid">Open matching note in AnkiDroid</string>
+    <string name="card_other_pitch_patterns">Other pitch patterns</string>
+    <string name="card_pending_send_needs_review">Pending Send needs review</string>
+    <string name="card_photo_attached">Photo attached</string>
+    <string name="card_pitch_accent">Pitch accent</string>
+    <string name="card_pitch_data_missing_for_this_reading">Pitch data missing for this reading.</string>
+    <string name="card_preparation_corrections">Preparation corrections</string>
+    <string name="card_preparing_image">Preparing image…</string>
+    <string name="card_preparing_photo">Preparing photo…</string>
+    <string name="card_preparing_the_offline_dictionary_for_first">Preparing the offline dictionary for first use…</string>
+    <string name="card_recovery_is_held_until_ankidroid_setup_suc">Recovery is held until AnkiDroid setup succeeds; the frozen draft has not been cleared.</string>
+    <string name="card_remove_interrupted_image">Remove interrupted image</string>
+    <string name="card_replace_photo">Replace photo</string>
+    <string name="card_resume_frozen_send">Resume frozen Send</string>
+    <string name="card_retry_frozen_send">Retry frozen Send</string>
+    <string name="card_retry_media_import_may_duplicate">Retry media import (may duplicate)</string>
+    <string name="card_retry_pending_send_check">Retry pending-send check</string>
+    <string name="card_retry_send">Retry Send</string>
+    <string name="card_retry_translation">Retry translation</string>
+    <string name="card_retry_unidic_setup">Retry UniDic setup</string>
+    <string name="card_sent_to_ankidroid">Sent to AnkiDroid</string>
+    <string name="card_sentence_readings">Sentence readings</string>
+    <string name="card_sentence_translation">Sentence translation</string>
+    <string name="card_tags_optional">Tags (optional)</string>
+    <string name="card_the_meaning_is_for_earlier_input_return_to">The meaning is for earlier input. Return to preparation to review it.</string>
+    <string name="card_the_meaning_may_be_stale_for_the_current_t">The meaning may be stale for the current target.</string>
+    <string name="card_the_saved_note_id_cannot_be_found_no_autom">The saved note ID cannot be found. No automatic re-insert will be attempted; inspect AnkiDroid before resolving this draft.</string>
+    <string name="card_this_reading_has_no_source_listed_pattern">This reading has no source-listed pattern. Return to preparation to correct the reading.</string>
+    <string name="card_this_translation_is_for_an_earlier_sentenc">This translation is for an earlier sentence.</string>
+    <string name="card_translation">Translation</string>
+    <string name="card_translation_is_being_prepared">Translation is being prepared…</string>
+    <string name="card_treat_pending_send_as_complete">Treat pending Send as complete</string>
+    <string name="card_vocabulary_reading">Vocabulary reading</string>
+    <string name="card_why_is_pitch_missing">Why is pitch missing?</string>
+    <string name="legacy_settings_add_a_key_to_list_voices">Add a key to list voices.</string>
+    <string name="legacy_settings_android_keystore_stays_on_this_device_and">Android Keystore, stays on this device, and is sent only to Google Cloud\ </string>
+    <string name="legacy_settings_ankidroid_detected_grant_api_permission_to">AnkiDroid detected. Grant API permission to continue setup.</string>
+    <string name="legacy_settings_ankidroid_not_detected_install_it_before_s">AnkiDroid not detected. Install it before setting up export.</string>
+    <string name="legacy_settings_ankidroid_setup">AnkiDroid setup</string>
+    <string name="legacy_settings_applied_to_each_new_note_per_note_edits_do">Applied to each new note. Per-note edits do not change these defaults.</string>
+    <string name="legacy_settings_audio_cache">Audio cache</string>
+    <string name="legacy_settings_changing_the_voice_invalidates_sentence_au">Changing the voice invalidates sentence audio only. Voice listing does not\ </string>
+    <string name="legacy_settings_choose_destination_deck">Choose destination deck</string>
+    <string name="legacy_settings_choose_note_type">Choose note type</string>
+    <string name="legacy_settings_choose_sentence_voice">Choose sentence voice</string>
+    <string name="legacy_settings_clear_audio_cache">Clear audio cache</string>
+    <string name="legacy_settings_clearing">Clearing…</string>
+    <string name="legacy_settings_cloud_translation_api_and_restrict_this_ke">Cloud Translation API, and restrict this key to those two APIs. Entering or\ </string>
+    <string name="legacy_settings_current_draft_audio_is_kept_separately">Current draft audio is kept separately.</string>
+    <string name="legacy_settings_data_sources_and_licenses">Data sources and licenses</string>
+    <string name="legacy_settings_destination_deck">Destination deck</string>
+    <string name="legacy_settings_empty_translation_blocks_send_retry_keeps">empty translation blocks Send; Retry keeps manual corrections. Voice listing\ </string>
+    <string name="legacy_settings_fixed_path_no_model_or_provider_choice">Fixed path: no model or provider choice.</string>
+    <string name="legacy_settings_google_cloud">Google Cloud</string>
+    <string name="legacy_settings_google_cloud_translation_basic_default_neu">Google Cloud Translation Basic — default neural (NMT), Japanese to English.\ </string>
+    <string name="legacy_settings_google_cloud_translation_basic_default_neu_2">Google Cloud Translation Basic — default neural (NMT), Japanese → English.\ </string>
+    <string name="legacy_settings_grant_ankidroid_api_permission">Grant AnkiDroid API permission</string>
+    <string name="legacy_settings_grant_the_ankidroid_api_permission_before">Grant the AnkiDroid API permission before choosing the note type or deck.</string>
+    <string name="legacy_settings_in_an_authentication_header_never_in_a_url">in an authentication header, never in a URL.</string>
+    <string name="legacy_settings_install_ankidroid_to_set_up_export">Install AnkiDroid to set up export.</string>
+    <string name="legacy_settings_jmdict_and_kanjium_attribution_is_availabl">JMdict and Kanjium attribution is available in Sources &amp; licenses.\ </string>
+    <string name="legacy_settings_key_saved_for_speech_and_translation">Key saved for speech and translation.</string>
+    <string name="legacy_settings_key_saved_securely">Key saved securely</string>
+    <string name="legacy_settings_listing_japanese_chirp_3_hd_voices">\ \ Listing Japanese Chirp 3 HD voices…</string>
+    <string name="legacy_settings_listing_japanese_voices">Listing Japanese voices…</string>
+    <string name="legacy_settings_loading_note_types_and_decks">Loading note types and decks…</string>
+    <string name="legacy_settings_loading_saved_settings">Loading saved settings…</string>
+    <string name="legacy_settings_local_license_copies_are_bundled_with_the">Local license copies are bundled with the app. JMdict data is updated through app releases.</string>
+    <string name="legacy_settings_mecab_0_996_taku_kudo_and_nippon_telegraph">MeCab 0.996 © Taku Kudo and Nippon Telegraph and Telephone Corporation; BSD license.</string>
+    <string name="legacy_settings_no_decks_are_available_check_ankidroid_set">No decks are available. Check AnkiDroid setup in Settings.</string>
+    <string name="legacy_settings_no_existing_decks_available_in_ankidroid">No existing decks available in AnkiDroid.</string>
+    <string name="legacy_settings_no_japanese_chirp_3_hd_voices_were_returne">No Japanese Chirp 3 HD voices were returned.</string>
+    <string name="legacy_settings_no_key_saved">No key saved</string>
+    <string name="legacy_settings_no_key_saved_local_preparation_works_speec">No key saved. Local preparation works; speech and translation need a key.</string>
+    <string name="legacy_settings_no_note_types_available_in_ankidroid">No note types available in AnkiDroid.</string>
+    <string name="legacy_settings_note_types_and_decks_are_loaded_from_ankid">Note types and decks are loaded from AnkiDroid.</string>
+    <string name="legacy_settings_one_api_key_for_sentence_speech_and_transl">One API key for sentence speech and translation. It is encrypted with Android Keystore, stays on this device, and is sent only to Google Cloud in an authentication header. Entering or saving it sends no request.</string>
+    <string name="legacy_settings_one_api_key_for_sentence_speech_and_transl_2">One API key for sentence speech and translation. It is encrypted with\ </string>
+    <string name="legacy_settings_open_cc_by_sa_4_0">Open CC BY-SA 4.0</string>
+    <string name="legacy_settings_open_edrdg_license">Open EDRDG license</string>
+    <string name="legacy_settings_previously_selected_deck_unavailable">Previously selected deck unavailable</string>
+    <string name="legacy_settings_previously_selected_note_type_unavailable">Previously selected note type unavailable</string>
+    <string name="legacy_settings_project_setup_enable_billing_enable_the_cl">Project setup: enable billing, enable the Cloud Text-to-Speech API and the\ </string>
+    <string name="legacy_settings_refresh_voices">Refresh voices</string>
+    <string name="legacy_settings_retry_ankidroid_setup">Retry AnkiDroid setup</string>
+    <string name="legacy_settings_save">Save</string>
+    <string name="legacy_settings_save_the_key_then_refresh_voices">Save the key, then refresh voices.</string>
+    <string name="legacy_settings_saved_voice_not_in_this_list">Saved voice not in this list</string>
+    <string name="legacy_settings_saving">Saving…</string>
+    <string name="legacy_settings_saving_the_key_sends_no_request">saving the key sends no request.</string>
+    <string name="legacy_settings_select_part_of_the_sentence_then_use_it_as">Select part of the sentence, then use it as the target for a multi-word phrase.</string>
+    <string name="legacy_settings_sentence_voice_chirp_3_hd">Sentence voice · Chirp 3 HD</string>
+    <string name="legacy_settings_show_key">Show key</string>
+    <string name="legacy_settings_showing_a_cached_voice_list_it_has_not_bee">Showing a cached voice list. It has not been verified for the current key.</string>
+    <string name="legacy_settings_showing_the_cached_list_it_is_not_verified">\ Showing the cached list; it is not verified for the current key.</string>
+    <string name="legacy_settings_showing_the_cached_list_which_is_not_fresh">\ Showing the cached list, which is not fresh verification.</string>
+    <string name="legacy_settings_sources">Sources</string>
+    <string name="legacy_settings_sources_licenses">Sources &amp; licenses</string>
+    <string name="legacy_settings_speech_cloud_text_to_speech">Speech · Cloud Text-to-Speech</string>
+    <string name="legacy_settings_synthesize_or_bill_any_speech">synthesize or bill any speech.</string>
+    <string name="legacy_settings_test_translation">Test translation</string>
+    <string name="legacy_settings_testing">Testing…</string>
+    <string name="legacy_settings_testing_translation">\ \ Testing translation…</string>
+    <string name="legacy_settings_the_bundled_mixed_source_ajt_pitch_data_st">The bundled mixed-source AJT pitch data still needs a separate distribution-rights review.</string>
+    <string name="legacy_settings_the_current_draft_s_audio_is_kept_outside">The current draft\'s audio is kept outside this cache.</string>
+    <string name="legacy_settings_the_disclosed_sample_is_sent_only_when_you">The disclosed sample is sent only when you tap Test; that request may be billable.</string>
+    <string name="legacy_settings_the_saved_google_cloud_key_could_not_be_op">The saved Google Cloud key could not be opened. Enter it again.</string>
+    <string name="legacy_settings_the_saved_voice_is_no_longer_listed_choose">The saved voice is no longer listed. Choose another voice before generating sentence audio.</string>
+    <string name="legacy_settings_the_saved_voice_is_not_in_google_s_current">The saved voice is not in Google\'s current list. Select a listed voice before generating sentence audio.</string>
+    <string name="legacy_settings_the_test_sends_one_disclosed_sample_senten">The test sends one disclosed sample sentence and may be billable. A failed or\ </string>
+    <string name="legacy_settings_translation_cloud_translation_basic">Translation · Cloud Translation Basic</string>
+    <string name="legacy_settings_translation_has_not_been_tested_in_this_se">Translation has not been tested in this session.</string>
+    <string name="legacy_settings_translation_not_tested_in_this_session">Translation not tested in this session.</string>
+    <string name="legacy_settings_translation_test">Translation test</string>
+    <string name="legacy_settings_unidic_cwj_3_1_1_the_unidic_consortium_and">UniDic CWJ 3.1.1 © the UniDic Consortium and Teruaki Oka; distributed under the included BSD license.</string>
+    <string name="legacy_settings_use_selection_as_target">Use selection as target</string>
+    <string name="legacy_settings_validates_speech_access_only_not_translati">validates speech access only, not translation access or speech quality.</string>
+    <string name="legacy_settings_voice_list_not_checked_yet">Voice list not checked yet.</string>
+    <string name="legacy_settings_voice_listing_does_not_synthesize_audio_it">Voice listing does not synthesize audio. It makes no speech-generation request.</string>
+    <string name="legacy_settings_voice_listing_not_checked_yet_refresh_voic">Voice listing not checked yet. Refresh voices to validate speech access.</string>
+    <string name="card_entry_count">%1$s entries</string>
+    <string name="card_reading_label">%1$s reading</string>
+    <string name="legacy_settings_reusable_audio_cache">Reusable sentence and word audio: %1$s.\ </string>
+    <string name="legacy_settings_translation_test_passed">Test passed. Sample 「%1$s」 → %2$s</string>
+
+    <string name="legacy_capture_input_title">Input</string>
+    <string name="legacy_capture_flash">Flash</string>
+    <string name="legacy_capture_choose_photo_from_device">Choose a photo from this device</string>
+    <string name="legacy_capture_saving_photo">Saving photo</string>
+    <string name="legacy_capture_capture_in_progress">Capture in progress</string>
+    <string name="legacy_capture_capture_photo">Capture photo</string>
+    <string name="legacy_capture_capture_failed">Capture failed</string>
+    <string name="legacy_capture_selected_state">Selected</string>
+    <string name="legacy_capture_not_selected_state">Not selected</string>
+    <string name="legacy_capture_flash_on_state">On</string>
+    <string name="legacy_capture_flash_off_state">Off</string>
+    <string name="card_target_title">Target</string>
+    <string name="card_review_title">Review</string>
+    <string name="card_flow_step_accessibility">Step %1$s of %2$s: %3$s</string>
+    <string name="card_word_accessibility">Word %1$s</string>
+    <string name="card_tag_accessibility">Tag %1$s</string>
+    <string name="card_view_whole_photo">View whole photo</string>
+    <string name="card_some_kanji_have_no_available_reading">Some kanji have no available reading</string>
+    <string name="card_target_selected">Target selected: %1$s</string>
+    <string name="card_target_selected_state">Selected target</string>
+    <string name="card_meaning_selected_state">Selected meaning</string>
+    <string name="card_not_selected_state">Not selected</string>
+    <string name="card_audio_playing_state">Playing</string>
+    <string name="card_audio_error_state">Error</string>
+    <string name="card_audio_setup_needed_state">Setup needed</string>
+    <string name="card_audio_in_progress_state">In progress</string>
+    <string name="legacy_capture_could_not_open_that_photo_choose_another_i">Could not open that photo. Choose another image or type the sentence.</string>
+    <string name="legacy_capture_could_not_open_that_photo_choose_another_i_2">Could not open that photo. Choose another image.</string>
+    <string name="legacy_capture_could_not_read_this_photo_type_or_edit_the">Could not read this photo. Type or edit the sentence to continue.</string>
+    <string name="legacy_capture_no_text_was_found_type_or_edit_the_sentenc">No text was found. Type or edit the sentence to continue.</string>
+    <string name="legacy_capture_this_draft_came_from_a_photo_so_it_needs_i">This draft came from a photo, so it needs its image. Replace the image instead.</string>
+    <string name="legacy_capture_this_photo_could_not_be_prepared_for_anki">This photo could not be prepared for Anki. Retry or remove it.</string>
+
+    <string name="card_a_matching_note_exists_for_the_frozen_revi">A matching note exists for the frozen revision. Treat it as complete only after checking AnkiDroid.</string>
+    <string name="card_allow_ankidroid_api_access_in_settings_bef">Allow AnkiDroid API access in Settings before sending.</string>
+    <string name="card_ankidroid_browser_is_unavailable_note_1_d">AnkiDroid browser is unavailable. Note %1$s matches \'%2$s\' in the submitted sentence \'%3$s\'. Keep this draft for manual resolution.</string>
+    <string name="card_ankidroid_did_not_add_the_note_you_can_saf">AnkiDroid did not add the note. You can safely review and retry.</string>
+    <string name="card_ankidroid_setup_could_not_be_loaded_open_s">AnkiDroid setup could not be loaded. Open Settings and retry setup.</string>
+    <string name="card_ankidroid_setup_is_still_loading_wait_for">AnkiDroid setup is still loading. Wait for it to finish.</string>
+    <string name="card_blocked_a_note_with_this_sentence_and_voca">Blocked: a note with this sentence and vocabulary lemma already exists.</string>
+    <string name="card_checking_the_frozen_send_revision_in_ankid">Checking the frozen Send revision in AnkiDroid…</string>
+    <string name="card_checking_the_saved_note_id_and_destination">Checking the saved note ID and destination cards in AnkiDroid…</string>
+    <string name="card_choose_a_dictionary_entry_to_resolve_this">Choose a dictionary entry to resolve this word.</string>
+    <string name="card_choose_a_source_listed_pitch_pattern_befor">Choose a source-listed pitch pattern before sending.</string>
+    <string name="card_choose_an_ankidroid_destination_deck_in_se">Choose an AnkiDroid destination deck in Settings before sending.</string>
+    <string name="card_choose_an_ankidroid_note_type_in_settings">Choose an AnkiDroid note type in Settings before sending.</string>
+    <string name="card_could_not_analyze_this_sentence_select_a_t">Could not analyze this sentence. Select a target span to search the dictionary.</string>
+    <string name="card_could_not_import_the_selected_image_the_dr">Could not import the selected image. The draft was kept; retry or remove the image.</string>
+    <string name="card_could_not_load_more_dictionary_matches">Could not load more dictionary matches.</string>
+    <string name="card_could_not_read_note_types_and_decks_check">Could not read note types and decks. Check AnkiDroid API access and retry.</string>
+    <string name="card_could_not_record_this_review_authorization">Could not record this Review authorization. Try Continue again.</string>
+    <string name="card_could_not_send_the_note_check_ankidroid_ap">Could not send the note. Check AnkiDroid API access and retry.</string>
+    <string name="card_could_not_verify_the_frozen_send_retry_the">Could not verify the frozen Send. Retry the check or inspect AnkiDroid before resolving it.</string>
+    <string name="card_could_not_verify_the_saved_note_id_retry_t">Could not verify the saved note ID. Retry this read-only recovery check; no new note will be inserted.</string>
+    <string name="card_dictionary_lookup_failed_retry_before_sele">Dictionary lookup failed. Retry before selecting a dictionary entry.</string>
+    <string name="card_finish_setup_in_settings_before_reviewing">Finish setup in Settings before reviewing audio.</string>
+    <string name="card_frozen_recovery_cleared_after_review_the_d">Frozen recovery cleared after review; the draft media was retained.</string>
+    <string name="card_no_matching_note_was_found_but_the_frozen">No matching note was found, but the frozen destination deck is unavailable. Confirm the outcome before choosing a new destination.</string>
+    <string name="card_no_matching_note_was_found_for_the_frozen">No matching note was found for the frozen revision; retry will reuse its saved media receipt.</string>
+    <string name="card_no_pitch_pattern_can_be_resolved_for_this">No pitch pattern can be resolved for this reading.</string>
+    <string name="card_note_1_d_recovered_in_the_selected_deck">Note %1$s recovered in the selected deck.</string>
+    <string name="card_note_sent_to_ankidroid">Note sent to AnkiDroid.</string>
+    <string name="card_outcome_acknowledged_choose_a_valid_destin">Outcome acknowledged; choose a valid destination before retrying.</string>
+    <string name="card_pending_send_cleared_after_review_configur">Pending Send cleared after review; configure the destination before retrying.</string>
+    <string name="card_pending_send_held_for_manual_resolution_co">Pending Send held for manual resolution; configure the destination before retrying.</string>
+    <string name="card_pending_send_marked_complete">Pending Send marked complete.</string>
+    <string name="card_restore_the_frozen_note_s_ankidroid_note_t">Restore the frozen note\'s AnkiDroid note type and deck in Settings before retrying.</string>
+    <string name="card_resuming_the_frozen_send_will_reuse_the_sa">Resuming the frozen Send will reuse the saved media receipt.</string>
+    <string name="card_retrying_the_frozen_media_sequence_may_dup">Retrying the frozen media sequence may duplicate an import that reached AnkiDroid without a saved receipt.</string>
+    <string name="card_retrying_the_frozen_send_the_draft_remains">Retrying the frozen Send; the draft remains locked until it finishes.</string>
+    <string name="card_still_needed_1_s">Still needed: %1$s</string>
+    <string name="card_the_frozen_note_type_fields_changed_confir">The frozen note type fields changed. Confirm the previous outcome before retrying.</string>
+    <string name="card_the_frozen_note_type_is_unavailable_confir">The frozen note type is unavailable. Confirm the previous outcome before choosing a new destination.</string>
+    <string name="card_the_frozen_send_destination_is_unavailable">The frozen Send destination is unavailable; resolve it before retrying.</string>
+    <string name="card_the_frozen_send_is_unavailable_keep_the_dr">The frozen Send is unavailable; keep the draft and resolve the outcome manually.</string>
+    <string name="card_the_frozen_send_record_is_incomplete_keep">The frozen Send record is incomplete. Keep this draft and resolve the outcome manually before retrying.</string>
+    <string name="card_the_image_is_still_being_prepared_send_bec">The image is still being prepared. Send becomes available when it is ready.</string>
+    <string name="card_the_inserted_note_id_was_not_saved_the_out">The inserted note ID was not saved. The outcome is uncertain; resolve it explicitly before retrying.</string>
+    <string name="card_the_interrupted_image_was_discarded_the_re">The interrupted image was discarded; the rest of the draft was kept.</string>
+    <string name="card_the_missing_saved_note_outcome_was_explici">The missing saved note outcome was explicitly acknowledged; review the draft before a new Send.</string>
+    <string name="card_the_note_fields_are_incomplete_return_to_p">The note fields are incomplete. Return to preparation and complete the note.</string>
+    <string name="card_the_offline_dictionary_is_still_loading_wa">The offline dictionary is still loading. Wait for it to finish before sending.</string>
+    <string name="card_the_saved_note_has_cards_in_another_or_mix">The saved note has cards in another or mixed destination. Nothing was moved or reinserted; inspect AnkiDroid and resolve this draft explicitly.</string>
+    <string name="card_the_saved_note_id_has_no_verifiable_cards">The saved note ID has no verifiable cards. Nothing was moved or reinserted; inspect AnkiDroid and resolve this draft explicitly.</string>
+    <string name="card_the_selected_image_is_missing_or_not_ready">The selected image is missing or not ready to send.</string>
+    <string name="card_the_selected_image_is_not_ready_to_send">The selected image is not ready to send.</string>
+    <string name="card_translation_is_unavailable_tap_retry_to_co">Translation is unavailable. Tap Retry to continue.</string>
+    <string name="card_translation_needs_retry_tap_retry_to_conti">Translation needs retry. Tap Retry to continue.</string>
+    <string name="card_translation_paused_while_sending_retry_aft">Translation paused while sending. Retry after resolving this Send.</string>
+    <string name="card_translation_request_could_not_be_recorded">Translation request could not be recorded. Tap Retry to continue.</string>
+    <string name="card_translation_was_interrupted_tap_retry_to_c">Translation was interrupted. Tap Retry to continue.</string>
+    <string name="card_translation_was_not_started_tap_retry_to_c">Translation was not started. Tap Retry to continue.</string>
+    <string name="card_wait_for_or_retry_the_missing_audio_before">Wait for or retry the missing audio before sending.</string>
+    <string name="legacy_onboarding_checking_unidic_runtime_archive">Checking UniDic runtime archive</string>
+    <string name="legacy_onboarding_mecab_native_analysis_could_not_load_you_c">MeCab native analysis could not load. You can still select a sentence span and search the dictionary.</string>
+    <string name="legacy_onboarding_offline_dictionary_could_not_be_prepared_a">Offline dictionary could not be prepared. A dictionary entry is required before Send.</string>
+    <string name="legacy_onboarding_unidic_could_not_be_downloaded_verified_or">UniDic could not be downloaded, verified or installed. Check your connection and free storage, then retry.</string>
+    <string name="legacy_settings_audio_cache_cleared_draft_audio_is_unaffec">Audio cache cleared. Draft audio is unaffected.</string>
+    <string name="legacy_settings_could_not_load_saved_settings">Could not load saved settings.</string>
+    <string name="legacy_settings_save_the_current_key_successfully_before_r">Save the current key successfully before reloading voices.</string>
+    <string name="legacy_settings_settings_are_still_loading_back_out_again">Settings are still loading. Back out again when loading has finished.</string>
+    <string name="legacy_settings_settings_could_not_be_saved_the_key_was_no">Settings could not be saved. The key was not stored in plain text.</string>
+    <string name="legacy_settings_setup_could_not_be_marked_complete_back_re">Setup could not be marked complete. Back remains here so you can retry.</string>
+    <string name="legacy_settings_the_audio_cache_could_not_be_cleared">The audio cache could not be cleared.</string>
+    <string name="legacy_settings_the_google_cloud_key_contains_whitespace">The Google Cloud key contains whitespace.</string>
+    <string name="legacy_settings_to_finish_setup_save_a_google_cloud_key_an">To finish setup, save a Google Cloud key and choose a voice verified by Google\'s current list.</string>
+    <string name="legacy_settings_translation_test_failed">Translation test failed.</string>
+    <string name="card_full_photo">Full photo</string>
+    <string name="card_close_photo">Close photo</string>
+    <string name="card_sending_state">Sending</string>
+    <string name="card_edit_preparation">Edit preparation</string>
+    <string name="card_audio_prepare_control">Prepare %1$s audio</string>
+    <string name="card_audio_play_control">Play %1$s audio</string>
+    <string name="card_audio_stop_control">Stop %1$s audio</string>
+    <string name="card_audio_generating_control">Generating %1$s audio</string>
+    <string name="card_audio_advisory_control">%1$s for %2$s audio</string>
+    <string name="card_audio_retry_control">Retry %1$s audio</string>
+    <string name="card_audio_generating_blocker">%1$s audio is being generated. Wait for it to finish.</string>
+    <string name="card_audio_needs_preparation_blocker">%1$s audio has not been generated. Tap the speaker control to generate it.</string>
+    <string name="card_audio_unavailable_blocker">%1$s audio is unavailable. Tap the speaker control to check what is needed.</string>
+    <string name="card_audio_advisory_blocker">%1$s: %2$s</string>
+    <string name="card_audio_message">%1$s</string>
+    <string name="card_audio_generation_failed">%1$s audio not generated: %2$s</string>
+    <string name="card_audio_no_diagnostic_details">No diagnostic details are available.</string>
+    <string name="card_audio_playback_failed">%1$s audio could not be played on this device</string>
+    <string name="card_audio_not_ready_to_send">%1$s audio is not ready to send.</string>
+    <string name="card_translation_setup_needed">Translation setup needed</string>
+    <string name="card_translation_interrupted">Translation interrupted</string>
+    <string name="card_translation_failed">Translation failed</string>
+    <string name="card_translation_in_progress">Translation in progress</string>
+    <string name="card_sentence_audio_not_ready">Sentence audio is not ready</string>
+    <string name="card_word_audio_not_ready">Word audio is not ready</string>
+    <string name="card_translation_needs_review">Translation needs review</string>
+    <string name="card_open_settings_action">Open Settings</string>
+    <string name="card_generate_action">Generate</string>
+    <string name="card_sentence_audio_field">Sentence</string>
+    <string name="card_word_audio_field">Word</string>
+    <string name="card_audio_needs_preparation_state">Needs preparation</string>
+    <string name="card_audio_unavailable_state">Unavailable</string>
+    <string name="card_audio_setup_needed_headline">%1$s audio setup needed</string>
+    <string name="card_preparing_image_status">Preparing image…</string>
+    <string name="card_image_unavailable_status">Image is not available</string>
+    <string name="card_continue_action">Continue</string>
+    <string name="card_ankidroid_field_mapping">AnkiDroid field mapping: %1$s</string>
+    <string name="card_note_fields_do_not_match_note_type">The note fields do not match the selected AnkiDroid note type.</string>
+    <string name="card_target_choose_hint">Tap a word to choose the target.</string>
+    <string name="card_dictionary_searching">Searching JMdict…</string>
+    <string name="card_dictionary_preparing">Preparing the offline dictionary…</string>
+    <string name="card_choose_dictionary_entry_hint">Choose the intended dictionary entry.</string>
+    <string name="card_no_dictionary_match_for_selection">No dictionary match for this selection.</string>
+    <string name="card_target_continue_hint">Tap a word to continue.</string>
+    <string name="card_dictionary_continue_hint">Choose a dictionary entry to continue.</string>
+    <string name="card_meaning_continue_hint">Choose a meaning to continue.</string>
+    <string name="card_pitch_continue_hint">A source-listed pitch pattern is required to continue.</string>
+    <string name="card_matching_note_exists">A matching note already exists in AnkiDroid.</string>
+    <string name="card_send_recovery_media_receipts_recorded">Media receipts were recorded, but note insertion did not start. Review before resuming.</string>
+    <string name="card_send_recovery_previous_send_interrupted">A previous Send was interrupted. Verify its frozen outcome before retrying.</string>
+    <string name="card_send_recovery_note_saved_verifying_cards">The note ID was saved before deck assignment. Verifying its cards before retrying anything.</string>
+    <string name="card_send_recovery_destination_verified_initial">The inserted note\'s destination was verified. Finalizing recovery.</string>
+    <string name="card_send_recovery_media_receipts_saved">Media receipts were saved, but note insertion did not start. Review the frozen note before resuming.</string>
+    <string name="card_send_recovery_note_insertion_uncertain">Could not confirm note insertion. Checking the frozen Send revision…</string>
+    <string name="card_send_recovery_note_assignment_interrupted">Note ID was saved, but deck assignment was interrupted. Recovery will move only that note\'s cards.</string>
+    <string name="card_send_recovery_destination_verified">The note\'s destination was verified; recovery will finalize it without inserting again.</string>
+    <string name="card_send_recovery_media_preparation_interrupted">%1$s was interrupted before its receipt was saved. Inspect AnkiDroid before retrying.</string>
+    <string name="card_media_preparation">Media preparation</string>
+    <string name="card_media_label">media</string>
+    <string name="legacy_capture_continue_action">Continue</string>
+    <string name="legacy_capture_preparing_photo_for_anki">Preparing the photo for Anki…</string>
+    <string name="legacy_capture_photo_attached">Photo attached</string>
+
+    <string name="legacy_settings_jmdict_source_notice">JMdict © James William Breen and EDRDG; CC BY-SA 4.0. %1$s</string>
+    <string name="legacy_settings_kanjium_source_notice">The pitch accent notation, verb particle data, phonetics, homonyms, and other additions or modifications to EDICT, KANJIDIC, or KRADFILE were provided by Uros O. through his free database. Kanjium CC BY-SA 4.0. %1$s</string>
+    <string name="card_send_recovery_media_import_uncertain">The %1$s import may have reached AnkiDroid. Inspect the collection before resuming; do not blindly retry.</string>
+    <string name="card_send_recovery_media_import_stage_uncertain">The %1$s import failed during %2$s and may have reached AnkiDroid. Inspect the collection before resuming; do not blindly retry.</string>
+    <string name="legacy_settings_voice_list_safe_error">Could not list voices. Check the saved key and network, then reload.</string>
+    <string name="legacy_settings_settings_save_fallback">Settings could not be saved.</string>
+    <string name="legacy_settings_settings_persist_failed">Could not persist settings.</string>
+    <string name="card_vocabulary_reading_kana_required">Enter the reading in kana.</string>
+    <string name="card_no_dictionary_entry_loaded">No dictionary entry is loaded for this word yet.</string>
+    <string name="card_reading_not_listed_for_word">No dictionary entry for %1$s is read %2$s. Pick a listed reading.</string>
+    <string name="card_this_word">this word</string>
+    <string name="card_sentence_audio_not_configured">Sentence audio is not configured. Add a Google Cloud key and verified voice in Settings.</string>
+    <string name="card_word_audio_unavailable">Word audio is unavailable. Select a dictionary entry in preparation.</string>
+    <string name="card_saved_cloud_key_unreadable">The saved Google Cloud API key could not be opened. Re-enter it and choose a verified sentence voice in Settings.</string>
+    <string name="card_no_cloud_key_saved">No Google Cloud API key is saved. Add one and choose a verified sentence voice in Settings.</string>
+    <string name="card_no_verified_sentence_voice">No verified sentence voice is selected. Choose one in Settings before generating sentence audio.</string>
+    <string name="card_sentence_voice_unverified">The selected sentence voice is not verified. Reload voices and choose a verified voice in Settings.</string>
+    <string name="card_select_dictionary_entry_for_audio">Select a dictionary entry before generating word audio.</string>
+    <string name="card_ajt_pitch_record_missing">No AJT pitch record matches this entry/reading, so the note cannot be mined.</string>
+    <string name="card_ajt_pitch_index_missing">The bundled AJT pitch index is missing; pitch-dependent notes cannot be mined.</string>
+    <string name="card_ajt_pitch_index_empty">The AJT pitch index contains no records; pitch-dependent notes cannot be mined.</string>
+    <string name="card_ajt_pitch_index_invalid">The AJT pitch index is unusable and was discarded; tap Retry to reinstall it.</string>
+    <string name="card_ajt_pitch_index_open_failed">The AJT pitch index could not be opened; tap Retry to reinstall it.</string>
+    <string name="legacy_capture_camera_capture_failed">Could not capture a photo. Try again.</string>
+    <string name="card_selected_pitch_accent">Selected: %1$s</string>
+    <string name="card_tags_from_confirmed_note_save_failed">Could not save the tags from the confirmed note.</string>
+    <string name="legacy_capture_draft_image_source_save_failed">Could not save the draft image source.</string>
+    <string name="legacy_capture_pending_photo_replacement_save_failed">Could not save the pending photo replacement.</string>
+    <string name="card_frozen_note_destination_invalid">The frozen note ID or destination deck ID is invalid.</string>
+    <string name="card_resolved_send_state_save_failed">Could not save the resolved Send state.</string>
+    <string name="card_frozen_image_receipt_unavailable">The frozen image receipt is unavailable; resolve the pending Send manually.</string>
+    <string name="card_selected_image_not_ready_for_import">The selected image is not ready for import.</string>
+    <string name="card_draft_audio_not_frozen">Draft audio was not frozen for this Send.</string>
+    <string name="card_note_changed_before_send_freeze">The note changed before Send could be frozen.</string>
+    <string name="card_frozen_submission_recovery_save_failed">Could not save frozen submission recovery data.</string>
+    <string name="card_sentence_audio_missing_media_identity">The frozen sentence audio has no media identity.</string>
+    <string name="card_word_audio_missing_media_identity">The frozen vocabulary audio has no media identity.</string>
+    <string name="card_frozen_media_changed_before_import">Frozen media changed before provider import.</string>
+    <string name="card_media_receipt_save_failed">Could not save the %1$s receipt.</string>
+    <string name="card_completed_media_recovery_save_failed">Could not save completed media recovery state.</string>
+    <string name="card_frozen_submission_save_failed">Could not save frozen submission data.</string>
+    <string name="card_inserted_note_has_no_cards">The inserted note no longer has cards; resolve the saved note ID before retrying.</string>
+    <string name="card_inserted_note_id_save_failed">Could not persist the inserted note ID before deck assignment.</string>
+    <string name="card_verified_destination_save_failed">Could not persist verified destination membership.</string>
+    <string name="card_send_retry_suffix">%1$s Retry Send to rerun duplicate checking before any new insert.</string>
+</resources>

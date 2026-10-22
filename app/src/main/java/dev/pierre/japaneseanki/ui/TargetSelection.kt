@@ -24,12 +24,19 @@ internal data class TargetPill(
     val label: String get() = prefix + token.surface + suffix
 }
 
-/** Builds the visible pill row from analyzer tokens without making punctuation selectable. */
+/** Builds inline target units from analyzer tokens without making punctuation selectable. */
 internal fun targetPills(tokens: List<JapaneseToken>): List<TargetPill> {
     val pills = mutableListOf<TargetPill>()
     var leadingPunctuation = ""
     tokens.forEach { token ->
-        if (token.isPunctuationToken()) {
+        if (token.surface.isBlank()) {
+            if (pills.isEmpty()) {
+                leadingPunctuation += token.surface
+            } else {
+                val previous = pills.removeAt(pills.lastIndex)
+                pills += previous.copy(suffix = previous.suffix + token.surface)
+            }
+        } else if (token.isPunctuationToken()) {
             if (pills.isEmpty() || token.partOfSpeech.contains("括弧開")) {
                 leadingPunctuation += token.surface
             } else {
