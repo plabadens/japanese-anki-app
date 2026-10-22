@@ -9,6 +9,34 @@ plugins {
 val mecabSourceDir = providers.environmentVariable("MECAB_SOURCE_DIR").orNull
     ?: error("Build inside the Nix development shell to provide pinned MeCab source")
 
+// Release signing material is read from the environment and never from the repository. Every
+// value is optional: when they are absent `assembleRelease` keeps producing the unsigned
+// variant that `nix build .#apk`, local builds and the debug CI workflow already expect. When
+// they are all present, the release APK is signed with the stable release identity, which is
+// what lets the phone update an installed build in place.
+val releaseKeystoreFile: java.io.File? = providers.environmentVariable("JAPANESE_ANKI_RELEASE_KEYSTORE")
+    .orNull
+    ?.let { file(it) }
+val releaseKeystorePassword: String? =
+    providers.environmentVariable("JAPANESE_ANKI_RELEASE_KEYSTORE_PASSWORD").orNull
+val releaseKeyAlias: String? = providers.environmentVariable("JAPANESE_ANKI_RELEASE_KEY_ALIAS").orNull
+// A PKCS12 keystore holds one password; reuse the store password unless one is given separately.
+val releaseKeyPassword: String? =
+    providers.environmentVariable("JAPANESE_ANKI_RELEASE_KEY_PASSWORD").orNull
+        ?: releaseKeystorePassword
+val releaseSigningConfigured: Boolean =
+    (releaseKeystoreFile?.isFile == true) &&
+    !releaseKeystorePassword.isNullOrEmpty() &&
+    !releaseKeyAlias.isNullOrEmpty() &&
+    !releaseKeyPassword.isNullOrEmpty()
+
+if (releaseKeystoreFile != null && !releaseSigningConfigured) {
+    logger.warn(
+        "JAPANESE_ANKI_RELEASE_KEYSTORE is set but the release signing environment is " +
+            "incomplete or the file does not exist; assembleRelease will produce an UNSIGNED APK.",
+    )
+}
+
 android {
     namespace = "dev.pierre.japaneseanki"
     compileSdk = 37
@@ -25,6 +53,16 @@ android {
             storePassword = providers.environmentVariable("JAPANESE_ANKI_DEBUG_KEYSTORE_PASSWORD").getOrElse("android")
             keyAlias = providers.environmentVariable("JAPANESE_ANKI_DEBUG_KEY_ALIAS").getOrElse("androiddebugkey")
             keyPassword = providers.environmentVariable("JAPANESE_ANKI_DEBUG_KEY_PASSWORD").getOrElse("android")
+        }
+    }
+
+    // Release signing identity, present only when the environment provides it (see above).
+    if (releaseSigningConfigured) {
+        signingConfigs.create("releaseEnv") {
+            storeFile = releaseKeystoreFile
+            storePassword = releaseKeystorePassword
+            keyAlias = releaseKeyAlias
+            keyPassword = releaseKeyPassword
         }
     }
 
@@ -59,6 +97,9 @@ android {
             getByName("debug") { signingConfig = signingConfigs.getByName("sharedDebug") }
         }
         release {
+            if (releaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName("releaseEnv")
+            }
             isMinifyEnabled = false
         }
     }

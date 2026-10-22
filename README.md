@@ -1,101 +1,119 @@
 # Japanese Anki Card Creator
 
-See `docs/toolchain-notes.md` for deferred toolchain work: the AGP 9.x upgrade (required eventually for the pinned `compileSdk = 37`), the release-APK lint lock gap, and emulator caveats.
+A personal, sideloaded Android app for mining one Japanese sentence and one vocabulary item into a
+new note in AnkiDroid. Capture or type a sentence, choose the word and the meaning you want, let the
+app produce readings, pitch, audio, translation and image, glance at the composed note, send it.
 
-Native Android app for creating Japanese sentence-mining notes in AnkiDroid. Mission: **get everything right the first time, without unnecessary choices**. See [the approved screen-and-copy contract](docs/sentence-mining-flow.md) for every view/string and [SPEC.md](SPEC.md) for technical requirements and acceptance R01–R39. Feature work lands on [dev](docs/branching.md), not directly on main.
+Native Kotlin + Jetpack Compose, API 37 only, built with Nix and Gradle. It creates **notes**;
+AnkiDroid owns the note type, cards, media, scheduling and sync.
 
-**Design approved; implementation compliance pending:** the 22 October contract selects progress A: title-only navigation and one grouped Review busy state in the stable action area. One selectable sentence, no duplicate hero, no generated-field repair workbench, separate optional notes/tags and a backgroundable setup wizard. Native Material 3 Expressive motion/haptics support the task without gamification. Technical requirements retain API 37, Google Chirp 3 HD with reading hints, Google Cloud Translation Basic v2 NMT behind one shared protected key, complete notes, annotated AJT pitch and 1080 px WebP. Approval is not native acceptance. Existing mockups, old matrices and dated status reports do not control UI or establish compliance. Nix development builds remain required.
+Mission: **get everything right the first time, without unnecessary choices.**
 
-## Build environment (NixOS x86_64)
+## Start here
 
-The flake declares the shipped target: Android SDK platform **37.0**, build-tools
-36.0.0 (the version `app/build.gradle.kts` pins), NDK 27.2.12479018, CMake 4.1.2,
-emulator 37.1.11 and the API-37.0 `google_apis` x86_64 system image, all in one
-signed-for Nix SDK root. Nothing is expected from a globally installed Android SDK.
+| Document | What it gives you |
+|---|---|
+| [docs/sentence-mining-flow.md](docs/sentence-mining-flow.md) | **AUTHORITATIVE for the UI** — the approved screen-and-copy contract: every view, string, state and choreography (progress A) |
+| [SPEC.md](SPEC.md) | **AUTHORITATIVE** — what the app must do: behaviour, contracts, acceptance criteria R01–R39 |
+| [docs/DESIGN.md](docs/DESIGN.md) | **AUTHORITATIVE** — what it should feel like: intent, tone, visual language |
+| [docs/BEST-PRACTICES.md](docs/BEST-PRACTICES.md) | **AUTHORITATIVE** — how work is done: modules, conventions, gates, commits, evidence |
+| [docs/branching.md](docs/branching.md) | The branch model: feature work lands on `dev`, `main` ships |
+| [docs/README.md](docs/README.md) | The index of every other document, with its status |
+| [AGENTS.md](AGENTS.md) | Root rules for agent sessions |
+
+Feature work lands on [`dev`](docs/branching.md), not directly on `main`. Breaking `dev` is a
+nuisance; breaking `main` is a delivery failure.
+
+**Design approved; implementation compliance pending.** The 22 October contract selects progress A:
+title-only navigation and one grouped Review busy state in the stable action area, one selectable
+sentence, no duplicate hero, no generated-field repair workbench, separate optional notes/tags, and a
+backgroundable setup wizard. Native Material 3 Expressive motion and haptics support the task without
+gamification. Approval is not native acceptance, and older mockups, matrices and dated status reports
+neither control the UI nor establish compliance.
+
+## Quick start
 
 ```sh
-nix develop   # JDK 17, Gradle 8.14.4, SDK 37.0, build-tools, NDK, CMake, emulator, adb
-./scripts/test-core.sh
-gradle -Pandroid.aapt2FromMavenOverride="$ANDROID_HOME/build-tools/36.0.0/aapt2" testDebugUnitTest assembleDebug
+nix develop                     # JDK 17, Gradle 8.14.4, SDK 37.0, build-tools 36.0.0, NDK, CMake, emulator, adb
+./scripts/test-core.sh          # fast lane: platform-independent core tests
+gradle -Pandroid.aapt2FromMavenOverride="$ANDROID_HOME/build-tools/36.0.0/aapt2" \
+  testDebugUnitTest assembleDebug
 ```
 
-Dependency fetch: the first `gradle` invocation downloads the AGP/Kotlin/AndroidX
-artifacts from `google()` / `mavenCentral()` into the Gradle user cache;
-it needs network access once and is incremental afterwards. `nix develop` rewrites
-the ignored `local.properties` with the pinned SDK path.
+The aapt2 override is required — the Maven-hosted aapt2 does not work in the NixOS sandbox. There is
+no Gradle wrapper; nothing is expected from a globally installed Android SDK. The first Gradle run
+needs network access to fill the Maven cache.
 
-`nix build .#apk` builds an unsigned release APK and `nix build .#debugApk` a debug
-APK inside the Nix sandbox; both also run `testDebugUnitTest` (`doCheck`). The
-first run resolves Maven artifacts through the Nix Gradle MITM cache
-(`nix/gradle/deps.json`, refreshed with `./scripts/update-gradle-deps.sh`), so it
-needs network access once. Outputs are `/nix/store` paths, not byte-identical
-across rebuilds, and no reproducibility claim is made. The primary supported
-workflow remains Gradle inside `nix develop`, which writes separate
-`app-arm64-v8a-debug.apk` and `app-x86_64-debug.apk` files under
-`app/build/outputs/apk/debug/`. Use x86_64 for the emulator and arm64-v8a for
-physical devices; there is no universal APK. To install on a physical device, set
-`ANDROID_SERIAL` to that phone's serial and use the explicit arm64 path:
+Output is split by ABI under `app/build/outputs/apk/debug/`: `app-arm64-v8a-debug.apk` for a phone,
+`app-x86_64-debug.apk` for the emulator. There is no universal APK. To install on a device:
 
 ```sh
 adb -s "$ANDROID_SERIAL" install -r app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
 ```
 
-The sandbox build has no keystore configured, so `.#debugApk` signs with a throwaway
-debug key and cannot replace an existing install; for an update-compatible APK use
-the Gradle path with `JAPANESE_ANKI_DEBUG_KEYSTORE` set (see `app/build.gradle.kts`).
+For an update-compatible build, point `JAPANESE_ANKI_DEBUG_KEYSTORE` at the existing keystore (see
+`app/build.gradle.kts`); the Nix sandbox build signs with a throwaway key and cannot replace an
+existing install.
 
-The fixed-output inputs pin MeCab and UniDic. The APK does not contain the 426 MiB
-runtime dictionary ZIP. The approved flow provisions the pinned UniDic v0.4
-asset through backgroundable onboarding/Downloads, verifies its SHA-256/archive,
-then extracts about 725 MB privately. Full wizard/background compliance is pending,
-not established by the installer alone. `nix build .#unidicRuntime` produces the asset;
-it must be uploaded with the APK before the release is usable. The
-Japanese OCR model, NHK index, dictionary and pitch data remain bundled; the app
-targets API 37 and requires API 37.
-
-## Android emulator (Nix, API 37 x86_64)
-
-`.#emulator-wrapper` provisions the AVD and runs ADB operations against the
-flake-declared SDK; the API-37.0 `google_apis;x86_64` system image and emulator
-37.1.11 come from the same `nix develop` closure, so `nix build`/`nix run` needs no
-extra setup:
-
-```sh
-nix run .#emulator-wrapper -- start
-```
-
-The wrapper keeps AVD, Android user configuration, temporary files, logs, and screenshots under this checkout's `.tmp-nix/`. Android Emulator does not register with an `adb` server using `localfilesystem:`; the shared `scripts/emulator-adb` helper therefore uses the pinned SDK's ADB executable, unsets `ADB_SERVER_SOCKET`, and supplies one explicit emulator serial for every device-directed command. The default is `emulator-5554`; `EMULATOR_PORT=<n>` selects another port, or `ANDROID_SERIAL=emulator-<n>` may select an emulator directly. If both selectors are set they must agree. Physical-device serials are rejected; this tooling never targets an attached phone. `scripts/ui-journey.py` uses the same helper. Its hierarchy dumps use unique remote names and unique local files under `TMPDIR` (the wrapper configures `.tmp-nix/tmp`), so concurrent runs do not overwrite a shared dump. The AVD is `japanese-anki-pixel7-api37` (Pixel 7 profile, 1080x2400, API 37.0). One AVD instance at a time: a second emulator on the same AVD corrupts its user data. In process-isolated environments the emulator is killed when its launching shell exits, so run boot, install, launch, captures, crash scan, and shutdown together using the single-session command:
+## Emulator
 
 ```sh
 nix run .#emulator-wrapper -- session app/build/outputs/apk/debug/app-x86_64-debug.apk .tmp-nix/screenshots/smoke
 ```
 
-It creates a Pixel 7 profile, boots headlessly, waits up to 60 seconds for ADB and 240 seconds for `sys.boot_completed=1`, disables Bluetooth to avoid the recurring system crash dialog, installs with `adb install -r`, launches `dev.pierre.japaneseanki/.MainActivity`, captures `<prefix>-dark.png` and `<prefix>-light.png`, writes `<prefix>-logcat.txt`, scans for app crashes, and shuts down the emulator. Outside such a process-isolated environment, individual commands are available:
+That boots the API-37.0 `google_apis` x86_64 AVD headlessly, installs and launches, captures
+dark/light screenshots and logcat, scans for crashes and shuts down. The individual commands
+(`start`, `status`, `install`, `launch`, `tap`, `theme`, `screenshot`, `dump`, `share-text`,
+`share-image`, `logcat`, `stop`), the one-emulator-per-AVD rule and the ADB serial rules are in
+[docs/BEST-PRACTICES.md §5](docs/BEST-PRACTICES.md#5-running-the-gates). Install AnkiDroid only in
+this emulator, from an official distribution, into a disposable collection; never touch an attached
+phone.
 
-```sh
-nix run .#emulator-wrapper -- start
-nix run .#emulator-wrapper -- status
-nix run .#emulator-wrapper -- install app/build/outputs/apk/debug/app-x86_64-debug.apk
-nix run .#emulator-wrapper -- reinstall app/build/outputs/apk/debug/app-x86_64-debug.apk  # install -r + grant camera + relaunch
-nix run .#emulator-wrapper -- launch
-nix run .#emulator-wrapper -- restart          # force-stop + launch, no reinstall
-nix run .#emulator-wrapper -- grant [permission]  # defaults to android.permission.CAMERA
-nix run .#emulator-wrapper -- tap <x> <y>
-nix run .#emulator-wrapper -- theme light|dark
-nix run .#emulator-wrapper -- screenshot .tmp-nix/screenshots/current.png
-nix run .#emulator-wrapper -- dump .tmp-nix/ui.xml   # uiautomator hierarchy dump, pulled locally
-nix run .#emulator-wrapper -- share-text 'Japanese sentence to import'
-nix run .#emulator-wrapper -- share-image /path/to/image.png
-nix run .#emulator-wrapper -- logcat -d
-nix run .#emulator-wrapper -- stop
+## Release packaging
+
+The approved flow provisions the pinned UniDic v0.4 asset through backgroundable
+onboarding/Downloads, verifies its SHA-256 and archive contents, then extracts about 725 MB into
+app-private storage. Full wizard/background compliance is pending and is **not** established by the
+installer alone.
+
+A signed, installable APK is published by pushing a `v<versionName>` tag from `main`; the workflow
+attaches it to a GitHub Release so it can be installed from the phone. The loop — issue forms,
+triage labels, release signing secrets and failure modes — is
+[docs/agent-flow.md](docs/agent-flow.md). Builds of `dev` are debug APKs only, and a debug APK cannot
+update a release install.
+
+- `nix build .#debugApk` / `nix build .#apk` build inside the sandbox and run the unit tests
+  (`doCheck`). Outputs are `/nix/store` paths and are not byte-identical across rebuilds; no
+  reproducibility claim is made.
+- `nix build .#unidicRuntime` produces the first-run UniDic asset (446,602,958 bytes, build-pinned
+  SHA-256). The APK bundles the Japanese OCR model, the NHK-2016 index, the dictionary and the pitch
+  data; UniDic alone is downloaded on first use and must be published beside the APK or the release
+  is unusable.
+- Bundled assets, their exact sizes, hashes and the open licensing questions are in
+  [docs/first-run-resource-delivery.md](docs/first-run-resource-delivery.md).
+
+## Where things are
+
+```
+app/src/main/java/dev/pierre/japaneseanki/     Kotlin: platform-independent core, Android layer
+app/src/main/java/dev/pierre/japaneseanki/ui/  Compose screens and theme
+app/src/test, app/src/androidTest              JVM tests, instrumentation tests
+datasets/                                      pinned upstream data and asset builders
+scripts/                                       build, test, dataset, emulator and screenshot tooling
+misc/Sentence (JA)/                            reference Anki note type
+mockup/expressive-flow/                        historical HTML study (superseded by the approved contract)
+design/icon-sources/                           launcher icon sources and proposals
+docs/                                          documentation, evidence, archive
 ```
 
-For iterating on UI code, `scripts/rebuild.sh [test|build-only]` builds the debug APK (via `nix develop`, reusing the incremental Gradle cache) and reinstalls+relaunches it in one command. `scripts/pixel.py <png> at|row|col ...` inspects screenshot pixels precisely (exact edge/letterbox bounds) instead of eyeballing a downscaled render.
+## Status
 
-Install AnkiDroid only in this emulator by downloading its APK from the official AnkiDroid release/Play distribution and running the wrapper's `install` command with that APK. Keep all test data disposable and isolated to the emulator; do not touch any attached phone.
+This README does not track implementation status. The approved screen/copy contract governs what the
+UI must be; the published v0.4 payload and the dated test reports under
+[docs/archive/evidence/](docs/archive/evidence/) predate it. Neither a published APK nor green
+component tests establishes the new flow.
 
-For the redesign, provision an API-37 x86_64 emulator and follow the R-series checklist in SPEC §14. Inject local image fixtures and use the Google Cloud Translation Basic NMT path for actual quality checks, with controlled responses for failure tests. No offline TTS engine or ARM64 emulator matrix is required. Verify ARM64 packaging separately; physical-device validation remains optional. Record emulator-only limitations honestly.
-
-## Implementation and evidence status
-
-The published v0.4 payload and earlier test reports predate the approved screen/copy contract. See `docs/evidence/` for dated build/test evidence and `docs/first-run-resource-delivery.md` for resource availability and remaining setup gaps. Neither a published APK nor green component tests establishes the new flow or fixes the user-reported import failure. The compliance task must inventory every surface/string, exercise connected native journeys and verify imports with both a separate dummy provider APK and real AnkiDroid in disposable emulator collections. Label unrun gates explicitly; do not restore old manual-field editing, obsolete providers or prototype progress controls from historical status text.
+Known defects, unrun gates and what is still unverified — including live Google speech and
+translation quality and the two import-boundary gates (separate dummy provider APK, and real
+AnkiDroid in a disposable collection) — are enumerated as acceptance rows in [SPEC.md §14](SPEC.md)
+and must be reported as NOT RUN until actually exercised.

@@ -1,5 +1,9 @@
 # Redesign evidence: AJT and image encoding
 
+**How to use it:** EVIDENCE. Research that supports three `SPEC.md` decisions (image encoding, AJT
+pitch HTML, recording matching); it is not a claim that the app implements them, and its
+"still unverified" list remains unverified unless a later record says otherwise.
+
 Research supporting `SPEC.md`, not proof that the Android redesign is implemented. No application code or installed card template was modified in this investigation.
 
 ## 1. WebP choice and quality experiment
@@ -26,7 +30,7 @@ Visual review: Q35 retains basic photographic recognition and medium/large sign 
 
 At Q75, measured WebP sizes are 18,652 bytes (book) and 29,720 bytes (sign). Do not extrapolate those sizes to noisy full-resolution camera captures. Android's encoder and actual Anki WebView output remain untested in this experiment; qualify Q75 there with real camera fixtures before release. No physical-phone-only gate is implied: imported real captures can be tested in the emulator.
 
-Full measurements: [image-quality-sweep.csv](evidence/image-quality-sweep.csv). Contact sheets: [book](evidence/book-photo-webp-detail-sheet.png), [Japanese sign](evidence/synthetic-sign-webp-detail-sheet.png). The latter shows 2× nearest-neighbor crops, not native viewing size.
+Full measurements: [image-quality-sweep.csv](archive/evidence/image-quality-sweep.csv). Contact sheets: [book](archive/evidence/book-photo-webp-detail-sheet.png), [Japanese sign](archive/evidence/synthetic-sign-webp-detail-sheet.png). The latter shows 2× nearest-neighbor crops, not native viewing size.
 
 Disposable experiment script/output directory: `/srv/hermes/.hermes/cache/scratch/anki-image-encoding-spike/`. That scratch directory may expire; the measurements and WebP visual evidence linked above are preserved in this repository. No new production dependency on Pillow/AVIF is introduced.
 

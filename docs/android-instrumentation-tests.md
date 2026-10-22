@@ -1,5 +1,9 @@
 # Android instrumentation tests
 
+**How to use it:** REFERENCE. The runbook for `app/src/androidTest` on a dedicated API-37
+x86_64 AVD. Part of the gate set in `BEST-PRACTICES.md` §5; the criteria it serves are `SPEC.md`
+§14 (R01–R39) and the approved [screen/copy contract](sentence-mining-flow.md).
+
 ## Approved-flow compliance scope
 
 Tooling below is a harness, not acceptance of the approved [screen/copy contract](sentence-mining-flow.md). SPEC.md R01–R39 controls the current gate. Coordinate a single API-37 x86_64 emulator lane; do not boot a competing AVD or launch unrestricted heavy builds while another owner uses it.

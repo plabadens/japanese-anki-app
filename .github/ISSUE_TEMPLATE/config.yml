@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Install or update the app on the phone
+    url: https://github.com/plabadens/japanese-anki-app/blob/main/docs/agent-flow.md
+    about: Which APK to download, how to tell release from debug builds, and why an update can refuse to install.
+  - name: Build the app locally (Nix)
+    url: https://github.com/plabadens/japanese-anki-app/blob/main/README.md
+    about: Toolchain, emulator, and local gradle/nix commands.

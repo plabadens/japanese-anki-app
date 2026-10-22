@@ -2,6 +2,15 @@
 
 > **Approved UI authority:** [Sentence-mining flow and exact-copy contract](docs/sentence-mining-flow.md), approved 22 October 2026 with **progress A**. It is the sole screen/copy/choreography authority; this specification retains the aligned technical, completeness, privacy and submission requirements. Historical remediation notes and mockups do not override it. No second pitch backend is approved.
 
+**Status:** AUTHORITATIVE for required behavior, data contracts and acceptance criteria. The
+document that governs what each screen says and looks like is the approved
+[screen-and-copy contract](docs/sentence-mining-flow.md); §4 below states the technical and
+accessibility requirements those screens must meet. This document does not cover how the work is
+built, tested or verified — that is [docs/BEST-PRACTICES.md](docs/BEST-PRACTICES.md) — or the
+intent and tone behind it — that is [docs/DESIGN.md](docs/DESIGN.md). Document map:
+[docs/README.md](docs/README.md). Target alternatives and any pitch-backend migration remain
+proposal/approval gates; no second pitch backend is approved.
+
 **Target:** next development revision after v0.4. This document defines required behavior and acceptance, not a claim that the current APK meets them. Changes land on dev; promotion to main and publication require a separate merge train and authorization.
 
 **Product:** A personal, sideloaded Android app built with Kotlin and Jetpack Compose.
@@ -99,7 +108,7 @@ Use the theme's expressive motion scheme with spatial versus effects springs and
 
 Support English UI, system light/dark mode, a portrait-only app composition with landscape photograph capture/import, 200% font scaling, TalkBack labels/states, at least 48 dp non-overlapping touch targets, 4.5:1 normal-text contrast and 3:1 actionable-icon contrast. Respect system-bar/keyboard insets; long content scrolls. Support reduced/disabled animation settings and do not use color alone to communicate state.
 
-Validate production Compose components and the connected journey against the approved text contract. Existing HTML mockups are historical references, not authority to restore extra UI. One UI owner integrates shared screens; components and tests trace visible/accessibility copy to the shared catalogue.
+Validate production Compose components and the connected journey against the approved text contract. Existing HTML mockups are historical references, not authority to restore extra UI. One UI owner integrates shared screens; components and tests trace visible/accessibility copy to the shared catalogue. Intent and tone are in [docs/DESIGN.md](docs/DESIGN.md); the prototype-then-reuse working method is in [docs/BEST-PRACTICES.md](docs/BEST-PRACTICES.md) §10.
 
 ### 4.2 Capture
 
@@ -357,27 +366,23 @@ There are no manual generated-field overrides or correction-replacement dialogs.
 
 ## 12. Build and dependency maintenance
 
-`flake.nix` supplies the JDK, API-37 SDK/build tools, Gradle, NDK/native tools, and data-build dependencies needed by a fresh checkout. Pin versions/source revisions and document SDK licenses, build/test/install commands, and emulator provisioning. Do not rely on undeclared global tools.
+The shipped toolchain is the pinned Nix environment defined in §2: a fresh checkout must build and run its tests with the documented commands, without relying on an undeclared global tool. Bundled data must be reproducible from pinned sources with versions, hashes, licences and notices preserved, and signing material must stay outside the repository and the Nix store.
 
-Acceptance requires a successful build and test run from a clean checkout in the Nix environment. Record the exact commands and resulting APK. Dependency fetching is permitted.
-
-Keep dataset transformations repeatable, preserve upstream coverage, record versions/hashes/licenses, and include required attribution/notices in Sources/Licenses. Review linguistic fixtures after dataset updates. AJT code reuse and derived data each require their own licensing review; do not equate an add-on code license with recording rights.
-
-Keep signing secrets outside the repository/Nix store and document a local sideload/update procedure.
+How that is done — gate commands, dependency-lock refresh, dataset rebuild procedure, filtered Nix source sets, deferred toolchain work and signing setup — is in [docs/BEST-PRACTICES.md](docs/BEST-PRACTICES.md) §5–§6. Acceptance of this section is R01.
 
 ## 13. Delivery priorities and quality evidence
 
-Build one connected vertical slice before expanding UI states: Photo/Type → local choice → actual generation → composed Review → confirmed AnkiDroid note. Every visible playback, edit, and send control in the delivered slice must perform its real operation.
+Build one connected vertical slice before widening the surface: capture or type → local choice → actual generation → composed Review → confirmed AnkiDroid note. Every visible playback, edit and send control in the delivered slice performs its real operation; a dead control is a defect, not a placeholder.
 
-Keep capture, correction, selection, and scrolling responsive. Do OCR, dictionary initialization, image work, network I/O, and export off the UI thread. Coalesce obsolete local analysis. Measure local preparation latency and memory on the selected runtime; do not hide image compression or network waits inside the low-latency choice phase.
+Local preparation stays responsive: capture, correction, selection and scrolling never wait on OCR, dictionary initialization, image work, network I/O or export, and obsolete local analysis is discarded rather than queued. Latency and memory of the local phase are measured on the selected runtime; image compression and network waits are not hidden inside it.
 
-Use an interactive Compose prototype and screenshots from the real app to evaluate composition, touch flow, keyboard, Back, and rotation. Check light/dark and large text before calling the UI complete.
+Quality evidence for a release includes real Japanese mining examples, source-backed phonetic fixtures, image comparisons, and an exported note rendered in AnkiDroid. Sentence-TTS quality is evaluated by live audition when credentials are available (§15); controlled provider tests establish request and error handling, not speech quality.
 
-Quality evidence must include real Japanese mining examples, source-backed phonetic fixtures, image comparisons, and an exported note rendered in AnkiDroid. Evaluate sentence-TTS quality through a live audition when credentials are available, under the delivery policy in §15. Controlled provider tests establish request/error handling, not live speech quality.
+The working order, prototype loop and gate sequence that produce this slice are in [docs/BEST-PRACTICES.md](docs/BEST-PRACTICES.md) §5 and §10.
 
 ## 14. Acceptance checklist
 
-Record the tested revision, fixture, environment, actual result, and evidence for each scenario. An unrun or blocked check is not a pass. Apply the credential-dependent verification policy in §15 to live-service checks.
+Record the tested revision, fixture, environment, actual result, and evidence for each scenario. An unrun or blocked check is not a pass. Apply the credential-dependent verification policy in §15 to live-service checks, and the evidence rules in [docs/BEST-PRACTICES.md](docs/BEST-PRACTICES.md) §9 to how results are recorded.
 
 | ID | Scenario | Required result |
 |---|---|---|
@@ -438,9 +443,11 @@ Required verification areas:
 
 Do not silently remove required content, fabricate phonetics or test results, upload photographs, or export partial notes to satisfy acceptance.
 
+How that evidence is produced, gated and recorded — clean-checkout build, evidence areas, gate ladder, verdict definitions — is in [docs/BEST-PRACTICES.md](docs/BEST-PRACTICES.md) §9.
+
 ## 16. References
 
-This is the technical/content/safety contract for the next development revision. [The approved screen-and-copy contract](docs/sentence-mining-flow.md) controls all user-visible composition and wording; SPEC acceptance R01–R39 is current. Older matrices and mockups are historical evidence only.
+This is the technical/content/safety contract for the next development revision. [The approved screen-and-copy contract](docs/sentence-mining-flow.md) controls all user-visible composition and wording; SPEC acceptance R01–R39 is current. Older matrices and mockups are historical evidence only. The intent and tone behind it are in [docs/DESIGN.md](docs/DESIGN.md); the engineering standards behind its build and verification requirements are in [docs/BEST-PRACTICES.md](docs/BEST-PRACTICES.md); the full document map is [docs/README.md](docs/README.md).
 
 - `misc/Sentence (JA)/template.json` defines the reference field schema. `Recognition/front.html`, `Recognition/back.html`, and `template.css` provide the reference presentation. Validate their compatibility under §8.
 - [AJT Japanese pinned source](https://github.com/Ajatt-Tools/Japanese/tree/5729b8c080823eadaa121c76e0f23c55d6a81935) — furigana behavior, pitch HTML, and phonetic data.
