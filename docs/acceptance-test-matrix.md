@@ -27,7 +27,7 @@ Build and install the current debug APK:
 
 ```sh
 nix develop --command bash -lc 'gradle -Pandroid.aapt2FromMavenOverride="$ANDROID_HOME/build-tools/36.0.0/aapt2" testDebugUnitTest assembleDebug --no-daemon --max-workers=2'
-nix run .#emulator-wrapper -- install app/build/outputs/apk/debug/app-debug.apk
+nix run .#emulator-wrapper -- install app/build/outputs/apk/debug/app-x86_64-debug.apk
 nix run .#emulator-wrapper -- launch
 ```
 
@@ -36,7 +36,7 @@ nix run .#emulator-wrapper -- launch
 The wrapper's single-session smoke command is the reliable option in process-isolated shells, where background children may be killed when a command returns:
 
 ```sh
-nix run .#emulator-wrapper -- session app/build/outputs/apk/debug/app-debug.apk .tmp-nix/screenshots/smoke
+nix run .#emulator-wrapper -- session app/build/outputs/apk/debug/app-x86_64-debug.apk .tmp-nix/screenshots/smoke
 ```
 
 It creates the Pixel 7 AVD if needed, waits for boot, disables Bluetooth (avoids a recurring system crash prompt), installs/launches the APK, captures dark and light startup PNGs, writes logcat, scans for app crashes, then shuts the AVD down. `start`/`status`/`install`/`launch`/`stop` are also available separately when the host keeps the emulator alive between commands. The session path is preferable for one-shot smoke checks, not for walking through dozens of UI states; on a persistent emulator use the individual commands below, or run an equivalent scripted sequence inside one process.

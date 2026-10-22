@@ -30,8 +30,10 @@ first run resolves Maven artifacts through the Nix Gradle MITM cache
 (`nix/gradle/deps.json`, refreshed with `./scripts/update-gradle-deps.sh`), so it
 needs network access once. Outputs are `/nix/store` paths, not byte-identical
 across rebuilds, and no reproducibility claim is made. The primary supported
-workflow remains Gradle inside `nix develop`, which writes
-`app/build/outputs/apk/debug/app-debug.apk`.
+workflow remains Gradle inside `nix develop`, which writes separate
+`app-arm64-v8a-debug.apk` and `app-x86_64-debug.apk` files under
+`app/build/outputs/apk/debug/`. Use x86_64 for the emulator and arm64-v8a for
+physical devices; there is no universal APK.
 
 The sandbox build has no keystore configured, so `.#debugApk` signs with a throwaway
 debug key and cannot replace an existing install; for an update-compatible APK use
@@ -55,7 +57,7 @@ nix run .#emulator-wrapper -- start
 The wrapper keeps AVD, Android user configuration, temporary files, logs, and screenshots under this checkout's `.tmp-nix/`. Android Emulator does not register with an `adb` server using `localfilesystem:`; the shared `scripts/emulator-adb` helper therefore uses the pinned SDK's ADB executable, unsets `ADB_SERVER_SOCKET`, and supplies one explicit emulator serial for every device-directed command. The default is `emulator-5554`; `EMULATOR_PORT=<n>` selects another port, or `ANDROID_SERIAL=emulator-<n>` may select an emulator directly. If both selectors are set they must agree. Physical-device serials are rejected; this tooling never targets an attached phone. `scripts/ui-journey.py` uses the same helper. Its hierarchy dumps use unique remote names and unique local files under `TMPDIR` (the wrapper configures `.tmp-nix/tmp`), so concurrent runs do not overwrite a shared dump. The AVD is `japanese-anki-pixel7-api37` (Pixel 7 profile, 1080x2400, API 37.0). One AVD instance at a time: a second emulator on the same AVD corrupts its user data. In process-isolated environments the emulator is killed when its launching shell exits, so run boot, install, launch, captures, crash scan, and shutdown together using the single-session command:
 
 ```sh
-nix run .#emulator-wrapper -- session /path/to/app-debug.apk .tmp-nix/screenshots/smoke
+nix run .#emulator-wrapper -- session app/build/outputs/apk/debug/app-x86_64-debug.apk .tmp-nix/screenshots/smoke
 ```
 
 It creates a Pixel 7 profile, boots headlessly, waits up to 60 seconds for ADB and 240 seconds for `sys.boot_completed=1`, disables Bluetooth to avoid the recurring system crash dialog, installs with `adb install -r`, launches `dev.pierre.japaneseanki/.MainActivity`, captures `<prefix>-dark.png` and `<prefix>-light.png`, writes `<prefix>-logcat.txt`, scans for app crashes, and shuts down the emulator. Outside such a process-isolated environment, individual commands are available:
@@ -63,8 +65,8 @@ It creates a Pixel 7 profile, boots headlessly, waits up to 60 seconds for ADB a
 ```sh
 nix run .#emulator-wrapper -- start
 nix run .#emulator-wrapper -- status
-nix run .#emulator-wrapper -- install app/build/outputs/apk/debug/app-debug.apk
-nix run .#emulator-wrapper -- reinstall app/build/outputs/apk/debug/app-debug.apk  # install -r + grant camera + relaunch
+nix run .#emulator-wrapper -- install app/build/outputs/apk/debug/app-x86_64-debug.apk
+nix run .#emulator-wrapper -- reinstall app/build/outputs/apk/debug/app-x86_64-debug.apk  # install -r + grant camera + relaunch
 nix run .#emulator-wrapper -- launch
 nix run .#emulator-wrapper -- restart          # force-stop + launch, no reinstall
 nix run .#emulator-wrapper -- grant [permission]  # defaults to android.permission.CAMERA

@@ -53,22 +53,25 @@ jobs:
         shell: bash
         run: nix develop --command ./scripts/ci-build-apk.sh
 
-      - name: Collect APK
+      - name: Collect and verify ABI APKs
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist
-          cp app/build/outputs/apk/debug/app-debug.apk dist/japanese-anki-debug.apk
+          cp app/build/outputs/apk/debug/app-arm64-v8a-debug.apk dist/japanese-anki-0.4-arm64-v8a-debug.apk
+          cp app/build/outputs/apk/debug/app-x86_64-debug.apk dist/japanese-anki-0.4-x86_64-debug.apk
+          python3 scripts/verify-apk-abi.py dist/japanese-anki-0.4-arm64-v8a-debug.apk arm64-v8a
+          python3 scripts/verify-apk-abi.py dist/japanese-anki-0.4-x86_64-debug.apk x86_64
           (
             cd dist
-            sha256sum japanese-anki-debug.apk > SHA256SUMS.txt
+            sha256sum japanese-anki-0.4-arm64-v8a-debug.apk japanese-anki-0.4-x86_64-debug.apk > SHA256SUMS.txt
           )
-          ls -lh dist
+          stat --printf='%n %s bytes\n' dist/japanese-anki-0.4-arm64-v8a-debug.apk dist/japanese-anki-0.4-x86_64-debug.apk dist/SHA256SUMS.txt
 
       - name: Write summary
         run: |
           {
-            echo "## Japanese Anki debug APK"
+            echo "## Japanese Anki 0.4 ABI-split debug APKs"
             echo
             echo "Built from \`$GITHUB_SHA\` with the flake-pinned Android toolchain."
             echo
@@ -76,14 +79,32 @@ jobs:
             cat dist/SHA256SUMS.txt
             echo '```'
             echo
-            echo "This is a debug-signed APK. It installs normally but uses a CI debug identity,"
-            echo "so it is not an update-compatible replacement for a locally signed build."
+            echo "The emulator artifact is the x86_64 APK; the physical-device artifact is arm64-v8a."
+            echo "Both are debug-signed with the CI identity and are not update-compatible with a locally signed build."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload APK
+      - name: Upload arm64-v8a APK
         uses: actions/upload-artifact@v4
         with:
-          name: japanese-anki-debug-apk
-          path: dist/
+          name: japanese-anki-0.4-arm64-v8a-debug-apk
+          path: dist/japanese-anki-0.4-arm64-v8a-debug.apk
           retention-days: 14
           compression-level: 0
+          if-no-files-found: error
+
+      - name: Upload x86_64 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: japanese-anki-0.4-x86_64-debug-apk
+          path: dist/japanese-anki-0.4-x86_64-debug.apk
+          retention-days: 14
+          compression-level: 0
+          if-no-files-found: error
+
+      - name: Upload SHA256SUMS.txt
+        uses: actions/upload-artifact@v4
+        with:
+          name: japanese-anki-0.4-sha256sums
+          path: dist/SHA256SUMS.txt
+          retention-days: 14
+          if-no-files-found: error

@@ -6,8 +6,8 @@
 # a devshell) and an emulator already started with `nix run .#emulator-wrapper -- start`.
 #
 # Usage:
-#   scripts/rebuild.sh           # assembleDebug, then reinstall+relaunch
-#   scripts/rebuild.sh test      # testDebugUnitTest assembleDebug, then reinstall+relaunch
+#   scripts/rebuild.sh           # assembleDebug, then install x86_64 + relaunch
+#   scripts/rebuild.sh test       # testDebugUnitTest assembleDebug, then install x86_64 + relaunch
 #   scripts/rebuild.sh build-only
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -23,4 +23,4 @@ if [[ "${1:-}" == "build-only" ]]; then
 fi
 
 echo "== reinstall + relaunch =="
-nix run .#emulator-wrapper -- reinstall app/build/outputs/apk/debug/app-debug.apk
+nix run .#emulator-wrapper -- reinstall app/build/outputs/apk/debug/app-x86_64-debug.apk

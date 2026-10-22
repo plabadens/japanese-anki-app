@@ -144,13 +144,13 @@
 
       releaseApk = mkAndroidApk {
         task = "assembleRelease";
-        apkPath = "app/build/outputs/apk/release/app-release-unsigned.apk";
-        outputName = "japanese-anki-unsigned.apk";
+        apkPath = "app/build/outputs/apk/release/app-arm64-v8a-release-unsigned.apk";
+        outputName = "japanese-anki-0.4-arm64-v8a-unsigned.apk";
       };
       debugApk = mkAndroidApk {
         task = "assembleDebug";
-        apkPath = "app/build/outputs/apk/debug/app-debug.apk";
-        outputName = "japanese-anki-debug.apk";
+        apkPath = "app/build/outputs/apk/debug/app-x86_64-debug.apk";
+        outputName = "japanese-anki-0.4-x86_64-debug.apk";
       };
       coreTests = pkgs.runCommand "japanese-anki-core-tests" {
         nativeBuildInputs = [ jdk pkgs.gradle pkgs.python3 ];

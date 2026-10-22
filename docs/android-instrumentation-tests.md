@@ -42,7 +42,7 @@ EMU_PID=$!
 trap 'adb -s emulator-5560 emu kill >/dev/null 2>&1 || true; wait "$EMU_PID" 2>/dev/null || true; adb kill-server >/dev/null 2>&1 || true' EXIT
 adb -s emulator-5560 wait-for-device
 until [ "$(adb -s emulator-5560 shell getprop sys.boot_completed | tr -d '\r')" = 1 ]; do sleep 2; done
-adb -s emulator-5560 install -r app/build/outputs/apk/debug/app-debug.apk
+adb -s emulator-5560 install -r app/build/outputs/apk/debug/app-x86_64-debug.apk
 adb -s emulator-5560 install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 adb -s emulator-5560 shell am instrument -w -r \
   -e class dev.pierre.japaneseanki.AndroidPlatformSmokeTest \
