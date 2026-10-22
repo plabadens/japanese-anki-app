@@ -8,24 +8,23 @@ import org.junit.Test
 class InputCaptureStateTest {
     @Test
     fun portraitPreviewUsesFullWidthAtTheUprightFourByThreeSensorRatio() {
-        val bounds = cameraPreviewSizeDp(400f, 600f)
+        val bounds = cameraPreviewSizeDp(400f)
 
         assertEquals(CameraPreviewSizeDp(400f, 1600f / 3f), bounds)
     }
 
     @Test
-    fun previewFitsShortPanesWithoutCroppingOrExceedingConstraints() {
-        val bounds = cameraPreviewSizeDp(400f, 480f)
+    fun shortPanesKeepTheFullViewportAndLeaveOverflowToScrolling() {
+        val bounds = cameraPreviewSizeDp(320f)
 
-        assertEquals(CameraPreviewSizeDp(360f, 480f), bounds)
-        assertTrue(bounds.width <= 400f)
-        assertTrue(bounds.height <= 480f)
+        assertEquals(CameraPreviewSizeDp(320f, 1280f / 3f), bounds)
+        assertTrue(bounds.height > 400f)
         assertEquals(3f / 4f, bounds.width / bounds.height, 0.0001f)
     }
 
     @Test
     fun busyAndErrorFeedbackKeepPreviewAndShutterBoundsStable() {
-        val expectedPreview = cameraPreviewSizeDp(393f, 610f)
+        val expectedPreview = cameraPreviewSizeDp(393f)
         val presentations = listOf(
             captureShutterPresentation(captureInProgress = false, captureFailed = false),
             captureShutterPresentation(captureInProgress = true, captureFailed = false),
@@ -35,7 +34,7 @@ class InputCaptureStateTest {
         assertEquals(3, presentations.size)
         assertEquals(
             listOf(expectedPreview),
-            presentations.map { cameraPreviewSizeDp(393f, 610f) }.distinct(),
+            presentations.map { cameraPreviewSizeDp(393f) }.distinct(),
         )
         assertEquals(listOf(CAMERA_SHUTTER_SIZE_DP), presentations.map { it.diameterDp }.distinct())
         assertEquals(CAMERA_CONTROL_ROW_HEIGHT_DP, 96)
