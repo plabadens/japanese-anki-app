@@ -21,6 +21,17 @@ class CardSurfacePresentationTest {
         assertNull(englishPartOfSpeechLabel(listOf("unknown-tag")))
     }
 
+    @Test fun missingWordRecordingIsAStatusNotARetryAction() {
+        assertEquals(
+            dev.pierre.japaneseanki.R.string.no_recording,
+            reviewAudioControlLabel("Word", ReviewAudioPresentation.SourceMissing).resourceId,
+        )
+        assertEquals(
+            dev.pierre.japaneseanki.R.string.no_recording,
+            reviewAudioSendBlocker("Word", ReviewAudioPresentation.SourceMissing)?.resourceId,
+        )
+    }
+
     @Test fun photoCoverCropCentersAndHonorsTheSelectedVerticalFocus() {
         val (scale, dx, centerDy) = focalCropOffsets(
             imageWidth = 400,

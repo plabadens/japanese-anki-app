@@ -92,6 +92,7 @@ internal data class ResourceCopy(@StringRes val resourceId: Int, val formatArgs:
 internal sealed interface ReviewAudioPresentation {
     data object Unavailable : ReviewAudioPresentation
     data object NeedsPreparation : ReviewAudioPresentation
+    data object SourceMissing : ReviewAudioPresentation
     data object Ready : ReviewAudioPresentation
     data object Playing : ReviewAudioPresentation
     data object Generating : ReviewAudioPresentation
@@ -100,6 +101,7 @@ internal sealed interface ReviewAudioPresentation {
 }
 
 internal fun reviewAudioControlLabel(field: String, audio: ReviewAudioPresentation): ResourceCopy = when (audio) {
+    ReviewAudioPresentation.SourceMissing -> ResourceCopy(R.string.no_recording)
     ReviewAudioPresentation.Unavailable, ReviewAudioPresentation.NeedsPreparation ->
         ResourceCopy(R.string.card_audio_prepare_control, listOf(field))
     ReviewAudioPresentation.Ready -> ResourceCopy(R.string.card_audio_play_control, listOf(field))
@@ -113,6 +115,7 @@ internal fun reviewAudioControlLabel(field: String, audio: ReviewAudioPresentati
 }
 
 internal fun reviewAudioSendBlocker(field: String, audio: ReviewAudioPresentation): ResourceCopy? = when (audio) {
+    ReviewAudioPresentation.SourceMissing -> ResourceCopy(R.string.no_recording)
     ReviewAudioPresentation.Ready, ReviewAudioPresentation.Playing -> null
     ReviewAudioPresentation.Generating -> ResourceCopy(R.string.card_audio_generating_blocker, listOf(field))
     ReviewAudioPresentation.NeedsPreparation -> ResourceCopy(R.string.card_audio_needs_preparation_blocker, listOf(field))
@@ -202,7 +205,10 @@ internal fun CardScreen(
     partOfSpeech: String?,
     definition: String,
     pitch: PitchAccent?,
+    pitchStatus: String?,
+    pitchPending: Boolean,
     wordStatus: String?,
+    wordAudioEnabled: Boolean,
     meaningAvailable: Boolean,
     onChangeMeaning: () -> Unit,
     imagePath: String?,
@@ -326,13 +332,24 @@ internal fun CardScreen(
                                             audio = wordAudio,
                                             onToggle = onToggleWordAudio,
                                             onRetry = onRetryWordAudio,
+                                            enabled = wordAudioEnabled,
+                                            unavailableMessage = wordStatus,
                                         )
                                     }
-                                    pitch?.let { PitchPatternDiagram(pitch = it) } ?: Text(
-                                        stringResource(R.string.no_pitch),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
+                                    when {
+                                        pitch != null -> PitchPatternDiagram(pitch = pitch)
+                                        pitchStatus != null -> Text(
+                                            pitchStatus,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                        pitchPending -> Spacer(Modifier.height(24.dp))
+                                        else -> Text(
+                                            stringResource(R.string.no_pitch),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
                                     if (definition.isNotBlank()) {
                                         Text(definition, style = MaterialTheme.typography.bodyLarge)
                                     }
@@ -614,11 +631,18 @@ private fun CardAudioButton(
     audio: ReviewAudioPresentation,
     onToggle: () -> Unit,
     onRetry: () -> Unit,
+    enabled: Boolean = true,
+    unavailableMessage: String? = null,
 ) {
-    val description = reviewAudioControlLabel(field, audio).let { copy ->
-        stringResource(copy.resourceId, *copy.formatArgs.toTypedArray())
+    val description = if (!enabled && unavailableMessage != null) unavailableMessage else {
+        reviewAudioControlLabel(field, audio).let { copy ->
+            stringResource(copy.resourceId, *copy.formatArgs.toTypedArray())
+        }
     }
-    val state = when (audio) {
+    val state = when {
+        !enabled && unavailableMessage != null -> unavailableMessage
+        audio == ReviewAudioPresentation.SourceMissing -> stringResource(R.string.no_recording)
+        else -> when (audio) {
         ReviewAudioPresentation.Unavailable -> stringResource(R.string.card_audio_unavailable_state)
         ReviewAudioPresentation.NeedsPreparation -> stringResource(R.string.card_audio_needs_preparation_state)
         ReviewAudioPresentation.Ready -> stringResource(R.string.ready)
@@ -626,6 +650,8 @@ private fun CardAudioButton(
         ReviewAudioPresentation.Generating -> stringResource(R.string.card_audio_in_progress_state)
         is ReviewAudioPresentation.Advisory -> audio.headline
         is ReviewAudioPresentation.Failed -> stringResource(R.string.card_audio_error_state)
+        ReviewAudioPresentation.SourceMissing -> stringResource(R.string.no_recording)
+        }
     }
     val action = if (audio == ReviewAudioPresentation.Ready || audio == ReviewAudioPresentation.Playing) onToggle else onRetry
     val glyphColor = when (audio) {
@@ -635,7 +661,7 @@ private fun CardAudioButton(
     }
     IconButton(
         onClick = action,
-        enabled = audio != ReviewAudioPresentation.Generating,
+        enabled = enabled && audio != ReviewAudioPresentation.Generating && audio != ReviewAudioPresentation.SourceMissing,
         modifier = Modifier.size(48.dp).semantics {
             contentDescription = description
             stateDescription = state
