@@ -40,4 +40,4 @@ No production resource entries have been created: hosting is unresolved and a tr
 
 ## Verification status
 
-Automated coverage is in `app/src/test/java/dev/pierre/japaneseanki/VerifiedFirstRunResourcesTest.kt`. The targeted Gradle run passed all 11 tests (`:app:testDebugUnitTest --tests dev.pierre.japaneseanki.VerifiedFirstRunResourcesTest`; 0 failures/errors). A full `:app:testDebugUnitTest` run timed out after 420 seconds while other project builds were active, so the rest of the JVM suite remains unverified.
+Automated coverage is in `app/src/test/java/dev/pierre/japaneseanki/VerifiedFirstRunResourcesTest.kt`. The targeted resource suite passed all 11 tests (0 failures/errors). After the shared Gradle activity cleared, the full `:app:testDebugUnitTest` run passed 32 suites and 269 tests (0 skipped, failures, or errors).
