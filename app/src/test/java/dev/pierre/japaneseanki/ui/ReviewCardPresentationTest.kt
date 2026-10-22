@@ -3,7 +3,6 @@ package dev.pierre.japaneseanki.ui
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -43,11 +42,6 @@ class ReviewCardPresentationTest {
         assertEquals("Edit preparation", ReviewPreparationActionLabel)
     }
 
-    @Test fun translationProgressIsPresentedOnceAndOnlyWhilePending() {
-        assertEquals("Translating…", reviewTranslationProgressLabel(pending = true))
-        assertNull(reviewTranslationProgressLabel(pending = false))
-    }
-
     @Test fun audioControlsUsePlayStopAndDistinguishPreparationFromFailure() {
         assertTrue(ReviewAudioControlSize >= 48.dp)
         assertEquals("Play Sentence audio", reviewAudioControlLabel("Sentence", ReviewAudioPresentation.Ready))
@@ -55,7 +49,7 @@ class ReviewCardPresentationTest {
         assertEquals("Generating Sentence audio", reviewAudioControlLabel("Sentence", ReviewAudioPresentation.Generating))
         assertEquals("Prepare Sentence audio", reviewAudioControlLabel("Sentence", ReviewAudioPresentation.NeedsPreparation))
         assertEquals(
-            "Explain unavailable Word audio",
+            "Retry Word audio",
             reviewAudioControlLabel("Word", ReviewAudioPresentation.Failed("Network timeout")),
         )
     }

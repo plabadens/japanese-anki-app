@@ -57,6 +57,7 @@ import androidx.compose.ui.semantics.semantics
 import dev.pierre.japaneseanki.ui.ReviewCard
 import dev.pierre.japaneseanki.ui.AppContentMaxWidth
 import dev.pierre.japaneseanki.ui.ReviewSendPresentation
+import dev.pierre.japaneseanki.ui.ReviewStatusRole
 import dev.pierre.japaneseanki.ui.ReviewAudioPresentation
 import dev.pierre.japaneseanki.ui.reviewAudioGenerationFailureMessage
 import dev.pierre.japaneseanki.ui.reviewAudioPlaybackFailureMessage
@@ -256,12 +257,16 @@ internal data class DraftAudio(
     val path: String? = null,
     val generating: Boolean = false,
     val error: String? = null,
+    val advisoryHeadline: String? = null,
+    val advisoryMessage: String? = null,
     val identity: String = "",
     val needsContinue: Boolean = false,
 ) {
-    fun presentation(): ReviewAudioPresentation = when {
+    fun presentation(actionLabel: String = "Retry"): ReviewAudioPresentation = when {
         generating -> ReviewAudioPresentation.Generating
         path != null -> ReviewAudioPresentation.Ready
+        advisoryHeadline != null && advisoryMessage != null ->
+            ReviewAudioPresentation.Advisory(advisoryHeadline, advisoryMessage, actionLabel)
         error != null -> ReviewAudioPresentation.Failed(error)
         needsContinue -> ReviewAudioPresentation.NeedsPreparation
         else -> ReviewAudioPresentation.Unavailable
@@ -695,7 +700,13 @@ class MainActivity : ComponentActivity() {
             )
 
             fun audioView(item: AudioItem): DraftAudio {
-                audioConfigErrors[item]?.let { return DraftAudio(error = it) }
+                audioConfigErrors[item]?.let {
+                    val field = if (item == AudioItem.SENTENCE) "Sentence" else "Word"
+                    return DraftAudio(
+                        advisoryHeadline = "$field audio setup needed",
+                        advisoryMessage = it.substringBefore(". ").trimEnd('.') + ".",
+                    )
+                }
                 audioPlaybackErrors[item]?.let { return DraftAudio(error = it) }
                 return (audioSnapshot.items[item] ?: DraftAudioState.Idle).toDraftAudio(item)
             }
@@ -3381,11 +3392,11 @@ class MainActivity : ComponentActivity() {
                                 add("The selected image is missing or not ready to send.")
                             }
                             if (!frozenRetryReady && !sentenceAudioReady) {
-                                add(reviewAudioSendBlocker("Sentence", sentenceAudio.presentation())
+                                add(reviewAudioSendBlocker("Sentence", sentenceAudio.presentation(audioActionLabel(AudioItem.SENTENCE)))
                                     ?: "Sentence audio is not ready to send.")
                             }
                             if (!frozenRetryReady && !wordAudioReady) {
-                                add(reviewAudioSendBlocker("Word", wordAudio.presentation())
+                                add(reviewAudioSendBlocker("Word", wordAudio.presentation(audioActionLabel(AudioItem.VOCABULARY)))
                                     ?: "Word audio is not ready to send.")
                             }
                             if (!apiPermissionGranted) {
@@ -3424,6 +3435,38 @@ class MainActivity : ComponentActivity() {
                             isSubmitting -> null
                             submitMessage != null -> null
                             else -> sendBlockers.firstOrNull()
+                        }
+                        val reviewTranslationError =
+                            (activeTranslationResult() as? TranslationResult.Failed)?.message
+                        val translationNeedsSettings = reviewTranslationError?.let {
+                            it.contains("Google Cloud API key", ignoreCase = true) ||
+                                it.contains("credential", ignoreCase = true)
+                        } == true
+                        val submitHintActionLabel = when {
+                            translationNeedsSettings -> "Open Settings"
+                            reviewTranslationError != null -> "Retry"
+                            !sentenceAudioReady -> audioActionLabel(AudioItem.SENTENCE)
+                            !wordAudioReady -> audioActionLabel(AudioItem.VOCABULARY)
+                            !apiPermissionGranted || selectedModel == null || selectedDeck == null || setupError != null -> "Open Settings"
+                            else -> "Edit preparation"
+                        }
+                        val submitHintRole = if (
+                            translationNeedsSettings || !apiPermissionGranted || selectedModel == null ||
+                            selectedDeck == null || setupError != null
+                        ) ReviewStatusRole.Information else ReviewStatusRole.Warning
+                        val submitHintAction: (() -> Unit) = when {
+                            translationNeedsSettings -> ({ openSettings() })
+                            reviewTranslationError != null -> ({
+                                translationAutoAllowed = true
+                                translationRetry++
+                            })
+                            !sentenceAudioReady -> ({ onAudioAction(AudioItem.SENTENCE) })
+                            !wordAudioReady -> ({ onAudioAction(AudioItem.VOCABULARY) })
+                            !apiPermissionGranted || selectedModel == null || selectedDeck == null || setupError != null -> ({ openSettings() })
+                            else -> ({
+                                generationStarted = false
+                                route = AppRoute.Target
+                            })
                         }
                         val loadMoreMatches: () -> Unit = {
                             val query = target?.textIn(editor.text)
@@ -3643,15 +3686,16 @@ class MainActivity : ComponentActivity() {
                                         definition = displayDefinition,
                                         translation = displayTranslation,
                                         translationPending = activeTranslationResult() is TranslationResult.Pending,
-                                        translationError = (activeTranslationResult() as? TranslationResult.Failed)?.message,
+                                        translationError = reviewTranslationError,
                                         translationStale = translationDraft.manuallyEdited && translationDraft.stale,
                                         editingEnabled = !submissionLocked && completedSubmission == null,
                                         onRetryTranslation = {
                                             translationAutoAllowed = true
                                             translationRetry++
                                         },
-                                        sentenceAudio = sentenceAudio.presentation(),
-                                        vocabularyAudio = wordAudio.presentation(),
+                                        onOpenSettings = { openSettings() },
+                                        sentenceAudio = sentenceAudio.presentation(audioActionLabel(AudioItem.SENTENCE)),
+                                        vocabularyAudio = wordAudio.presentation(audioActionLabel(AudioItem.VOCABULARY)),
                                         sentenceAudioAction = audioActionLabel(AudioItem.SENTENCE),
                                         vocabularyAudioAction = audioActionLabel(AudioItem.VOCABULARY),
                                         onToggleSentenceAudio = {
@@ -3728,6 +3772,9 @@ class MainActivity : ComponentActivity() {
                                         sendStatusContent = sendRecoveryContent,
                                         imageFocalY = photoFocusY,
                                         sendHint = submitHint,
+                                        sendHintActionLabel = submitHintActionLabel,
+                                        sendHintRole = submitHintRole,
+                                        onSendHintAction = submitHintAction,
                                     )
                                 }
                             }
