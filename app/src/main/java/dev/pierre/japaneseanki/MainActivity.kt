@@ -66,23 +66,21 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.contentDescription
-import dev.pierre.japaneseanki.ui.ReviewCard
 import dev.pierre.japaneseanki.ui.AppContentMaxWidth
-import dev.pierre.japaneseanki.ui.ReviewSendPresentation
-import dev.pierre.japaneseanki.ui.ReviewStatusRole
+
 import dev.pierre.japaneseanki.ui.ReviewAudioPresentation
+import dev.pierre.japaneseanki.ui.CardScreen
+import dev.pierre.japaneseanki.ui.englishPartOfSpeechLabel
+import dev.pierre.japaneseanki.ui.reviewTranslationFailureStatus
 import dev.pierre.japaneseanki.ui.reviewAudioGenerationFailureMessage
 import dev.pierre.japaneseanki.ui.reviewAudioPlaybackFailureMessage
 import dev.pierre.japaneseanki.ui.reviewAudioSendBlocker
-import dev.pierre.japaneseanki.ui.FlowProgress
-import dev.pierre.japaneseanki.ui.FlowStep
 import dev.pierre.japaneseanki.ui.FlowTheme
 import dev.pierre.japaneseanki.ui.FlowTopBar
 import dev.pierre.japaneseanki.ui.InputScreen
 import dev.pierre.japaneseanki.ui.SettingsScreen
 import dev.pierre.japaneseanki.ui.SettingsScreenState
-import dev.pierre.japaneseanki.ui.TargetScreen
+
 import dev.pierre.japaneseanki.ui.ocrFocusFraction
 import dev.pierre.japaneseanki.speech.CloudVoice
 import dev.pierre.japaneseanki.speech.GoogleChirpSpeechProvider
@@ -258,10 +256,10 @@ private fun draftAudioPreferenceKeys(): List<String> = buildList {
 }
 
 private fun pitchUnavailableMessage(failure: AjtPitchFailure): Int = when (failure) {
-    AjtPitchFailure.MISSING_INDEX -> R.string.legacy_card_ajt_pitch_index_missing
-    AjtPitchFailure.EMPTY_INDEX -> R.string.legacy_card_ajt_pitch_index_empty
-    AjtPitchFailure.INVALID_INDEX -> R.string.legacy_card_ajt_pitch_index_invalid
-    AjtPitchFailure.OPEN_FAILED -> R.string.legacy_card_ajt_pitch_index_open_failed
+    AjtPitchFailure.MISSING_INDEX -> R.string.card_ajt_pitch_index_missing
+    AjtPitchFailure.EMPTY_INDEX -> R.string.card_ajt_pitch_index_empty
+    AjtPitchFailure.INVALID_INDEX -> R.string.card_ajt_pitch_index_invalid
+    AjtPitchFailure.OPEN_FAILED -> R.string.card_ajt_pitch_index_open_failed
 }
 
 /** Per-item audio state for the current draft revision. */
@@ -293,15 +291,15 @@ private fun DraftAudioState.toDraftAudio(item: AudioItem, context: Context): Dra
     is DraftAudioState.Ready -> DraftAudio(path = file.path, identity = identity)
     is DraftAudioState.Failed -> DraftAudio(
         error = reviewAudioGenerationFailureMessage(
-            context.getString(if (item == AudioItem.SENTENCE) R.string.legacy_card_sentence_audio_field else R.string.legacy_card_word_audio_field),
+            context.getString(if (item == AudioItem.SENTENCE) R.string.card_sentence_audio_field else R.string.card_word_audio_field),
             message,
-            context.getString(R.string.legacy_card_audio_no_diagnostic_details),
+            context.getString(R.string.card_audio_no_diagnostic_details),
         ).resolve(context),
         identity = identity,
     )
 }
 
-enum class AppRoute { Capture, Target, Review }
+enum class AppRoute { Capture, Card }
 
 data class SubmissionOutcome(val status: String, val noteId: Long? = null)
 
@@ -445,7 +443,7 @@ class MainActivity : ComponentActivity() {
             val restoredSuggestionText = preferences.getString("translation_suggestion", null)
             val restoredSuggestionSource = preferences.getString("translation_suggestion_source", null)
                 ?.let { saved -> TranslationSource.entries.firstOrNull { it.name == saved } }
-            val interruptedTranslation = TranslationResult.Failed(this@MainActivity.getString(R.string.legacy_card_translation_was_interrupted_tap_retry_to_c))
+            val interruptedTranslation = TranslationResult.Failed(this@MainActivity.getString(R.string.card_translation_was_interrupted_tap_retry_to_c))
             var translationDraft by remember {
                 mutableStateOf(
                     TranslationDraft(
@@ -732,10 +730,10 @@ class MainActivity : ComponentActivity() {
             fun audioView(item: AudioItem): DraftAudio {
                 audioConfigErrors[item]?.let {
                     val field = this@MainActivity.getString(
-                        if (item == AudioItem.SENTENCE) R.string.legacy_card_sentence_audio_field else R.string.legacy_card_word_audio_field,
+                        if (item == AudioItem.SENTENCE) R.string.card_sentence_audio_field else R.string.card_word_audio_field,
                     )
                     return DraftAudio(
-                        advisoryHeadline = this@MainActivity.getString(R.string.legacy_card_audio_setup_needed_headline, field),
+                        advisoryHeadline = this@MainActivity.getString(R.string.card_audio_setup_needed_headline, field),
                         advisoryMessage = it.substringBefore(". ").trimEnd('.') + ".",
                     )
                 }
@@ -801,12 +799,11 @@ class MainActivity : ComponentActivity() {
 
             var route by remember {
                 mutableStateOf(
-                    AppRoute.entries.firstOrNull { it.name == preferences.getString("route", null) }
-                        ?: when {
-                            editor.text.isBlank() -> AppRoute.Capture
-                            target != null && preferences.getLong("dictionary_entry_id", -1) > 0 -> AppRoute.Review
-                            else -> AppRoute.Target
-                        },
+                    when (preferences.getString("route", null)) {
+                        "Capture" -> AppRoute.Capture
+                        "Target", "Review", "Card" -> AppRoute.Card
+                        else -> if (editor.text.isBlank()) AppRoute.Capture else AppRoute.Card
+                    },
                 )
             }
             var photoSourcePath by remember {
@@ -855,15 +852,15 @@ class MainActivity : ComponentActivity() {
                             val operation = preferences.getString(SubmissionRecoveryKeys.MEDIA_OPERATION, null)
                                 ?.let { name -> runCatching { MediaImportOperation.valueOf(name) }.getOrNull() }
                             this@MainActivity.getString(
-                                R.string.legacy_card_send_recovery_media_preparation_interrupted,
+                                R.string.card_send_recovery_media_preparation_interrupted,
                                 operation?.label?.replaceFirstChar { it.uppercase() }
-                                    ?: this@MainActivity.getString(R.string.legacy_card_media_preparation),
+                                    ?: this@MainActivity.getString(R.string.card_media_preparation),
                             )
                         }
-                        SubmissionPhase.MEDIA_IMPORTED -> this@MainActivity.getString(R.string.legacy_card_send_recovery_media_receipts_recorded)
-                        SubmissionPhase.NOTE_INSERTING -> this@MainActivity.getString(R.string.legacy_card_send_recovery_previous_send_interrupted)
-                        SubmissionPhase.NOTE_INSERTED -> this@MainActivity.getString(R.string.legacy_card_send_recovery_note_saved_verifying_cards)
-                        SubmissionPhase.DESTINATION_VERIFIED -> this@MainActivity.getString(R.string.legacy_card_send_recovery_destination_verified_initial)
+                        SubmissionPhase.MEDIA_IMPORTED -> this@MainActivity.getString(R.string.card_send_recovery_media_receipts_recorded)
+                        SubmissionPhase.NOTE_INSERTING -> this@MainActivity.getString(R.string.card_send_recovery_previous_send_interrupted)
+                        SubmissionPhase.NOTE_INSERTED -> this@MainActivity.getString(R.string.card_send_recovery_note_saved_verifying_cards)
+                        SubmissionPhase.DESTINATION_VERIFIED -> this@MainActivity.getString(R.string.card_send_recovery_destination_verified_initial)
                         null -> null
                     },
                 )
@@ -881,7 +878,7 @@ class MainActivity : ComponentActivity() {
             val selectedDeck = decks.firstOrNull { it.id == selectedDeckId }
             val incoming = sharedText.value
             val submissionLocked = isSubmitting || recoveryRequired || frozenRetryReady || duplicateBlocked
-            val blockedStatusPrefix = stringResource(R.string.legacy_card_blocked)
+            val blockedStatusPrefix = stringResource(R.string.card_blocked)
             val navigationLocked = submissionLocked || captureInProgress
             val currentSubmissionLocked = rememberUpdatedState(submissionLocked)
             val currentDraftGeneration = rememberUpdatedState(draftGeneration)
@@ -991,9 +988,9 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            fun continueToReview() {
+            fun continueToCard() {
                 if (!onboardingComplete) {
-                    preparationAuthorizationError = this@MainActivity.getString(R.string.legacy_card_finish_setup_in_settings_before_reviewing)
+                    preparationAuthorizationError = this@MainActivity.getString(R.string.finish_setup)
                     showSettings = true
                     return
                 }
@@ -1002,7 +999,7 @@ class MainActivity : ComponentActivity() {
                 if (nextRevision == null || !preferences.edit()
                         .putLong("review_authorization_sequence", nextRevision).commit()
                 ) {
-                    preparationAuthorizationError = this@MainActivity.getString(R.string.legacy_card_could_not_record_this_review_authorization)
+                    preparationAuthorizationError = this@MainActivity.getString(R.string.preparation_interrupted)
                     return
                 }
                 reviewAuthorizationSequence = nextRevision
@@ -1010,13 +1007,13 @@ class MainActivity : ComponentActivity() {
                 generationStarted = true
                 translationAutoAllowed = true
                 pendingReviewAuthorization = nextRevision
-                route = AppRoute.Review
+                route = AppRoute.Card
             }
 
             val hasManualDefinition = definitionManuallyEdited && definition.isNotBlank()
             val persistLastSentTags: (FrozenSubmission) -> Unit = { snapshot ->
                 check(settings.edit().putString("last_note_tags", snapshot.tags.joinToString(" ")).commit()) {
-                    this@MainActivity.getString(R.string.legacy_card_tags_from_confirmed_note_save_failed)
+                    this@MainActivity.getString(R.string.card_tags_from_confirmed_note_save_failed)
                 }
             }
             val clearDraft = {
@@ -1166,7 +1163,7 @@ class MainActivity : ComponentActivity() {
                 tokenizationError = null
                 tokenizationLoading = analyzerReady
                 ocrError = null
-                route = AppRoute.Target
+                continueToCard()
             }
             val setDraftOrigin: (String) -> Unit = { origin ->
                 if (draftOrigin != origin) {
@@ -1256,7 +1253,7 @@ class MainActivity : ComponentActivity() {
                                 result.text.isNotBlank() -> applyOcrText(result.text, 0.5f)
                                 else -> {
                                     ocrError = this@MainActivity.getString(R.string.legacy_capture_no_text_was_found_type_or_edit_the_sentenc)
-                                    route = AppRoute.Target
+                                    route = AppRoute.Capture
                                 }
                             }
                         } catch (cancelled: CancellationException) {
@@ -1271,7 +1268,7 @@ class MainActivity : ComponentActivity() {
                                 ) && imageProcessingRevision == processingRevision && noteImagePath == file.absolutePath
                             ) {
                                 ocrError = this@MainActivity.getString(R.string.legacy_capture_could_not_read_this_photo_type_or_edit_the)
-                                route = AppRoute.Target
+                                route = AppRoute.Capture
                             }
                         } finally {
                             if (imageProcessingRevision == processingRevision && noteImagePath == file.absolutePath) {
@@ -1492,7 +1489,7 @@ class MainActivity : ComponentActivity() {
                 pitchAccentText = unresolved.pitchAccent
                 pitchHtmlText = null
                 pitchCandidates = emptyList()
-                pitchIndexError = this@MainActivity.getString(R.string.legacy_card_choose_a_dictionary_entry_to_resolve_this)
+                pitchIndexError = this@MainActivity.getString(R.string.card_choose_a_dictionary_entry_to_resolve_this)
                 audioController.clear(AudioItem.VOCABULARY)
                 audioSnapshot = audioController.snapshot()
             }
@@ -1522,20 +1519,20 @@ class MainActivity : ComponentActivity() {
                     // Never display a pronunciation that no dictionary entry supports.
                     vocabularyReading = ""
                     vocabularyReadingError = if (corrected.isEmpty()) {
-                        this@MainActivity.getString(R.string.legacy_card_vocabulary_reading_kana_required)
+                        this@MainActivity.getString(R.string.card_vocabulary_reading_kana_required)
                     } else if (dictionaryEntries.isEmpty()) {
-                        this@MainActivity.getString(R.string.legacy_card_no_dictionary_entry_loaded)
+                        this@MainActivity.getString(R.string.card_no_dictionary_entry_loaded)
                     } else {
                         this@MainActivity.getString(
-                            R.string.legacy_card_reading_not_listed_for_word,
-                            vocabulary.ifBlank { this@MainActivity.getString(R.string.legacy_card_this_word) },
+                            R.string.card_reading_not_listed_for_word,
+                            vocabulary.ifBlank { this@MainActivity.getString(R.string.card_this_word) },
                             corrected,
                         )
                     }
                     selectedDictionaryEntry = null
                     selectedDictionaryEntryId = null
                     selectedSenseIndices = emptySet()
-                    pitchIndexError = this@MainActivity.getString(R.string.legacy_card_no_pitch_pattern_can_be_resolved_for_this)
+                    pitchIndexError = this@MainActivity.getString(R.string.card_no_pitch_pattern_can_be_resolved_for_this)
                     return false
                 }
                 val entry = dictionaryEntries.first { it.id == match.id }
@@ -1621,14 +1618,14 @@ class MainActivity : ComponentActivity() {
                     } else requestDraft.result
                     if (active is TranslationResult.Pending) {
                         translationDraft = requestDraft.requestFinished(
-                            TranslationResult.Failed(this@MainActivity.getString(R.string.legacy_card_translation_needs_retry_tap_retry_to_conti)),
+                            TranslationResult.Failed(this@MainActivity.getString(R.string.card_translation_needs_retry_tap_retry_to_conti)),
                         )
                     }
                     return@LaunchedEffect
                 }
                 if (!translationAutoAllowed && !explicitRetry) {
                     translationDraft = requestDraft.requestFinished(
-                        TranslationResult.Failed(this@MainActivity.getString(R.string.legacy_card_translation_was_not_started_tap_retry_to_c)),
+                        TranslationResult.Failed(this@MainActivity.getString(R.string.card_translation_was_not_started_tap_retry_to_c)),
                     )
                     return@LaunchedEffect
                 }
@@ -1650,7 +1647,7 @@ class MainActivity : ComponentActivity() {
                     .commit()
                 if (!requestRecorded) {
                     translationDraft = translationDraft.requestFinished(
-                        TranslationResult.Failed(this@MainActivity.getString(R.string.legacy_card_translation_request_could_not_be_recorded)),
+                        TranslationResult.Failed(this@MainActivity.getString(R.string.card_translation_request_could_not_be_recorded)),
                     )
                     return@LaunchedEffect
                 }
@@ -1662,7 +1659,7 @@ class MainActivity : ComponentActivity() {
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
-                    TranslationResult.Failed(this@MainActivity.getString(R.string.legacy_card_translation_is_unavailable_tap_retry_to_co))
+                    TranslationResult.Failed(this@MainActivity.getString(R.string.card_translation_is_unavailable_tap_retry_to_co))
                 }
                 if (translationResponseIsCurrent(
                         sentence, requestRevision, editor.text,
@@ -1704,7 +1701,7 @@ class MainActivity : ComponentActivity() {
                 } catch (_: Exception) {
                     if (asyncDraftIsCurrent(callbackGeneration)) {
                         japaneseTokens = emptyList()
-                        tokenizationError = this@MainActivity.getString(R.string.legacy_card_could_not_analyze_this_sentence_select_a_t)
+                        tokenizationError = this@MainActivity.getString(R.string.card_could_not_analyze_this_sentence_select_a_t)
                     }
                 } finally {
                     tokenizationLoading = false
@@ -1769,7 +1766,7 @@ class MainActivity : ComponentActivity() {
                     audioPlaybackErrors = audioPlaybackErrors + (
                         item to reviewAudioPlaybackFailureMessage(
                             this@MainActivity.getString(
-                                if (item == AudioItem.SENTENCE) R.string.legacy_card_sentence_audio_field else R.string.legacy_card_word_audio_field,
+                                if (item == AudioItem.SENTENCE) R.string.card_sentence_audio_field else R.string.card_word_audio_field,
                             ),
                         ).resolve(this@MainActivity)
                     )
@@ -1787,10 +1784,10 @@ class MainActivity : ComponentActivity() {
                 )
 
             fun audioActionLabel(item: AudioItem): Int = when {
-                audioConfigErrors.containsKey(item) && audioSettingsRequired(item) -> R.string.legacy_card_open_settings_action
-                audioConfigErrors.containsKey(item) -> R.string.legacy_card_edit_preparation
-                (audioSnapshot.items[item] as? DraftAudioState.Failed)?.retryable == false -> R.string.legacy_card_edit_preparation
-                audioSnapshot.items[item] is DraftAudioState.NeedsContinue -> R.string.legacy_card_generate_action
+                audioConfigErrors.containsKey(item) && audioSettingsRequired(item) -> R.string.card_open_settings_action
+                audioConfigErrors.containsKey(item) -> R.string.card_edit_preparation
+                (audioSnapshot.items[item] as? DraftAudioState.Failed)?.retryable == false -> R.string.card_edit_preparation
+                audioSnapshot.items[item] is DraftAudioState.NeedsContinue -> R.string.card_generate_action
                 else -> R.string.retry
             }
 
@@ -1805,11 +1802,11 @@ class MainActivity : ComponentActivity() {
                     audioConfigErrors.containsKey(item) -> {
                         audioConfigErrors = audioConfigErrors - item
                         generationStarted = false
-                        route = AppRoute.Target
+                        route = AppRoute.Card
                     }
                     (audioSnapshot.items[item] as? DraftAudioState.Failed)?.retryable == false -> {
                         generationStarted = false
-                        route = AppRoute.Target
+                        route = AppRoute.Card
                     }
                     else -> {
                         val attempt = audioController.confirm(item) ?: audioController.retry(item)
@@ -1817,8 +1814,8 @@ class MainActivity : ComponentActivity() {
                             runAudioAttempt(attempt)
                         } else {
                             val message = this@MainActivity.getString(
-                                if (item == AudioItem.SENTENCE) R.string.legacy_card_sentence_audio_not_configured
-                                else R.string.legacy_card_word_audio_unavailable,
+                                if (item == AudioItem.SENTENCE) R.string.card_sentence_audio_not_configured
+                                else R.string.card_word_audio_unavailable,
                             )
                             audioConfigErrors = audioConfigErrors + (item to message)
                             Log.w("DraftAudio", "${item.name} audio unavailable: no current input")
@@ -1887,13 +1884,13 @@ class MainActivity : ComponentActivity() {
                         sentenceText.isEmpty() || selectedTarget == null -> null
                         voice == null -> when {
                             settingsScreenState.credentialUnreadable ->
-                                this@MainActivity.getString(R.string.legacy_card_saved_cloud_key_unreadable)
+                                this@MainActivity.getString(R.string.card_saved_cloud_key_unreadable)
                             !settingsScreenState.credentialStored ->
-                                this@MainActivity.getString(R.string.legacy_card_no_cloud_key_saved)
+                                this@MainActivity.getString(R.string.card_no_cloud_key_saved)
                             selectedVoiceName.isBlank() ->
-                                this@MainActivity.getString(R.string.legacy_card_no_verified_sentence_voice)
+                                this@MainActivity.getString(R.string.card_no_verified_sentence_voice)
                             else ->
-                                this@MainActivity.getString(R.string.legacy_card_sentence_voice_unverified)
+                                this@MainActivity.getString(R.string.card_sentence_voice_unverified)
                         }
                         hintResult is HintResult.Impossible -> hintResult.reason
                         else -> null
@@ -1924,7 +1921,7 @@ class MainActivity : ComponentActivity() {
                     // the change that invalidated it.
                     audioConfigErrors = if (entry == null && vocabulary.isNotBlank()) {
                         audioConfigErrors + (
-                            AudioItem.VOCABULARY to this@MainActivity.getString(R.string.legacy_card_select_dictionary_entry_for_audio)
+                            AudioItem.VOCABULARY to this@MainActivity.getString(R.string.card_select_dictionary_entry_for_audio)
                             )
                     } else {
                         audioConfigErrors - AudioItem.VOCABULARY
@@ -1964,9 +1961,9 @@ class MainActivity : ComponentActivity() {
 
             androidx.compose.runtime.LaunchedEffect(route, pendingReviewAuthorization, submissionLocked) {
                 val revision = pendingReviewAuthorization ?: return@LaunchedEffect
-                if (route != AppRoute.Review || submissionLocked) return@LaunchedEffect
+                if (route != AppRoute.Card || submissionLocked) return@LaunchedEffect
                 androidx.compose.runtime.withFrameNanos { }
-                if (route != AppRoute.Review || submissionLocked || pendingReviewAuthorization != revision) {
+                if (route != AppRoute.Card || submissionLocked || pendingReviewAuthorization != revision) {
                     return@LaunchedEffect
                 }
                 pendingReviewAuthorization = null
@@ -2051,7 +2048,7 @@ class MainActivity : ComponentActivity() {
                         throw cancelled
                     } catch (_: Exception) {
                         if (asyncDraftIsCurrent(callbackGeneration)) {
-                            dictionaryError = this@MainActivity.getString(R.string.legacy_card_dictionary_lookup_failed_retry_before_sele)
+                            dictionaryError = this@MainActivity.getString(R.string.card_dictionary_lookup_failed_retry_before_sele)
                         }
                     } finally {
                         dictionarySearchLoading = false
@@ -2090,7 +2087,7 @@ class MainActivity : ComponentActivity() {
                     if (!asyncDraftIsCurrent(callbackGeneration)) return@LaunchedEffect
                     pitchCandidates = candidates
                     pitchIndexError = if (candidates.isEmpty()) {
-                        this@MainActivity.getString(R.string.legacy_card_ajt_pitch_record_missing)
+                        this@MainActivity.getString(R.string.card_ajt_pitch_record_missing)
                     } else null
                     if (candidates.isNotEmpty()) {
                         pitchAccentText = candidates.first().accent.toString()
@@ -2119,7 +2116,7 @@ class MainActivity : ComponentActivity() {
                 if (incoming != null) {
                     if (editor.text.isBlank()) {
                         captureMode = "Type"
-                        route = AppRoute.Target
+                        route = AppRoute.Capture
                         if (photoSourcePath == null) setDraftOrigin("Type")
                         replaceEditorText(incoming, true)
                         selectTarget(null)
@@ -2587,7 +2584,7 @@ class MainActivity : ComponentActivity() {
             val displayTags = frozenForDisplay?.tags?.joinToString(" ") ?: tags
             val displayPitch = frozenForDisplay?.pitchAccentText?.toIntOrNull()
                 ?.let { PitchAccent.create(displayVocabularyReading, it, pitchHtmlText) } ?: pitch
-            val visibleRoute = if (frozenForDisplay != null) AppRoute.Review else route
+            val visibleRoute = if (frozenForDisplay != null) AppRoute.Card else route
             val frozenDestinationReady = !frozenRetryReady || (
                 restoredFrozenForUi != null && selectedModel?.id == restoredFrozenForUi.modelId &&
                     selectedDeck?.id == restoredFrozenForUi.deckId && selectedModel.fields == restoredFrozenForUi.modelFields
@@ -2646,7 +2643,7 @@ class MainActivity : ComponentActivity() {
                 selectedDeckId = snapshot.deckId
                 selectedDictionaryEntry = null
                 selectedDictionaryEntryId = null
-                route = AppRoute.Review
+                route = AppRoute.Card
                 frozenSnapshotAppliedRevision = snapshot.revision
             }
 
@@ -2667,7 +2664,7 @@ class MainActivity : ComponentActivity() {
                 ) ?: return@LaunchedEffect
                 val snapshot = readFrozenSubmission(preferences)
                 if (snapshot == null) {
-                    recoveryMessage = this@MainActivity.getString(R.string.legacy_card_the_frozen_send_record_is_incomplete_keep)
+                    recoveryMessage = this@MainActivity.getString(R.string.card_the_frozen_send_record_is_incomplete_keep)
                     return@LaunchedEffect
                 }
                 if (selectedModelId != snapshot.modelId) {
@@ -2680,22 +2677,22 @@ class MainActivity : ComponentActivity() {
                 }
                 val model = noteTypes.firstOrNull { it.id == snapshot.modelId }
                 if (model == null) {
-                    recoveryMessage = this@MainActivity.getString(R.string.legacy_card_the_frozen_note_type_is_unavailable_confir)
+                    recoveryMessage = this@MainActivity.getString(R.string.card_the_frozen_note_type_is_unavailable_confir)
                     return@LaunchedEffect
                 }
                 if (model.fields != snapshot.modelFields) {
-                    recoveryMessage = this@MainActivity.getString(R.string.legacy_card_the_frozen_note_type_fields_changed_confir)
+                    recoveryMessage = this@MainActivity.getString(R.string.card_the_frozen_note_type_fields_changed_confir)
                     return@LaunchedEffect
                 }
                 val values = snapshot.modelFields.zip(snapshot.orderedFields).toMap()
                 if (phase == SubmissionPhase.NOTE_INSERTED || phase == SubmissionPhase.DESTINATION_VERIFIED) {
                     val noteId = snapshot.noteId
                     if (noteId == null) {
-                        recoveryMessage = this@MainActivity.getString(R.string.legacy_card_the_inserted_note_id_was_not_saved_the_out)
+                        recoveryMessage = this@MainActivity.getString(R.string.card_the_inserted_note_id_was_not_saved_the_out)
                         return@LaunchedEffect
                     }
                     knownNoteId = noteId
-                    recoveryMessage = this@MainActivity.getString(R.string.legacy_card_checking_the_saved_note_id_and_destination)
+                    recoveryMessage = this@MainActivity.getString(R.string.card_checking_the_saved_note_id_and_destination)
                     try {
                         val decision = withContext(Dispatchers.IO) {
                             val gateway = AnkiDroidGateway(contentResolver)
@@ -2711,23 +2708,23 @@ class MainActivity : ComponentActivity() {
                                 frozenRetryReady = false
                                 completedSubmission = snapshot
                                 knownNoteId = null
-                                submitMessage = this@MainActivity.getString(R.string.legacy_card_note_1_d_recovered_in_the_selected_deck, noteId.toString())
+                                submitMessage = this@MainActivity.getString(R.string.card_note_1_d_recovered_in_the_selected_deck, noteId.toString())
                             }
                             NoteInsertedRecoveryDecision.NEEDS_REVIEW -> recoveryMessage =
-                                this@MainActivity.getString(R.string.legacy_card_the_saved_note_has_cards_in_another_or_mix)
+                                this@MainActivity.getString(R.string.card_the_saved_note_has_cards_in_another_or_mix)
                             NoteInsertedRecoveryDecision.INDETERMINATE -> recoveryMessage =
-                                this@MainActivity.getString(R.string.legacy_card_the_saved_note_id_has_no_verifiable_cards)
-                            NoteInsertedRecoveryDecision.FAIL -> error(this@MainActivity.getString(R.string.legacy_card_frozen_note_destination_invalid))
+                                this@MainActivity.getString(R.string.card_the_saved_note_id_has_no_verifiable_cards)
+                            NoteInsertedRecoveryDecision.FAIL -> error(this@MainActivity.getString(R.string.card_frozen_note_destination_invalid))
                         }
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
-                        recoveryMessage = this@MainActivity.getString(R.string.legacy_card_could_not_verify_the_saved_note_id_retry_t)
+                        recoveryMessage = this@MainActivity.getString(R.string.card_could_not_verify_the_saved_note_id_retry_t)
                     }
                     return@LaunchedEffect
                 }
                 if (phase != SubmissionPhase.NOTE_INSERTING) return@LaunchedEffect
-                recoveryMessage = this@MainActivity.getString(R.string.legacy_card_checking_the_frozen_send_revision_in_ankid)
+                recoveryMessage = this@MainActivity.getString(R.string.card_checking_the_frozen_send_revision_in_ankid)
                 try {
                     val duplicateId = withContext(Dispatchers.IO) {
                         AnkiDroidGateway(contentResolver).hasMatchingNoteInAnyDeck(model, values)
@@ -2735,21 +2732,21 @@ class MainActivity : ComponentActivity() {
                     if (duplicateId != null) {
                         recoveryDuplicate = true
                         knownNoteId = duplicateId
-                        recoveryMessage = this@MainActivity.getString(R.string.legacy_card_a_matching_note_exists_for_the_frozen_revi)
+                        recoveryMessage = this@MainActivity.getString(R.string.card_a_matching_note_exists_for_the_frozen_revi)
                     } else if (decks.none { it.id == snapshot.deckId }) {
                         recoveryDuplicate = false
-                        recoveryMessage = this@MainActivity.getString(R.string.legacy_card_no_matching_note_was_found_but_the_frozen)
+                        recoveryMessage = this@MainActivity.getString(R.string.card_no_matching_note_was_found_but_the_frozen)
                     } else {
                         recoveryRequired = false
                         frozenRetryReady = true
                         recoveryDuplicate = false
                         knownNoteId = null
-                        recoveryMessage = this@MainActivity.getString(R.string.legacy_card_no_matching_note_was_found_for_the_frozen)
+                        recoveryMessage = this@MainActivity.getString(R.string.card_no_matching_note_was_found_for_the_frozen)
                     }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
-                    recoveryMessage = this@MainActivity.getString(R.string.legacy_card_could_not_verify_the_frozen_send_retry_the)
+                    recoveryMessage = this@MainActivity.getString(R.string.card_could_not_verify_the_frozen_send_retry_the)
                 }
             }
 
@@ -2781,7 +2778,7 @@ class MainActivity : ComponentActivity() {
                     } catch (_: Exception) {
                         if (currentSetupReload.value == loadRevision) {
                             setupLoadedSuccessfully = false
-                            setupError = this@MainActivity.getString(R.string.legacy_card_could_not_read_note_types_and_decks_check)
+                            setupError = this@MainActivity.getString(R.string.card_could_not_read_note_types_and_decks_check)
                         }
                     } finally {
                         if (currentSetupReload.value == loadRevision) setupLoading = false
@@ -2899,14 +2896,14 @@ class MainActivity : ComponentActivity() {
                 if (browserIntent.resolveActivity(packageManager) != null) {
                     startActivity(browserIntent)
                 } else {
-                    submitMessage = this@MainActivity.getString(R.string.legacy_card_ankidroid_browser_is_unavailable_note_1_d, noteId.toString(), displayVocabulary, displaySentence)
+                    submitMessage = this@MainActivity.getString(R.string.card_ankidroid_browser_is_unavailable_note_1_d, noteId.toString(), displayVocabulary, displaySentence)
                 }
             }
 
             val sendRecoveryContent: @androidx.compose.runtime.Composable () -> Unit = {
                 knownNoteId?.let { noteId ->
                     TextButton(onClick = { openKnownNote(noteId) }) {
-                        Text(stringResource(R.string.legacy_card_open_matching_note_in_ankidroid))
+                        Text(stringResource(R.string.card_open_matching_note_in_ankidroid))
                     }
                 }
                 if (duplicateBlocked) TextButton(onClick = {
@@ -2922,48 +2919,48 @@ class MainActivity : ComponentActivity() {
                     knownNoteId = null
                     submitMessage = null
                     recoveryMessage = null
-                    route = AppRoute.Target
+                    route = AppRoute.Card
                     draftGeneration++
                 }, modifier = Modifier.heightIn(min = 48.dp)) {
-                    Text(stringResource(R.string.legacy_card_edit_and_recheck))
+                    Text(stringResource(R.string.card_edit_and_recheck))
                 }
                 if (recoveryRequired && recoveryPhase == SubmissionPhase.NOTE_INSERTING &&
                     (!apiPermissionGranted || setupLoading || setupError != null || !setupLoadedSuccessfully)) {
-                    Text(stringResource(R.string.legacy_card_recovery_is_held_until_ankidroid_setup_suc), style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.card_recovery_is_held_until_ankidroid_setup_suc), style = MaterialTheme.typography.bodyMedium)
                 } else if (recoveryRequired && recoveryDuplicate) {
                     TextButton(onClick = {
                         val confirmedSnapshot = publishedFrozenSnapshot ?: readFrozenSubmission(preferences)
                         if (confirmedSnapshot == null) {
-                            recoveryMessage = this@MainActivity.getString(R.string.legacy_card_the_frozen_send_is_unavailable_keep_the_dr)
+                            recoveryMessage = this@MainActivity.getString(R.string.card_the_frozen_send_is_unavailable_keep_the_dr)
                             return@TextButton
                         }
                         persistLastSentTags(confirmedSnapshot)
                         check(preferences.edit().putString(SubmissionRecoveryKeys.STATUS, "done").commit()) {
-                            this@MainActivity.getString(R.string.legacy_card_resolved_send_state_save_failed)
+                            this@MainActivity.getString(R.string.card_resolved_send_state_save_failed)
                         }
                         completedSubmission = confirmedSnapshot
                         recoveryRequired = false
                         recoveryPhase = null
                         recoveryDuplicate = false
                         knownNoteId = null
-                        submitMessage = this@MainActivity.getString(R.string.legacy_card_pending_send_marked_complete)
-                    }) { Text(stringResource(R.string.legacy_card_treat_pending_send_as_complete)) }
+                        submitMessage = this@MainActivity.getString(R.string.card_pending_send_marked_complete)
+                    }) { Text(stringResource(R.string.card_treat_pending_send_as_complete)) }
                 } else if (recoveryRequired && recoveryPhase == SubmissionPhase.MEDIA_IMPORTING) {
                     val pendingOperation = preferences.getString(SubmissionRecoveryKeys.MEDIA_OPERATION, null)
                         ?.let { name -> runCatching { MediaImportOperation.valueOf(name) }.getOrNull() }
                     TextButton(onClick = {
                         recoveryRequired = false
                         frozenRetryReady = true
-                        recoveryMessage = this@MainActivity.getString(R.string.legacy_card_retrying_the_frozen_media_sequence_may_dup)
-                    }) { Text(stringResource(R.string.legacy_card_retry_media_import_may_duplicate)) }
+                        recoveryMessage = this@MainActivity.getString(R.string.card_retrying_the_frozen_media_sequence_may_dup)
+                    }) { Text(stringResource(R.string.card_retry_media_import_may_duplicate)) }
                     if (pendingOperation == MediaImportOperation.IMAGE) {
                         TextButton(onClick = {
                             clearPendingSubmission(preferences)
                             removeDraftImage()
                             recoveryRequired = false
                             recoveryPhase = null
-                            recoveryMessage = this@MainActivity.getString(R.string.legacy_card_the_interrupted_image_was_discarded_the_re)
-                        }) { Text(stringResource(R.string.legacy_card_remove_interrupted_image)) }
+                            recoveryMessage = this@MainActivity.getString(R.string.card_the_interrupted_image_was_discarded_the_re)
+                        }) { Text(stringResource(R.string.card_remove_interrupted_image)) }
                     } else {
                         TextButton(onClick = {
                             clearPendingSubmission(preferences)
@@ -2973,55 +2970,55 @@ class MainActivity : ComponentActivity() {
                             recoveryRequired = false
                             recoveryPhase = null
                             frozenRetryReady = false
-                            recoveryMessage = this@MainActivity.getString(R.string.legacy_card_frozen_recovery_cleared_after_review_the_d)
-                        }) { Text(stringResource(R.string.legacy_card_i_checked_clear_frozen_recovery)) }
+                            recoveryMessage = this@MainActivity.getString(R.string.card_frozen_recovery_cleared_after_review_the_d)
+                        }) { Text(stringResource(R.string.card_i_checked_clear_frozen_recovery)) }
                     }
                 } else if (recoveryRequired && recoveryPhase == SubmissionPhase.MEDIA_IMPORTED) {
                     TextButton(onClick = {
                         recoveryRequired = false
                         frozenRetryReady = true
-                        recoveryMessage = this@MainActivity.getString(R.string.legacy_card_resuming_the_frozen_send_will_reuse_the_sa)
-                    }) { Text(stringResource(R.string.legacy_card_resume_frozen_send)) }
+                        recoveryMessage = this@MainActivity.getString(R.string.card_resuming_the_frozen_send_will_reuse_the_sa)
+                    }) { Text(stringResource(R.string.card_resume_frozen_send)) }
                     TextButton(onClick = {
                         clearPendingSubmission(preferences)
                         removeDraftImage()
                         recoveryRequired = false
                         recoveryPhase = null
-                        recoveryMessage = this@MainActivity.getString(R.string.legacy_card_pending_send_cleared_after_review_configur)
-                    }) { Text(stringResource(R.string.legacy_card_i_checked_configure_destination)) }
+                        recoveryMessage = this@MainActivity.getString(R.string.card_pending_send_cleared_after_review_configur)
+                    }) { Text(stringResource(R.string.card_i_checked_configure_destination)) }
                 } else if (recoveryRequired && recoveryMessage?.contains("No matching note") == true) {
                     TextButton(onClick = {
                         recoveryRequired = false
                         frozenRetryReady = true
-                        recoveryMessage = this@MainActivity.getString(R.string.legacy_card_retrying_the_frozen_send_the_draft_remains)
-                    }) { Text(stringResource(R.string.legacy_card_retry_frozen_send)) }
+                        recoveryMessage = this@MainActivity.getString(R.string.card_retrying_the_frozen_send_the_draft_remains)
+                    }) { Text(stringResource(R.string.card_retry_frozen_send)) }
                 } else if (recoveryRequired && knownNoteId != null && recoveryMessage?.contains("no longer") == true) {
-                    Text(stringResource(R.string.legacy_card_the_saved_note_id_cannot_be_found_no_autom), style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.card_the_saved_note_id_cannot_be_found_no_autom), style = MaterialTheme.typography.bodyMedium)
                     TextButton(onClick = {
                         clearPendingSubmission(preferences)
                         recoveryRequired = false
                         recoveryPhase = null
                         frozenRetryReady = false
                         knownNoteId = null
-                        recoveryMessage = this@MainActivity.getString(R.string.legacy_card_the_missing_saved_note_outcome_was_explici)
-                    }) { Text(stringResource(R.string.legacy_card_i_checked_resolve_outcome)) }
+                        recoveryMessage = this@MainActivity.getString(R.string.card_the_missing_saved_note_outcome_was_explici)
+                    }) { Text(stringResource(R.string.card_i_checked_resolve_outcome)) }
                 } else if (recoveryRequired && recoveryMessage?.contains("unavailable") == true) {
                     TextButton(onClick = {
                         clearPendingSubmission(preferences)
                         recoveryRequired = false
                         recoveryPhase = null
-                        recoveryMessage = this@MainActivity.getString(R.string.legacy_card_outcome_acknowledged_choose_a_valid_destin)
-                    }) { Text(stringResource(R.string.legacy_card_i_checked_configure_destination)) }
+                        recoveryMessage = this@MainActivity.getString(R.string.card_outcome_acknowledged_choose_a_valid_destin)
+                    }) { Text(stringResource(R.string.card_i_checked_configure_destination)) }
                 } else if (recoveryRequired && recoveryMessage?.startsWith("Could not verify") == true) {
-                    TextButton(onClick = { setupReload++ }) { Text(stringResource(R.string.legacy_card_retry_pending_send_check)) }
+                    TextButton(onClick = { setupReload++ }) { Text(stringResource(R.string.card_retry_pending_send_check)) }
                 } else if (recoveryRequired) {
                     TextButton(onClick = {
                         clearPendingSubmission(preferences)
                         recoveryRequired = false
                         recoveryPhase = null
                         recoveryDuplicate = false
-                        recoveryMessage = this@MainActivity.getString(R.string.legacy_card_pending_send_held_for_manual_resolution_co)
-                    }) { Text(stringResource(R.string.legacy_card_i_checked_configure_destination)) }
+                        recoveryMessage = this@MainActivity.getString(R.string.card_pending_send_held_for_manual_resolution_co)
+                    }) { Text(stringResource(R.string.card_i_checked_configure_destination)) }
                 }
             }
 
@@ -3037,11 +3034,7 @@ class MainActivity : ComponentActivity() {
                     showSettings -> closeSettings()
                     showDictionarySheet -> dismissDictionarySheet()
                     showOcrSheet -> showOcrSheet = false
-                    route == AppRoute.Review -> {
-                        generationStarted = false
-                        route = AppRoute.Target
-                    }
-                    route == AppRoute.Target -> route = AppRoute.Capture
+                    route == AppRoute.Card -> route = AppRoute.Capture
                 }
             }
             val darkTheme = isSystemInDarkTheme()
@@ -3074,13 +3067,11 @@ class MainActivity : ComponentActivity() {
                         FlowTopBar(
                             title = when (visibleRoute) {
                                 AppRoute.Capture -> stringResource(R.string.legacy_capture_input_title)
-                                AppRoute.Target -> stringResource(R.string.legacy_card_target_title)
-                                AppRoute.Review -> stringResource(R.string.legacy_card_review_title)
+                                AppRoute.Card -> stringResource(R.string.card)
                             },
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                             onBack = if (navigationLocked) null else when (visibleRoute) {
-                                AppRoute.Review -> ({ generationStarted = false; route = AppRoute.Target })
-                                AppRoute.Target -> ({ route = AppRoute.Capture })
+                                AppRoute.Card -> ({ route = AppRoute.Capture })
                                 AppRoute.Capture -> null
                             },
                             onSettings = if (!navigationLocked) ({ openSettings() }) else null,
@@ -3090,23 +3081,17 @@ class MainActivity : ComponentActivity() {
                                 null
                             },
                         )
-                        FlowProgress(
-                            current = when (visibleRoute) {
-                                AppRoute.Capture -> FlowStep.Input
-                                AppRoute.Target -> FlowStep.Target
-                                AppRoute.Review -> FlowStep.Review
-                            },
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                        )
-                        if (analyzerLoading || analyzerError != null || dictionaryLoading || dictionaryError != null) {
+                        if (visibleRoute == AppRoute.Capture &&
+                            (analyzerLoading || analyzerError != null || dictionaryLoading || dictionaryError != null)
+                        ) {
                             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
                                 if (analyzerLoading) {
                                     Text(analyzerStatus, style = MaterialTheme.typography.bodySmall)
                                 } else if (analyzerError != null) {
                                     Text(analyzerError!!, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                                    TextButton(onClick = { analyzerRetry++ }) { Text(stringResource(R.string.legacy_card_retry_unidic_setup)) }
+                                    TextButton(onClick = { analyzerRetry++ }) { Text(stringResource(R.string.card_retry_unidic_setup)) }
                                 } else if (dictionaryLoading) {
-                                    Text(stringResource(R.string.legacy_card_preparing_the_offline_dictionary_for_first), style = MaterialTheme.typography.bodySmall)
+                                    Text(stringResource(R.string.card_preparing_the_offline_dictionary_for_first), style = MaterialTheme.typography.bodySmall)
                                 } else if (dictionaryError != null) {
                                     Text(dictionaryError!!, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                                 }
@@ -3128,61 +3113,61 @@ class MainActivity : ComponentActivity() {
                         }
                         val sendBlockers = buildList {
                             if (imagePending) {
-                                add(this@MainActivity.getString(R.string.legacy_card_the_image_is_still_being_prepared_send_bec))
+                                add(this@MainActivity.getString(R.string.card_the_image_is_still_being_prepared_send_bec))
                             } else if (imageAttached && !imageProcessing && imageError == null && !imageReady) {
-                                add(this@MainActivity.getString(R.string.legacy_card_the_selected_image_is_not_ready_to_send))
+                                add(this@MainActivity.getString(R.string.card_the_selected_image_is_not_ready_to_send))
                             } else if (!sendImageReady) {
-                                add(this@MainActivity.getString(R.string.legacy_card_the_selected_image_is_missing_or_not_ready))
+                                add(this@MainActivity.getString(R.string.card_the_selected_image_is_missing_or_not_ready))
                             }
                             if (!frozenRetryReady && !sentenceAudioReady) {
-                                val field = this@MainActivity.getString(R.string.legacy_card_sentence_audio_field)
+                                val field = this@MainActivity.getString(R.string.card_sentence_audio_field)
                                 val blocker = reviewAudioSendBlocker(
                                     field,
                                     sentenceAudio.presentation(this@MainActivity.getString(audioActionLabel(AudioItem.SENTENCE))),
                                 )
                                 add(blocker?.resolve(this@MainActivity)
-                                    ?: this@MainActivity.getString(R.string.legacy_card_audio_not_ready_to_send, field))
+                                    ?: this@MainActivity.getString(R.string.card_audio_not_ready_to_send, field))
                             }
                             if (!frozenRetryReady && !wordAudioReady) {
-                                val field = this@MainActivity.getString(R.string.legacy_card_word_audio_field)
+                                val field = this@MainActivity.getString(R.string.card_word_audio_field)
                                 val blocker = reviewAudioSendBlocker(
                                     field,
                                     wordAudio.presentation(this@MainActivity.getString(audioActionLabel(AudioItem.VOCABULARY))),
                                 )
                                 add(blocker?.resolve(this@MainActivity)
-                                    ?: this@MainActivity.getString(R.string.legacy_card_audio_not_ready_to_send, field))
+                                    ?: this@MainActivity.getString(R.string.card_audio_not_ready_to_send, field))
                             }
                             if (!apiPermissionGranted) {
-                                add(this@MainActivity.getString(R.string.legacy_card_allow_ankidroid_api_access_in_settings_bef))
+                                add(this@MainActivity.getString(R.string.card_allow_ankidroid_api_access_in_settings_bef))
                             }
-                            if (selectedModel == null) add(this@MainActivity.getString(R.string.legacy_card_choose_an_ankidroid_note_type_in_settings))
-                            if (selectedDeck == null) add(this@MainActivity.getString(R.string.legacy_card_choose_an_ankidroid_destination_deck_in_se))
+                            if (selectedModel == null) add(this@MainActivity.getString(R.string.card_choose_an_ankidroid_note_type_in_settings))
+                            if (selectedDeck == null) add(this@MainActivity.getString(R.string.card_choose_an_ankidroid_destination_deck_in_se))
                             if (fieldsByName == null && !frozenRetryReady) {
-                                add(this@MainActivity.getString(R.string.legacy_card_the_note_fields_are_incomplete_return_to_p))
+                                add(this@MainActivity.getString(R.string.card_the_note_fields_are_incomplete_return_to_p))
                             }
-                            validationErrors.firstOrNull()?.let { add(this@MainActivity.getString(R.string.legacy_card_still_needed_1_s, it)) }
+                            validationErrors.firstOrNull()?.let { add(this@MainActivity.getString(R.string.card_still_needed_1_s, it)) }
                             if (effectiveMapping?.isValid != true) {
                                 add(
                                     effectiveMapping?.errors?.firstOrNull()?.let {
-                                        this@MainActivity.getString(R.string.legacy_card_ankidroid_field_mapping, it)
-                                    } ?: this@MainActivity.getString(R.string.legacy_card_note_fields_do_not_match_note_type),
+                                        this@MainActivity.getString(R.string.card_ankidroid_field_mapping, it)
+                                    } ?: this@MainActivity.getString(R.string.card_note_fields_do_not_match_note_type),
                                 )
                             }
                             if (!frozenDestinationReady) {
-                                add(this@MainActivity.getString(R.string.legacy_card_restore_the_frozen_note_s_ankidroid_note_t))
+                                add(this@MainActivity.getString(R.string.card_restore_the_frozen_note_s_ankidroid_note_t))
                             }
                             if (!frozenRetryReady && pitch == null) {
-                                add(this@MainActivity.getString(R.string.legacy_card_choose_a_source_listed_pitch_pattern_befor))
+                                add(this@MainActivity.getString(R.string.card_choose_a_source_listed_pitch_pattern_befor))
                             }
                             if (!frozenRetryReady && (dictionaryLoading || dictionarySearchLoading)) {
-                                add(this@MainActivity.getString(R.string.legacy_card_the_offline_dictionary_is_still_loading_wa))
+                                add(this@MainActivity.getString(R.string.card_the_offline_dictionary_is_still_loading_wa))
                             }
                             if (setupError != null) {
                                 add(setupError)
                             } else if (!setupLoadedSuccessfully) {
-                                add(this@MainActivity.getString(R.string.legacy_card_ankidroid_setup_could_not_be_loaded_open_s))
+                                add(this@MainActivity.getString(R.string.card_ankidroid_setup_could_not_be_loaded_open_s))
                             }
-                            if (setupLoading) add(this@MainActivity.getString(R.string.legacy_card_ankidroid_setup_is_still_loading_wait_for))
+                            if (setupLoading) add(this@MainActivity.getString(R.string.card_ankidroid_setup_is_still_loading_wait_for))
                         }
                         val submitHint = when {
                             completedSubmission != null || duplicateBlocked || recoveryRequired -> null
@@ -3197,18 +3182,15 @@ class MainActivity : ComponentActivity() {
                                 it.contains("credential", ignoreCase = true)
                         } == true
                         val submitHintActionLabel = when {
-                            translationNeedsSettings -> this@MainActivity.getString(R.string.legacy_card_open_settings_action)
+                            translationNeedsSettings -> this@MainActivity.getString(R.string.card_open_settings_action)
                             reviewTranslationError != null -> this@MainActivity.getString(R.string.retry)
                             !sentenceAudioReady -> this@MainActivity.getString(audioActionLabel(AudioItem.SENTENCE))
                             !wordAudioReady -> this@MainActivity.getString(audioActionLabel(AudioItem.VOCABULARY))
                             !apiPermissionGranted || selectedModel == null || selectedDeck == null || setupError != null ->
-                                this@MainActivity.getString(R.string.legacy_card_open_settings_action)
-                            else -> this@MainActivity.getString(R.string.legacy_card_edit_preparation)
+                                this@MainActivity.getString(R.string.card_open_settings_action)
+                            else -> this@MainActivity.getString(R.string.card_edit_preparation)
                         }
-                        val submitHintRole = if (
-                            translationNeedsSettings || !apiPermissionGranted || selectedModel == null ||
-                            selectedDeck == null || setupError != null
-                        ) ReviewStatusRole.Information else ReviewStatusRole.Warning
+
                         val submitHintAction: (() -> Unit) = when {
                             translationNeedsSettings -> ({ openSettings() })
                             reviewTranslationError != null -> ({
@@ -3220,7 +3202,7 @@ class MainActivity : ComponentActivity() {
                             !apiPermissionGranted || selectedModel == null || selectedDeck == null || setupError != null -> ({ openSettings() })
                             else -> ({
                                 generationStarted = false
-                                route = AppRoute.Target
+                                route = AppRoute.Card
                             })
                         }
                         val loadMoreMatches: () -> Unit = {
@@ -3245,7 +3227,7 @@ class MainActivity : ComponentActivity() {
                                         throw cancelled
                                     } catch (_: Exception) {
                                         if (asyncDraftIsCurrent(callbackGeneration)) {
-                                            dictionaryError = this@MainActivity.getString(R.string.legacy_card_could_not_load_more_dictionary_matches)
+                                            dictionaryError = this@MainActivity.getString(R.string.card_could_not_load_more_dictionary_matches)
                                         }
                                     } finally {
                                         dictionarySearchLoading = false
@@ -3262,7 +3244,7 @@ class MainActivity : ComponentActivity() {
                                 },
                                 editor = editor,
                                 onEditorChange = updateEditor,
-                                onContinue = { route = AppRoute.Target },
+                                onContinue = { continueToCard() },
                                 onOpenGallery = {
                                     photoPicker.launch(
                                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
@@ -3288,13 +3270,10 @@ class MainActivity : ComponentActivity() {
                                 ocrError = ocrError,
                                 onRetryOcr = {
                                     val source = photoSourcePath?.let(::File)?.takeIf(File::isFile)
-                                    if (source != null) {
-                                        processImage(source, true)
-                                    } else {
-                                        photoPicker.launch(
-                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                                        )
-                                    }
+                                    if (source != null) processImage(source, true)
+                                    else photoPicker.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                    )
                                 },
                                 imageAttached = imageAttached,
                                 imageStatus = when {
@@ -3306,225 +3285,156 @@ class MainActivity : ComponentActivity() {
                                 imageFailed = !imageProcessing && imageError != null,
                                 onRetryImage = {
                                     val source = photoSourcePath?.let(::File)?.takeIf(File::isFile)
-                                    if (source != null) {
-                                        processImage(source, true)
-                                    } else {
-                                        photoPicker.launch(
-                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                                        )
-                                    }
-                                },
-                            )
-                            AppRoute.Target -> TargetScreen(
-                                sentence = editor.text,
-                                tokens = japaneseTokens,
-                                selectedSpan = target,
-                                onSelectSpan = { span ->
-                                    selectTarget(span)
-                                    editor = editor.copy(selection = TextRange(span.start, span.end))
-                                },
-                                onEditSentence = { showSentenceEditor = true },
-                                entryLabel = selectedDictionaryEntry?.expression ?: vocabulary.takeIf { it.isNotBlank() },
-                                entryDetail = selectedDictionaryEntry?.reading,
-                                meaningChoiceCount = meaningChoices.size,
-                                meaningResolved = selectedDictionaryEntry != null && selectedSenseIndices.isNotEmpty(),
-                                onChooseEntry = { if (meaningChoices.size > 1) showDictionarySheet = true },
-                                meaningStatus = when {
-                                    ocrError != null -> ocrError
-                                    preparationAuthorizationError != null -> preparationAuthorizationError
-                                    target == null -> "Tap a word to choose the target."
-                                    dictionarySearchLoading -> "Searching JMdict…"
-                                    selectedDictionaryEntry == null && dictionaryLoading -> "Preparing the offline dictionary…"
-                                    selectedDictionaryEntry == null && meaningChoices.size > 1 -> null
-                                    selectedDictionaryEntry == null && dictionaryReady -> "No dictionary match for this selection."
-                                    vocabularyReadingError != null -> vocabularyReadingError
-                                    pitchIndexError != null -> pitchIndexError
-                                    else -> null
-                                },
-                                canContinue = !submissionLocked && target != null && selectedDictionaryEntry != null &&
-                                    definition.isNotBlank() && pitch != null,
-                                continueHint = when {
-                                    target == null -> stringResource(R.string.legacy_card_target_continue_hint)
-                                    selectedDictionaryEntry == null -> stringResource(R.string.legacy_card_dictionary_continue_hint)
-                                    definition.isBlank() -> stringResource(R.string.legacy_card_meaning_continue_hint)
-                                    pitch == null -> stringResource(R.string.legacy_card_pitch_continue_hint)
-                                    else -> null
-                                },
-                                onContinue = { continueToReview() },
-                                modifier = Modifier.weight(1f).fillMaxWidth(),
-                                locked = submissionLocked,
-                                tokensLoading = tokenizationLoading,
-                                hasMoreEntries = dictionaryHasMore && !dictionarySearchLoading,
-                                onLoadMoreEntries = loadMoreMatches,
-                                ocrChoicesAvailable = ocrChoices.size > 1,
-                                onReopenOcrChooser = { showOcrSheet = ocrChoices.size > 1 },
-                                vocabularyReading = vocabularyReading,
-                                onVocabularyReadingChange = { applyVocabularyReading(it) },
-                                vocabularyReadingError = vocabularyReadingError,
-                                correctableReadings = correctableReadings,
-                                onReadingCorrection = { span, reading -> applyReadingCorrection(span, reading) },
-                                readingCorrectionError = readingCorrectionError,
-                                definition = definition,
-                                definitionStale = dependentFieldsStale && definitionManuallyEdited,
-                                onDefinitionChange = { text ->
-                                    if (!submissionLocked) {
-                                        definition = text
-                                        definitionManuallyEdited = true
-                                        definitionProvenanceKnown = true
-                                        selectedSenseIndices = emptySet()
-                                        dependentFieldsStale = false
-                                    }
-                                },
-                                onAcknowledgeDefinition = { dependentFieldsStale = false },
-                                translation = translation,
-                                translationPending = activeTranslationResult() is TranslationResult.Pending,
-                                translationError = (activeTranslationResult() as? TranslationResult.Failed)?.message,
-                                translationStale = translationDraft.manuallyEdited && translationDraft.stale,
-                                onTranslationChange = { text ->
-                                    if (!submissionLocked) {
-                                        translationRequestRevision++
-                                        translationDraft = translationDraft.saveManualEdit(text)
-                                    }
-                                },
-                                onRetryTranslation = {
-                                    translationAutoAllowed = true
-                                    translationRetry++
-                                },
-                                pitchAlternatives = pitchCandidates.map(AjtPitchRecord::accent),
-                                selectedPitchAccent = pitchAccentText.toIntOrNull(),
-                                onSelectPitch = { accent ->
-                                    pitchCandidates.firstOrNull { it.accent == accent }?.let { record ->
-                                        pitchAccentText = record.accent.toString()
-                                        pitchHtmlText = record.html
-                                    }
-                                },
-                                imageAttached = imageAttached,
-                                imageProcessing = imageProcessing,
-                                imageError = imageError,
-                                onChoosePhoto = {
-                                    if (!submissionLocked) noteImagePicker.launch(
+                                    if (source != null) processImage(source, true)
+                                    else photoPicker.launch(
                                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                                     )
                                 },
-                                onRemovePhoto = { if (!submissionLocked) removeDraftImage() },
                             )
-                            AppRoute.Review -> Box(Modifier.weight(1f).fillMaxWidth()) {
-                                if (reviewTarget != null) {
-                                    ReviewCard(
-                                        sentence = displaySentence,
-                                        target = reviewTarget,
-                                        sentenceReading = frozenForDisplay?.sentenceReading ?: sentenceReading,
-                                        furigana = if (frozenForDisplay == null) sentenceFurigana else emptyList(),
-                                        vocabulary = displayVocabulary,
-                                        vocabularyReading = displayVocabularyReading,
-                                        pitch = displayPitch,
-                                        definition = displayDefinition,
-                                        translation = displayTranslation,
-                                        translationPending = activeTranslationResult() is TranslationResult.Pending,
-                                        translationError = reviewTranslationError,
-                                        translationStale = translationDraft.manuallyEdited && translationDraft.stale,
-                                        editingEnabled = !submissionLocked && completedSubmission == null,
-                                        onRetryTranslation = {
-                                            translationAutoAllowed = true
-                                            translationRetry++
-                                        },
-                                        onOpenSettings = { openSettings() },
-                                        sentenceAudio = sentenceAudio.presentation(this@MainActivity.getString(audioActionLabel(AudioItem.SENTENCE))),
-                                        vocabularyAudio = wordAudio.presentation(this@MainActivity.getString(audioActionLabel(AudioItem.VOCABULARY))),
-                                        sentenceAudioAction = this@MainActivity.getString(audioActionLabel(AudioItem.SENTENCE)),
-                                        vocabularyAudioAction = this@MainActivity.getString(audioActionLabel(AudioItem.VOCABULARY)),
-                                        onToggleSentenceAudio = {
-                                            if (playingAudio == AudioItem.SENTENCE) {
-                                                stopAudioPlayback()
-                                                playingAudio = null
-                                            } else {
-                                                audioReadyFile(AudioItem.SENTENCE)?.let { playAudio(AudioItem.SENTENCE, it) }
-                                            }
-                                        },
-                                        onRetrySentenceAudio = { onAudioAction(AudioItem.SENTENCE) },
-                                        onToggleVocabularyAudio = {
-                                            if (playingAudio == AudioItem.VOCABULARY) {
-                                                stopAudioPlayback()
-                                                playingAudio = null
-                                            } else {
-                                                audioReadyFile(AudioItem.VOCABULARY)?.let { playAudio(AudioItem.VOCABULARY, it) }
-                                            }
-                                        },
-                                        onRetryVocabularyAudio = { onAudioAction(AudioItem.VOCABULARY) },
-                                        notes = displayNotes,
-                                        tags = displayTags.split(Regex("\\s+")).filter(String::isNotBlank),
-                                        imagePath = frozenForDisplay?.media?.path ?: noteImagePath,
-                                        imageStatus = when {
-                                            imageProcessing -> stringResource(R.string.legacy_card_preparing_image_status)
-                                            imageError != null -> imageError
-                                            imageAttached -> stringResource(R.string.legacy_card_image_unavailable_status)
-                                            else -> null
-                                        },
-                                        ocrChoicesAvailable = ocrChoices.size > 1,
-                                        onReopenOcrChooser = { showOcrSheet = ocrChoices.size > 1 },
-                                        pitchHasAlternatives = pitchCandidates.size > 1,
-                                        pitchInfoExpanded = pitchInfoExpanded,
-                                        onTogglePitchInfo = { pitchInfoExpanded = !pitchInfoExpanded },
-                                        onEdit = {
-                                            if (!submissionLocked) {
-                                                generationStarted = false
-                                                route = AppRoute.Target
-                                            }
-                                        },
-                                        onTagsChange = { text -> if (!submissionLocked) tags = text },
-                                        onNotesChange = { text -> if (!submissionLocked) notes = text },
-                                        onEditNote = {
-                                            if (!submissionLocked && completedSubmission == null) {
-                                                noteEditorDraft = notes
-                                                showNoteEditor = true
-                                            }
-                                        },
-                                        onEditTags = {
-                                            if (!submissionLocked && completedSubmission == null) {
-                                                tagEditorDraft = AnkiFieldContract.parseTags(tags).toList()
-                                                tagEntryDraft = ""
-                                                showTagsEditor = true
-                                            }
-                                        },
-                                        sendPresentation = when {
-                                            isSubmitting -> ReviewSendPresentation.Sending
-                                            completedSubmission != null -> ReviewSendPresentation.Status(
-                                                submitMessage ?: stringResource(R.string.legacy_card_note_sent_to_ankidroid),
-                                            )
-                                            duplicateBlocked -> ReviewSendPresentation.Status(
-                                                submitMessage ?: stringResource(R.string.legacy_card_matching_note_exists),
-                                            )
-                                            recoveryRequired -> ReviewSendPresentation.Status(
-                                                recoveryMessage ?: stringResource(R.string.legacy_card_pending_send_needs_review),
-                                            )
-                                            submitMessage?.startsWith(blockedStatusPrefix) == true ->
-                                                ReviewSendPresentation.Status(submitMessage.orEmpty())
-                                            submitMessage != null -> ReviewSendPresentation.Status(
-                                                submitMessage!!,
-                                                stringResource(R.string.legacy_card_retry_send),
-                                            )
-                                            else -> ReviewSendPresentation.Ready
-                                        },
-                                        onSend = if (canSend && completedSubmission == null && !duplicateBlocked &&
-                                            submitMessage?.startsWith(blockedStatusPrefix) != true
-                                        ) {
-                                            ({ submitAction() })
-                                        } else {
-                                            null
-                                        },
-                                        onSendStatusAction = if (canSend && completedSubmission == null && !duplicateBlocked) {
-                                            ({ submitAction() })
-                                        } else {
-                                            null
-                                        },
-                                        sendStatusContent = sendRecoveryContent,
-                                        imageFocalY = photoFocusY,
-                                        sendHint = submitHint,
-                                        sendHintActionLabel = submitHintActionLabel,
-                                        sendHintRole = submitHintRole,
-                                        onSendHintAction = submitHintAction,
-                                    )
+                            AppRoute.Card -> {
+                                val sentenceAudioPresentation = sentenceAudio.presentation(
+                                    this@MainActivity.getString(audioActionLabel(AudioItem.SENTENCE)),
+                                )
+                                val wordAudioPresentation = wordAudio.presentation(
+                                    this@MainActivity.getString(audioActionLabel(AudioItem.VOCABULARY)),
+                                )
+                                val cardAnalyzerError = tokenizationError ?: analyzerError
+                                val cardAnalyzing = analyzerLoading || tokenizationLoading
+                                val cardUpdating = (reviewTarget != null) &&
+                                    (translationDraft.stale || dependentFieldsStale)
+                                val sendBlockedStatus = submitMessage?.startsWith(blockedStatusPrefix) == true
+                                val recoveryActionLabel = submitHintActionLabel.takeIf {
+                                    submitHint != null && it != this@MainActivity.getString(R.string.card_edit_preparation)
                                 }
+                                val cardStatus = when {
+                                    completedSubmission != null -> submitMessage ?: stringResource(R.string.card_note_sent_to_ankidroid)
+                                    duplicateBlocked -> submitMessage ?: stringResource(R.string.card_matching_note_exists)
+                                    recoveryRequired -> recoveryMessage ?: stringResource(R.string.card_pending_send_needs_review)
+                                    else -> null
+                                }
+                                val cardHint = when {
+                                    cardAnalyzerError != null -> cardAnalyzerError
+                                    cardAnalyzing -> analyzerStatus
+                                    target == null -> stringResource(R.string.card_hint_word)
+                                    cardUpdating -> null
+                                    completedSubmission != null -> cardStatus
+                                    duplicateBlocked -> cardStatus
+                                    recoveryRequired -> cardStatus
+                                    isSubmitting -> stringResource(R.string.sending)
+                                    sendBlockedStatus -> submitMessage
+                                    submitMessage != null -> submitMessage
+                                    reviewTranslationError != null -> this@MainActivity.getString(
+                                        reviewTranslationFailureStatus(reviewTranslationError).headlineResource,
+                                    )
+                                    wordAudioPresentation == ReviewAudioPresentation.Generating ->
+                                        stringResource(R.string.card_hint_preparing)
+                                    submitHint != null -> submitHint
+                                    else -> null
+                                }
+                                val cardNoWordAction = reviewTarget == null && cardAnalyzerError == null && !cardAnalyzing &&
+                                    !recoveryRequired && !duplicateBlocked && completedSubmission == null && submitMessage == null
+                                val cardActionLabel = when {
+                                    cardNoWordAction -> stringResource(R.string.send)
+                                    cardAnalyzerError != null -> stringResource(R.string.retry)
+                                    cardUpdating -> stringResource(R.string.update_card)
+                                    recoveryRequired || duplicateBlocked || completedSubmission != null || isSubmitting ->
+                                        stringResource(R.string.send)
+                                    submitMessage != null && !sendBlockedStatus -> stringResource(R.string.card_retry_send)
+                                    recoveryActionLabel != null -> recoveryActionLabel
+                                    else -> stringResource(R.string.send)
+                                }
+                                val cardActionEnabled = when {
+                                    cardNoWordAction -> false
+                                    isSubmitting || cardAnalyzing || completedSubmission != null || duplicateBlocked || recoveryRequired -> false
+                                    cardAnalyzerError != null -> !submissionLocked
+                                    cardUpdating -> !submissionLocked
+                                    submitMessage != null && !sendBlockedStatus -> canSend
+                                    recoveryActionLabel != null -> !submissionLocked
+                                    else -> canSend && reviewTarget != null
+                                }
+                                val cardAction: () -> Unit = when {
+                                    cardNoWordAction -> ({})
+                                    cardAnalyzerError != null -> ({ analyzerRetry++ })
+                                    cardUpdating -> ({ continueToCard() })
+                                    submitMessage != null && !sendBlockedStatus -> ({ submitAction() })
+                                    recoveryActionLabel != null -> submitHintAction
+                                    else -> submitAction
+                                }
+                                val cardWordStatus = when {
+                                    reviewTarget == null -> null
+                                    dictionaryLoading || dictionarySearchLoading -> stringResource(R.string.card_dictionary_searching)
+                                    selectedDictionaryEntry == null && dictionaryEntries.size > 1 ->
+                                        stringResource(R.string.card_choose_dictionary_entry_hint)
+                                    selectedDictionaryEntry == null && dictionaryReady ->
+                                        stringResource(R.string.card_no_dictionary_match_for_selection)
+                                    dictionaryError != null -> dictionaryError
+                                    vocabularyReadingError != null -> vocabularyReadingError
+                                    pitchIndexError != null -> pitchIndexError
+                                    else -> null
+                                }
+                                CardScreen(
+                                    sentence = displaySentence,
+                                    tokens = japaneseTokens,
+                                    selectedSpan = reviewTarget,
+                                    selectionEnabled = !submissionLocked && completedSubmission == null &&
+                                        !duplicateBlocked && !recoveryRequired,
+                                    onSelectSpan = { span ->
+                                        if (!submissionLocked && completedSubmission == null && !duplicateBlocked && !recoveryRequired) {
+                                            selectTarget(span)
+                                            editor = editor.copy(selection = TextRange(span.start, span.end))
+                                        }
+                                    },
+                                    furigana = if (frozenForDisplay == null) sentenceFurigana else emptyList(),
+                                    onEditSentence = { if (!submissionLocked) showSentenceEditor = true },
+                                    translation = displayTranslation,
+                                    vocabulary = displayVocabulary,
+                                    vocabularyReading = displayVocabularyReading,
+                                    partOfSpeech = englishPartOfSpeechLabel(
+                                        VocabularyPartOfSpeech.forSelectedSenses(selectedDictionaryEntry, selectedSenseIndices),
+                                    ),
+                                    definition = displayDefinition,
+                                    pitch = displayPitch,
+                                    wordStatus = cardWordStatus,
+                                    meaningAvailable = dictionaryEntries.sumOf { it.senses.size } > 1 && !submissionLocked,
+                                    onChangeMeaning = { if (!submissionLocked) showDictionarySheet = true },
+                                    imagePath = frozenForDisplay?.media?.path ?: processedImagePath.takeIf { imageReady },
+                                    imageFocusY = photoFocusY,
+                                    notes = displayNotes,
+                                    tags = displayTags,
+                                    onNotesChange = { text -> if (!submissionLocked && completedSubmission == null) notes = text },
+                                    onTagsChange = { text -> if (!submissionLocked && completedSubmission == null) tags = text },
+                                    sentenceAudio = sentenceAudioPresentation,
+                                    wordAudio = wordAudioPresentation,
+                                    onToggleSentenceAudio = {
+                                        if (playingAudio == AudioItem.SENTENCE) {
+                                            stopAudioPlayback()
+                                            playingAudio = null
+                                        } else {
+                                            audioReadyFile(AudioItem.SENTENCE)?.let { playAudio(AudioItem.SENTENCE, it) }
+                                        }
+                                    },
+                                    onRetrySentenceAudio = { onAudioAction(AudioItem.SENTENCE) },
+                                    onToggleWordAudio = {
+                                        if (playingAudio == AudioItem.VOCABULARY) {
+                                            stopAudioPlayback()
+                                            playingAudio = null
+                                        } else {
+                                            audioReadyFile(AudioItem.VOCABULARY)?.let { playAudio(AudioItem.VOCABULARY, it) }
+                                        }
+                                    },
+                                    onRetryWordAudio = { onAudioAction(AudioItem.VOCABULARY) },
+                                    hint = cardHint,
+                                    hintPreparing = cardAnalyzing,
+                                    actionLabel = cardActionLabel,
+                                    actionEnabled = cardActionEnabled,
+                                    actionLoading = isSubmitting,
+                                    onAction = cardAction,
+                                    statusMessage = cardStatus?.takeIf { it != cardHint },
+                                    statusContent = {
+                                        if (duplicateBlocked || recoveryRequired) sendRecoveryContent()
+                                    },
+                                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                                )
                             }
                         }
                         if (showSentenceEditor) {
@@ -3654,7 +3564,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
-                        if (visibleRoute == AppRoute.Review && reviewTarget == null) {
+                        if (visibleRoute == AppRoute.Card && reviewTarget == null) {
                             submitMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                             recoveryMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                             sendRecoveryContent()
@@ -3671,7 +3581,7 @@ class MainActivity : ComponentActivity() {
                             if (frozenRetryReady && (restoredFrozen == null || restoredFrozen.modelId != model.id ||
                                     restoredFrozen.deckId != deck.id || restoredFrozen.modelFields != model.fields)
                             ) {
-                                submitMessage = this@MainActivity.getString(R.string.legacy_card_the_frozen_send_destination_is_unavailable)
+                                submitMessage = this@MainActivity.getString(R.string.card_the_frozen_send_destination_is_unavailable)
                                 return@submitAction
                             }
                             val fields = restoredFrozen?.modelFields?.zip(restoredFrozen.orderedFields)?.toMap()
@@ -3685,7 +3595,7 @@ class MainActivity : ComponentActivity() {
                                     is DraftAudioFreeze.Frozen -> freeze.snapshot
                                     is DraftAudioFreeze.Incomplete -> {
                                         submitMessage =
-                                            this@MainActivity.getString(R.string.legacy_card_wait_for_or_retry_the_missing_audio_before)
+                                            this@MainActivity.getString(R.string.card_wait_for_or_retry_the_missing_audio_before)
                                         return@submitAction
                                     }
                                     DraftAudioFreeze.Disposed -> return@submitAction
@@ -3723,7 +3633,7 @@ class MainActivity : ComponentActivity() {
                             translationAutoAllowed = false
                             if (activeTranslationResult() is TranslationResult.Pending) {
                                 translationDraft = translationDraft.requestFinished(
-                                    TranslationResult.Failed(this@MainActivity.getString(R.string.legacy_card_translation_paused_while_sending_retry_aft)),
+                                    TranslationResult.Failed(this@MainActivity.getString(R.string.card_translation_paused_while_sending_retry_aft)),
                                 )
                             }
                             dictionaryLoading = false
@@ -3761,7 +3671,7 @@ class MainActivity : ComponentActivity() {
                                                         localFileExists = localExists,
                                                         localIdentity = if (localExists) liveMediaIdentity(localFile) else null,
                                                     ),
-                                                ) { this@MainActivity.getString(R.string.legacy_card_frozen_image_receipt_unavailable) }
+                                                ) { this@MainActivity.getString(R.string.card_frozen_image_receipt_unavailable) }
                                                 restoredFrozen
                                             } else {
                                                 val includeImage = imageAttached && !imageProcessing
@@ -3769,7 +3679,7 @@ class MainActivity : ComponentActivity() {
                                                     processedImagePath?.let(::File)?.takeIf(File::isFile)
                                                 } else null
                                                 if (includeImage) check(processed != null) {
-                                                    this@MainActivity.getString(R.string.legacy_card_selected_image_not_ready_for_import)
+                                                    this@MainActivity.getString(R.string.card_selected_image_not_ready_for_import)
                                                 }
                                                 val imageIdentity = liveMediaIdentity(processed)
                                                 val importedImage = if (includeImage) {
@@ -3781,7 +3691,7 @@ class MainActivity : ComponentActivity() {
                                                     )
                                                 } else null
                                                 val frozenFiles = frozenAudio
-                                                    ?: error(this@MainActivity.getString(R.string.legacy_card_draft_audio_not_frozen))
+                                                    ?: error(this@MainActivity.getString(R.string.card_draft_audio_not_frozen))
                                                 val sentenceEntry = frozenFiles.files.getValue(AudioItem.SENTENCE)
                                                 val wordEntry = frozenFiles.files.getValue(AudioItem.VOCABULARY)
                                                 val sentenceIdentity = MediaIdentity(
@@ -3804,7 +3714,7 @@ class MainActivity : ComponentActivity() {
                                                     vocabularyAudioFilename = wordImported,
                                                 )
                                                 val baseFields = baseDraft.fieldsByName()
-                                                    ?: error(this@MainActivity.getString(R.string.legacy_card_note_changed_before_send_freeze))
+                                                    ?: error(this@MainActivity.getString(R.string.card_note_changed_before_send_freeze))
                                                 val baseMapping = AnkiFieldContract.mapToModelOrder(model.fields, baseFields)
                                                 check(baseMapping.isValid) { baseMapping.errors.joinToString() }
                                                 FrozenSubmission(
@@ -3836,7 +3746,7 @@ class MainActivity : ComponentActivity() {
                                                     check(preferences.edit()
                                                         .putLong(SubmissionRecoveryKeys.REVISION_SEQUENCE, snapshot.revision)
                                                         .putFrozenSubmission(snapshot, SubmissionPhase.MEDIA_IMPORTING)
-                                                        .commit()) { this@MainActivity.getString(R.string.legacy_card_frozen_submission_recovery_save_failed) }
+                                                        .commit()) { this@MainActivity.getString(R.string.card_frozen_submission_recovery_save_failed) }
                                                 }
                                             }
                                             publishFrozen(frozen)
@@ -3865,7 +3775,7 @@ class MainActivity : ComponentActivity() {
                                                 importSendMedia(
                                                     sentenceAudio = frozen.sentenceAudio?.takeUnless { it.omitted }?.let { item ->
                                                         val identity = item.identity
-                                                            ?: error(this@MainActivity.getString(R.string.legacy_card_sentence_audio_missing_media_identity))
+                                                            ?: error(this@MainActivity.getString(R.string.card_sentence_audio_missing_media_identity))
                                                         mediaImportRequest(
                                                             preferences,
                                                             SENTENCE_AUDIO_RECEIPT_KEYS,
@@ -3876,7 +3786,7 @@ class MainActivity : ComponentActivity() {
                                                     },
                                                     wordAudio = frozen.wordAudio?.takeUnless { it.omitted }?.let { item ->
                                                         val identity = item.identity
-                                                            ?: error(this@MainActivity.getString(R.string.legacy_card_word_audio_missing_media_identity))
+                                                            ?: error(this@MainActivity.getString(R.string.card_word_audio_missing_media_identity))
                                                         mediaImportRequest(
                                                             preferences,
                                                             WORD_AUDIO_RECEIPT_KEYS,
@@ -3906,7 +3816,7 @@ class MainActivity : ComponentActivity() {
                                                     import = { operation, identity ->
                                                         val file = File(identity.path)
                                                         check(liveMediaIdentity(file) == identity) {
-                                                            this@MainActivity.getString(R.string.legacy_card_frozen_media_changed_before_import)
+                                                            this@MainActivity.getString(R.string.card_frozen_media_changed_before_import)
                                                         }
                                                         when (operation) {
                                                             MediaImportOperation.SENTENCE_AUDIO,
@@ -3929,7 +3839,7 @@ class MainActivity : ComponentActivity() {
                                             // reused frozen receipts too, so recovery has one canonical record.
                                             importedReceipts.forEach { receipt ->
                                                 check(persistReceipt(receipt)) {
-                                                    this@MainActivity.getString(R.string.legacy_card_media_receipt_save_failed, receipt.operation.label)
+                                                    this@MainActivity.getString(R.string.card_media_receipt_save_failed, receipt.operation.label)
                                                 }
                                             }
                                             frozen = durableSnapshot
@@ -3939,13 +3849,13 @@ class MainActivity : ComponentActivity() {
                                                 .remove(SubmissionRecoveryKeys.MEDIA_SOURCE_PATH)
                                                 .remove(SubmissionRecoveryKeys.MEDIA_SOURCE_SIZE)
                                                 .remove(SubmissionRecoveryKeys.MEDIA_SOURCE_MODIFIED)
-                                                .commit()) { this@MainActivity.getString(R.string.legacy_card_completed_media_recovery_save_failed) }
+                                                .commit()) { this@MainActivity.getString(R.string.card_completed_media_recovery_save_failed) }
                                             publishFrozen(frozen)
                                             val frozenFields = frozen.modelFields.zip(frozen.orderedFields).toMap()
                                             val frozenMapping = AnkiFieldContract.mapToModelOrder(model.fields, frozenFields)
                                             check(frozenMapping.isValid) { frozenMapping.errors.joinToString() }
                                             check(preferences.edit().putFrozenSubmission(frozen, SubmissionPhase.NOTE_INSERTING).commit()) {
-                                                this@MainActivity.getString(R.string.legacy_card_frozen_submission_save_failed)
+                                                this@MainActivity.getString(R.string.card_frozen_submission_save_failed)
                                             }
                                             publishFrozen(frozen)
                                             // A process death between provider insert and this commit leaves NOTE_INSERTING without an ID;
@@ -3955,15 +3865,15 @@ class MainActivity : ComponentActivity() {
                                             check(preferences.edit().putFrozenSubmission(
                                                 insertedSnapshot,
                                                 SubmissionPhase.NOTE_INSERTED,
-                                            ).commit()) { this@MainActivity.getString(R.string.legacy_card_inserted_note_id_save_failed) }
+                                            ).commit()) { this@MainActivity.getString(R.string.card_inserted_note_id_save_failed) }
                                             publishFrozen(insertedSnapshot)
                                             check(gateway.ensureNoteInDeck(insertedNoteId, deck.id)) {
-                                                this@MainActivity.getString(R.string.legacy_card_inserted_note_has_no_cards)
+                                                this@MainActivity.getString(R.string.card_inserted_note_has_no_cards)
                                             }
                                             check(preferences.edit().putFrozenSubmission(
                                                 insertedSnapshot,
                                                 SubmissionPhase.DESTINATION_VERIFIED,
-                                            ).commit()) { this@MainActivity.getString(R.string.legacy_card_verified_destination_save_failed) }
+                                            ).commit()) { this@MainActivity.getString(R.string.card_verified_destination_save_failed) }
                                             persistLastSentTags(insertedSnapshot)
                                             check(preferences.edit().putString(SubmissionRecoveryKeys.STATUS, "done").commit())
                                             clearPersistedDraft(preferences, File(filesDir, "draft"))
@@ -3979,7 +3889,7 @@ class MainActivity : ComponentActivity() {
                                             duplicateBlocked = true
                                             knownNoteId = outcome.noteId
                                             if (restoredFrozen != null) clearPendingSubmission(preferences)
-                                            submitMessage = this@MainActivity.getString(R.string.legacy_card_blocked_a_note_with_this_sentence_and_voca)
+                                            submitMessage = this@MainActivity.getString(R.string.card_blocked_a_note_with_this_sentence_and_voca)
                                         }
                                         "created" -> {
                                             // The note is verified: nothing needs the frozen files
@@ -3992,14 +3902,14 @@ class MainActivity : ComponentActivity() {
                                             recoveryPhase = null
                                             recoveryDuplicate = false
                                             knownNoteId = null
-                                            submitMessage = this@MainActivity.getString(R.string.legacy_card_note_sent_to_ankidroid)
+                                            submitMessage = this@MainActivity.getString(R.string.card_note_sent_to_ankidroid)
                                         }
                                         else -> {
                                             audioController.releaseFreeze(retainFiles = false)
                                             audioSnapshot = audioController.snapshot()
                                             frozenRetryReady = false
                                             recoveryPhase = null
-                                            submitMessage = this@MainActivity.getString(R.string.legacy_card_ankidroid_did_not_add_the_note_you_can_saf)
+                                            submitMessage = this@MainActivity.getString(R.string.card_ankidroid_did_not_add_the_note_you_can_saf)
                                         }
                                     }
                                 } catch (cancelled: CancellationException) {
@@ -4014,7 +3924,7 @@ class MainActivity : ComponentActivity() {
                                     frozenRetryReady = false
                                     knownNoteId = null
                                     submitMessage = this@MainActivity.getString(
-                                        R.string.legacy_card_send_retry_suffix,
+                                        R.string.card_send_retry_suffix,
                                         error.message.orEmpty(),
                                     )
                                 } catch (error: Exception) {
@@ -4035,111 +3945,86 @@ class MainActivity : ComponentActivity() {
                                         frozenRetryReady = false
                                         recoveryMessage = when (phase) {
                                             SubmissionPhase.MEDIA_IMPORTING -> {
-                                                val label = mediaOperation?.label ?: this@MainActivity.getString(R.string.legacy_card_media_label)
+                                                val label = mediaOperation?.label ?: this@MainActivity.getString(R.string.card_media_label)
                                                 val stage = mediaFailure?.stage?.name?.lowercase()?.replace('_', ' ')
                                                 if (stage == null) {
-                                                    this@MainActivity.getString(R.string.legacy_card_send_recovery_media_import_uncertain, label)
+                                                    this@MainActivity.getString(R.string.card_send_recovery_media_import_uncertain, label)
                                                 } else {
-                                                    this@MainActivity.getString(R.string.legacy_card_send_recovery_media_import_stage_uncertain, label, stage)
+                                                    this@MainActivity.getString(R.string.card_send_recovery_media_import_stage_uncertain, label, stage)
                                                 }
                                             }
-                                            SubmissionPhase.MEDIA_IMPORTED -> this@MainActivity.getString(R.string.legacy_card_send_recovery_media_receipts_saved)
-                                            SubmissionPhase.NOTE_INSERTING -> this@MainActivity.getString(R.string.legacy_card_send_recovery_note_insertion_uncertain)
-                                            SubmissionPhase.NOTE_INSERTED -> this@MainActivity.getString(R.string.legacy_card_send_recovery_note_assignment_interrupted)
-                                            SubmissionPhase.DESTINATION_VERIFIED -> this@MainActivity.getString(R.string.legacy_card_send_recovery_destination_verified)
+                                            SubmissionPhase.MEDIA_IMPORTED -> this@MainActivity.getString(R.string.card_send_recovery_media_receipts_saved)
+                                            SubmissionPhase.NOTE_INSERTING -> this@MainActivity.getString(R.string.card_send_recovery_note_insertion_uncertain)
+                                            SubmissionPhase.NOTE_INSERTED -> this@MainActivity.getString(R.string.card_send_recovery_note_assignment_interrupted)
+                                            SubmissionPhase.DESTINATION_VERIFIED -> this@MainActivity.getString(R.string.card_send_recovery_destination_verified)
                                         }
                                     } else if (imageAttached) {
                                         audioController.releaseFreeze(retainFiles = false)
                                         audioSnapshot = audioController.snapshot()
-                                        submitMessage = this@MainActivity.getString(R.string.legacy_card_could_not_import_the_selected_image_the_dr)
+                                        submitMessage = this@MainActivity.getString(R.string.card_could_not_import_the_selected_image_the_dr)
                                     } else {
                                         audioController.releaseFreeze(retainFiles = false)
                                         audioSnapshot = audioController.snapshot()
-                                        submitMessage = this@MainActivity.getString(R.string.legacy_card_could_not_send_the_note_check_ankidroid_ap)
+                                        submitMessage = this@MainActivity.getString(R.string.card_could_not_send_the_note_check_ankidroid_ap)
                                     }
                                 } finally {
                                     isSubmitting = false
                                 }
                             }
                         }
-                        if (visibleRoute == AppRoute.Review && reviewTarget == null) Button(
-                            enabled = completedSubmission == null && !duplicateBlocked &&
-                                submitMessage?.startsWith(blockedStatusPrefix) != true && canSend,
-                            onClick = { submitAction() },
-                        ) {
-                            if (isSubmitting) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                    Text(stringResource(R.string.sending))
-                                }
-                            } else {
-                                Text(
-                                    when {
-                                        completedSubmission != null -> stringResource(R.string.legacy_card_sent_to_ankidroid)
-                                        submitMessage?.startsWith(blockedStatusPrefix) == true -> stringResource(R.string.legacy_card_already_in_ankidroid)
-                                        recoveryRequired -> stringResource(R.string.legacy_card_pending_send_needs_review)
-                                        submitMessage != null -> stringResource(R.string.legacy_card_retry_send)
-                                        !frozenRetryReady && imagePending -> stringResource(R.string.legacy_card_preparing_image)
-                                        else -> stringResource(R.string.send)
-                                    },
-                                )
-                            }
-                        }
+
                     }
                 }
-                if (showDictionarySheet && target?.textIn(editor.text) != null && meaningChoices.size > 1) {
-                    fun chooseMeaning(entry: DictionaryEntry, senseIndex: Int, meaning: String) {
-                        if (submissionLocked) return
-                        if (!definitionProvenanceKnown) {
-                            val previousGlosses = selectedDictionaryEntry?.let { previous ->
-                                selectedSenseIndices.sorted().mapNotNull { previous.senses.getOrNull(it) }
-                                    .joinToString("\n") { it.glosses.joinToString("; ") }
-                            }.orEmpty()
-                            definitionManuallyEdited = definition.isNotBlank() && definition != previousGlosses
-                            definitionProvenanceKnown = true
-                        }
-                        pitchAccentText = ""
-                        vocabularyReadingError = null
-                        pitchIndexError = null
-                        if (definitionManuallyEdited && definition.isNotBlank()) dependentFieldsStale = true
-                        vocabulary = entry.expression
-                        vocabularyReading = entry.reading
-                        selectedDictionaryEntry = entry
-                        selectedDictionaryEntryId = entry.id
-                        selectedSenseIndices = setOf(senseIndex)
-                        if (!definitionManuallyEdited) definition = meaning
-                        showDictionarySheet = false
-                    }
+                if (showDictionarySheet && target?.textIn(editor.text) != null &&
+                    dictionaryEntries.sumOf { it.senses.size } > 1
+                ) {
                     ModalBottomSheet(onDismissRequest = { dismissDictionarySheet() }) {
                         Column(
                             Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState())
                                 .padding(horizontal = 20.dp, vertical = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            Text("Choose meaning", style = MaterialTheme.typography.titleLarge)
-                            meaningChoices.forEach { (entry, senseIndex, meaning) ->
-                                val selected = selectedDictionaryEntryId == entry.id &&
-                                    senseIndex in selectedSenseIndices
-                                Column {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().clickable(enabled = !submissionLocked) {
-                                            chooseMeaning(entry, senseIndex, meaning)
-                                        },
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        RadioButton(
-                                            selected = selected,
-                                            onClick = { chooseMeaning(entry, senseIndex, meaning) },
-                                            enabled = !submissionLocked,
-                                        )
-                                        Column(Modifier.weight(1f)) {
-                                            Text("${entry.expression} · ${entry.reading}")
-                                            Text(
-                                                meaning,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
+                            Text(stringResource(R.string.choose_meaning), style = MaterialTheme.typography.titleLarge)
+                            dictionaryEntries.forEach { entry ->
+                                entry.senses.forEachIndexed { senseIndex, sense ->
+                                    OutlinedButton(
+                                    enabled = !submissionLocked,
+                                    onClick = {
+                                        if (!definitionProvenanceKnown) {
+                                            val savedSenseIndices = preferences.getStringSet("dictionary_sense_indices", null)
+                                                ?.mapNotNull(String::toIntOrNull)?.filter { it in entry.senses.indices }
+                                                ?.takeIf { it.isNotEmpty() } ?: listOf(0)
+                                            val savedGlosses = savedSenseIndices.sorted().mapNotNull { index ->
+                                                entry.senses.getOrNull(index)?.glosses?.joinToString("; ")
+                                            }.joinToString("\n")
+                                            definitionManuallyEdited = definition.isNotBlank() && definition != savedGlosses
+                                            definitionProvenanceKnown = true
                                         }
+                                        if (selectedDictionaryEntryId != entry.id) {
+                                            pitchAccentText = ""
+                                            pitchHtmlText = null
+                                            pitchCandidates = emptyList()
+                                            vocabularyReadingError = null
+                                            pitchIndexError = null
+                                            vocabulary = entry.expression
+                                            vocabularyReading = entry.reading
+                                            selectedDictionaryEntry = entry
+                                            selectedDictionaryEntryId = entry.id
+                                            audioController.clear(AudioItem.VOCABULARY)
+                                            audioSnapshot = audioController.snapshot()
+                                        }
+                                        if (definitionManuallyEdited && definition.isNotBlank()) dependentFieldsStale = true
+                                        selectedSenseIndices = setOf(senseIndex)
+                                        if (!definitionManuallyEdited) {
+                                            definition = entry.senses.getOrNull(senseIndex)?.glosses?.joinToString("; ").orEmpty()
+                                        }
+                                        showDictionarySheet = false
+                                    },
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                                ) {
+                                    Column(horizontalAlignment = Alignment.Start) {
+                                        Text("${entry.expression} · ${entry.reading}")
+                                        Text(sense.glosses.joinToString("; "))
                                     }
                                     TextButton(
                                         onClick = {
@@ -4179,6 +4064,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
     }
 
     override fun onResume() {
