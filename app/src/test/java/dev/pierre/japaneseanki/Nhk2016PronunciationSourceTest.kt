@@ -42,7 +42,10 @@ class Nhk2016PronunciationSourceTest {
             }
             assertTrue(runCatching { source.synthesize(AudioSynthesisRequest(AudioItem.VOCABULARY, "cat", 0), File(root, "x.ogg")) }.isFailure)
             assertEquals(0, urls.size)
-            assertTrue(runCatching { source.synthesize(AudioSynthesisRequest(AudioItem.VOCABULARY, "cat", 0, "entry"), File(root, "x.ogg")) }.isFailure)
+            val missing = runCatching {
+                source.synthesize(AudioSynthesisRequest(AudioItem.VOCABULARY, "cat", 0, "entry"), File(root, "x.ogg"))
+            }.exceptionOrNull()
+            assertTrue(missing is AudioSourceMissingException)
             assertEquals(1, urls.size) // index only; reading is not falsely treated as a headword match
             assertFalse(urls.any { it.contains("/media/") })
         } finally { root.deleteRecursively() }

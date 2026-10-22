@@ -116,6 +116,124 @@ class DraftAudioControllerTest {
     }
 
     @Test
+    fun reviewEntryStartsOnlyMissingItemsOnceForExplicitContinueAndNeverOnRestoreOrReopen() {
+        val fixture = Fixture()
+        try {
+            val persistence = MapPersistence()
+            val controller = controller(fixture, persistence)
+            val sentence = fixture.input(AudioItem.SENTENCE, "sentence-r7", revision = 7)
+            val word = fixture.input(AudioItem.VOCABULARY, "word-r7", format = AudioFormat.OGG, revision = 7)
+            controller.setInput(sentence)
+            controller.setInput(word)
+            val entry = ReviewAudioGenerationCoordinator(controller, persistence)
+
+            assertTrue(entry.onReviewEntry(7, ReviewAudioEntryCause.PROCESS_RESTORE).isEmpty())
+            assertTrue(entry.onReviewEntry(7, ReviewAudioEntryCause.REVISIT).isEmpty())
+            assertEquals(0, fixture.providerCalls)
+
+            val attempts = entry.onReviewEntry(7, ReviewAudioEntryCause.EXPLICIT_CONTINUE)
+            assertEquals(setOf(AudioItem.SENTENCE, AudioItem.VOCABULARY), attempts.map { it.token.item }.toSet())
+            assertTrue(entry.onReviewEntry(7, ReviewAudioEntryCause.EXPLICIT_CONTINUE).isEmpty())
+            attempts.forEach(controller::runAttempt)
+            assertEquals(2, fixture.providerCalls)
+
+            // An edited sentence is a new revision; the accepted word audio remains valid.
+            controller.setInput(fixture.input(AudioItem.SENTENCE, "sentence-r8", text = "別の文", revision = 8))
+            controller.setInput(fixture.input(AudioItem.VOCABULARY, "word-r7", format = AudioFormat.OGG, revision = 8))
+            val changedRevision = entry.onReviewEntry(8, ReviewAudioEntryCause.EXPLICIT_CONTINUE)
+            assertEquals(listOf(AudioItem.SENTENCE), changedRevision.map { it.token.item })
+            assertTrue(controller.state(AudioItem.VOCABULARY) is DraftAudioState.Ready)
+            changedRevision.forEach(controller::runAttempt)
+            assertEquals(3, fixture.providerCalls)
+
+            controller.dispose()
+            val restored = controller(fixture, persistence)
+            restored.setInput(fixture.input(AudioItem.SENTENCE, "sentence-r8", text = "別の文", revision = 8))
+            restored.setInput(fixture.input(AudioItem.VOCABULARY, "word-r7", format = AudioFormat.OGG, revision = 8))
+            val reopened = ReviewAudioGenerationCoordinator(restored, persistence)
+            assertTrue(reopened.onReviewEntry(8, ReviewAudioEntryCause.PROCESS_RESTORE).isEmpty())
+            assertTrue(reopened.onReviewEntry(8, ReviewAudioEntryCause.REVISIT).isEmpty())
+            assertTrue(reopened.onReviewEntry(8, ReviewAudioEntryCause.EXPLICIT_CONTINUE).isEmpty())
+            restored.setInput(fixture.input(AudioItem.SENTENCE, "sentence-r7", revision = 7))
+            restored.setInput(fixture.input(AudioItem.VOCABULARY, "word-r7", format = AudioFormat.OGG, revision = 7))
+            assertTrue("a lower previously authorized revision cannot be replayed", reopened.onReviewEntry(7, ReviewAudioEntryCause.EXPLICIT_CONTINUE).isEmpty())
+            assertEquals("restoration and revisiting must make zero provider calls", 3, fixture.providerCalls)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @Test
+    fun permanentSpeechFailureIsNotRetriedForUnchangedInput() {
+        val fixture = Fixture()
+        try {
+            val persistence = MapPersistence()
+            var calls = 0
+            val controller = DraftAudioController(
+                store = fixture.store,
+                persistence = persistence,
+                synthesize = { _, _ ->
+                    calls++
+                    throw dev.pierre.japaneseanki.speech.SpeechException(
+                        dev.pierre.japaneseanki.speech.SpeechFailure.INVALID_REQUEST,
+                        "The request was rejected.",
+                        diagnostic = dev.pierre.japaneseanki.speech.SpeechDiagnostic(
+                            category = dev.pierre.japaneseanki.speech.SpeechFailure.INVALID_REQUEST,
+                            httpStatus = 400,
+                            googleStatus = "INVALID_ARGUMENT",
+                            googleReason = "INVALID_ARGUMENT",
+                            exceptionClass = null,
+                            durationMillis = 12,
+                            request = dev.pierre.japaneseanki.speech.SpeechRequestMetadata(
+                                operation = dev.pierre.japaneseanki.speech.SpeechOperation.SYNTHESIS,
+                                inputBytes = 9,
+                                requestBytes = 128,
+                                voiceName = "ja-JP-Chirp3-HD-Achernar",
+                                hintCount = 1,
+                            ),
+                        ),
+                    )
+                },
+            )
+            val input = fixture.input(AudioItem.SENTENCE, "permanent-rejection", revision = 3)
+            controller.setInput(input)
+            val failed = controller.runAttempt(controller.confirm(AudioItem.SENTENCE)!!)
+            assertTrue(failed is DraftAudioAttemptResult.Failed)
+            assertFalse((failed as DraftAudioAttemptResult.Failed).retryable)
+            assertNull(controller.retry(AudioItem.SENTENCE))
+
+            controller.setInput(input)
+            assertNull("an unchanged permanent failure is not eligible for Generate", controller.confirm(AudioItem.SENTENCE))
+            assertEquals(1, calls)
+            val state = controller.state(AudioItem.SENTENCE) as DraftAudioState.Failed
+            assertFalse(state.retryable)
+            assertEquals("INVALID_REQUEST", state.diagnostic?.category)
+            assertNull(state.diagnostic?.exceptionClass)
+            assertEquals(3L, state.diagnostic?.revision)
+            assertEquals(AudioItem.SENTENCE, state.diagnostic?.item)
+            assertEquals(400, state.diagnostic?.httpStatus)
+            assertEquals("INVALID_ARGUMENT", state.diagnostic?.googleReason)
+            assertEquals(12L, state.diagnostic?.durationMillis)
+            assertEquals(128, state.diagnostic?.requestBytes)
+            assertEquals("ja-JP-Chirp3-HD-Achernar", state.diagnostic?.voiceName)
+            assertEquals(1, state.diagnostic?.hintCount)
+
+            controller.dispose()
+            val restored = controller(fixture, persistence)
+            restored.setInput(input)
+            val restoredFailure = restored.state(AudioItem.SENTENCE) as DraftAudioState.Failed
+            assertFalse("restoring a permanent rejection does not make it retryable", restoredFailure.retryable)
+            assertEquals("INVALID_REQUEST", restoredFailure.diagnostic?.category)
+            assertEquals(400, restoredFailure.diagnostic?.httpStatus)
+            assertEquals("INVALID_ARGUMENT", restoredFailure.diagnostic?.googleReason)
+            assertNull(restored.retry(AudioItem.SENTENCE))
+            assertEquals("restoration must not call the provider", 1, calls)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @Test
     fun confirmIsSingleFlightPerItem() {
         val fixture = Fixture()
         try {
