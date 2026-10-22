@@ -7,7 +7,11 @@ Contract: `2c473ed7426850f86ef17bf9c93f69cb21b873ef` is an ancestor of both the 
 
 ## Executed here
 
-- PASS — `:app:testDebugUnitTest :app:lintDebug :app:assembleDebug` on the merged integration. Gradle returned `BUILD SUCCESSFUL` (58 actionable tasks). Test XML was programmatically aggregated: 39 suites, 314 tests, 0 failures, 0 errors, 0 skipped.
+- PASS — Independently reran `:app:testDebugUnitTest :app:lintDebug :app:assembleDebug` on the merged integration in this acceptance run. Gradle returned `BUILD SUCCESSFUL` (58 actionable tasks; 5 executed, 53 up-to-date). Test XML was programmatically aggregated: 39 suites, 314 tests, 0 failures, 0 errors, 0 skipped.
+- PASS — Re-ran `bash scripts/test-core.sh` inside `nix develop --offline`; JUnit `OK (192 tests)`. Jansi emitted a `/tmp` noexec native-library warning, but the command exited 0.
+- PASS — Re-ran the AJT builder and bundled-asset regression scripts; both reported passed.
+- PASS — Re-ran `git diff --check 2c473ed..HEAD` (clean).
+- NOT RUN — No `adb` executable is available in this acceptance environment, so no new device/native rerun was possible. Native/API-37 results below are explicitly parent handoff evidence only.
 - PASS — `bash scripts/test-core.sh`: JUnit `OK (192 tests)`. Java emitted a Jansi native-library/noexec warning from `/tmp`; it did not affect test completion.
 - PASS — `python3 scripts/test-build-ajt-pitch.py`: builder regression passed, including required 受付 devoiced-ツ reference markup, duplicate/source-order handling, kana/alternate spelling and 出来る forms, all three shard metadata/hash recording, and refusal of incomplete shard sets.
 - PASS — `python3 scripts/test-ajt-pitch-asset.py`: bundled 676,632-record index regression passed; confirms exact 受付 `ウケツケ` devoiced `ツ` output, plain variants, all required 出きる/出来る/出來る behavior, and source hashes for all three AJT shards.
