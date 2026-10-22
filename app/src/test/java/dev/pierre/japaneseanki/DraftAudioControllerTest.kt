@@ -116,6 +116,17 @@ class DraftAudioControllerTest {
     }
 
     @Test
+    fun reviewAudioInputsUseTheRevisionThatContinueWillAuthorize() {
+        val beforeFirstContinue = declaredReviewAudioRevision(pendingAuthorization = null, lastAuthorization = 0L)
+        assertEquals(1L, beforeFirstContinue)
+        assertEquals(
+            beforeFirstContinue,
+            declaredReviewAudioRevision(pendingAuthorization = beforeFirstContinue, lastAuthorization = beforeFirstContinue),
+        )
+        assertEquals(2L, declaredReviewAudioRevision(pendingAuthorization = null, lastAuthorization = beforeFirstContinue))
+    }
+
+    @Test
     fun reviewEntryStartsOnlyMissingItemsOnceForExplicitContinueAndNeverOnRestoreOrReopen() {
         val fixture = Fixture()
         try {
