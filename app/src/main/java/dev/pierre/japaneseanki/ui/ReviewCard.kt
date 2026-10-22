@@ -226,6 +226,7 @@ internal fun ReviewCard(
     sentenceAudioAction: String = "Retry",
     vocabularyAudioAction: String = "Retry",
     sendPresentation: ReviewSendPresentation? = null,
+    primaryActionLabel: String = "Send to AnkiDroid",
     onSend: (() -> Unit)? = null,
     onSendStatusAction: (() -> Unit)? = null,
     sendStatusContent: @Composable () -> Unit = {},
@@ -478,7 +479,7 @@ internal fun ReviewCard(
                 when (presentation) {
                     ReviewSendPresentation.Ready -> {
                         FlowPrimaryButton(
-                            text = "Send to AnkiDroid",
+                            text = primaryActionLabel,
                             onClick = { onSend?.invoke() },
                             enabled = onSend != null,
                         )

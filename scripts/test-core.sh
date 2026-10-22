@@ -31,6 +31,7 @@ java -cp "$gradle_lib/*" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler \
   app/src/main/java/dev/pierre/japaneseanki/DraftAudioStore.kt \
   app/src/main/java/dev/pierre/japaneseanki/DraftAudioController.kt \
   app/src/main/java/dev/pierre/japaneseanki/ReviewAudioGenerationCoordinator.kt \
+  app/src/main/java/dev/pierre/japaneseanki/PreparationAuthorization.kt \
   app/src/main/java/dev/pierre/japaneseanki/Nhk2016PronunciationSource.kt \
   app/src/main/java/dev/pierre/japaneseanki/PitchAccent.kt \
   app/src/main/java/dev/pierre/japaneseanki/AjtPitchHtml.kt \
@@ -56,6 +57,7 @@ java -cp "$gradle_lib/*" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler \
   app/src/test/java/dev/pierre/japaneseanki/AudioReliabilityTest.kt \
   app/src/test/java/dev/pierre/japaneseanki/DraftAudioStoreTest.kt \
   app/src/test/java/dev/pierre/japaneseanki/DraftAudioControllerTest.kt \
+  app/src/test/java/dev/pierre/japaneseanki/PreparationAuthorizationTest.kt \
   app/src/test/java/dev/pierre/japaneseanki/PitchAccentTest.kt \
   app/src/test/java/dev/pierre/japaneseanki/speech/SpeechTest.kt \
   app/src/test/java/dev/pierre/japaneseanki/speech/ReadingHintCorrectionTest.kt \
@@ -77,9 +79,11 @@ java -cp "$classes:$runtime_cp" org.junit.runner.JUnitCore \
   dev.pierre.japaneseanki.AudioReliabilityTest \
   dev.pierre.japaneseanki.DraftAudioStoreTest \
   dev.pierre.japaneseanki.DraftAudioControllerTest \
+  dev.pierre.japaneseanki.PreparationAuthorizationTest \
   dev.pierre.japaneseanki.PitchAccentTest \
   dev.pierre.japaneseanki.speech.ReadingHintCorrectionTest \
   dev.pierre.japaneseanki.speech.SpeechHintBuilderTest \
+  dev.pierre.japaneseanki.speech.SentenceHintSpansTest \
   dev.pierre.japaneseanki.speech.GoogleSpeechProviderTest \
   dev.pierre.japaneseanki.JapaneseMorphologyTest \
   dev.pierre.japaneseanki.OcrCandidateSelectionTest \

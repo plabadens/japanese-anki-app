@@ -240,7 +240,7 @@ Target sentence-TTS spend is **at most USD 5/month at roughly two cards/day**. R
 
 Generation begins automatically when the sentence is committed (translation, sentence speech) and when a word is selected (that word's recording). Never repeat billable work automatically on revisit, recomposition or process restoration. Preserve completed matching results; explicit Retry resumes only appropriate transient/invalidated work, not unchanged permanent rejections. Cancel or ignore superseded responses. Audio for outdated inputs is unavailable for playback/export. Do not auto-play audio.
 
-Keep one bounded reusable audio cache with a 250 MB limit. Cache keys include source/model, text or recording identity, exact voice ID/configuration, the canonical phonetic-hint payload and hint-builder version for sentence speech, and revision where relevant. Active-draft media is durable and protected from eviction. Cache clearing must not remove the draft or AnkiDroid's copies. No cache-management dashboard is needed.
+Keep one bounded reusable audio cache with a 250 MB limit. Cache keys include source/model, text or recording identity, exact voice ID/configuration, the canonical phonetic-hint payload and hint-builder version for sentence speech, and revision where relevant. Active-draft media is durable and protected from eviction; cached results belonging only to an abandoned or superseded draft are evictable. Cache clearing must not remove the draft or AnkiDroid's copies. No cache-management dashboard is needed.
 
 ### 6.4 Small modular provider boundary
 
@@ -363,7 +363,7 @@ There are no manual generated-field overrides or correction-replacement dialogs.
 ## 11. Privacy and diagnostics
 
 - Photographs remain on the device through capture, OCR, processing, and draft storage; the app may import them into the local AnkiDroid collection. AnkiDroid's user-controlled sync is outside this app. Never upload photos to OCR/LLM services or diagnostics.
-- Google Cloud Text-to-Speech receives sentence text and phonetic hints for synthesis; Google Cloud Translation receives only sentence text for translation; recording hosts receive necessary lookup/download requests. No private Notes, credentials in URLs, raw-media logs, or unrelated network processing.
+- Committing a sentence sends its text to Google Cloud Text-to-Speech and Google Cloud Translation; OCR or merely entering/revisiting the card does not. Speech receives sentence text and phonetic hints; translation receives only sentence text. Recording hosts receive necessary lookup/download requests. No private Notes, credentials in URLs, raw-media logs, or unrelated network processing.
 - No app analytics, ads, clipboard surveillance, automatic log upload, or private-content diagnostic upload. SDK-default diagnostic traffic is permitted only if it excludes user content and credentials; document selected versions and check behavior. Local text logs alone do not establish remote transmission.
 - Store one shared Google Cloud API key at runtime using Android Keystore-backed protection. Supply it only to the intended Google Cloud Text-to-Speech and Translation endpoints, in authentication headers, and do not forward it across redirects. Never commit credentials, place them in Nix inputs/APKs, display them in errors, or log them. Exclude credentials, drafts, and media from backup/cloud restore.
 - Use HTTPS, bounded downloads/timeouts, and file-format validation. Request camera/AnkiDroid permissions normally; use the system photo picker rather than broad storage access.

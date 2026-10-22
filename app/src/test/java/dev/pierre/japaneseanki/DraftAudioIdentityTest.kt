@@ -27,6 +27,21 @@ class DraftAudioIdentityTest {
         )
     }
 
+    @Test fun sentenceRequestIdentityDoesNotDependOnSelectedVocabulary() {
+        val hints = listOf(
+            dev.pierre.japaneseanki.speech.ReadingHintSpan(0, 2, "昨日", "きのう"),
+            dev.pierre.japaneseanki.speech.ReadingHintSpan(6, 9, "喫茶店", "きっさてん"),
+        )
+        assertEquals(
+            DraftAudioIdentity.sentenceRequest(sentence, hints, "voice"),
+            DraftAudioIdentity.sentenceRequest(sentence, hints, "voice"),
+        )
+        assertNotEquals(
+            DraftAudioIdentity.sentenceRequest(sentence, hints, "voice-a"),
+            DraftAudioIdentity.sentenceRequest(sentence, hints, "voice-b"),
+        )
+    }
+
     @Test fun aSentenceReadingCorrectionInvalidatesOnlyTheSentenceRecording() {
         val corrected = listOf(
             FuriganaSpan(TargetSpan(0, 2), "昨日", "きのうび"),

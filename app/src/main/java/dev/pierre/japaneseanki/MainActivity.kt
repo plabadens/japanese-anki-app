@@ -290,6 +290,17 @@ private fun DraftAudioState.toDraftAudio(item: AudioItem): DraftAudio = when (th
 
 enum class AppRoute { Capture, Target, Review }
 
+private data class SentenceAudioAuthorization(
+    val revision: Long,
+    val sentence: String,
+    val voiceName: String,
+)
+
+private data class WordAudioAuthorization(
+    val revision: Long,
+    val target: TargetSpan,
+)
+
 data class SubmissionOutcome(val status: String, val noteId: Long? = null)
 
 internal fun ankiBrowserUriText(noteId: Long): String {
@@ -431,6 +442,11 @@ class MainActivity : ComponentActivity() {
             val restoredSuggestionText = preferences.getString("translation_suggestion", null)
             val restoredSuggestionSource = preferences.getString("translation_suggestion_source", null)
                 ?.let { saved -> TranslationSource.entries.firstOrNull { it.name == saved } }
+            val restoredCommittedSentence = preferences.getString("committed_sentence", null)
+            val committedTranslationWasNotAttempted = !restoredTranslationManual &&
+                restoredTranslationText.isBlank() && !restoredCommittedSentence.isNullOrBlank() &&
+                restoredCommittedSentence == preferences.getString("sentence", "").orEmpty() &&
+                preferences.getString("translation_attempted_sentence", null) != restoredCommittedSentence
             val interruptedTranslation = TranslationResult.Failed("Translation was interrupted. Tap Retry to continue.")
             var translationDraft by remember {
                 mutableStateOf(
@@ -446,6 +462,7 @@ class MainActivity : ComponentActivity() {
                             restoredTranslationText.isNotBlank() -> TranslationResult.Ready(restoredTranslationText, TranslationSource.MANUAL)
                             restoredTranslationWasPending -> interruptedTranslation
                             restoredTranslationError != null -> TranslationResult.Failed(restoredTranslationError)
+                            committedTranslationWasNotAttempted -> interruptedTranslation
                             else -> TranslationResult.Pending
                         },
                         manuallyEdited = restoredTranslationManual,
@@ -466,7 +483,7 @@ class MainActivity : ComponentActivity() {
                 mutableStateOf(preferences.getString("translation_attempted_sentence", null))
             }
             var translationAutoAllowed by remember {
-                mutableStateOf(preferences.getString("sentence", "").isNullOrBlank())
+                mutableStateOf(false)
             }
             var translationRetry by remember { mutableStateOf(0) }
             var lastHandledTranslationRetry by remember { mutableStateOf(0) }
@@ -478,7 +495,7 @@ class MainActivity : ComponentActivity() {
             }
             val updateTranslationSentence: (String) -> Unit = { sentence ->
                 translationRequestRevision++
-                translationAutoAllowed = true
+                translationAutoAllowed = false
                 translationDraft = translationDraft.sentenceChanged(sentence)
             }
             val activeTranslationResult: () -> TranslationResult = {
@@ -506,6 +523,7 @@ class MainActivity : ComponentActivity() {
             }
             var showSettings by remember { mutableStateOf(!onboardingComplete) }
             var showSentenceEditor by remember { mutableStateOf(false) }
+            var sentenceEditorDraft by remember { mutableStateOf<TextFieldValue?>(null) }
             var showDeckSheet by remember { mutableStateOf(false) }
             var showDiscardConfirm by remember { mutableStateOf(false) }
             var audioCacheBytes by remember { mutableStateOf(0L) }
@@ -615,10 +633,22 @@ class MainActivity : ComponentActivity() {
             }
             var captureMode by remember { mutableStateOf(preferences.getString("capture_mode", "Photo") ?: "Photo") }
             var generationStarted by remember { mutableStateOf(false) }
+            var cardInvalidated by remember {
+                mutableStateOf(preferences.getBoolean("card_invalidated", false))
+            }
+            var committedSentence by remember {
+                mutableStateOf(preferences.getString("committed_sentence", null))
+            }
+            var committedSentenceVoice by remember {
+                mutableStateOf(preferences.getString("committed_sentence_voice", selectedVoiceName))
+            }
             var reviewAuthorizationSequence by remember {
                 mutableStateOf(preferences.getLong("review_authorization_sequence", 0L).coerceAtLeast(0L))
             }
-            var pendingReviewAuthorization by remember { mutableStateOf<Long?>(null) }
+            var pendingSentenceAudioAuthorization by remember { mutableStateOf<SentenceAudioAuthorization?>(null) }
+            var pendingWordAudioAuthorization by remember { mutableStateOf<WordAudioAuthorization?>(null) }
+            var handledSentenceAudioAuthorization by remember { mutableStateOf<Long?>(null) }
+            var handledWordAudioAuthorization by remember { mutableStateOf<Long?>(null) }
             var preparationAuthorizationError by remember { mutableStateOf<String?>(null) }
             var playingAudio by remember { mutableStateOf<AudioItem?>(null) }
             var audioPlaybackErrors by remember { mutableStateOf<Map<AudioItem, String>>(emptyMap()) }
@@ -671,8 +701,51 @@ class MainActivity : ComponentActivity() {
                     ),
                 )
             }
-            val reviewAudioCoordinator = remember(audioController) {
-                ReviewAudioGenerationCoordinator(audioController, audioPersistence)
+            val preparationAuthorization = remember {
+                PreparationAuthorization(
+                    initialCommittedSentence = committedSentence,
+                    persistSentenceCommit = { sentence ->
+                        val nextRevision = runCatching { Math.addExact(reviewAuthorizationSequence, 1L) }
+                            .getOrNull() ?: return@PreparationAuthorization false
+                        val saved = preferences.edit()
+                            .putString("committed_sentence", sentence)
+                            .putString("sentence", sentence)
+                            .putString("committed_sentence_voice", selectedVoiceName)
+                            .putLong("review_authorization_sequence", nextRevision)
+                            .commit()
+                        if (saved) {
+                            committedSentence = sentence
+                            committedSentenceVoice = selectedVoiceName
+                            cardInvalidated = true
+                            reviewAuthorizationSequence = nextRevision
+                        }
+                        saved
+                    },
+                    authorizeTranslation = {
+                        translationRequestRevision++
+                        translationAutoAllowed = true
+                        generationStarted = true
+                    },
+                    authorizeSentenceSpeech = { sentence ->
+                        pendingSentenceAudioAuthorization = SentenceAudioAuthorization(
+                            revision = reviewAuthorizationSequence,
+                            sentence = sentence,
+                            voiceName = selectedVoiceName,
+                        )
+                    },
+                    authorizeWordRecording = { identity, selected ->
+                        if (identity.isBlank()) return@PreparationAuthorization false
+                        val nextRevision = runCatching { Math.addExact(reviewAuthorizationSequence, 1L) }
+                            .getOrNull() ?: return@PreparationAuthorization false
+                        if (!preferences.edit().putLong("review_authorization_sequence", nextRevision).commit()) {
+                            false
+                        } else {
+                            reviewAuthorizationSequence = nextRevision
+                            pendingWordAudioAuthorization = WordAudioAuthorization(nextRevision, selected)
+                            true
+                        }
+                    },
+                )
             }
             androidx.compose.runtime.DisposableEffect(audioController) {
                 onDispose { audioController.dispose() }
@@ -690,14 +763,17 @@ class MainActivity : ComponentActivity() {
             // A reading, sentence or voice change invalidates the sentence recording; a vocabulary
             // reading change also re-resolves the word recording through its own identity.
             val currentSentenceIdentity = rememberUpdatedState(
-                DraftAudioIdentity.sentence(
+                DraftAudioIdentity.sentenceRequest(
                     editor.text,
-                    target,
-                    sentenceReading,
-                    sentenceFurigana,
+                    sentenceHintSpans(editor.text, japaneseTokens, readingCorrections),
                     selectedVoiceName,
                 ),
             )
+            androidx.compose.runtime.LaunchedEffect(selectedVoiceName, committedSentence, committedSentenceVoice) {
+                if (!committedSentence.isNullOrBlank() && committedSentenceVoice != selectedVoiceName) {
+                    cardInvalidated = true
+                }
+            }
 
             fun audioView(item: AudioItem): DraftAudio {
                 audioConfigErrors[item]?.let {
@@ -952,19 +1028,19 @@ class MainActivity : ComponentActivity() {
                     return
                 }
                 if (navigationLocked) return
-                val nextRevision = runCatching { Math.addExact(reviewAuthorizationSequence, 1L) }.getOrNull()
-                if (nextRevision == null || !preferences.edit()
-                        .putLong("review_authorization_sequence", nextRevision).commit()
-                ) {
-                    preparationAuthorizationError = "Could not record this Review authorization. Try Continue again."
-                    return
-                }
-                reviewAuthorizationSequence = nextRevision
                 preparationAuthorizationError = null
-                generationStarted = true
-                translationAutoAllowed = true
-                pendingReviewAuthorization = nextRevision
                 route = AppRoute.Review
+            }
+
+            fun commitSentence(sentence: String = editor.text): Boolean {
+                if (navigationLocked || sentence.isBlank()) return false
+                preparationAuthorizationError = null
+                if (committedSentence == sentence) return true
+                val committed = preparationAuthorization.commitSentence(sentence)
+                if (!committed && committedSentence != sentence) {
+                    preparationAuthorizationError = "Could not record the sentence commit. Try committing it again."
+                }
+                return committed
             }
 
             val hasManualDefinition = definitionManuallyEdited && definition.isNotBlank()
@@ -1025,6 +1101,15 @@ class MainActivity : ComponentActivity() {
                 translationRetry = 0
                 lastHandledTranslationRetry = 0
                 translationRequestRevision++
+                committedSentence = null
+                committedSentenceVoice = selectedVoiceName
+                cardInvalidated = false
+                preparationAuthorization.reset()
+                reviewAuthorizationSequence = 0L
+                pendingSentenceAudioAuthorization = null
+                pendingWordAudioAuthorization = null
+                handledSentenceAudioAuthorization = null
+                handledWordAudioAuthorization = null
                 notes = ""
                 tags = normalizeTagInput(settings.getString(SettingsPreferenceKeys.DEFAULT_TAGS, "").orEmpty())
                 selectedDictionaryEntry = null
@@ -1051,12 +1136,18 @@ class MainActivity : ComponentActivity() {
                     .remove(WORD_AUDIO_RECEIPT_MODIFIED)
                     .remove("sentence_audio_path")
                     .remove("word_audio_path")
+                    .remove("committed_sentence")
+                    .remove("committed_sentence_voice")
+                    .remove("card_invalidated")
+                    .remove("review_authorization_sequence")
                     .apply()
             }
             val replaceEditorText: (String, Boolean) -> Unit = { text, invalidateDraftGeneration ->
                 editorInputRevision++
                 if (invalidateDraftGeneration) draftGeneration++
                 if (text != editor.text) {
+                    cardInvalidated = true
+                    generationStarted = false
                     if (submissionLocked) translationRequestRevision++ else updateTranslationSentence(text)
                 }
                 editor = TextFieldValue(text, selection = TextRange(text.length))
@@ -1088,11 +1179,14 @@ class MainActivity : ComponentActivity() {
                 if (currentSubmissionLocked.value) return@selectTarget
                 val previousTarget = target
                 if (selected != previousTarget) {
+                    cardInvalidated = true
                     if (hasManualDefinition) dependentFieldsStale = true
                     selectedDictionaryEntry = null
                     selectedDictionaryEntryId = null
                     dictionaryEntries = emptyList()
                     pitchAccentText = ""
+                    audioController.clear(AudioItem.VOCABULARY)
+                    audioSnapshot = audioController.snapshot()
                 }
                 if (selected != previousTarget) {
                     // The reading belongs to the selected occurrence; a new target must never
@@ -1102,6 +1196,11 @@ class MainActivity : ComponentActivity() {
                     }.orEmpty()
                 }
                 target = selected
+                if (selected != null) {
+                    val surface = selected.textIn(editor.text).orEmpty()
+                    val identity = "${selected.start}:${selected.end}:$surface"
+                    preparationAuthorization.selectWord(identity, selected)
+                }
                 if (selected != null && vocabulary.isBlank()) {
                     val surface = selected.textIn(editor.text).orEmpty()
                     val lemma = resolveAnalyzedLemma(japaneseTokens, selected)
@@ -1121,6 +1220,7 @@ class MainActivity : ComponentActivity() {
                 tokenizationLoading = analyzerReady
                 ocrError = null
                 route = AppRoute.Target
+                commitSentence(text.trim())
             }
             val setDraftOrigin: (String) -> Unit = { origin ->
                 if (draftOrigin != origin) {
@@ -1462,6 +1562,7 @@ class MainActivity : ComponentActivity() {
                     return true
                 }
                 // The recording belongs to the previous reading/entry; re-resolve it.
+                cardInvalidated = true
                 audioController.clear(AudioItem.VOCABULARY)
                 audioSnapshot = audioController.snapshot()
                 pitchAccentText = ""
@@ -1493,13 +1594,13 @@ class MainActivity : ComponentActivity() {
                 }
                 readingCorrectionError = null
                 val corrected = SentenceReadings.normalizeReading(reading)
+                cardInvalidated = true
+                readingCorrections = SentenceReadings.correct(readingCorrections, editor.text, span, corrected)
                 if (span == target) {
                     if (sentenceReading == corrected) return true
                     sentenceReading = corrected
-                } else {
-                    readingCorrections = SentenceReadings.correct(readingCorrections, editor.text, span, corrected)
                 }
-                // Any sentence-reading change invalidates the sentence recording and its hints.
+                // A sentence-reading change invalidates sentence speech and its hints.
                 audioController.clear(AudioItem.SENTENCE)
                 audioSnapshot = audioController.snapshot()
                 return true
@@ -1719,11 +1820,9 @@ class MainActivity : ComponentActivity() {
                     audioConfigErrors.containsKey(item) && audioSettingsRequired(item) -> openSettings()
                     audioConfigErrors.containsKey(item) -> {
                         audioConfigErrors = audioConfigErrors - item
-                        generationStarted = false
                         route = AppRoute.Target
                     }
                     (audioSnapshot.items[item] as? DraftAudioState.Failed)?.retryable == false -> {
-                        generationStarted = false
                         route = AppRoute.Target
                     }
                     else -> {
@@ -1743,34 +1842,25 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // Inputs are declared when preparation or Review is visible. Automatic work is
-            // separately authorized by the explicit Continue transition below.
+            // Inputs are cheap to declare. Provider work is started only by the matching
+            // sentence-commit or word-selection authorization token.
             androidx.compose.runtime.LaunchedEffect(
-                route, submissionLocked, audioInputRevision,
+                route, submissionLocked, audioInputRevision, reviewAuthorizationSequence,
+                pendingSentenceAudioAuthorization, pendingWordAudioAuthorization,
                 currentSentenceIdentity.value, currentWordIdentity.value,
             ) {
-                // Declare both frozen-revision inputs on preparation and Review. This does no provider
-                // work; restore/revisit cannot authorize generation by itself.
                 if (submissionLocked) return@LaunchedEffect
 
-                val declaredAudioRevision = declaredReviewAudioRevision(
-                    pendingReviewAuthorization,
-                    reviewAuthorizationSequence,
-                )
-                val sentenceText = editor.text.trim()
-                val selectedTarget = target
+                val declaredAudioRevision = reviewAuthorizationSequence
+                val sentenceText = editor.text
+                val requestHintSpans = sentenceHintSpans(sentenceText, japaneseTokens, readingCorrections)
+                val hintResult = ReadingHintBuilder.build(sentenceText, requestHintSpans)
                 val authoritativeCatalog = settingsScreenState.voiceCatalog.takeIf {
                     settingsScreenState.credentialStored && it.provenance == VoiceCatalogProvenance.AUTHORITATIVE
                 }
                 val voice = authoritativeCatalog?.voices?.firstOrNull { it.name == selectedVoiceName }
-                val hintResult = if (selectedTarget != null && selectedTarget.textIn(editor.text) != null) {
-                    ReadingHintBuilder.build(
-                        sentenceText,
-                        sentenceHintSpans(sentenceText, selectedTarget, sentenceReading, sentenceFurigana),
-                    )
-                } else null
 
-                if (selectedTarget != null && sentenceText.isNotEmpty() &&
+                if (sentenceText.isNotEmpty() &&
                     voice != null && hintResult is HintResult.Ready
                 ) {
                     audioConfigErrors = audioConfigErrors - AudioItem.SENTENCE
@@ -1800,7 +1890,7 @@ class MainActivity : ComponentActivity() {
                     // Configuration errors stay on the screen: they are not provider failures
                     // and must not be presented as retryable generation attempts.
                     val sentenceConfigError = when {
-                        sentenceText.isEmpty() || selectedTarget == null -> null
+                        sentenceText.isEmpty() -> null
                         voice == null -> when {
                             settingsScreenState.credentialUnreadable ->
                                 "The saved Google Cloud API key could not be opened. Re-enter it and choose a verified sentence voice in Settings."
@@ -1829,6 +1919,29 @@ class MainActivity : ComponentActivity() {
                         audioConfigErrors + (AudioItem.SENTENCE to sentenceConfigError)
                     }
                     audioController.clear(AudioItem.SENTENCE)
+                }
+
+                val sentenceAuthorization = pendingSentenceAudioAuthorization
+                if (sentenceAuthorization != null &&
+                    handledSentenceAudioAuthorization != sentenceAuthorization.revision
+                ) {
+                    val authorizationStillMatches = sentenceAuthorization.sentence == sentenceText &&
+                        sentenceAuthorization.voiceName == selectedVoiceName
+                    val sentenceHasKanji = sentenceText.any { containsKanji(it.toString()) }
+                    val waitingForAnalysis = sentenceHasKanji &&
+                        (analyzerLoading || tokenizationLoading || (!analyzerReady && analyzerError == null))
+                    val waitingForVoiceCatalog = voice == null && settingsScreenState.loading
+                    if (!authorizationStillMatches) {
+                        handledSentenceAudioAuthorization = sentenceAuthorization.revision
+                        pendingSentenceAudioAuthorization = null
+                    } else if (!waitingForAnalysis && !waitingForVoiceCatalog) {
+                        handledSentenceAudioAuthorization = sentenceAuthorization.revision
+                        pendingSentenceAudioAuthorization = null
+                        if (voice != null && hintResult is HintResult.Ready) {
+                            runAudioAttempt(audioController.confirm(AudioItem.SENTENCE))
+                            audioSnapshot = audioController.snapshot()
+                        }
+                    }
                 }
 
                 val entryId = selectedDictionaryEntryId
@@ -1875,26 +1988,19 @@ class MainActivity : ComponentActivity() {
                         ),
                     )
                 }
-                audioSnapshot = audioController.snapshot()
-            }
 
-            androidx.compose.runtime.LaunchedEffect(route, pendingReviewAuthorization, submissionLocked) {
-                val revision = pendingReviewAuthorization ?: return@LaunchedEffect
-                if (route != AppRoute.Review || submissionLocked) return@LaunchedEffect
-                androidx.compose.runtime.withFrameNanos { }
-                if (route != AppRoute.Review || submissionLocked || pendingReviewAuthorization != revision) {
-                    return@LaunchedEffect
+                val wordAuthorization = pendingWordAudioAuthorization
+                if (wordAuthorization != null && handledWordAudioAuthorization != wordAuthorization.revision) {
+                    if (target != wordAuthorization.target) {
+                        handledWordAudioAuthorization = wordAuthorization.revision
+                        pendingWordAudioAuthorization = null
+                    } else if (entry != null && vocabulary.isNotBlank()) {
+                        handledWordAudioAuthorization = wordAuthorization.revision
+                        pendingWordAudioAuthorization = null
+                        runAudioAttempt(audioController.confirm(AudioItem.VOCABULARY))
+                        audioSnapshot = audioController.snapshot()
+                    }
                 }
-                pendingReviewAuthorization = null
-                val attempts = reviewAudioCoordinator.onReviewEntry(
-                    revision,
-                    ReviewAudioEntryCause.EXPLICIT_CONTINUE,
-                )
-                Log.i(
-                    "DraftAudio",
-                    "Review entry revision=$revision audioAttempts=${attempts.joinToString(",") { it.input.item.name }}",
-                )
-                attempts.forEach(::runAudioAttempt)
                 audioSnapshot = audioController.snapshot()
             }
 
@@ -2033,7 +2139,7 @@ class MainActivity : ComponentActivity() {
                 if (incoming != null) {
                     if (editor.text.isBlank()) {
                         captureMode = "Type"
-                        route = AppRoute.Target
+                        route = AppRoute.Capture
                         if (photoSourcePath == null) setDraftOrigin("Type")
                         replaceEditorText(incoming, true)
                         selectTarget(null)
@@ -2867,14 +2973,37 @@ class MainActivity : ComponentActivity() {
                 )
             } ?: true
             val sendImageReady = if (frozenRetryReady) frozenReceiptReady else imageReady
+            val translationReady = activeTranslationResult() is TranslationResult.Ready &&
+                !translationDraft.stale && translationDraft.sentence == editor.text
+            val cardPreparationReady = committedSentence == editor.text && translationReady &&
+                !dependentFieldsStale && sentenceAudioReady && wordAudioReady && pitch != null &&
+                imageReady && !imagePending && validationErrors.isEmpty() &&
+                !dictionaryLoading && !dictionarySearchLoading
+            val cardNeedsUpdate = cardInvalidated ||
+                (target != null && (committedSentence != editor.text || !cardPreparationReady))
             val canSend = apiPermissionGranted && selectedModel != null && selectedDeck != null &&
                 (if (frozenRetryReady) effectiveFrozenFields != null else fieldsByName != null && validationErrors.isEmpty()) &&
                 effectiveMapping?.isValid == true && sendImageReady && frozenDestinationReady &&
+                (frozenRetryReady || (!cardNeedsUpdate && cardPreparationReady)) &&
                 (frozenRetryReady || pitch != null) &&
                 (frozenRetryReady || (sentenceAudioReady && wordAudioReady)) &&
                 (frozenRetryReady || (!dictionaryLoading && !dictionarySearchLoading)) &&
                 setupLoadedSuccessfully && !setupLoading && setupError == null && !recoveryRequired &&
                 !isSubmitting && !duplicateBlocked
+
+            fun updateCard() {
+                if (!cardNeedsUpdate || submissionLocked || committedSentence != editor.text) return
+                val attempts = buildList {
+                    if (!sentenceAudioReady) audioController.confirm(AudioItem.SENTENCE)?.let(::add)
+                    if (!wordAudioReady) audioController.confirm(AudioItem.VOCABULARY)?.let(::add)
+                }
+                attempts.forEach(::runAudioAttempt)
+                audioSnapshot = audioController.snapshot()
+                if (attempts.isEmpty() && cardPreparationReady) {
+                    cardInvalidated = false
+                    preferences.edit().putBoolean("card_invalidated", false).apply()
+                }
+            }
 
             val applyFrozenSubmissionToDraft: (FrozenSubmission) -> Unit = { snapshot ->
                 replaceEditorText(snapshot.sentence, true)
@@ -3102,6 +3231,7 @@ class MainActivity : ComponentActivity() {
                 editor.text, editor.selection, target, vocabulary, vocabularyReading, pitchAccentText, pitchHtmlText, definition,
                 sentenceReading, readingCorrections, definitionManuallyEdited, dependentFieldsStale, translationDraft,
                 translationAttemptedSentence,
+                cardInvalidated,
                 notes, tags, selectedModelId, selectedDeckId, selectedDictionaryEntryId, selectedSenseIndices, completedSubmission,
             ) {
                 if (completedSubmission != null) return@LaunchedEffect
@@ -3143,6 +3273,7 @@ class MainActivity : ComponentActivity() {
                         (translationDraft.suggestion as? TranslationResult.Failed)?.message,
                     )
                     .putString("translation_attempted_sentence", translationAttemptedSentence)
+                    .putBoolean("card_invalidated", cardInvalidated)
                     .putString("notes", notes)
                     .putString("tags", tags)
                     .putLong("model_id", selectedModelId ?: -1)
@@ -3295,7 +3426,6 @@ class MainActivity : ComponentActivity() {
                     showDictionarySheet -> dismissDictionarySheet()
                     showOcrSheet -> showOcrSheet = false
                     route == AppRoute.Review -> {
-                        generationStarted = false
                         route = AppRoute.Target
                     }
                     route == AppRoute.Target -> route = AppRoute.Capture
@@ -3336,7 +3466,7 @@ class MainActivity : ComponentActivity() {
                             },
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                             onBack = if (navigationLocked) null else when (visibleRoute) {
-                                AppRoute.Review -> ({ generationStarted = false; route = AppRoute.Target })
+                                AppRoute.Review -> ({ route = AppRoute.Target })
                                 AppRoute.Target -> ({ route = AppRoute.Capture })
                                 AppRoute.Capture -> null
                             },
@@ -3374,6 +3504,8 @@ class MainActivity : ComponentActivity() {
                             if (updated.text != editor.text) {
                                 if (photoSourcePath == null) setDraftOrigin("Type")
                                 draftGeneration++
+                                cardInvalidated = true
+                                generationStarted = false
                                 updateTranslationSentence(updated.text)
                                 if (hasManualDefinition) dependentFieldsStale = true
                                 selectTarget(null)
@@ -3457,14 +3589,16 @@ class MainActivity : ComponentActivity() {
                         val submitHintAction: (() -> Unit) = when {
                             translationNeedsSettings -> ({ openSettings() })
                             reviewTranslationError != null -> ({
-                                translationAutoAllowed = true
-                                translationRetry++
+                                if (committedSentence == editor.text) {
+                                    generationStarted = true
+                                    translationAutoAllowed = true
+                                    translationRetry++
+                                }
                             })
                             !sentenceAudioReady -> ({ onAudioAction(AudioItem.SENTENCE) })
                             !wordAudioReady -> ({ onAudioAction(AudioItem.VOCABULARY) })
                             !apiPermissionGranted || selectedModel == null || selectedDeck == null || setupError != null -> ({ openSettings() })
                             else -> ({
-                                generationStarted = false
                                 route = AppRoute.Target
                             })
                         }
@@ -3507,7 +3641,9 @@ class MainActivity : ComponentActivity() {
                                 },
                                 editor = editor,
                                 onEditorChange = updateEditor,
-                                onContinue = { route = AppRoute.Target },
+                                onContinue = {
+                                    if (commitSentence() && !submissionLocked) route = AppRoute.Target
+                                },
                                 onOpenGallery = {
                                     photoPicker.launch(
                                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
@@ -3568,7 +3704,10 @@ class MainActivity : ComponentActivity() {
                                     selectTarget(span)
                                     editor = editor.copy(selection = TextRange(span.start, span.end))
                                 },
-                                onEditSentence = { showSentenceEditor = true },
+                                onEditSentence = {
+                                    sentenceEditorDraft = editor
+                                    showSentenceEditor = true
+                                },
                                 entryLabel = selectedDictionaryEntry?.expression ?: vocabulary.takeIf { it.isNotBlank() },
                                 entryDetail = selectedDictionaryEntry?.reading,
                                 entryCount = dictionaryEntries.size,
@@ -3578,8 +3717,9 @@ class MainActivity : ComponentActivity() {
                                     ?: emptyList(),
                                 selectedSenses = selectedSenseIndices,
                                 onToggleSense = { index, checked ->
-                                    if (!submissionLocked) {
-                                        val newSelection = if (checked) {
+                                if (!submissionLocked) {
+                                    cardInvalidated = true
+                                    val newSelection = if (checked) {
                                             selectedSenseIndices + index
                                         } else {
                                             selectedSenseIndices - index
@@ -3652,8 +3792,11 @@ class MainActivity : ComponentActivity() {
                                     }
                                 },
                                 onRetryTranslation = {
-                                    translationAutoAllowed = true
-                                    translationRetry++
+                                    if (committedSentence == editor.text) {
+                                        generationStarted = true
+                                        translationAutoAllowed = true
+                                        translationRetry++
+                                    }
                                 },
                                 pitchAlternatives = pitchCandidates.map(AjtPitchRecord::accent),
                                 selectedPitchAccent = pitchAccentText.toIntOrNull(),
@@ -3690,8 +3833,11 @@ class MainActivity : ComponentActivity() {
                                         translationStale = translationDraft.manuallyEdited && translationDraft.stale,
                                         editingEnabled = !submissionLocked && completedSubmission == null,
                                         onRetryTranslation = {
-                                            translationAutoAllowed = true
-                                            translationRetry++
+                                            if (committedSentence == editor.text) {
+                                                generationStarted = true
+                                                translationAutoAllowed = true
+                                                translationRetry++
+                                            }
                                         },
                                         onOpenSettings = { openSettings() },
                                         sentenceAudio = sentenceAudio.presentation(audioActionLabel(AudioItem.SENTENCE)),
@@ -3732,7 +3878,6 @@ class MainActivity : ComponentActivity() {
                                         onTogglePitchInfo = { pitchInfoExpanded = !pitchInfoExpanded },
                                         onEdit = {
                                             if (!submissionLocked) {
-                                                generationStarted = false
                                                 route = AppRoute.Target
                                             }
                                         },
@@ -3757,7 +3902,12 @@ class MainActivity : ComponentActivity() {
                                             )
                                             else -> ReviewSendPresentation.Ready
                                         },
-                                        onSend = if (canSend && completedSubmission == null && !duplicateBlocked &&
+                                        primaryActionLabel = if (cardNeedsUpdate && !frozenRetryReady) "Update card" else "Send to AnkiDroid",
+                                        onSend = if (cardNeedsUpdate && !frozenRetryReady && committedSentence == editor.text &&
+                                            completedSubmission == null && !duplicateBlocked
+                                        ) {
+                                            ({ updateCard() })
+                                        } else if (canSend && completedSubmission == null && !duplicateBlocked &&
                                             submitMessage?.startsWith("Blocked:") != true
                                         ) {
                                             ({ submitAction() })
@@ -3780,7 +3930,10 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         if (showSentenceEditor) {
-                            ModalBottomSheet(onDismissRequest = { showSentenceEditor = false }) {
+                            ModalBottomSheet(onDismissRequest = {
+                                sentenceEditorDraft = null
+                                showSentenceEditor = false
+                            }) {
                                 Column(
                                     Modifier.fillMaxWidth().heightIn(max = 620.dp).verticalScroll(rememberScrollState())
                                         .padding(horizontal = 24.dp, vertical = 8.dp),
@@ -3788,8 +3941,8 @@ class MainActivity : ComponentActivity() {
                                 ) {
                                     Text("Edit sentence", style = MaterialTheme.typography.titleLarge)
                                     OutlinedTextField(
-                                        value = editor,
-                                        onValueChange = updateEditor,
+                                        value = sentenceEditorDraft ?: editor,
+                                        onValueChange = { sentenceEditorDraft = it },
                                         modifier = Modifier.fillMaxWidth(),
                                         label = { Text("Japanese sentence") },
                                         minLines = 3,
@@ -3800,21 +3953,36 @@ class MainActivity : ComponentActivity() {
                                     )
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         OutlinedButton(
-                                            enabled = editor.selection.start != editor.selection.end,
+                                            enabled = (sentenceEditorDraft ?: editor).let {
+                                                it.selection.start != it.selection.end
+                                            },
                                             onClick = {
-                                                selectTarget(
-                                                    TargetSpan.fromSelection(
-                                                        editor.text,
-                                                        editor.selection.start,
-                                                        editor.selection.end,
-                                                    ),
+                                                val edited = sentenceEditorDraft ?: editor
+                                                val selected = TargetSpan.fromSelection(
+                                                    edited.text,
+                                                    edited.selection.start,
+                                                    edited.selection.end,
                                                 )
-                                                showSentenceEditor = false
+                                                updateEditor(edited)
+                                                if (commitSentence(edited.text)) {
+                                                    selectTarget(
+                                                        selected,
+                                                    )
+                                                    sentenceEditorDraft = null
+                                                    showSentenceEditor = false
+                                                }
                                             },
                                             modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                                         ) { Text("Use selection as target") }
                                         Button(
-                                            onClick = { showSentenceEditor = false },
+                                            onClick = {
+                                                val edited = sentenceEditorDraft ?: editor
+                                                updateEditor(edited)
+                                                if (commitSentence(edited.text)) {
+                                                    sentenceEditorDraft = null
+                                                    showSentenceEditor = false
+                                                }
+                                            },
                                             modifier = Modifier.heightIn(min = 48.dp),
                                         ) { Text("Done") }
                                     }

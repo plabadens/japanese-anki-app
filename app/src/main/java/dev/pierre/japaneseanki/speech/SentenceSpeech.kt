@@ -1,6 +1,9 @@
 package dev.pierre.japaneseanki.speech
 
 import dev.pierre.japaneseanki.FuriganaSpan
+import dev.pierre.japaneseanki.JapaneseToken
+import dev.pierre.japaneseanki.ReadingCorrection
+import dev.pierre.japaneseanki.SentenceReadings
 import dev.pierre.japaneseanki.TargetSpan
 import dev.pierre.japaneseanki.containsKanji
 import java.security.MessageDigest
@@ -38,6 +41,54 @@ fun sentenceHintSpans(
     if (containsKanji(targetSurface)) {
         add(ReadingHintSpan(target.start, target.end, targetSurface, targetReading))
     }
+}
+
+/**
+ * Reading hints for the committed sentence, independent of which word is selected. Every kanji
+ * token is represented, including unresolved readings, so [ReadingHintBuilder] can block rather
+ * than silently sending a request without required hints. Corrections replace overlapping token
+ * spans; ordinary word selection does not change this list.
+ */
+internal fun sentenceHintSpans(
+    sentence: String,
+    tokens: List<JapaneseToken>,
+    corrections: List<ReadingCorrection>,
+): List<ReadingHintSpan> {
+    val usableCorrections = corrections.mapNotNull { correction ->
+        val surface = correction.span.textIn(sentence) ?: return@mapNotNull null
+        if (surface != correction.surface || SentenceReadings.rejection(sentence, correction.span, correction.reading) != null) {
+            return@mapNotNull null
+        }
+        ReadingHintSpan(correction.span.start, correction.span.end, surface, correction.reading)
+    }
+    val spans = buildList {
+        tokens.forEach { token ->
+            val surface = token.span.textIn(sentence) ?: return@forEach
+            if (surface != token.surface || !containsKanji(surface)) return@forEach
+            if (usableCorrections.any { it.start < token.span.end && it.end > token.span.start }) return@forEach
+            add(ReadingHintSpan(token.span.start, token.span.end, surface, token.surfaceReading))
+        }
+        addAll(usableCorrections)
+    }.sortedBy(ReadingHintSpan::start)
+
+    val covered = BooleanArray(sentence.length)
+    spans.forEach { span ->
+        for (offset in span.start.coerceAtLeast(0) until span.end.coerceAtMost(sentence.length)) {
+            covered[offset] = true
+        }
+    }
+    val unresolved = mutableListOf<ReadingHintSpan>()
+    var offset = 0
+    while (offset < sentence.length) {
+        if (covered[offset] || !containsKanji(sentence[offset].toString())) {
+            offset++
+            continue
+        }
+        val start = offset
+        while (offset < sentence.length && !covered[offset] && containsKanji(sentence[offset].toString())) offset++
+        unresolved += ReadingHintSpan(start, offset, sentence.substring(start, offset), "")
+    }
+    return (spans + unresolved).sortedBy(ReadingHintSpan::start)
 }
 
 /**
