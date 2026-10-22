@@ -30,3 +30,18 @@ Contract: `2c473ed7426850f86ef17bf9c93f69cb21b873ef` is an ancestor of both the 
 - NOT RUN — first-run distribution asset/license clearance. AJT metadata correctly retains unresolved third-party data rights; no licensing or publication claim is made.
 
 No acceptance claim is based on a fixture as live-provider quality. Native gaps remain explicit; this is not an unconditional release approval. Target A is the approved production direction; the B alternative remains prototype-only. No implementation changes were made in this acceptance task.
+
+## Local merge-train revalidation
+
+The original native-test narrative above mischaracterizes the XML scope. Use the raw test cases, not the earlier summary. The final merged source tree at `4f7aae8` was independently revalidated by the local merge-train worker; this section supersedes the earlier native-test count/scope claims for the merged tree.
+
+- PASS — `:app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:compileDebugAndroidTestKotlin`; Gradle `BUILD SUCCESSFUL`. XML aggregation: 41 JVM suites/files, 318 tests, 0 failures/errors/skips. Lint completed with 46 warnings and 19 hints; no lint errors.
+- PASS — `bash scripts/test-core.sh`: JUnit `OK (184 tests)`, exit 0. Jansi printed the known `/tmp` noexec native-library warning; it did not affect the test result.
+- PASS — AJT builder and bundled-asset regressions: `scripts/test-build-ajt-pitch.py` and `scripts/test-ajt-pitch-asset.py` both passed.
+- PASS — `:app:connectedDebugAndroidTest` on the single API-37 x86_64 AVD `emulator-5560`: 29 tests, 0 failures/errors/skips across `AjtPitchRepositoryAndroidTest` (7), `AndroidPlatformSmokeTest` (3), `AssetPolicyAndroidTest` (2), `DraftAudioPlaybackTest` (2), `ImageExportInstrumentedTest` (5), `OfflineDictionaryAndroidTest` (7), and `ui.InputScreenLayoutTest` (3). Raw XML: `app/build/outputs/androidTest-results/connected/debug/TEST-emulator-5560 - 17-_app-.xml`.
+- PASS — the native XML includes `InputScreenLayoutTest.cameraViewportAndControlBoundsStayFixedAndBothModesShareTheSelector`, `liveCameraPreviewMatchesItsViewportAndShutterSavesAnImage`, and `shutterComposableKeepsItsRealBoundsAcrossReadyAndErrorStates`; the bundled offline Japanese OCR and NHK headword lookup tests also passed. This is actual camera preview/shutter and offline-fixture evidence, not merely a pitch-only run.
+- PASS — split APK inspection: arm64-v8a `125,919,054` bytes with five native libraries under only `lib/arm64-v8a/`; x86_64 `126,492,495` bytes with five under only `lib/x86_64/`. The x86_64 APK contains the 36,971,461-byte NHK index (SHA-256 `9d9714b79c15ae6586d053665bf6cd0b881fcd56ed42ed3b4d758ea0499f1137`) and the bundled dictionary; it does not contain the UniDic runtime ZIP. The APK is not resource-free.
+- NOT RUN — integrated OCR/dictionary chooser/dismissal/reopen flows, photo-picker selection, AnkiDroid provider import/chooser (`com.ichi2.anki` is absent), or live Google/paid requests. Those remain residual acceptance gaps.
+- BLOCKED — the exact UniDic release URL in `UniDicResourceCatalog` returned HTTP 404 when checked. Hash/length/archive behavior is covered by local fake-transport tests, not a successful public first-run download. Cancel/resume and Wi-Fi/mobile-data consent onboarding remain unimplemented. AJT data licensing and NHK recording rights remain unresolved; this is not unconditional release approval.
+
+The merge-train AVD was stopped after this run; the dedicated ADB server reported no attached devices afterward.
