@@ -6,6 +6,8 @@ This document supersedes conflicting workflow/UI/resource rules in SPEC.md. Pres
 
 ## Settled behavior
 
+Latest user decisions: production Target is **A, hero sentence with compact Material word pills**; B remains a prototype only. **Google Play Services-managed Japanese ML Kit model download without an app-pinned model hash is explicitly approved.** This OCR-only exception supersedes strict model-hash wording below; all app-managed datasets remain build-hash-verified and no model payload belongs in the release APK. Onboarding must wait for usable OCR, handle download/check failures and retries honestly, and verify offline recognition after delivery. Use indeterminate progress if the API cannot expose bytes. No recognition-backend change, privacy/telemetry waiver, push or publication is authorized. Remove prototype debug text from production.
+
 ### Capture
 
 Use a full-width uncropped orientation-correct 4:3 sensor view (upright portrait viewport 3:4). No synthetic black masks, inset card frame or corner clipping. Ordinary chrome/extra space below is acceptable. A Pixel-camera-inspired bottom Camera/Type toggle is welcome; do not copy zoom/camera-switch features that are not required. Preview position and dimensions must remain identical through shutter idle/pending/error and background processing states. Keep all transient feedback in reserved/overlay slots. Fixed shutter slot; all sibling capture actions honor operation locks. Capture save errors must retain safe diagnostics and clean partials.
