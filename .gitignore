@@ -31,6 +31,7 @@ mockup/expressive-flow/evidence/*/screens/
 
 # Run artifacts and archives: duplicates of tracked content, or raw logs that
 # belong on a release/issue instead of in the tree.
+dist/
 *.zip
 *.tap
 **/boot-logcat.txt
