@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,7 +13,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -33,9 +39,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
@@ -44,8 +52,8 @@ import java.io.File
 
 /**
  * Input view of the portrait composition: an uncropped 4:3-sensor preview shown upright in a 3:4
- * viewport, with Gallery / shutter / Type controls. Landscape photographs remain inside this
- * portrait composition; the app never becomes a landscape layout.
+ * viewport, with a Gallery/shutter row and a connected Camera/Type selector below it. Landscape
+ * photographs remain inside this portrait composition; the app never becomes a landscape layout.
  */
 @Composable
 internal fun InputScreen(
@@ -86,17 +94,18 @@ internal fun InputScreen(
     val captureOperationGate = remember { CaptureOperationGate() }
     val actionsEnabled = captureActionsEnabled(enabled, captureInProgress || captureOperationGate.isActive)
 
-    Column(modifier.fillMaxSize()) {
-        if (captureMode == "Photo") {
-            // Feedback must remain an overlay. Previously variable rows below the weighted camera
-            // changed PreviewView's bounds and transform; CameraX's lifecycle binding itself stayed
-            // bound, so the risk was a surface resize/reconfiguration rather than unbind/rebind.
-            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-                val previewSize = cameraPreviewSizeDp(maxWidth.value, maxHeight.value)
+    if (captureMode == "Photo") {
+        Column(modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            // A full-width upright 3:4 viewport is a design constraint, not something to shrink
+            // when a short screen or large text leaves less room for chrome. The page scrolls.
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val previewSize = cameraPreviewSizeDp(maxWidth.value)
                 Box(
                     modifier = Modifier
-                        .size(width = previewSize.width.dp, height = previewSize.height.dp)
-                        .align(Alignment.Center),
+                        .width(previewSize.width.dp)
+                        .height(previewSize.height.dp)
+                        .align(Alignment.TopCenter)
+                        .testTag("camera-preview-viewport"),
                 ) {
                     PhotoPane(
                         modifier = Modifier.fillMaxSize(),
@@ -104,23 +113,23 @@ internal fun InputScreen(
                         controller = cameraController,
                         operationGate = captureOperationGate,
                     )
+                    InputStatusPanel(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        enabled = actionsEnabled,
+                        operationGate = captureOperationGate,
+                        cameraError = cameraError,
+                        ocrLoading = ocrLoading,
+                        ocrError = ocrError,
+                        onRetryOcr = onRetryOcr,
+                        ocrChoicesAvailable = ocrChoicesAvailable,
+                        onReopenOcrChooser = onReopenOcrChooser,
+                        imageStatus = imageStatus,
+                        imageFailed = imageFailed,
+                        onRetryImage = onRetryImage,
+                    )
                 }
-                InputStatusPanel(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    enabled = actionsEnabled,
-                    operationGate = captureOperationGate,
-                    cameraError = cameraError,
-                    ocrLoading = ocrLoading,
-                    ocrError = ocrError,
-                    onRetryOcr = onRetryOcr,
-                    ocrChoicesAvailable = ocrChoicesAvailable,
-                    onReopenOcrChooser = onReopenOcrChooser,
-                    imageStatus = imageStatus,
-                    imageFailed = imageFailed,
-                    onRetryImage = onRetryImage,
-                )
             }
             CaptureRow(
                 enabled = actionsEnabled,
@@ -128,7 +137,6 @@ internal fun InputScreen(
                 controller = cameraController,
                 onRequestCamera = onRequestCamera,
                 onOpenGallery = onOpenGallery,
-                onType = { onCaptureModeChange("Type") },
                 onCaptured = onCaptured,
                 onCameraError = onCameraError,
                 onCaptureStateChanged = { inProgress ->
@@ -141,25 +149,28 @@ internal fun InputScreen(
                     .fillMaxWidth()
                     .height(CAMERA_CONTROL_ROW_HEIGHT_DP.dp),
             )
-        } else {
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
+            CaptureModeSelector(
+                captureMode = captureMode,
+                onCaptureModeChange = onCaptureModeChange,
+                enabled = actionsEnabled && !captureOperationGate.isActive,
+                modifier = Modifier.padding(vertical = 8.dp),
+            )
+            Spacer(Modifier.height(8.dp))
+        }
+    } else {
+        BoxWithConstraints(modifier.fillMaxSize()) {
+            val writingHeight = (maxHeight - 280.dp).coerceAtLeast(220.dp)
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                 WritingPane(
-                    modifier = Modifier.weight(1f).fillMaxWidth().padding(top = 8.dp),
+                    modifier = Modifier.fillMaxWidth().height(writingHeight).padding(horizontal = 16.dp).padding(top = 8.dp),
                     editor = editor,
                     onEditorChange = onEditorChange,
                     enabled = actionsEnabled,
                 )
-                // The slot stays measured even while empty, so attachment/OCR status never moves
-                // the editor or hides its text. The Photo preview uses the same content as overlay.
+                // Keep the attachment/OCR message slot stable; longer content scrolls within it.
                 Box(Modifier.fillMaxWidth().height(INPUT_STATUS_SLOT_HEIGHT_DP.dp)) {
                     InputStatusPanel(
-                        modifier = Modifier.align(Alignment.Center),
+                        modifier = Modifier.align(Alignment.Center).padding(horizontal = 16.dp),
                         enabled = actionsEnabled,
                         operationGate = captureOperationGate,
                         cameraError = null,
@@ -176,33 +187,112 @@ internal fun InputScreen(
                         },
                     )
                 }
-            }
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(
-                        enabled = actionsEnabled && !captureOperationGate.isActive,
-                        onClick = { if (!captureOperationGate.isActive) onChoosePhoto() },
-                    ) {
-                        Text(if (imageAttached) "Change photo" else "Add photo (optional)")
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(
+                            enabled = actionsEnabled && !captureOperationGate.isActive,
+                            onClick = { if (!captureOperationGate.isActive) onChoosePhoto() },
+                        ) {
+                            Text(if (imageAttached) "Change photo" else "Add photo (optional)")
+                        }
+                        Spacer(Modifier.weight(1f))
                     }
-                    Spacer(Modifier.weight(1f))
-                    TextButton(
-                        enabled = actionsEnabled && !captureOperationGate.isActive,
-                        onClick = { if (!captureOperationGate.isActive) onCaptureModeChange("Photo") },
-                    ) {
-                        Text("Photo")
-                    }
+                    FlowPrimaryButton(
+                        text = "Continue",
+                        onClick = { if (!captureOperationGate.isActive) onContinue() },
+                        enabled = actionsEnabled && !captureOperationGate.isActive && editor.text.isNotBlank(),
+                    )
                 }
-                FlowPrimaryButton(
-                    text = "Continue",
-                    onClick = { if (!captureOperationGate.isActive) onContinue() },
-                    enabled = actionsEnabled && !captureOperationGate.isActive && editor.text.isNotBlank(),
+                CaptureModeSelector(
+                    captureMode = captureMode,
+                    onCaptureModeChange = onCaptureModeChange,
+                    enabled = actionsEnabled && !captureOperationGate.isActive,
+                    modifier = Modifier.padding(vertical = 8.dp),
                 )
+                Spacer(Modifier.height(8.dp))
             }
         }
+    }
+}
+
+@Composable
+private fun CaptureModeSelector(
+    captureMode: String,
+    onCaptureModeChange: (String) -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .heightIn(min = INPUT_MODE_SELECTOR_MIN_HEIGHT_DP.dp)
+            .testTag("input-mode-selector"),
+        shape = RoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Row(
+            modifier = Modifier.selectableGroup().heightIn(min = INPUT_MODE_SELECTOR_MIN_HEIGHT_DP.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ModeSelectorOption(
+                label = "Camera",
+                tag = "input-mode-camera",
+                selected = captureMode == "Photo",
+                enabled = enabled,
+                modifier = Modifier.weight(1f),
+                onClick = { onCaptureModeChange("Photo") },
+            )
+            Box(
+                Modifier
+                    .width(1.dp)
+                    .heightIn(min = INPUT_MODE_SELECTOR_MIN_HEIGHT_DP.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant),
+            )
+            ModeSelectorOption(
+                label = "Type",
+                tag = "input-mode-type",
+                selected = captureMode == "Type",
+                enabled = enabled,
+                modifier = Modifier.weight(1f),
+                onClick = { onCaptureModeChange("Type") },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ModeSelectorOption(
+    label: String,
+    tag: String,
+    selected: Boolean,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = modifier
+            .heightIn(min = INPUT_MODE_SELECTOR_MIN_HEIGHT_DP.dp)
+            .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
+            .selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onClick)
+            .semantics {
+                stateDescription = if (selected) "Selected" else "Not selected"
+            }
+            .testTag(tag)
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            maxLines = 1,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 
@@ -381,7 +471,6 @@ private fun CaptureRow(
     controller: androidx.camera.view.LifecycleCameraController?,
     onRequestCamera: () -> Unit,
     onOpenGallery: () -> Unit,
-    onType: () -> Unit,
     onCaptured: (File) -> Unit,
     onCameraError: (String) -> Unit,
     onCaptureStateChanged: (Boolean) -> Unit,
@@ -390,47 +479,50 @@ private fun CaptureRow(
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = modifier.testTag("camera-controls-row").padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CaptureActionButton(
-            enabled = enabled,
-            operationGate = operationGate,
-            onClick = onOpenGallery,
-            contentDescription = "Choose a photo from this device",
-        ) { FlowIcons.Gallery(Modifier.size(24.dp)) }
-
-        if (controller != null) {
-            CameraShutterButton(
-                controller = controller,
-                enabled = enabled,
-                outputDirectory = outputDirectory,
-                onCaptured = onCaptured,
-                onError = onCameraError,
-                onCaptureStateChanged = onCaptureStateChanged,
-                captureFailed = captureFailed,
-                operationGate = operationGate,
-            )
-        } else {
-            FlowPrimaryButton(
-                text = "Camera",
-                onClick = { if (enabled && !operationGate.isActive) onRequestCamera() },
-                modifier = Modifier.size(width = 120.dp, height = 48.dp),
-                enabled = enabled && !operationGate.isActive,
-                showArrow = false,
-            )
-        }
-
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier.weight(1f).fillMaxHeight().testTag("camera-gallery-slot"),
+            contentAlignment = Alignment.CenterStart,
+        ) {
             CaptureActionButton(
                 enabled = enabled,
                 operationGate = operationGate,
-                onClick = onType,
-                contentDescription = "Type a sentence",
-            ) { FlowIcons.Keyboard(Modifier.size(24.dp)) }
-            Text("Type", style = MaterialTheme.typography.bodySmall)
+                onClick = onOpenGallery,
+                contentDescription = "Choose a photo from this device",
+                modifier = Modifier.testTag("camera-gallery-button"),
+            ) { FlowIcons.Gallery(Modifier.size(24.dp)) }
         }
+
+        Box(Modifier.testTag("camera-shutter-slot"), contentAlignment = Alignment.Center) {
+            if (controller != null) {
+                CameraShutterButton(
+                    controller = controller,
+                    enabled = enabled,
+                    outputDirectory = outputDirectory,
+                    onCaptured = onCaptured,
+                    onError = onCameraError,
+                    onCaptureStateChanged = onCaptureStateChanged,
+                    captureFailed = captureFailed,
+                    operationGate = operationGate,
+                    modifier = Modifier.testTag("camera-shutter"),
+                )
+            } else {
+                FlowPrimaryButton(
+                    text = "Camera",
+                    onClick = { if (enabled && !operationGate.isActive) onRequestCamera() },
+                    modifier = Modifier.size(width = 120.dp, height = 48.dp).testTag("camera-permission-action"),
+                    enabled = enabled && !operationGate.isActive,
+                    showArrow = false,
+                )
+            }
+        }
+
+        Box(
+            modifier = Modifier.weight(1f).fillMaxHeight().testTag("camera-type-slot"),
+            contentAlignment = Alignment.CenterEnd,
+        ) {}
     }
 }
 
@@ -440,12 +532,13 @@ private fun CaptureActionButton(
     operationGate: CaptureOperationGate,
     onClick: () -> Unit,
     contentDescription: String,
+    modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
     Surface(
         onClick = { if (enabled && !operationGate.isActive) onClick() },
         enabled = enabled && !operationGate.isActive,
-        modifier = Modifier.size(48.dp).semantics { this.contentDescription = contentDescription },
+        modifier = modifier.size(CAMERA_SIDE_SLOT_SIZE_DP.dp).semantics { this.contentDescription = contentDescription },
         shape = CircleShape,
         color = MaterialTheme.colorScheme.primaryContainer,
         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,

@@ -6,18 +6,18 @@ import java.util.concurrent.atomic.AtomicBoolean
 internal data class CameraPreviewSizeDp(val width: Float, val height: Float)
 
 /**
- * Fit the largest 3:4 preview inside the available pane. The preview is sized from pane constraints
- * only; transient status, capture and picker state must never participate in this calculation.
+ * The sensor viewport always uses the full available width. Short panes scroll their controls;
+ * they do not silently narrow the camera image to make the controls fit.
  */
-internal fun cameraPreviewSizeDp(availableWidth: Float, availableHeight: Float): CameraPreviewSizeDp {
+internal fun cameraPreviewSizeDp(availableWidth: Float): CameraPreviewSizeDp {
     require(availableWidth.isFinite() && availableWidth >= 0f) { "availableWidth must be finite and non-negative" }
-    require(availableHeight.isFinite() && availableHeight >= 0f) { "availableHeight must be finite and non-negative" }
-    val width = minOf(availableWidth, availableHeight * 3f / 4f)
-    return CameraPreviewSizeDp(width = width, height = width * 4f / 3f)
+    return CameraPreviewSizeDp(width = availableWidth, height = availableWidth * 4f / 3f)
 }
 
 internal const val CAMERA_CONTROL_ROW_HEIGHT_DP = 96
 internal const val CAMERA_SHUTTER_SIZE_DP = 80
+internal const val CAMERA_SIDE_SLOT_SIZE_DP = 48
+internal const val INPUT_MODE_SELECTOR_MIN_HEIGHT_DP = 48
 internal const val INPUT_STATUS_SLOT_HEIGHT_DP = 88
 internal const val INPUT_STATUS_OVERLAY_MAX_HEIGHT_DP = 112
 

@@ -82,7 +82,7 @@ internal fun CameraViewfinder(controller: LifecycleCameraController, modifier: M
     }
 }
 
-/** The circular shutter itself; the portrait capture triad places it beside Gallery and Type. */
+/** The fixed-size circular shutter; the capture row centers it between equal gallery-side slots. */
 @Composable
 internal fun CameraShutterButton(
     controller: LifecycleCameraController,
