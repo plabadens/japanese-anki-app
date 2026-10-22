@@ -1,0 +1,44 @@
+{
+  "source": "../round3/icon-a-foreground.svg",
+  "glyph_outline": "../round3/glyphs/hon-composed.svg",
+  "canvas_viewbox_px": [
+    512,
+    512
+  ],
+  "adaptive_canvas_dp": [
+    108,
+    108
+  ],
+  "adaptive_visible_mask_dp": 72,
+  "adaptive_safe_circle_diameter_dp": 66.0,
+  "scale_pivot_px": [
+    256,
+    256
+  ],
+  "scale_formula": "min(safe_circle_radius_source_px / critical_junction_radius_px, maximum_uniform_scale_to_keep_source_mark_bounds_inside_512px_viewport)",
+  "critical_junction": "overlap of top horizontal stroke and central vertical stem",
+  "critical_junction_bounds_px": [
+    248.90151734602213,
+    151.40342675075908,
+    288.9977591233078,
+    189.7825907645978
+  ],
+  "critical_junction_radius_px": 109.67814386943127,
+  "safe_circle_radius_in_source_px": 156.44444444444446,
+  "safe_circle_max_scale": 1.4263958061752682,
+  "source_mark_bounds_px": [
+    49.999999999999986,
+    90.39008377338075,
+    422.0,
+    464.00000000000006
+  ],
+  "viewport_fit_max_scale": 1.2307692307692304,
+  "scale_limiter": "108dp viewport extent",
+  "whole_mark_scale": 1.2307692307692304,
+  "junction_radius_after_scale_dp": 28.47413350456388,
+  "palette": {
+    "foreground": "#9C3329",
+    "background": "#FFF8F5"
+  },
+  "transformation": "uniform scale about canvas centre; no recentering or relative glyph/disc change"
+}
