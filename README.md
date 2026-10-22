@@ -33,7 +33,12 @@ across rebuilds, and no reproducibility claim is made. The primary supported
 workflow remains Gradle inside `nix develop`, which writes separate
 `app-arm64-v8a-debug.apk` and `app-x86_64-debug.apk` files under
 `app/build/outputs/apk/debug/`. Use x86_64 for the emulator and arm64-v8a for
-physical devices; there is no universal APK.
+physical devices; there is no universal APK. To install on a physical device, set
+`ANDROID_SERIAL` to that phone's serial and use the explicit arm64 path:
+
+```sh
+adb -s "$ANDROID_SERIAL" install -r app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
+```
 
 The sandbox build has no keystore configured, so `.#debugApk` signs with a throwaway
 debug key and cannot replace an existing install; for an update-compatible APK use
