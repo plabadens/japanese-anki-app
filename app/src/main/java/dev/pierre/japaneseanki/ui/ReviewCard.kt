@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -32,6 +31,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -76,6 +76,14 @@ internal sealed interface ReviewSendPresentation {
     data class Status(val message: String, val actionLabel: String? = null) : ReviewSendPresentation
 }
 
+internal enum class ReviewStatusRole { Information, Warning, Error }
+
+internal data class ReviewStatusPresentation(
+    val headline: String,
+    val role: ReviewStatusRole,
+    val actionLabel: String? = null,
+)
+
 /** Presentation-only state supplied by the owner of sentence and vocabulary audio requests. */
 internal sealed interface ReviewAudioPresentation {
     data object Unavailable : ReviewAudioPresentation
@@ -83,6 +91,7 @@ internal sealed interface ReviewAudioPresentation {
     data object Ready : ReviewAudioPresentation
     data object Playing : ReviewAudioPresentation
     data object Generating : ReviewAudioPresentation
+    data class Advisory(val headline: String, val message: String, val actionLabel: String) : ReviewAudioPresentation
     data class Failed(val message: String) : ReviewAudioPresentation
 }
 
@@ -91,7 +100,8 @@ internal fun reviewAudioControlLabel(field: String, audio: ReviewAudioPresentati
     ReviewAudioPresentation.Ready -> "Play $field audio"
     ReviewAudioPresentation.Playing -> "Stop $field audio"
     ReviewAudioPresentation.Generating -> "Generating $field audio"
-    is ReviewAudioPresentation.Failed -> "Explain unavailable $field audio"
+    is ReviewAudioPresentation.Advisory -> "${audio.actionLabel} for $field audio"
+    is ReviewAudioPresentation.Failed -> "Retry $field audio"
 }
 
 internal fun reviewAudioSendBlocker(field: String, audio: ReviewAudioPresentation): String? = when (audio) {
@@ -101,14 +111,23 @@ internal fun reviewAudioSendBlocker(field: String, audio: ReviewAudioPresentatio
         "$field audio has not been generated. Tap the speaker control to generate it."
     ReviewAudioPresentation.Unavailable ->
         "$field audio is unavailable. Tap the speaker control to check what is needed."
+    is ReviewAudioPresentation.Advisory -> "${audio.headline}: ${audio.message}"
     is ReviewAudioPresentation.Failed -> audio.message
 }
 
 internal fun reviewAudioGenerationFailureMessage(field: String, detail: String): String =
-    "$field audio generation failed: ${detail.ifBlank { "No diagnostic details are available." }}"
+    "$field audio not generated: ${detail.ifBlank { "No diagnostic details are available." }.substringBefore(" Tap Retry").trim().trimEnd('.')}"
 
 internal fun reviewAudioPlaybackFailureMessage(field: String): String =
-    "$field audio could not be played on this device. Tap Retry to try again."
+    "$field audio could not be played on this device"
+
+internal fun reviewTranslationFailureStatus(message: String): ReviewStatusPresentation = when {
+    message.contains("Google Cloud API key", ignoreCase = true) || message.contains("credential", ignoreCase = true) ->
+        ReviewStatusPresentation("Translation setup needed", ReviewStatusRole.Information)
+    message.contains("interrupted", ignoreCase = true) ->
+        ReviewStatusPresentation("Translation interrupted", ReviewStatusRole.Error)
+    else -> ReviewStatusPresentation("Translation failed", ReviewStatusRole.Error)
+}
 
 internal enum class ReviewEditableField { Notes, Tags }
 
@@ -130,9 +149,6 @@ internal class ReviewFieldCallbacks(
 
 internal const val ReviewPreparationActionLabel = "Edit preparation"
 internal val ReviewAudioControlSize = 56.dp
-
-internal fun reviewTranslationProgressLabel(pending: Boolean): String? =
-    if (pending) "Translating…" else null
 
 /** Height of the Review context photo slot in the portrait composition. */
 internal val ReviewPhotoHeight = 144.dp
@@ -200,6 +216,7 @@ internal fun ReviewCard(
     translationError: String? = null,
     translationStale: Boolean = false,
     onRetryTranslation: (() -> Unit)? = null,
+    onOpenSettings: (() -> Unit)? = null,
     sentenceAudio: ReviewAudioPresentation = ReviewAudioPresentation.Unavailable,
     vocabularyAudio: ReviewAudioPresentation = ReviewAudioPresentation.Unavailable,
     onToggleSentenceAudio: (() -> Unit)? = null,
@@ -214,6 +231,9 @@ internal fun ReviewCard(
     sendStatusContent: @Composable () -> Unit = {},
     imageFocalY: Float = 0.5f,
     sendHint: String? = null,
+    sendHintActionLabel: String? = null,
+    sendHintRole: ReviewStatusRole = ReviewStatusRole.Warning,
+    onSendHintAction: (() -> Unit)? = null,
     // Deprecated caller inputs retained temporarily so this component branch remains buildable
     // before MainActivity's integration-owned call-site cleanup. None expose Review controls.
     generatingFields: Set<String> = emptySet(),
@@ -252,6 +272,31 @@ internal fun ReviewCard(
     val fieldCallbacks = remember(onNotesChange, onTagsChange) {
         ReviewFieldCallbacks(onNotesChange, onTagsChange)
     }
+    val preSendStatusAndAction = when {
+        sentenceAudio is ReviewAudioPresentation.Advisory ->
+            ReviewStatusPresentation(sentenceAudio.headline, ReviewStatusRole.Information, sentenceAudio.actionLabel) to onRetrySentenceAudio
+        vocabularyAudio is ReviewAudioPresentation.Advisory ->
+            ReviewStatusPresentation(vocabularyAudio.headline, ReviewStatusRole.Information, vocabularyAudio.actionLabel) to onRetryVocabularyAudio
+        translationError != null && reviewTranslationFailureStatus(translationError).role == ReviewStatusRole.Information ->
+            reviewTranslationFailureStatus(translationError).copy(actionLabel = "Open Settings") to onOpenSettings
+        translationError != null ->
+            reviewTranslationFailureStatus(translationError).copy(actionLabel = "Retry") to onRetryTranslation
+        translationPending || "Translation" in generatingFields ->
+            ReviewStatusPresentation("Translation in progress", ReviewStatusRole.Information) to null
+        sentenceAudio is ReviewAudioPresentation.Failed ->
+            ReviewStatusPresentation(sentenceAudio.message, ReviewStatusRole.Error, sentenceAudioAction) to onRetrySentenceAudio
+        vocabularyAudio is ReviewAudioPresentation.Failed ->
+            ReviewStatusPresentation(vocabularyAudio.message, ReviewStatusRole.Error, vocabularyAudioAction) to onRetryVocabularyAudio
+        sentenceAudio == ReviewAudioPresentation.NeedsPreparation || sentenceAudio == ReviewAudioPresentation.Unavailable ->
+            ReviewStatusPresentation("Sentence audio is not ready", ReviewStatusRole.Warning, sentenceAudioAction) to onRetrySentenceAudio
+        vocabularyAudio == ReviewAudioPresentation.NeedsPreparation || vocabularyAudio == ReviewAudioPresentation.Unavailable ->
+            ReviewStatusPresentation("Word audio is not ready", ReviewStatusRole.Warning, vocabularyAudioAction) to onRetryVocabularyAudio
+        translationStale ->
+            ReviewStatusPresentation("Translation needs review", ReviewStatusRole.Warning, ReviewPreparationActionLabel) to onEdit
+        sendHint != null ->
+            ReviewStatusPresentation(sendHint, sendHintRole, sendHintActionLabel ?: ReviewPreparationActionLabel) to onSendHintAction
+        else -> null to null
+    }
 
     Column(Modifier.fillMaxSize()) {
         Column(
@@ -278,29 +323,29 @@ internal fun ReviewCard(
                 )
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                SentenceWithRuby(
-                    sentence = sentence,
-                    target = target,
-                    sentenceReading = sentenceReading,
-                    furigana = furigana,
-                    modifier = Modifier.weight(1f),
-                )
-                ReviewAudioButton(
-                    field = "Sentence",
-                    audio = sentenceAudio,
-                    onToggle = onToggleSentenceAudio,
-                    onRetry = onRetrySentenceAudio,
-                    actionLabel = sentenceAudioAction,
-                )
+            FlowCard {
+                Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        SentenceWithRuby(
+                            sentence = sentence,
+                            target = target,
+                            sentenceReading = sentenceReading,
+                            furigana = furigana,
+                            modifier = Modifier.weight(1f),
+                        )
+                        ReviewAudioButton(
+                            field = "Sentence",
+                            audio = sentenceAudio,
+                            onToggle = onToggleSentenceAudio,
+                            onRetry = onRetrySentenceAudio,
+                        )
+                    }
+                    ReviewAudioNotice(sentenceAudio, Modifier.fillMaxWidth().height(24.dp))
+                }
             }
 
             TranslationBlock(
                 translation = translation,
-                pending = translationPending || "Translation" in generatingFields,
-                error = translationError,
-                stale = translationStale,
-                onRetry = onRetryTranslation,
             )
 
             FlowCard(Modifier.padding(top = 8.dp)) {
@@ -321,16 +366,16 @@ internal fun ReviewCard(
                             audio = vocabularyAudio,
                             onToggle = onToggleVocabularyAudio,
                             onRetry = onRetryVocabularyAudio,
-                            actionLabel = vocabularyAudioAction,
                         )
                     }
+                    ReviewAudioNotice(vocabularyAudio, Modifier.fillMaxWidth().height(24.dp))
                     pitch?.let {
                         // Labels are katakana; the underlying source reading and HTML stay intact.
                         PitchPatternDiagram(pitch = it)
                     } ?: Text(
-                        "No pitch pattern is available for this reading.",
+                        "Pitch data missing for this reading.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     if (pitchHasAlternatives || pitch == null) {
                         TextButton(onClick = onTogglePitchInfo, modifier = Modifier.heightIn(min = 48.dp)) {
@@ -353,7 +398,7 @@ internal fun ReviewCard(
                         Text(
                             "The meaning is for earlier input. Return to preparation to review it.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -420,16 +465,18 @@ internal fun ReviewCard(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            Box(Modifier.fillMaxWidth().height(72.dp)) {
+                if (sendPresentation == ReviewSendPresentation.Ready) {
+                    ReviewStatusRegion(
+                        status = preSendStatusAndAction.first,
+                        onAction = preSendStatusAndAction.second,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
             sendPresentation?.let { presentation ->
                 when (presentation) {
-                    ReviewSendPresentation.Ready -> Column {
-                        if (sendHint != null) {
-                            Text(
-                                sendHint,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                    ReviewSendPresentation.Ready -> {
                         FlowPrimaryButton(
                             text = "Send to AnkiDroid",
                             onClick = { onSend?.invoke() },
@@ -624,49 +671,12 @@ private fun Modifier.drawDottedUnderline(color: Color): Modifier = this.then(
 @Composable
 private fun TranslationBlock(
     translation: String,
-    pending: Boolean,
-    error: String?,
-    stale: Boolean,
-    onRetry: (() -> Unit)?,
 ) {
     Text("Sentence translation", style = MaterialTheme.typography.labelLarge)
     if (translation.isNotBlank()) {
         Text(translation, style = MaterialTheme.typography.bodyLarge)
-    } else if (!pending) {
-        Text(
-            "Translation is required before Send.",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-    reviewTranslationProgressLabel(pending)?.let { label ->
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            CircularProgressIndicator(
-                Modifier.size(16.dp).semantics { stateDescription = label },
-                strokeWidth = 2.dp,
-            )
-            Text(label, style = MaterialTheme.typography.bodySmall)
-        }
-    }
-    error?.let { message ->
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                message,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
-            onRetry?.let { retry ->
-                TextButton(onClick = retry, modifier = Modifier.heightIn(min = 48.dp)) { Text("Retry") }
-            }
-        }
-    }
-    if (stale) {
-        Text(
-            "Your translation is for earlier input. Return to preparation to review it.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
-        )
+    } else {
+        Spacer(Modifier.height(24.dp))
     }
 }
 
@@ -676,10 +686,8 @@ private fun ReviewAudioButton(
     audio: ReviewAudioPresentation,
     onToggle: (() -> Unit)?,
     onRetry: (() -> Unit)?,
-    actionLabel: String,
 ) {
     val controlSize = ReviewAudioControlSize
-    var failureExpanded by remember(audio) { mutableStateOf(false) }
     when (audio) {
         ReviewAudioPresentation.Unavailable, ReviewAudioPresentation.NeedsPreparation -> {
             val description = reviewAudioControlLabel(field, audio)
@@ -752,28 +760,105 @@ private fun ReviewAudioButton(
             },
             contentAlignment = Alignment.Center,
         ) { CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) }
-        is ReviewAudioPresentation.Failed -> Column(
-            modifier = Modifier.widthIn(max = 180.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            IconButton(
-                onClick = { failureExpanded = !failureExpanded },
-                modifier = Modifier.size(controlSize).semantics {
-                    contentDescription = reviewAudioControlLabel(field, audio)
-                    stateDescription = if (failureExpanded) "Expanded" else "Collapsed"
-                },
-            ) {
-                Icon(
-                    MaterialSymbols.ErrorOutline,
-                    contentDescription = null,
-                    modifier = Modifier.size(26.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+        is ReviewAudioPresentation.Advisory, is ReviewAudioPresentation.Failed -> {
+            val failed = audio is ReviewAudioPresentation.Failed
+            val contentDescription = reviewAudioControlLabel(field, audio)
+            val state = if (failed) "Error" else "Setup needed"
+            val symbol = if (failed) MaterialSymbols.ErrorOutline else MaterialSymbols.InfoOutline
+            val tint = if (failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+            if (onRetry == null) {
+                Box(
+                    Modifier.size(controlSize).semantics {
+                        this.contentDescription = contentDescription
+                        stateDescription = state
+                    },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(symbol, contentDescription = null, modifier = Modifier.size(26.dp), tint = tint)
+                }
+            } else {
+                IconButton(
+                    onClick = onRetry,
+                    modifier = Modifier.size(controlSize).semantics {
+                        this.contentDescription = contentDescription
+                        stateDescription = state
+                    },
+                ) {
+                    Icon(symbol, contentDescription = null, modifier = Modifier.size(26.dp), tint = tint)
+                }
             }
-            if (failureExpanded) {
-                Text(audio.message, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
-                onRetry?.let { retry ->
-                    TextButton(onClick = retry, modifier = Modifier.heightIn(min = 48.dp)) { Text(actionLabel) }
+        }
+    }
+}
+
+@Composable
+private fun ReviewAudioNotice(audio: ReviewAudioPresentation, modifier: Modifier = Modifier) {
+    val failed = audio is ReviewAudioPresentation.Failed
+    val advisory = audio as? ReviewAudioPresentation.Advisory
+    val message = when {
+        advisory != null -> advisory.message
+        audio is ReviewAudioPresentation.Failed -> audio.message.substringBefore(':').trim()
+        else -> null
+    }
+    Box(modifier, contentAlignment = Alignment.CenterStart) {
+        if (message != null) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                shape = RoundedCornerShape(8.dp),
+                color = if (failed) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = if (failed) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+            ) {
+                Box(Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 2.dp), contentAlignment = Alignment.CenterStart) {
+                    Text(message, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReviewStatusRegion(
+    status: ReviewStatusPresentation?,
+    onAction: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    if (status == null) return
+    val isError = status.role == ReviewStatusRole.Error
+    val background = when (status.role) {
+        ReviewStatusRole.Error -> MaterialTheme.colorScheme.errorContainer
+        ReviewStatusRole.Warning -> MaterialTheme.colorScheme.tertiaryContainer
+        ReviewStatusRole.Information -> MaterialTheme.colorScheme.surfaceVariant
+    }
+    val foreground = when (status.role) {
+        ReviewStatusRole.Error -> MaterialTheme.colorScheme.onErrorContainer
+        ReviewStatusRole.Warning -> MaterialTheme.colorScheme.onTertiaryContainer
+        ReviewStatusRole.Information -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        color = background,
+        contentColor = foreground,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                if (isError) MaterialSymbols.ErrorOutline else MaterialSymbols.InfoOutline,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = if (isError) MaterialTheme.colorScheme.error else foreground,
+            )
+            Text(
+                status.headline,
+                modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 2,
+            )
+            if (status.actionLabel != null && onAction != null) {
+                TextButton(onClick = onAction, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text(status.actionLabel, maxLines = 1)
                 }
             }
         }
