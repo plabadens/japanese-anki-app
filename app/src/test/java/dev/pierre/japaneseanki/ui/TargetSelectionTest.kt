@@ -97,6 +97,45 @@ class TargetSelectionTest {
     }
 
     @Test
+    fun whitespaceStaysInlineButDoesNotBecomeASelectableTarget() {
+        val sentence = "猫 と犬。"
+        val tokens = listOf(
+            token(sentence, 0, 1),
+            JapaneseToken(
+                span = TargetSpan(1, 2),
+                surface = " ",
+                lemma = " ",
+                surfaceReading = "",
+                lemmaReading = "",
+                partOfSpeech = "空白",
+            ),
+            token(sentence, 2, 3),
+            token(sentence, 3, 4),
+            JapaneseToken(
+                span = TargetSpan(4, 5),
+                surface = "。",
+                lemma = "。",
+                surfaceReading = "",
+                lemmaReading = "",
+                partOfSpeech = "補助記号-句点",
+            ),
+        )
+
+        assertEquals(listOf("猫 ", "と", "犬。"), targetPills(tokens).map { it.label })
+        assertEquals(listOf("猫", "と", "犬"), targetPills(tokens).map { it.token.surface })
+    }
+
+    private fun token(sentence: String, start: Int, end: Int): JapaneseToken =
+        JapaneseToken(
+            span = TargetSpan(start, end),
+            surface = sentence.substring(start, end),
+            lemma = sentence.substring(start, end),
+            surfaceReading = "",
+            lemmaReading = "",
+            partOfSpeech = "名詞",
+        )
+
+    @Test
     fun punctuationIsAttachedToThePreviousPillAndStaysOutOfItsSpan() {
         val pills = targetPills(punctuated)
 

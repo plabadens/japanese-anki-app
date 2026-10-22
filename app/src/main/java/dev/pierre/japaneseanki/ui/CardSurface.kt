@@ -1,15 +1,15 @@
 package dev.pierre.japaneseanki.ui
 
-import android.graphics.Matrix
 import android.content.Context
+import android.graphics.Matrix
 import android.net.Uri
 import android.widget.ImageView
 import androidx.annotation.StringRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -45,19 +44,28 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.isTraversalGroup
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.traversalIndex
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -65,7 +73,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-
 import dev.pierre.japaneseanki.FuriganaSpan
 import dev.pierre.japaneseanki.JapaneseToken
 import dev.pierre.japaneseanki.OcrBounds
@@ -416,7 +423,7 @@ internal fun CardScreen(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SelectableSentence(
+internal fun SelectableSentence(
     sentence: String,
     tokens: List<JapaneseToken>,
     selectedSpan: TargetSpan?,
@@ -434,71 +441,105 @@ private fun SelectableSentence(
         return
     }
     FlowRow(
-        modifier = modifier,
+        modifier = modifier.testTag("sentence-layout").semantics { isTraversalGroup = true },
         horizontalArrangement = Arrangement.Start,
         verticalArrangement = Arrangement.Bottom,
     ) {
-        targetPills(tokens).forEach { pill ->
+        targetPills(tokens).forEachIndexed { index, pill ->
             val token = pill.token
             val isSelected = token.span == selectedSpan
             val selectedFill = MaterialTheme.colorScheme.secondaryContainer
+            val selectedText = MaterialTheme.colorScheme.onSecondaryContainer
             val selectedUnderline = MaterialTheme.colorScheme.primary
             val reading = readingBySpan[token.span]?.reading
                 ?: token.surfaceReading.takeIf { containsKanjiForCard(token.surface) }
-            Row(
-                modifier = Modifier.heightIn(min = 48.dp),
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                if (pill.prefix.isNotEmpty()) {
-                    Text(pill.prefix, style = MaterialTheme.typography.headlineMedium)
+            val baseStart = pill.prefix.length
+            val baseEnd = baseStart + token.surface.length
+            val display = buildAnnotatedString {
+                append(pill.prefix)
+                if (isSelected) {
+                    pushStyle(SpanStyle(color = selectedText, background = selectedFill))
                 }
-                Column(
+                append(token.surface)
+                if (isSelected) pop()
+                append(pill.suffix)
+            }
+            val layoutResult = remember(token.span, display.text) { mutableStateOf<TextLayoutResult?>(null) }
+            val interactionSource = remember(token.span) { MutableInteractionSource() }
+            Column(
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .clickable(
+                        enabled = selectionEnabled,
+                        interactionSource = interactionSource,
+                        indication = null,
+                        onClick = { onSelectSpan(token.span) },
+                    )
+                    .testTag("sentence-word-${token.span.start}-${token.span.end}")
+                    .semantics(mergeDescendants = true) {
+                        contentDescription = token.surface
+                        stateDescription = if (isSelected) selectedLabel else unselectedLabel
+                        selected = isSelected
+                        traversalIndex = index.toFloat()
+                    },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Bottom,
+            ) {
+                Box(Modifier.heightIn(min = readingBandHeight), contentAlignment = Alignment.Center) {
+                    if (!reading.isNullOrBlank()) {
+                        Text(
+                            reading,
+                            fontSize = 11.sp,
+                            lineHeight = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                Text(
+                    text = display,
                     modifier = Modifier
                         .heightIn(min = 48.dp)
-                        .clickable(enabled = selectionEnabled) { onSelectSpan(token.span) }
-                        .semantics {
-                            contentDescription = token.surface
-                            stateDescription = if (isSelected) selectedLabel else unselectedLabel
-                        },
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Bottom,
-                ) {
-                    Box(Modifier.height(readingBandHeight), contentAlignment = Alignment.Center) {
-                        if (!reading.isNullOrBlank()) {
-                            Text(
-                                reading,
-                                fontSize = 11.sp,
-                                lineHeight = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Clip,
-                            )
-                        }
-                    }
-                    Text(
-                        token.surface,
-                        modifier = Modifier
-                            .background(
-                                if (isSelected) selectedFill
-                                else Color.Transparent,
-                                RoundedCornerShape(2.dp),
-                            )
-                            .drawBehind {
-                                if (isSelected) {
-                                    drawLine(
-                                        color = selectedUnderline,
-                                        start = Offset(0f, size.height - 2.dp.toPx()),
-                                        end = Offset(size.width, size.height - 2.dp.toPx()),
-                                        strokeWidth = 2.dp.toPx(),
-                                    )
+                        .testTag("sentence-word-text-${token.span.start}-${token.span.end}")
+                        .pointerInput(selectionEnabled, baseStart, baseEnd, layoutResult.value) {
+                            if (selectionEnabled) {
+                                detectTapGestures { position ->
+                                    val textLayout = layoutResult.value ?: return@detectTapGestures
+                                    val minimumTouchHeight = 48.dp.toPx()
+                                    val hitBaseText = (baseStart until baseEnd).any { offset ->
+                                        val character = textLayout.getBoundingBox(offset)
+                                        val verticalExpansion = ((minimumTouchHeight - character.height) / 2f).coerceAtLeast(0f)
+                                        val top = (character.top - verticalExpansion).coerceAtLeast(0f)
+                                        val bottom = (character.bottom + verticalExpansion).coerceAtMost(size.height.toFloat())
+                                        position.x >= character.left && position.x <= character.right &&
+                                            position.y >= top && position.y <= bottom
+                                    }
+                                    if (hitBaseText) onSelectSpan(token.span)
                                 }
-                            },
-                        style = MaterialTheme.typography.headlineMedium,
-                    )
-                }
-                if (pill.suffix.isNotEmpty()) {
-                    Text(pill.suffix, style = MaterialTheme.typography.headlineMedium)
-                }
+                            }
+                        }
+                        .drawBehind {
+                            if (isSelected) {
+                                val textLayout = layoutResult.value ?: return@drawBehind
+                                val strokeWidth = 2.dp.toPx()
+                                (baseStart until baseEnd)
+                                    .groupBy(textLayout::getLineForOffset)
+                                    .forEach { (line, offsets) ->
+                                        val boxes = offsets.map(textLayout::getBoundingBox)
+                                        val left = boxes.minOf { it.left }
+                                        val right = boxes.maxOf { it.right }
+                                        val y = textLayout.getLineBottom(line) - strokeWidth / 2f
+                                        drawLine(
+                                            color = selectedUnderline,
+                                            start = Offset(left, y),
+                                            end = Offset(right, y),
+                                            strokeWidth = strokeWidth,
+                                        )
+                                    }
+                            }
+                        },
+                    style = MaterialTheme.typography.headlineMedium,
+                    onTextLayout = { layoutResult.value = it },
+                )
             }
         }
     }
