@@ -60,6 +60,7 @@ import dev.pierre.japaneseanki.ui.AppContentMaxWidth
 
 import dev.pierre.japaneseanki.ui.ReviewAudioPresentation
 import dev.pierre.japaneseanki.ui.CardScreen
+import dev.pierre.japaneseanki.ui.DictionaryMeaningSheet
 import dev.pierre.japaneseanki.ui.englishPartOfSpeechLabel
 import dev.pierre.japaneseanki.ui.reviewTranslationFailureStatus
 import dev.pierre.japaneseanki.ui.reviewAudioGenerationFailureMessage
@@ -254,6 +255,7 @@ internal data class DraftAudio(
     val path: String? = null,
     val generating: Boolean = false,
     val error: String? = null,
+    val sourceMissing: Boolean = false,
     val advisoryHeadline: String? = null,
     val advisoryMessage: String? = null,
     val identity: String = "",
@@ -262,6 +264,7 @@ internal data class DraftAudio(
     fun presentation(actionLabel: String): ReviewAudioPresentation = when {
         generating -> ReviewAudioPresentation.Generating
         path != null -> ReviewAudioPresentation.Ready
+        sourceMissing -> ReviewAudioPresentation.SourceMissing
         advisoryHeadline != null && advisoryMessage != null ->
             ReviewAudioPresentation.Advisory(advisoryHeadline, advisoryMessage, actionLabel)
         error != null -> ReviewAudioPresentation.Failed(error)
@@ -276,14 +279,20 @@ private fun DraftAudioState.toDraftAudio(item: AudioItem, context: Context): Dra
     is DraftAudioState.NeedsContinue -> DraftAudio(identity = identity, needsContinue = true)
     is DraftAudioState.Generating -> DraftAudio(generating = true, identity = identity)
     is DraftAudioState.Ready -> DraftAudio(path = file.path, identity = identity)
-    is DraftAudioState.Failed -> DraftAudio(
-        error = reviewAudioGenerationFailureMessage(
-            context.getString(if (item == AudioItem.SENTENCE) R.string.card_sentence_audio_field else R.string.card_word_audio_field),
-            message,
-            context.getString(R.string.card_audio_no_diagnostic_details),
-        ).resolve(context),
-        identity = identity,
-    )
+    is DraftAudioState.Failed -> if (
+        item == AudioItem.VOCABULARY && diagnostic?.category == "SOURCE_MISSING"
+    ) {
+        DraftAudio(sourceMissing = true, identity = identity)
+    } else {
+        DraftAudio(
+            error = reviewAudioGenerationFailureMessage(
+                context.getString(if (item == AudioItem.SENTENCE) R.string.card_sentence_audio_field else R.string.card_word_audio_field),
+                message,
+                context.getString(R.string.card_audio_no_diagnostic_details),
+            ).resolve(context),
+            identity = identity,
+        )
+    }
 }
 
 enum class AppRoute { Capture, Card }
@@ -1097,7 +1106,25 @@ class MainActivity : ComponentActivity() {
                     selectedDictionaryEntry = null
                     selectedDictionaryEntryId = null
                     dictionaryEntries = emptyList()
+                    dictionarySearchLoading = false
+                    dictionaryError = null
+                    dictionaryHasMore = false
+                    selectedSenseIndices = emptySet()
+                    vocabulary = ""
+                    vocabularyReading = ""
+                    vocabularyReadingError = null
+                    definition = ""
+                    definitionManuallyEdited = false
+                    definitionProvenanceKnown = true
                     pitchAccentText = ""
+                    pitchHtmlText = null
+                    pitchCandidates = emptyList()
+                    pitchIndexError = null
+                    pitchLookupLoading = false
+                    showDictionarySheet = false
+                    audioConfigErrors = audioConfigErrors - AudioItem.VOCABULARY
+                    audioController.clear(AudioItem.VOCABULARY)
+                    audioSnapshot = audioController.snapshot()
                 }
                 if (selected != previousTarget) {
                     // The reading belongs to the selected occurrence; a new target must never
@@ -1404,30 +1431,62 @@ class MainActivity : ComponentActivity() {
 
             // Nothing from a previous word may survive an unresolved dictionary choice.
             fun clearUnresolvedVocabulary() {
-                val unresolved = VocabularyResolution.unresolved()
-                vocabulary = unresolved.vocabulary
-                vocabularyReading = unresolved.reading
+                val currentTarget = target
+                val surface = currentTarget?.textIn(editor.text).orEmpty()
+                val candidate = currentTarget?.let { resolveAnalyzedLemma(japaneseTokens, it) }
+                vocabulary = candidate?.expression ?: surface
+                vocabularyReading = candidate?.reading.orEmpty()
                 vocabularyReadingError = null
-                definition = unresolved.definition
+                definition = ""
                 definitionManuallyEdited = false
                 definitionProvenanceKnown = true
-                dependentFieldsStale = false
                 selectedDictionaryEntry = null
                 selectedDictionaryEntryId = null
-                selectedSenseIndices = unresolved.senseIndices
-                pitchAccentText = unresolved.pitchAccent
+                selectedSenseIndices = emptySet()
+                pitchAccentText = ""
                 pitchHtmlText = null
                 pitchCandidates = emptyList()
-                pitchIndexError = this@MainActivity.getString(R.string.card_choose_a_dictionary_entry_to_resolve_this)
+                pitchIndexError = null
                 audioController.clear(AudioItem.VOCABULARY)
                 audioSnapshot = audioController.snapshot()
             }
 
             fun dismissDictionarySheet() {
                 showDictionarySheet = false
-                if (VocabularyResolution.isUnresolved(dictionaryEntries.size, selectedDictionaryEntry?.id)) {
+                if (selectedDictionaryEntry == null && DictionaryMeaningChoices.from(dictionaryEntries).size > 1) {
                     clearUnresolvedVocabulary()
                 }
+            }
+
+            fun commitDictionaryChoice(choice: DictionaryMeaningChoice) {
+                if (submissionLocked) return
+                val previousIsResolved = selectedDictionaryEntry?.let {
+                    it.id == selectedDictionaryEntryId && it.expression == vocabulary && it.reading == vocabularyReading
+                } == true
+                val samePronunciation = previousIsResolved && selectedDictionaryEntryId == choice.entry.id &&
+                    vocabulary == choice.entry.expression && vocabularyReading == choice.entry.reading
+                val sameChoice = samePronunciation && selectedSenseIndices == setOf(choice.senseIndex)
+                if (previousIsResolved && !sameChoice) dependentFieldsStale = true
+                if (!samePronunciation) {
+                    audioController.clear(AudioItem.VOCABULARY)
+                    audioSnapshot = audioController.snapshot()
+                    pitchAccentText = ""
+                    pitchHtmlText = null
+                    pitchCandidates = emptyList()
+                    pitchIndexError = null
+                    vocabularyReadingError = null
+                }
+                selectedDictionaryEntry = choice.entry
+                selectedDictionaryEntryId = choice.entry.id
+                vocabulary = choice.entry.expression
+                vocabularyReading = choice.entry.reading
+                selectedSenseIndices = setOf(choice.senseIndex)
+                definition = choice.definition
+                definitionManuallyEdited = false
+                definitionProvenanceKnown = true
+                dictionaryError = null
+                audioConfigErrors = audioConfigErrors - AudioItem.VOCABULARY
+                showDictionarySheet = false
             }
 
             /** A corrected vocabulary reading re-resolves entry, pitch and recording identity. */
@@ -1927,49 +1986,39 @@ class MainActivity : ComponentActivity() {
                         dictionaryEntries = entries
                         dictionaryError = null
                         dictionaryHasMore = entries.size == 50
+                        val choices = DictionaryMeaningChoices.from(entries)
                         val restoredEntry = entries.firstOrNull {
                             it.id == selectedDictionaryEntryId &&
                                 it.expression == vocabulary && it.reading == vocabularyReading
                         }
-                        val entry = restoredEntry ?: entries.firstOrNull()
-                        selectedDictionaryEntry = entry
-                        selectedSenseIndices = if (entry != null) {
-                            if (restoredEntry != null) {
-                                preferences.getStringSet("dictionary_sense_indices", null)
-                                    ?.mapNotNull(String::toIntOrNull)?.filter { it in entry.senses.indices }
-                                    ?.toSet()?.takeIf { it.isNotEmpty() } ?: setOf(0)
-                            } else if (entry.senses.isEmpty()) emptySet() else setOf(0)
-                        } else emptySet()
-                        if (entry != null) {
-                            val entryChanged = selectedDictionaryEntryId != entry.id || vocabulary != entry.expression ||
-                                vocabularyReading != entry.reading
-                            val savedSenses = selectedSenseIndices.sorted().mapNotNull { entry.senses.getOrNull(it) }
-                                .joinToString("\n") { it.glosses.joinToString("; ") }
-                            if (!definitionProvenanceKnown) {
-                                definitionManuallyEdited = definition.isNotBlank() && definition != savedSenses
-                                definitionProvenanceKnown = true
-                            }
-                            if (entryChanged) {
-                                if (definitionManuallyEdited && definition.isNotBlank()) dependentFieldsStale = true
-                                if (selectedDictionaryEntryId != entry.id) pitchAccentText = ""
-                                vocabulary = entry.expression
-                                vocabularyReading = entry.reading
-                                selectedDictionaryEntryId = entry.id
-                            }
-                            if (!definitionManuallyEdited) {
-                                val resolvedSenses = if (entryChanged || selectedSenseIndices.isEmpty()) setOf(0)
-                                    else selectedSenseIndices
-                                selectedSenseIndices = resolvedSenses
-                                definition = resolvedSenses.sorted().mapNotNull { index ->
-                                    entry.senses.getOrNull(index)?.glosses?.joinToString("; ")
-                                }.joinToString("\n")
-                            }
+                        val restoredSenseIndex = restoredEntry?.let { entry ->
+                            preferences.getStringSet("dictionary_sense_indices", null)
+                                ?.mapNotNull(String::toIntOrNull)
+                                ?.filter { it in entry.senses.indices }
+                                ?.minOrNull() ?: 0
                         }
-                        if (VocabularyResolution.isUnresolved(entries.size, entry?.id)) {
-                            // Several entries compete and none is chosen: clear the previous word
-                            // before the chooser is shown, so dismissing it cannot show stale data.
-                            clearUnresolvedVocabulary()
-                            showDictionarySheet = true
+                        val restoredChoice = DictionaryMeaningChoices.find(
+                            choices = choices,
+                            entryId = restoredEntry?.id,
+                            expression = vocabulary,
+                            reading = vocabularyReading,
+                            senseIndex = restoredSenseIndex,
+                        )
+                        when {
+                            restoredChoice != null -> commitDictionaryChoice(restoredChoice)
+                            choices.size == 1 -> commitDictionaryChoice(choices.single())
+                            choices.size > 1 -> {
+                                // Do not guess between viable readings/meanings. The selected
+                                // occurrence remains visible while the one combined sheet is open.
+                                clearUnresolvedVocabulary()
+                                showDictionarySheet = true
+                            }
+                            else -> {
+                                // No usable dictionary meaning is a card-local source miss, not a
+                                // chooser or an invitation to load more rows.
+                                clearUnresolvedVocabulary()
+                                showDictionarySheet = false
+                            }
                         }
                     } catch (cancelled: CancellationException) {
                         throw cancelled
@@ -3637,17 +3686,38 @@ class MainActivity : ComponentActivity() {
                                     recoveryActionLabel != null -> submitHintAction
                                     else -> submitAction
                                 }
+                                val cardMeaningChoices = DictionaryMeaningChoices.from(dictionaryEntries)
+                                val selectedMeaningChoice = DictionaryMeaningChoices.find(
+                                    choices = cardMeaningChoices,
+                                    entryId = selectedDictionaryEntryId,
+                                    expression = vocabulary,
+                                    reading = vocabularyReading,
+                                    senseIndex = selectedSenseIndices.singleOrNull(),
+                                )
+                                val selectedEntryIsResolved = selectedDictionaryEntry?.let {
+                                    it.id == selectedDictionaryEntryId && it.expression == vocabulary && it.reading == vocabularyReading
+                                } == true
                                 val cardWordStatus = when {
                                     reviewTarget == null -> null
                                     dictionaryLoading || dictionarySearchLoading -> stringResource(R.string.card_dictionary_searching)
-                                    selectedDictionaryEntry == null && dictionaryEntries.size > 1 ->
+                                    dictionaryError != null -> dictionaryError
+                                    selectedDictionaryEntry == null && cardMeaningChoices.size > 1 ->
                                         stringResource(R.string.card_choose_dictionary_entry_hint)
                                     selectedDictionaryEntry == null && dictionaryReady ->
-                                        stringResource(R.string.card_no_dictionary_match_for_selection)
-                                    dictionaryError != null -> dictionaryError
+                                        stringResource(R.string.no_entry)
                                     vocabularyReadingError != null -> vocabularyReadingError
-                                    pitchIndexError != null -> pitchIndexError
+                                    wordAudioPresentation == ReviewAudioPresentation.SourceMissing ->
+                                        stringResource(R.string.no_recording)
                                     else -> null
+                                }
+                                val cardPitchPending = reviewTarget != null && displayPitch == null && (
+                                    dictionaryLoading || dictionarySearchLoading || !selectedEntryIsResolved || pitchLookupLoading
+                                )
+                                val cardPitchStatus = when {
+                                    reviewTarget == null || displayPitch != null || cardPitchPending -> null
+                                    !selectedEntryIsResolved -> null
+                                    pitchIndexError != null -> pitchIndexError
+                                    else -> stringResource(R.string.no_pitch)
                                 }
                                 CardScreen(
                                     sentence = displaySentence,
@@ -3671,9 +3741,17 @@ class MainActivity : ComponentActivity() {
                                     ),
                                     definition = displayDefinition,
                                     pitch = displayPitch,
+                                    pitchStatus = cardPitchStatus,
+                                    pitchPending = cardPitchPending,
                                     wordStatus = cardWordStatus,
-                                    meaningAvailable = dictionaryEntries.sumOf { it.senses.size } > 1 && !submissionLocked,
-                                    onChangeMeaning = { if (!submissionLocked) showDictionarySheet = true },
+                                    wordAudioEnabled = selectedEntryIsResolved && !submissionLocked,
+                                    meaningAvailable = DictionaryMeaningChoices.hasAlternative(
+                                        cardMeaningChoices,
+                                        selectedMeaningChoice,
+                                    ) && !submissionLocked,
+                                    onChangeMeaning = {
+                                        if (!submissionLocked && cardMeaningChoices.size > 1) showDictionarySheet = true
+                                    },
                                     imagePath = frozenForDisplay?.media?.path ?: processedImagePath.takeIf { imageReady },
                                     imageFocusY = photoFocusY,
                                     notes = displayNotes,
@@ -4194,65 +4272,17 @@ class MainActivity : ComponentActivity() {
 
                     }
                 }
-                if (showDictionarySheet && target?.textIn(editor.text) != null &&
-                    dictionaryEntries.sumOf { it.senses.size } > 1
-                ) {
-                    ModalBottomSheet(onDismissRequest = { dismissDictionarySheet() }) {
-                        Column(
-                            Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState())
-                                .padding(horizontal = 20.dp, vertical = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Text(stringResource(R.string.choose_meaning), style = MaterialTheme.typography.titleLarge)
-                            dictionaryEntries.forEach { entry ->
-                                entry.senses.forEachIndexed { senseIndex, sense ->
-                                    OutlinedButton(
-                                    enabled = !submissionLocked,
-                                    onClick = {
-                                        if (!definitionProvenanceKnown) {
-                                            val savedSenseIndices = preferences.getStringSet("dictionary_sense_indices", null)
-                                                ?.mapNotNull(String::toIntOrNull)?.filter { it in entry.senses.indices }
-                                                ?.takeIf { it.isNotEmpty() } ?: listOf(0)
-                                            val savedGlosses = savedSenseIndices.sorted().mapNotNull { index ->
-                                                entry.senses.getOrNull(index)?.glosses?.joinToString("; ")
-                                            }.joinToString("\n")
-                                            definitionManuallyEdited = definition.isNotBlank() && definition != savedGlosses
-                                            definitionProvenanceKnown = true
-                                        }
-                                        if (selectedDictionaryEntryId != entry.id) {
-                                            pitchAccentText = ""
-                                            pitchHtmlText = null
-                                            pitchCandidates = emptyList()
-                                            vocabularyReadingError = null
-                                            pitchIndexError = null
-                                            vocabulary = entry.expression
-                                            vocabularyReading = entry.reading
-                                            selectedDictionaryEntry = entry
-                                            selectedDictionaryEntryId = entry.id
-                                            audioController.clear(AudioItem.VOCABULARY)
-                                            audioSnapshot = audioController.snapshot()
-                                        }
-                                        if (definitionManuallyEdited && definition.isNotBlank()) dependentFieldsStale = true
-                                        selectedSenseIndices = setOf(senseIndex)
-                                        if (!definitionManuallyEdited) {
-                                            definition = entry.senses.getOrNull(senseIndex)?.glosses?.joinToString("; ").orEmpty()
-                                        }
-                                        showDictionarySheet = false
-                                    },
-                                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                                ) {
-                                    Column(horizontalAlignment = Alignment.Start) {
-                                        Text("${entry.expression} · ${entry.reading}")
-                                        Text(sense.glosses.joinToString("; "))
-                                    }
-                                }
-                            }
-                        }
-                    }
+                val meaningChoices = DictionaryMeaningChoices.from(dictionaryEntries)
+                if (showDictionarySheet && target?.textIn(editor.text) != null && meaningChoices.size > 1) {
+                    DictionaryMeaningSheet(
+                        choices = meaningChoices,
+                        enabled = !submissionLocked,
+                        onDismissRequest = { dismissDictionarySheet() },
+                        onSelect = { choice -> commitDictionaryChoice(choice) },
+                    )
                 }
             }
         }
-    }
     }
 
     override fun onResume() {
