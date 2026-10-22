@@ -62,7 +62,8 @@ java -cp "$gradle_lib/*" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler \
   app/src/test/java/dev/pierre/japaneseanki/JapaneseMorphologyTest.kt \
   app/src/test/java/dev/pierre/japaneseanki/OcrCandidateSelectionTest.kt \
   app/src/test/java/dev/pierre/japaneseanki/TranslationServiceTest.kt \
-  app/src/test/java/dev/pierre/japaneseanki/GoogleHttpTest.kt
+  app/src/test/java/dev/pierre/japaneseanki/GoogleHttpTest.kt \
+  app/src/test/java/dev/pierre/japaneseanki/CopyCatalogueTest.kt
 
 java -cp "$classes:$runtime_cp" org.junit.runner.JUnitCore \
   dev.pierre.japaneseanki.TargetSpanTest \
@@ -84,4 +85,5 @@ java -cp "$classes:$runtime_cp" org.junit.runner.JUnitCore \
   dev.pierre.japaneseanki.JapaneseMorphologyTest \
   dev.pierre.japaneseanki.OcrCandidateSelectionTest \
   dev.pierre.japaneseanki.TranslationServiceTest \
-  dev.pierre.japaneseanki.GoogleHttpTest
+  dev.pierre.japaneseanki.GoogleHttpTest \
+  dev.pierre.japaneseanki.CopyCatalogueTest

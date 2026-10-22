@@ -1,52 +1,59 @@
 package dev.pierre.japaneseanki.ui
 
+import dev.pierre.japaneseanki.R
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class ReviewAudioPresentationTest {
     @Test fun defaultAudioPresentationOffersPreparationInsteadOfADeadControl() {
-        assertEquals("Prepare Sentence audio", reviewAudioControlLabel("Sentence", ReviewAudioPresentation.Unavailable))
-        assertEquals("Prepare Word audio", reviewAudioControlLabel("Word", ReviewAudioPresentation.NeedsPreparation))
         assertEquals(
-            "Word audio has not been generated. Tap the speaker control to generate it.",
+            ResourceCopy(R.string.legacy_card_audio_prepare_control, listOf("Sentence")),
+            reviewAudioControlLabel("Sentence", ReviewAudioPresentation.Unavailable),
+        )
+        assertEquals(
+            ResourceCopy(R.string.legacy_card_audio_prepare_control, listOf("Word")),
+            reviewAudioControlLabel("Word", ReviewAudioPresentation.NeedsPreparation),
+        )
+        assertEquals(
+            ResourceCopy(R.string.legacy_card_audio_needs_preparation_blocker, listOf("Word")),
             reviewAudioSendBlocker("Word", ReviewAudioPresentation.NeedsPreparation),
         )
     }
 
     @Test fun labelsExposeReadyPlayingGeneratingAndFailedStates() {
-        assertEquals("Play Sentence audio", reviewAudioControlLabel("Sentence", ReviewAudioPresentation.Ready))
-        assertEquals("Stop Word audio", reviewAudioControlLabel("Word", ReviewAudioPresentation.Playing))
-        assertEquals("Generating Sentence audio", reviewAudioControlLabel("Sentence", ReviewAudioPresentation.Generating))
+        assertEquals(ResourceCopy(R.string.legacy_card_audio_play_control, listOf("Sentence")), reviewAudioControlLabel("Sentence", ReviewAudioPresentation.Ready))
+        assertEquals(ResourceCopy(R.string.legacy_card_audio_stop_control, listOf("Word")), reviewAudioControlLabel("Word", ReviewAudioPresentation.Playing))
+        assertEquals(ResourceCopy(R.string.legacy_card_audio_generating_control, listOf("Sentence")), reviewAudioControlLabel("Sentence", ReviewAudioPresentation.Generating))
         assertEquals(
-            "Retry Vocabulary audio",
+            ResourceCopy(R.string.legacy_card_audio_retry_control, listOf("Vocabulary")),
             reviewAudioControlLabel("Vocabulary", ReviewAudioPresentation.Failed("No source available")),
         )
     }
 
-    @Test fun failedAudioCarriesTheExplanationForRetryPresentation() {
+    @Test fun failedAudioCarriesItsDynamicExplanation() {
         val failed = ReviewAudioPresentation.Failed("Audio could not be generated.")
-
         assertEquals("Audio could not be generated.", failed.message)
-        assertEquals("Retry Sentence audio", reviewAudioControlLabel("Sentence", failed))
-        assertEquals("Audio could not be generated.", reviewAudioSendBlocker("Sentence", failed))
+        assertEquals(ResourceCopy(R.string.legacy_card_audio_retry_control, listOf("Sentence")), reviewAudioControlLabel("Sentence", failed))
+        assertEquals(
+            ResourceCopy(R.string.legacy_card_audio_message, listOf("Audio could not be generated.")),
+            reviewAudioSendBlocker("Sentence", failed),
+        )
     }
 
     @Test fun failureMessagesNameTheAudioStageAndOfferAnAction() {
         assertEquals(
-            "No Google Cloud API key is saved. Add one and choose a verified sentence voice in Settings.",
+            ResourceCopy(R.string.legacy_card_audio_message, listOf("No Google Cloud API key is saved. Add one and choose a verified sentence voice in Settings.")),
             reviewAudioSendBlocker(
                 "Sentence",
-                ReviewAudioPresentation.Failed(
-                    "No Google Cloud API key is saved. Add one and choose a verified sentence voice in Settings.",
-                ),
+                ReviewAudioPresentation.Failed("No Google Cloud API key is saved. Add one and choose a verified sentence voice in Settings."),
             ),
         )
         assertEquals(
-            "Sentence audio not generated: The audio service timed out",
-            reviewAudioGenerationFailureMessage("Sentence", "The audio service timed out. Tap Retry."),
+            ResourceCopy(R.string.legacy_card_audio_generation_failed, listOf("Sentence", "The audio service timed out")),
+            reviewAudioGenerationFailureMessage("Sentence", "The audio service timed out. Tap Retry.", "No diagnostic details are available."),
         )
         assertEquals(
-            "Sentence audio could not be played on this device",
+            ResourceCopy(R.string.legacy_card_audio_playback_failed, listOf("Sentence")),
             reviewAudioPlaybackFailureMessage("Sentence"),
         )
     }
@@ -57,21 +64,23 @@ class ReviewAudioPresentationTest {
             message = "No Google Cloud API key is saved.",
             actionLabel = "Open Settings",
         )
-
-        assertEquals("Open Settings for Sentence audio", reviewAudioControlLabel("Sentence", advisory))
         assertEquals(
-            "Sentence audio setup needed: No Google Cloud API key is saved.",
+            ResourceCopy(R.string.legacy_card_audio_advisory_control, listOf("Open Settings", "Sentence")),
+            reviewAudioControlLabel("Sentence", advisory),
+        )
+        assertEquals(
+            ResourceCopy(R.string.legacy_card_audio_advisory_blocker, listOf("Sentence audio setup needed", "No Google Cloud API key is saved.")),
             reviewAudioSendBlocker("Sentence", advisory),
         )
     }
 
     @Test fun translationSetupAndInterruptedGenerationUseDifferentRolesAndHeadlines() {
         assertEquals(
-            ReviewStatusPresentation("Translation setup needed", ReviewStatusRole.Information),
+            TranslationFailurePresentation(R.string.legacy_card_translation_setup_needed, ReviewStatusRole.Information),
             reviewTranslationFailureStatus("Add your Google Cloud API key in Settings."),
         )
         assertEquals(
-            ReviewStatusPresentation("Translation interrupted", ReviewStatusRole.Error),
+            TranslationFailurePresentation(R.string.legacy_card_translation_interrupted, ReviewStatusRole.Error),
             reviewTranslationFailureStatus("Translation was interrupted. Tap Retry to continue."),
         )
     }

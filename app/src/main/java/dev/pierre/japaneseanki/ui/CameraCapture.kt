@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import dev.pierre.japaneseanki.R
 import java.io.File
 import java.io.IOException
 import java.util.UUID
@@ -99,6 +100,8 @@ internal fun CameraShutterButton(
     val context = LocalContext.current
     var capturing by remember(controller) { mutableStateOf(false) }
     val presentation = captureShutterPresentation(capturing, captureFailed)
+    val shutterDescription = context.getString(presentation.contentDescription)
+    val shutterStateDescription = context.getString(presentation.stateDescription)
     val currentOnCaptured by rememberUpdatedState(onCaptured)
     val currentOnError by rememberUpdatedState(onError)
     val currentOnCaptureStateChanged by rememberUpdatedState(onCaptureStateChanged)
@@ -117,7 +120,7 @@ internal fun CameraShutterButton(
             "Photo save failed: stage=$stage code=${errorCode ?: "none"} cause=$causeName partialRemoved=$partialRemoved",
         )
         finish()
-        currentOnError(CAMERA_CAPTURE_ERROR_MESSAGE)
+        currentOnError(context.getString(R.string.legacy_capture_camera_capture_failed))
     }
     val takePhoto = takePhoto@{
         if (!enabled || !operationGate.tryStart()) return@takePhoto
@@ -163,8 +166,8 @@ internal fun CameraShutterButton(
             .padding(7.dp)
             .background(MaterialTheme.colorScheme.primary, CircleShape)
             .semantics {
-                contentDescription = presentation.contentDescription
-                stateDescription = presentation.stateDescription
+                contentDescription = shutterDescription
+                stateDescription = shutterStateDescription
             },
         contentAlignment = Alignment.Center,
     ) {
@@ -179,4 +182,3 @@ internal fun CameraShutterButton(
 }
 
 private const val CAMERA_CAPTURE_TAG = "CameraCapture"
-private const val CAMERA_CAPTURE_ERROR_MESSAGE = "Could not capture a photo. Try again."

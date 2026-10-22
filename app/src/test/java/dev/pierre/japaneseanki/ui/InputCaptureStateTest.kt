@@ -1,5 +1,6 @@
 package dev.pierre.japaneseanki.ui
 
+import dev.pierre.japaneseanki.R
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -41,8 +42,8 @@ class InputCaptureStateTest {
         assertFalse(presentations[0].showProgress)
         assertTrue(presentations[1].showProgress)
         assertFalse(presentations[2].showProgress)
-        assertEquals("Capture in progress", presentations[1].stateDescription)
-        assertEquals("Capture failed", presentations[2].stateDescription)
+        assertEquals(R.string.legacy_capture_capture_in_progress, presentations[1].stateDescription)
+        assertEquals(R.string.legacy_capture_capture_failed, presentations[2].stateDescription)
     }
 
     @Test

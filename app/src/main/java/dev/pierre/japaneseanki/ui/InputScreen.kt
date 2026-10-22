@@ -1,5 +1,7 @@
 package dev.pierre.japaneseanki.ui
 
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -48,6 +50,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.pierre.japaneseanki.R
 import java.io.File
 
 /**
@@ -196,12 +199,12 @@ internal fun InputScreen(
                             enabled = actionsEnabled && !captureOperationGate.isActive,
                             onClick = { if (!captureOperationGate.isActive) onChoosePhoto() },
                         ) {
-                            Text(if (imageAttached) "Change photo" else "Add photo (optional)")
+                            Text(if (imageAttached) stringResource(R.string.legacy_capture_change_photo) else stringResource(R.string.legacy_capture_add_photo_optional))
                         }
                         Spacer(Modifier.weight(1f))
                     }
                     FlowPrimaryButton(
-                        text = "Continue",
+                        text = stringResource(R.string.legacy_capture_continue_action),
                         onClick = { if (!captureOperationGate.isActive) onContinue() },
                         enabled = actionsEnabled && !captureOperationGate.isActive && editor.text.isNotBlank(),
                     )
@@ -241,7 +244,7 @@ private fun CaptureModeSelector(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             ModeSelectorOption(
-                label = "Camera",
+                label = stringResource(R.string.camera),
                 tag = "input-mode-camera",
                 selected = captureMode == "Photo",
                 enabled = enabled,
@@ -255,7 +258,7 @@ private fun CaptureModeSelector(
                     .background(MaterialTheme.colorScheme.outlineVariant),
             )
             ModeSelectorOption(
-                label = "Type",
+                label = stringResource(R.string.type),
                 tag = "input-mode-type",
                 selected = captureMode == "Type",
                 enabled = enabled,
@@ -275,14 +278,15 @@ private fun ModeSelectorOption(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
+    val selectionState = stringResource(
+        if (selected) R.string.legacy_capture_selected_state else R.string.legacy_capture_not_selected_state,
+    )
     Box(
         modifier = modifier
             .heightIn(min = INPUT_MODE_SELECTOR_MIN_HEIGHT_DP.dp)
             .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
             .selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onClick)
-            .semantics {
-                stateDescription = if (selected) "Selected" else "Not selected"
-            }
+            .semantics { stateDescription = selectionState }
             .testTag(tag)
             .padding(horizontal = 8.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
@@ -349,23 +353,23 @@ private fun InputStatusPanel(
                         TextButton(
                             enabled = enabled && !operationGate.isActive,
                             onClick = { if (!operationGate.isActive) onRetryOcr() },
-                        ) { Text("Retry OCR") }
+                        ) { Text(stringResource(R.string.legacy_capture_retry_ocr)) }
                     }
                 }
             }
             if (ocrLoading) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                    Text("Reading the photo on this device…", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.legacy_capture_reading_the_photo_on_this_device), style = MaterialTheme.typography.bodySmall)
                 }
             }
             if (recoveryActions.reopenOcrChoices) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Text choices are ready.", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.legacy_capture_text_choices_are_ready), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
                     TextButton(
                         enabled = enabled && !operationGate.isActive,
                         onClick = { if (!operationGate.isActive) onReopenOcrChooser() },
-                    ) { Text("Review choices") }
+                    ) { Text(stringResource(R.string.legacy_capture_review_choices)) }
                 }
             }
             imageStatus?.let { status ->
@@ -380,7 +384,7 @@ private fun InputStatusPanel(
                         TextButton(
                             enabled = enabled && !operationGate.isActive,
                             onClick = { if (!operationGate.isActive) onRetryImage() },
-                        ) { Text("Retry photo") }
+                        ) { Text(stringResource(R.string.legacy_capture_retry_photo)) }
                     }
                 }
             }
@@ -420,7 +424,7 @@ private fun PhotoPane(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                "Camera access is needed to take a photo. Typing and the gallery still work.",
+                stringResource(R.string.legacy_capture_camera_access_is_needed_to_take_a_photo_ty),
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
@@ -428,6 +432,10 @@ private fun PhotoPane(
     }
     val hasFlash = rememberFlashAvailability(controller)
     var flashOn by remember(controller) { mutableStateOf(false) }
+    val flashLabel = stringResource(R.string.legacy_capture_flash)
+    val flashStateDescription = stringResource(
+        if (flashOn) R.string.legacy_capture_flash_on_state else R.string.legacy_capture_flash_off_state,
+    )
     Box(modifier, contentAlignment = Alignment.Center) {
         CameraViewfinder(controller = controller, modifier = Modifier.fillMaxSize())
         if (hasFlash) {
@@ -448,8 +456,8 @@ private fun PhotoPane(
                     .padding(12.dp)
                     .size(48.dp)
                     .semantics {
-                        contentDescription = "Flash"
-                        stateDescription = if (flashOn) "On" else "Off"
+                        contentDescription = flashLabel
+                        stateDescription = flashStateDescription
                     },
                 shape = CircleShape,
                 color = Color.Black.copy(alpha = 0.55f),
@@ -490,7 +498,7 @@ private fun CaptureRow(
                 enabled = enabled,
                 operationGate = operationGate,
                 onClick = onOpenGallery,
-                contentDescription = "Choose a photo from this device",
+                contentDescription = stringResource(R.string.legacy_capture_choose_photo_from_device),
                 modifier = Modifier.testTag("camera-gallery-button"),
             ) { FlowIcons.Gallery(Modifier.size(24.dp)) }
         }
@@ -510,7 +518,7 @@ private fun CaptureRow(
                 )
             } else {
                 FlowPrimaryButton(
-                    text = "Camera",
+                    text = stringResource(R.string.camera),
                     onClick = { if (enabled && !operationGate.isActive) onRequestCamera() },
                     modifier = Modifier.size(width = 120.dp, height = 48.dp).testTag("camera-permission-action"),
                     enabled = enabled && !operationGate.isActive,
@@ -559,12 +567,15 @@ private fun WritingPane(
         shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
+        val sentenceContentDescription = stringResource(R.string.sentence)
         OutlinedTextField(
             value = editor,
             onValueChange = onEditorChange,
             enabled = enabled,
-            modifier = Modifier.fillMaxSize().padding(8.dp).semantics { contentDescription = "Japanese sentence" },
-            placeholder = { Text("Type the Japanese sentence", style = MaterialTheme.typography.bodyLarge) },
+            modifier = Modifier.fillMaxSize().padding(8.dp).semantics {
+                contentDescription = sentenceContentDescription
+            },
+            placeholder = { Text(stringResource(R.string.legacy_capture_type_the_japanese_sentence), style = MaterialTheme.typography.bodyLarge) },
             textStyle = TextStyle(fontSize = 24.sp, lineHeight = 36.sp, color = MaterialTheme.colorScheme.onSurface),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = Color.Transparent,

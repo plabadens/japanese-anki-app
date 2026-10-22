@@ -1,5 +1,9 @@
 package dev.pierre.japaneseanki.ui
 
+import androidx.compose.ui.res.stringResource
+import androidx.annotation.StringRes
+
+import android.content.Context
 import android.graphics.Matrix
 import android.net.Uri
 import android.widget.ImageView
@@ -67,6 +71,7 @@ import dev.pierre.japaneseanki.OcrBounds
 import dev.pierre.japaneseanki.PitchAccent
 import dev.pierre.japaneseanki.PitchPatternDiagram
 import dev.pierre.japaneseanki.TargetSpan
+import dev.pierre.japaneseanki.R
 import java.io.File
 import kotlin.math.max
 
@@ -95,38 +100,57 @@ internal sealed interface ReviewAudioPresentation {
     data class Failed(val message: String) : ReviewAudioPresentation
 }
 
-internal fun reviewAudioControlLabel(field: String, audio: ReviewAudioPresentation): String = when (audio) {
-    ReviewAudioPresentation.Unavailable, ReviewAudioPresentation.NeedsPreparation -> "Prepare $field audio"
-    ReviewAudioPresentation.Ready -> "Play $field audio"
-    ReviewAudioPresentation.Playing -> "Stop $field audio"
-    ReviewAudioPresentation.Generating -> "Generating $field audio"
-    is ReviewAudioPresentation.Advisory -> "${audio.actionLabel} for $field audio"
-    is ReviewAudioPresentation.Failed -> "Retry $field audio"
+internal data class ResourceCopy(@StringRes val resourceId: Int, val formatArgs: List<Any> = emptyList()) {
+    fun resolve(context: Context): String = context.getString(resourceId, *formatArgs.toTypedArray())
 }
 
-internal fun reviewAudioSendBlocker(field: String, audio: ReviewAudioPresentation): String? = when (audio) {
+@Composable
+private fun resourceCopyText(copy: ResourceCopy): String =
+    stringResource(copy.resourceId, *copy.formatArgs.toTypedArray())
+
+internal fun reviewAudioControlLabel(field: String, audio: ReviewAudioPresentation): ResourceCopy = when (audio) {
+    ReviewAudioPresentation.Unavailable, ReviewAudioPresentation.NeedsPreparation ->
+        ResourceCopy(R.string.legacy_card_audio_prepare_control, listOf(field))
+    ReviewAudioPresentation.Ready -> ResourceCopy(R.string.legacy_card_audio_play_control, listOf(field))
+    ReviewAudioPresentation.Playing -> ResourceCopy(R.string.legacy_card_audio_stop_control, listOf(field))
+    ReviewAudioPresentation.Generating -> ResourceCopy(R.string.legacy_card_audio_generating_control, listOf(field))
+    is ReviewAudioPresentation.Advisory -> ResourceCopy(
+        R.string.legacy_card_audio_advisory_control,
+        listOf(audio.actionLabel, field),
+    )
+    is ReviewAudioPresentation.Failed -> ResourceCopy(R.string.legacy_card_audio_retry_control, listOf(field))
+}
+
+internal fun reviewAudioSendBlocker(field: String, audio: ReviewAudioPresentation): ResourceCopy? = when (audio) {
     ReviewAudioPresentation.Ready, ReviewAudioPresentation.Playing -> null
-    ReviewAudioPresentation.Generating -> "$field audio is being generated. Wait for it to finish."
+    ReviewAudioPresentation.Generating -> ResourceCopy(R.string.legacy_card_audio_generating_blocker, listOf(field))
     ReviewAudioPresentation.NeedsPreparation ->
-        "$field audio has not been generated. Tap the speaker control to generate it."
+        ResourceCopy(R.string.legacy_card_audio_needs_preparation_blocker, listOf(field))
     ReviewAudioPresentation.Unavailable ->
-        "$field audio is unavailable. Tap the speaker control to check what is needed."
-    is ReviewAudioPresentation.Advisory -> "${audio.headline}: ${audio.message}"
-    is ReviewAudioPresentation.Failed -> audio.message
+        ResourceCopy(R.string.legacy_card_audio_unavailable_blocker, listOf(field))
+    is ReviewAudioPresentation.Advisory -> ResourceCopy(
+        R.string.legacy_card_audio_advisory_blocker,
+        listOf(audio.headline, audio.message),
+    )
+    is ReviewAudioPresentation.Failed -> ResourceCopy(R.string.legacy_card_audio_message, listOf(audio.message))
 }
 
-internal fun reviewAudioGenerationFailureMessage(field: String, detail: String): String =
-    "$field audio not generated: ${detail.ifBlank { "No diagnostic details are available." }.substringBefore(" Tap Retry").trim().trimEnd('.')}"
+internal fun reviewAudioGenerationFailureMessage(field: String, detail: String, noDetails: String): ResourceCopy {
+    val safeDetail = detail.ifBlank { noDetails }.substringBefore(" Tap Retry").trim().trimEnd('.')
+    return ResourceCopy(R.string.legacy_card_audio_generation_failed, listOf(field, safeDetail))
+}
 
-internal fun reviewAudioPlaybackFailureMessage(field: String): String =
-    "$field audio could not be played on this device"
+internal fun reviewAudioPlaybackFailureMessage(field: String): ResourceCopy =
+    ResourceCopy(R.string.legacy_card_audio_playback_failed, listOf(field))
 
-internal fun reviewTranslationFailureStatus(message: String): ReviewStatusPresentation = when {
+internal data class TranslationFailurePresentation(@StringRes val headlineResource: Int, val role: ReviewStatusRole)
+
+internal fun reviewTranslationFailureStatus(message: String): TranslationFailurePresentation = when {
     message.contains("Google Cloud API key", ignoreCase = true) || message.contains("credential", ignoreCase = true) ->
-        ReviewStatusPresentation("Translation setup needed", ReviewStatusRole.Information)
+        TranslationFailurePresentation(R.string.legacy_card_translation_setup_needed, ReviewStatusRole.Information)
     message.contains("interrupted", ignoreCase = true) ->
-        ReviewStatusPresentation("Translation interrupted", ReviewStatusRole.Error)
-    else -> ReviewStatusPresentation("Translation failed", ReviewStatusRole.Error)
+        TranslationFailurePresentation(R.string.legacy_card_translation_interrupted, ReviewStatusRole.Error)
+    else -> TranslationFailurePresentation(R.string.legacy_card_translation_failed, ReviewStatusRole.Error)
 }
 
 internal enum class ReviewEditableField { Notes, Tags }
@@ -147,7 +171,7 @@ internal class ReviewFieldCallbacks(
     }
 }
 
-internal const val ReviewPreparationActionLabel = "Edit preparation"
+internal val ReviewPreparationActionResource = R.string.legacy_card_edit_preparation
 internal val ReviewAudioControlSize = 56.dp
 
 /** Height of the Review context photo slot in the portrait composition. */
@@ -223,8 +247,8 @@ internal fun ReviewCard(
     onRetrySentenceAudio: (() -> Unit)? = null,
     onToggleVocabularyAudio: (() -> Unit)? = null,
     onRetryVocabularyAudio: (() -> Unit)? = null,
-    sentenceAudioAction: String = "Retry",
-    vocabularyAudioAction: String = "Retry",
+    sentenceAudioAction: String = "",
+    vocabularyAudioAction: String = "",
     sendPresentation: ReviewSendPresentation? = null,
     onSend: (() -> Unit)? = null,
     onSendStatusAction: (() -> Unit)? = null,
@@ -272,29 +296,48 @@ internal fun ReviewCard(
     val fieldCallbacks = remember(onNotesChange, onTagsChange) {
         ReviewFieldCallbacks(onNotesChange, onTagsChange)
     }
+    val sendingStateDescription = stringResource(R.string.legacy_card_sending_state)
+    val preparationActionLabel = stringResource(ReviewPreparationActionResource)
+    val openSettingsActionLabel = stringResource(R.string.legacy_card_open_settings_action)
+    val retryActionLabel = stringResource(R.string.retry)
+    val translationInProgressLabel = stringResource(R.string.legacy_card_translation_in_progress)
+    val sentenceAudioNotReadyLabel = stringResource(R.string.legacy_card_sentence_audio_not_ready)
+    val wordAudioNotReadyLabel = stringResource(R.string.legacy_card_word_audio_not_ready)
+    val translationNeedsReviewLabel = stringResource(R.string.legacy_card_translation_needs_review)
+    val sentenceAudioActionLabel = sentenceAudioAction.ifEmpty { retryActionLabel }
+    val vocabularyAudioActionLabel = vocabularyAudioAction.ifEmpty { retryActionLabel }
+    val translationFailure = translationError?.let(::reviewTranslationFailureStatus)
     val preSendStatusAndAction = when {
         sentenceAudio is ReviewAudioPresentation.Advisory ->
             ReviewStatusPresentation(sentenceAudio.headline, ReviewStatusRole.Information, sentenceAudio.actionLabel) to onRetrySentenceAudio
         vocabularyAudio is ReviewAudioPresentation.Advisory ->
             ReviewStatusPresentation(vocabularyAudio.headline, ReviewStatusRole.Information, vocabularyAudio.actionLabel) to onRetryVocabularyAudio
-        translationError != null && reviewTranslationFailureStatus(translationError).role == ReviewStatusRole.Information ->
-            reviewTranslationFailureStatus(translationError).copy(actionLabel = "Open Settings") to onOpenSettings
-        translationError != null ->
-            reviewTranslationFailureStatus(translationError).copy(actionLabel = "Retry") to onRetryTranslation
+        translationFailure?.role == ReviewStatusRole.Information ->
+            ReviewStatusPresentation(
+                stringResource(translationFailure.headlineResource),
+                translationFailure.role,
+                openSettingsActionLabel,
+            ) to onOpenSettings
+        translationFailure != null ->
+            ReviewStatusPresentation(
+                stringResource(translationFailure.headlineResource),
+                translationFailure.role,
+                retryActionLabel,
+            ) to onRetryTranslation
         translationPending || "Translation" in generatingFields ->
-            ReviewStatusPresentation("Translation in progress", ReviewStatusRole.Information) to null
+            ReviewStatusPresentation(translationInProgressLabel, ReviewStatusRole.Information) to null
         sentenceAudio is ReviewAudioPresentation.Failed ->
-            ReviewStatusPresentation(sentenceAudio.message, ReviewStatusRole.Error, sentenceAudioAction) to onRetrySentenceAudio
+            ReviewStatusPresentation(sentenceAudio.message, ReviewStatusRole.Error, sentenceAudioActionLabel) to onRetrySentenceAudio
         vocabularyAudio is ReviewAudioPresentation.Failed ->
-            ReviewStatusPresentation(vocabularyAudio.message, ReviewStatusRole.Error, vocabularyAudioAction) to onRetryVocabularyAudio
+            ReviewStatusPresentation(vocabularyAudio.message, ReviewStatusRole.Error, vocabularyAudioActionLabel) to onRetryVocabularyAudio
         sentenceAudio == ReviewAudioPresentation.NeedsPreparation || sentenceAudio == ReviewAudioPresentation.Unavailable ->
-            ReviewStatusPresentation("Sentence audio is not ready", ReviewStatusRole.Warning, sentenceAudioAction) to onRetrySentenceAudio
+            ReviewStatusPresentation(sentenceAudioNotReadyLabel, ReviewStatusRole.Warning, sentenceAudioActionLabel) to onRetrySentenceAudio
         vocabularyAudio == ReviewAudioPresentation.NeedsPreparation || vocabularyAudio == ReviewAudioPresentation.Unavailable ->
-            ReviewStatusPresentation("Word audio is not ready", ReviewStatusRole.Warning, vocabularyAudioAction) to onRetryVocabularyAudio
+            ReviewStatusPresentation(wordAudioNotReadyLabel, ReviewStatusRole.Warning, vocabularyAudioActionLabel) to onRetryVocabularyAudio
         translationStale ->
-            ReviewStatusPresentation("Translation needs review", ReviewStatusRole.Warning, ReviewPreparationActionLabel) to onEdit
+            ReviewStatusPresentation(translationNeedsReviewLabel, ReviewStatusRole.Warning, preparationActionLabel) to onEdit
         sendHint != null ->
-            ReviewStatusPresentation(sendHint, sendHintRole, sendHintActionLabel ?: ReviewPreparationActionLabel) to onSendHintAction
+            ReviewStatusPresentation(sendHint, sendHintRole, sendHintActionLabel ?: preparationActionLabel) to onSendHintAction
         else -> null to null
     }
 
@@ -312,7 +355,7 @@ internal fun ReviewCard(
                     enabled = editingEnabled,
                     onClick = onReopenOcrChooser,
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Choose text from photo") }
+                ) { Text(stringResource(R.string.legacy_card_choose_text_from_photo)) }
             }
             if (imagePath != null || imageStatus != null) {
                 ReviewPhotoSlot(
@@ -334,7 +377,7 @@ internal fun ReviewCard(
                             modifier = Modifier.weight(1f),
                         )
                         ReviewAudioButton(
-                            field = "Sentence",
+                            field = stringResource(R.string.legacy_card_sentence_audio_field),
                             audio = sentenceAudio,
                             onToggle = onToggleSentenceAudio,
                             onRetry = onRetrySentenceAudio,
@@ -362,7 +405,7 @@ internal fun ReviewCard(
                             }
                         }
                         ReviewAudioButton(
-                            field = "Word",
+                            field = stringResource(R.string.legacy_card_word_audio_field),
                             audio = vocabularyAudio,
                             onToggle = onToggleVocabularyAudio,
                             onRetry = onRetryVocabularyAudio,
@@ -373,30 +416,30 @@ internal fun ReviewCard(
                         // Labels are katakana; the underlying source reading and HTML stay intact.
                         PitchPatternDiagram(pitch = it)
                     } ?: Text(
-                        "Pitch data missing for this reading.",
+                        stringResource(R.string.legacy_card_pitch_data_missing_for_this_reading),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     if (pitchHasAlternatives || pitch == null) {
                         TextButton(onClick = onTogglePitchInfo, modifier = Modifier.heightIn(min = 48.dp)) {
-                            Text(if (pitch == null) "Why is pitch missing?" else "Other pitch patterns")
+                            Text(if (pitch == null) stringResource(R.string.legacy_card_why_is_pitch_missing) else stringResource(R.string.legacy_card_other_pitch_patterns))
                         }
                         if (pitchInfoExpanded) {
                             Text(
                                 if (pitch == null) {
-                                    "This reading has no source-listed pattern. Return to preparation to correct the reading."
+                                    stringResource(R.string.legacy_card_this_reading_has_no_source_listed_pattern)
                                 } else {
-                                    "More than one source pattern is listed for this reading. Choose another during preparation."
+                                    stringResource(R.string.legacy_card_more_than_one_source_pattern_is_listed_for)
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer,
                             )
                         }
                     }
-                    Text(definition.ifBlank { "No definition yet." }, style = MaterialTheme.typography.bodyLarge)
+                    Text(definition.ifBlank { stringResource(R.string.legacy_card_no_definition_yet) }, style = MaterialTheme.typography.bodyLarge)
                     if (definitionStale) {
                         Text(
-                            "The meaning is for earlier input. Return to preparation to review it.",
+                            stringResource(R.string.legacy_card_the_meaning_is_for_earlier_input_return_to),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -408,11 +451,12 @@ internal fun ReviewCard(
                 if (tags.isNotEmpty()) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         tags.filter(String::isNotBlank).forEach { tag ->
+                            val tagDescription = stringResource(R.string.legacy_card_tag_accessibility, tag)
                             AssistChip(
                                 onClick = { editing = true },
                                 enabled = editingEnabled,
                                 label = { Text(tag) },
-                                modifier = Modifier.semantics { contentDescription = "Tag $tag" },
+                                modifier = Modifier.semantics { contentDescription = tagDescription },
                             )
                         }
                     }
@@ -428,7 +472,7 @@ internal fun ReviewCard(
                         fieldCallbacks.update(ReviewEditableField.Notes, value)
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Notes (optional)") },
+                    label = { Text(stringResource(R.string.legacy_card_notes_optional)) },
                     minLines = 2,
                 )
                 OutlinedTextField(
@@ -438,7 +482,7 @@ internal fun ReviewCard(
                         fieldCallbacks.update(ReviewEditableField.Tags, value)
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Tags (optional)") },
+                    label = { Text(stringResource(R.string.legacy_card_tags_optional)) },
                     singleLine = true,
                 )
             }
@@ -451,13 +495,13 @@ internal fun ReviewCard(
                     enabled = editingEnabled,
                     onClick = { onEdit() },
                     modifier = Modifier.heightIn(min = 48.dp),
-                ) { Text(ReviewPreparationActionLabel) }
+                ) { Text(preparationActionLabel) }
                 Spacer(Modifier.weight(1f))
                 TextButton(
                     enabled = editingEnabled,
                     onClick = { editing = !editing },
                     modifier = Modifier.heightIn(min = 48.dp),
-                ) { Text(if (editing) "Done" else "Edit notes & tags") }
+                ) { Text(if (editing) stringResource(R.string.done) else stringResource(R.string.legacy_card_edit_notes_tags)) }
             }
         }
 
@@ -478,7 +522,7 @@ internal fun ReviewCard(
                 when (presentation) {
                     ReviewSendPresentation.Ready -> {
                         FlowPrimaryButton(
-                            text = "Send to AnkiDroid",
+                            text = stringResource(R.string.send),
                             onClick = { onSend?.invoke() },
                             enabled = onSend != null,
                         )
@@ -486,11 +530,11 @@ internal fun ReviewCard(
                     ReviewSendPresentation.Sending -> Button(
                         onClick = {},
                         enabled = false,
-                        modifier = Modifier.fillMaxWidth().height(56.dp).semantics { stateDescription = "Sending" },
+                        modifier = Modifier.fillMaxWidth().height(56.dp).semantics { stateDescription = sendingStateDescription },
                     ) {
                         CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                         Spacer(Modifier.width(10.dp))
-                        Text("Sending…")
+                        Text(stringResource(R.string.sending))
                     }
                     is ReviewSendPresentation.Status -> Column(Modifier.fillMaxWidth()) {
                         Text(presentation.message, style = MaterialTheme.typography.bodyMedium)
@@ -521,6 +565,7 @@ private fun ReviewPhotoSlot(
     focusY: Float,
     onExpand: () -> Unit,
 ) {
+    val viewPhotoDescription = stringResource(R.string.legacy_card_view_whole_photo)
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -555,7 +600,7 @@ private fun ReviewPhotoSlot(
                 onClick = onExpand,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp).size(48.dp)
                     .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(24.dp))
-                    .semantics { contentDescription = "View whole photo" },
+                    .semantics { contentDescription = viewPhotoDescription },
             ) { FlowIcons.Expand(Modifier.size(22.dp)) }
         } else {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -576,12 +621,14 @@ private fun ReviewPhotoSlot(
 
 @Composable
 private fun FullPhotoDialog(imagePath: String, onDismiss: () -> Unit) {
+    val photoDescription = stringResource(R.string.legacy_card_full_photo)
+    val closeDescription = stringResource(R.string.legacy_card_close_photo)
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(
             Modifier
                 .fillMaxSize()
                 .background(Color.Black)
-                .semantics { contentDescription = "Full photo" },
+                .semantics { contentDescription = photoDescription },
         ) {
             AndroidView(
                 factory = { context -> ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_CENTER } },
@@ -591,8 +638,8 @@ private fun FullPhotoDialog(imagePath: String, onDismiss: () -> Unit) {
             IconButton(
                 onClick = onDismiss,
                 modifier = Modifier.align(Alignment.TopEnd).padding(16.dp).size(48.dp)
-                    .semantics { contentDescription = "Close photo" },
-            ) { Text("✕", color = Color.White, fontSize = 24.sp) }
+                    .semantics { contentDescription = closeDescription },
+            ) { Text(stringResource(R.string.legacy_card_copy), color = Color.White, fontSize = 24.sp) }
         }
     }
 }
@@ -610,14 +657,15 @@ private fun SentenceWithRuby(
     val parts = reviewSentenceParts(sentence, target, sentenceReading, furigana)
     val unresolvedColor = MaterialTheme.colorScheme.onSurfaceVariant
     val highlightColor = MaterialTheme.colorScheme.secondaryContainer
+    val sentenceStateDescription = if (parts.any { it.unresolvedKanji }) {
+        stringResource(R.string.legacy_card_some_kanji_have_no_available_reading)
+    } else {
+        stringResource(R.string.legacy_card_target_selected, target.textIn(sentence).toString())
+    }
     FlowRow(
         modifier = modifier.clearAndSetSemantics {
             contentDescription = sentence
-            if (parts.any { it.unresolvedKanji }) {
-                stateDescription = "Some kanji have no available reading"
-            } else {
-                stateDescription = "Target selected: ${target.textIn(sentence)}"
-            }
+            stateDescription = sentenceStateDescription
         },
         horizontalArrangement = Arrangement.Start,
         verticalArrangement = Arrangement.Bottom,
@@ -672,7 +720,7 @@ private fun Modifier.drawDottedUnderline(color: Color): Modifier = this.then(
 private fun TranslationBlock(
     translation: String,
 ) {
-    Text("Sentence translation", style = MaterialTheme.typography.labelLarge)
+    Text(stringResource(R.string.legacy_card_sentence_translation), style = MaterialTheme.typography.labelLarge)
     if (translation.isNotBlank()) {
         Text(translation, style = MaterialTheme.typography.bodyLarge)
     } else {
@@ -688,10 +736,17 @@ private fun ReviewAudioButton(
     onRetry: (() -> Unit)?,
 ) {
     val controlSize = ReviewAudioControlSize
+    val description = resourceCopyText(reviewAudioControlLabel(field, audio))
+    val needsPreparationState = stringResource(R.string.legacy_card_audio_needs_preparation_state)
+    val unavailableState = stringResource(R.string.legacy_card_audio_unavailable_state)
+    val playingState = stringResource(R.string.legacy_card_audio_playing_state)
+    val readyState = stringResource(R.string.ready)
+    val generatingState = stringResource(R.string.legacy_card_audio_in_progress_state)
+    val errorState = stringResource(R.string.legacy_card_audio_error_state)
+    val setupNeededState = stringResource(R.string.legacy_card_audio_setup_needed_state)
     when (audio) {
         ReviewAudioPresentation.Unavailable, ReviewAudioPresentation.NeedsPreparation -> {
-            val description = reviewAudioControlLabel(field, audio)
-            val state = if (audio == ReviewAudioPresentation.NeedsPreparation) "Needs preparation" else "Unavailable"
+            val state = if (audio == ReviewAudioPresentation.NeedsPreparation) needsPreparationState else unavailableState
             if (onRetry == null) {
                 Box(
                     Modifier.size(controlSize).semantics {
@@ -726,8 +781,8 @@ private fun ReviewAudioButton(
             if (onToggle == null) {
                 Box(
                     Modifier.size(controlSize).semantics {
-                        contentDescription = reviewAudioControlLabel(field, audio)
-                        stateDescription = if (audio == ReviewAudioPresentation.Playing) "Playing" else "Ready"
+                        contentDescription = description
+                        stateDescription = if (audio == ReviewAudioPresentation.Playing) playingState else readyState
                     },
                     contentAlignment = Alignment.Center,
                 ) {
@@ -741,8 +796,8 @@ private fun ReviewAudioButton(
                 IconButton(
                     onClick = onToggle,
                     modifier = Modifier.size(controlSize).semantics {
-                        contentDescription = reviewAudioControlLabel(field, audio)
-                        stateDescription = if (audio == ReviewAudioPresentation.Playing) "Playing" else "Ready"
+                        contentDescription = description
+                        stateDescription = if (audio == ReviewAudioPresentation.Playing) playingState else readyState
                     },
                 ) {
                     AudioControlGlyph(
@@ -755,15 +810,15 @@ private fun ReviewAudioButton(
         }
         ReviewAudioPresentation.Generating -> Box(
             Modifier.size(controlSize).semantics {
-                contentDescription = reviewAudioControlLabel(field, audio)
-                stateDescription = "In progress"
+                contentDescription = description
+                stateDescription = generatingState
             },
             contentAlignment = Alignment.Center,
         ) { CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) }
         is ReviewAudioPresentation.Advisory, is ReviewAudioPresentation.Failed -> {
             val failed = audio is ReviewAudioPresentation.Failed
-            val contentDescription = reviewAudioControlLabel(field, audio)
-            val state = if (failed) "Error" else "Setup needed"
+            val contentDescription = description
+            val state = if (failed) errorState else setupNeededState
             val symbol = if (failed) MaterialSymbols.ErrorOutline else MaterialSymbols.InfoOutline
             val tint = if (failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
             if (onRetry == null) {

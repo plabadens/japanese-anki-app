@@ -1,5 +1,7 @@
 package dev.pierre.japaneseanki.ui
 
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -33,10 +35,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.pierre.japaneseanki.R
 import dev.pierre.japaneseanki.JapaneseToken
 import dev.pierre.japaneseanki.CorrectableReading
 import dev.pierre.japaneseanki.TargetSpan
@@ -101,7 +105,7 @@ internal fun TargetScreen(
     Column(modifier.fillMaxWidth()) {
         if (ocrChoicesAvailable) {
             TextButton(enabled = !locked, onClick = onReopenOcrChooser) {
-                Text("Choose text from photo")
+                Text(stringResource(R.string.legacy_card_choose_text_from_photo))
             }
         }
         Column(
@@ -118,8 +122,8 @@ internal fun TargetScreen(
             if (pills.isEmpty()) {
                 Text(
                     when {
-                        tokensLoading -> "Analyzing the sentence…"
-                        else -> "No words are available yet. Edit the sentence to prepare the selection."
+                        tokensLoading -> stringResource(R.string.legacy_card_analyzing_the_sentence)
+                        else -> stringResource(R.string.legacy_card_no_words_are_available_yet_edit_the_senten)
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -151,7 +155,7 @@ internal fun TargetScreen(
                         contentDescription = null,
                         modifier = Modifier.size(18.dp),
                     )
-                    Text("  Edit sentence")
+                    Text(stringResource(R.string.legacy_card_edit_sentence))
                 }
             }
             if (entryLabel != null) {
@@ -170,7 +174,7 @@ internal fun TargetScreen(
                     Spacer(Modifier.weight(1f))
                     if (entryCount > 1) {
                         TextButton(enabled = !locked, onClick = onChooseEntry) {
-                            Text("$entryCount entries")
+                            Text(stringResource(R.string.legacy_card_entry_count, entryCount.toString()))
                             Spacer(Modifier.size(4.dp))
                             FlowIcons.ChevronDown(Modifier.size(16.dp))
                         }
@@ -181,7 +185,7 @@ internal fun TargetScreen(
                 Text(status, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (senses.isNotEmpty()) {
-                Text("Meaning", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.legacy_card_meaning), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 senses.forEachIndexed { index, gloss ->
                     MeaningCard(
                         gloss = gloss,
@@ -192,20 +196,20 @@ internal fun TargetScreen(
                 }
             }
             TextButton(enabled = !locked, onClick = { correctionsExpanded = !correctionsExpanded }) {
-                Text(if (correctionsExpanded) "Hide preparation corrections" else "Edit preparation corrections")
+                Text(if (correctionsExpanded) stringResource(R.string.legacy_card_hide_preparation_corrections) else stringResource(R.string.legacy_card_edit_preparation_corrections))
             }
             if (correctionsExpanded) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Preparation corrections", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.legacy_card_preparation_corrections), style = MaterialTheme.typography.titleMedium)
                     TextButton(enabled = !locked, onClick = onChoosePhoto) {
-                        Text(if (imageAttached) "Replace photo" else "Attach photo")
+                        Text(if (imageAttached) stringResource(R.string.legacy_card_replace_photo) else stringResource(R.string.attach_photo))
                     }
                     if (imageAttached) {
                         TextButton(enabled = !locked && !imageProcessing, onClick = onRemovePhoto) {
-                            Text("Remove photo")
+                            Text(stringResource(R.string.remove_photo))
                         }
                         Text(
-                            if (imageProcessing) "Preparing photo…" else "Photo attached",
+                            if (imageProcessing) stringResource(R.string.legacy_card_preparing_photo) else stringResource(R.string.legacy_card_photo_attached),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -213,13 +217,13 @@ internal fun TargetScreen(
                     imageError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 
                     if (correctableReadings.isNotEmpty()) {
-                        Text("Sentence readings", style = MaterialTheme.typography.labelLarge)
+                        Text(stringResource(R.string.legacy_card_sentence_readings), style = MaterialTheme.typography.labelLarge)
                         correctableReadings.forEach { item ->
                             OutlinedTextField(
                                 value = item.reading,
                                 onValueChange = { onReadingCorrection(item.span, it) },
                                 enabled = !locked,
-                                label = { Text("${item.surface} reading") },
+                                label = { Text(stringResource(R.string.legacy_card_reading_label, item.surface)) },
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth(),
                             )
@@ -230,7 +234,7 @@ internal fun TargetScreen(
                         value = vocabularyReading,
                         onValueChange = onVocabularyReadingChange,
                         enabled = !locked,
-                        label = { Text("Vocabulary reading") },
+                        label = { Text(stringResource(R.string.legacy_card_vocabulary_reading)) },
                         singleLine = true,
                         isError = vocabularyReadingError != null,
                         modifier = Modifier.fillMaxWidth(),
@@ -240,38 +244,44 @@ internal fun TargetScreen(
                         value = definition,
                         onValueChange = onDefinitionChange,
                         enabled = !locked,
-                        label = { Text("Meaning") },
+                        label = { Text(stringResource(R.string.legacy_card_meaning)) },
                         minLines = 2,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     if (definitionStale) {
-                        Text("The meaning may be stale for the current target.", color = MaterialTheme.colorScheme.error)
-                        TextButton(enabled = !locked, onClick = onAcknowledgeDefinition) { Text("Keep this meaning") }
+                        Text(stringResource(R.string.legacy_card_the_meaning_may_be_stale_for_the_current_t), color = MaterialTheme.colorScheme.error)
+                        TextButton(enabled = !locked, onClick = onAcknowledgeDefinition) { Text(stringResource(R.string.legacy_card_keep_this_meaning)) }
                     }
                     OutlinedTextField(
                         value = translation,
                         onValueChange = onTranslationChange,
                         enabled = !locked,
-                        label = { Text("Translation") },
+                        label = { Text(stringResource(R.string.legacy_card_translation)) },
                         minLines = 2,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     if (translationPending) {
-                        Text("Translation is being prepared…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.legacy_card_translation_is_being_prepared), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     translationError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                    if (translationStale) Text("This translation is for an earlier sentence.", color = MaterialTheme.colorScheme.error)
+                    if (translationStale) Text(stringResource(R.string.legacy_card_this_translation_is_for_an_earlier_sentenc), color = MaterialTheme.colorScheme.error)
                     if (translationError != null) {
-                        TextButton(enabled = !locked, onClick = onRetryTranslation) { Text("Retry translation") }
+                        TextButton(enabled = !locked, onClick = onRetryTranslation) { Text(stringResource(R.string.legacy_card_retry_translation)) }
                     }
                     if (pitchAlternatives.isNotEmpty()) {
-                        Text("Pitch accent", style = MaterialTheme.typography.labelLarge)
+                        Text(stringResource(R.string.legacy_card_pitch_accent), style = MaterialTheme.typography.labelLarge)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             pitchAlternatives.forEach { accent ->
                                 OutlinedButton(
                                     enabled = !locked,
                                     onClick = { onSelectPitch(accent) },
-                                ) { Text(if (accent == selectedPitchAccent) "Selected: $accent" else "$accent") }
+                                ) {
+                                    Text(
+                                        if (accent == selectedPitchAccent) {
+                                            stringResource(R.string.legacy_card_selected_pitch_accent, accent)
+                                        } else "$accent",
+                                    )
+                                }
                             }
                         }
                     }
@@ -282,7 +292,7 @@ internal fun TargetScreen(
                     onClick = onLoadMoreEntries,
                     enabled = !locked,
                     modifier = Modifier.heightIn(min = 48.dp),
-                ) { Text("Load more dictionary matches") }
+                ) { Text(stringResource(R.string.legacy_card_load_more_dictionary_matches)) }
             }
         }
         Column(
@@ -296,7 +306,7 @@ internal fun TargetScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            FlowPrimaryButton(text = "Continue", onClick = onContinue, enabled = canContinue && !locked)
+            FlowPrimaryButton(text = stringResource(R.string.legacy_card_continue_action), onClick = onContinue, enabled = canContinue && !locked)
         }
     }
 }
@@ -343,6 +353,10 @@ private fun WordPill(
     onClick: () -> Unit,
 ) {
     val shape = RoundedCornerShape(24.dp)
+    val spokenDescription = stringResource(R.string.legacy_card_word_accessibility, spokenSurface)
+    val selectionDescription = stringResource(
+        if (selected) R.string.legacy_card_target_selected_state else R.string.legacy_card_not_selected_state,
+    )
     Surface(
         onClick = onClick,
         enabled = enabled,
@@ -358,8 +372,8 @@ private fun WordPill(
         modifier = Modifier
             .padding(if (selected) 0.dp else 2.dp)
             .semantics {
-                contentDescription = "Word $spokenSurface"
-                stateDescription = if (selected) "Selected target" else "Not selected"
+                contentDescription = spokenDescription
+                stateDescription = selectionDescription
             },
     ) {
         Text(
@@ -381,6 +395,9 @@ private fun MeaningCard(
     onCheckedChange: (Boolean) -> Unit,
 ) {
     val shape = RoundedCornerShape(16.dp)
+    val selectionDescription = stringResource(
+        if (checked) R.string.legacy_card_meaning_selected_state else R.string.legacy_card_not_selected_state,
+    )
     Surface(
         onClick = { onCheckedChange(!checked) },
         enabled = enabled,
@@ -396,7 +413,7 @@ private fun MeaningCard(
             .padding(vertical = 2.dp)
             .semantics {
                 contentDescription = gloss
-                stateDescription = if (checked) "Selected meaning" else "Not selected"
+                stateDescription = selectionDescription
             },
     ) {
         Row(
