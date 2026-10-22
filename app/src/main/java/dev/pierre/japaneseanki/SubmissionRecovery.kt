@@ -94,6 +94,10 @@ internal object SubmissionRecoveryKeys {
     const val WORD_AUDIO_MODIFIED = "pending_word_audio_modified"
     const val WORD_AUDIO_IMPORTED_FILENAME = "pending_word_audio_imported_filename"
     const val WORD_AUDIO_OMITTED = "pending_word_audio_omitted"
+    const val MEDIA_OPERATION = "pending_media_operation"
+    const val MEDIA_SOURCE_PATH = "pending_media_source_path"
+    const val MEDIA_SOURCE_SIZE = "pending_media_source_size"
+    const val MEDIA_SOURCE_MODIFIED = "pending_media_source_modified"
 }
 
 private data class FrozenAudioKeys(
@@ -252,17 +256,18 @@ internal fun validateAudioReceipt(item: FrozenAudioItem, source: File): AudioRec
     return if (current == item.identity) AudioReceiptValidation.VALID else AudioReceiptValidation.SOURCE_CHANGED
 }
 
-internal enum class NoteInsertedRecoveryDecision { MOVE, COMPLETE, RESOLVE, FAIL }
+internal enum class NoteInsertedRecoveryDecision { COMPLETE, NEEDS_REVIEW, INDETERMINATE, FAIL }
 
 internal fun noteInsertedRecoveryDecision(
     noteId: Long?,
     cards: List<AnkiCardLocation>?,
     deckId: Long,
 ): NoteInsertedRecoveryDecision = when {
-    noteId == null || cards == null || cards.isEmpty() -> NoteInsertedRecoveryDecision.RESOLVE
-    deckId <= 0L -> NoteInsertedRecoveryDecision.FAIL
+    noteId == null || cards == null || cards.isEmpty() -> NoteInsertedRecoveryDecision.INDETERMINATE
+    noteId <= 0L || deckId <= 0L -> NoteInsertedRecoveryDecision.FAIL
+    cards.any { it.ord < 0 || it.deckId <= 0L } -> NoteInsertedRecoveryDecision.FAIL
     cards.all { it.deckId == deckId } -> NoteInsertedRecoveryDecision.COMPLETE
-    else -> NoteInsertedRecoveryDecision.MOVE
+    else -> NoteInsertedRecoveryDecision.NEEDS_REVIEW
 }
 
 internal fun nextSubmissionRevision(currentSequence: Long, currentPendingRevision: Long): Long =
@@ -402,5 +407,9 @@ internal fun clearFrozenSubmission(preferences: SharedPreferences) {
         .remove(SubmissionRecoveryKeys.WORD_AUDIO_MODIFIED)
         .remove(SubmissionRecoveryKeys.WORD_AUDIO_IMPORTED_FILENAME)
         .remove(SubmissionRecoveryKeys.WORD_AUDIO_OMITTED)
+        .remove(SubmissionRecoveryKeys.MEDIA_OPERATION)
+        .remove(SubmissionRecoveryKeys.MEDIA_SOURCE_PATH)
+        .remove(SubmissionRecoveryKeys.MEDIA_SOURCE_SIZE)
+        .remove(SubmissionRecoveryKeys.MEDIA_SOURCE_MODIFIED)
         .commit()
 }

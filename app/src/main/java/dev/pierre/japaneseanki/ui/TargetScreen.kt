@@ -18,10 +18,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
@@ -32,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.pierre.japaneseanki.JapaneseToken
+import dev.pierre.japaneseanki.CorrectableReading
 import dev.pierre.japaneseanki.TargetSpan
 
 /**
@@ -41,6 +48,7 @@ import dev.pierre.japaneseanki.TargetSpan
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun TargetScreen(
+    sentence: String,
     tokens: List<JapaneseToken>,
     selectedSpan: TargetSpan?,
     onSelectSpan: (TargetSpan) -> Unit,
@@ -61,9 +69,41 @@ internal fun TargetScreen(
     tokensLoading: Boolean = false,
     hasMoreEntries: Boolean = false,
     onLoadMoreEntries: (() -> Unit)? = null,
+    ocrChoicesAvailable: Boolean = false,
+    onReopenOcrChooser: () -> Unit = {},
+    vocabularyReading: String,
+    onVocabularyReadingChange: (String) -> Unit,
+    vocabularyReadingError: String?,
+    correctableReadings: List<CorrectableReading>,
+    onReadingCorrection: (TargetSpan, String) -> Unit,
+    readingCorrectionError: String?,
+    definition: String,
+    definitionStale: Boolean,
+    onDefinitionChange: (String) -> Unit,
+    onAcknowledgeDefinition: () -> Unit,
+    translation: String,
+    translationPending: Boolean,
+    translationError: String?,
+    translationStale: Boolean,
+    onTranslationChange: (String) -> Unit,
+    onRetryTranslation: () -> Unit,
+    pitchAlternatives: List<Int>,
+    selectedPitchAccent: Int?,
+    onSelectPitch: (Int) -> Unit,
+    imageAttached: Boolean,
+    imageProcessing: Boolean,
+    imageError: String?,
+    onChoosePhoto: () -> Unit,
+    onRemovePhoto: () -> Unit,
 ) {
     val pills = targetPills(tokens)
+    var correctionsExpanded by remember { mutableStateOf(false) }
     Column(modifier.fillMaxWidth()) {
+        if (ocrChoicesAvailable) {
+            TextButton(enabled = !locked, onClick = onReopenOcrChooser) {
+                Text("Choose text from photo")
+            }
+        }
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -72,6 +112,9 @@ internal fun TargetScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            if (sentence.isNotBlank()) {
+                Text(sentence, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.fillMaxWidth())
+            }
             if (pills.isEmpty()) {
                 Text(
                     when {
@@ -96,14 +139,6 @@ internal fun TargetScreen(
                         )
                     }
                 }
-            }
-            if (selectedSpan != null) {
-                SpanControls(
-                    target = selectedSpan,
-                    tokens = tokens,
-                    enabled = !locked,
-                    onSpanChange = onSelectSpan,
-                )
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -156,6 +191,92 @@ internal fun TargetScreen(
                     )
                 }
             }
+            TextButton(enabled = !locked, onClick = { correctionsExpanded = !correctionsExpanded }) {
+                Text(if (correctionsExpanded) "Hide preparation corrections" else "Edit preparation corrections")
+            }
+            if (correctionsExpanded) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Preparation corrections", style = MaterialTheme.typography.titleMedium)
+                    TextButton(enabled = !locked, onClick = onChoosePhoto) {
+                        Text(if (imageAttached) "Replace photo" else "Attach photo")
+                    }
+                    if (imageAttached) {
+                        TextButton(enabled = !locked && !imageProcessing, onClick = onRemovePhoto) {
+                            Text("Remove photo")
+                        }
+                        Text(
+                            if (imageProcessing) "Preparing photo…" else "Photo attached",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    imageError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+
+                    if (correctableReadings.isNotEmpty()) {
+                        Text("Sentence readings", style = MaterialTheme.typography.labelLarge)
+                        correctableReadings.forEach { item ->
+                            OutlinedTextField(
+                                value = item.reading,
+                                onValueChange = { onReadingCorrection(item.span, it) },
+                                enabled = !locked,
+                                label = { Text("${item.surface} reading") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                        readingCorrectionError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    }
+                    OutlinedTextField(
+                        value = vocabularyReading,
+                        onValueChange = onVocabularyReadingChange,
+                        enabled = !locked,
+                        label = { Text("Vocabulary reading") },
+                        singleLine = true,
+                        isError = vocabularyReadingError != null,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    vocabularyReadingError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    OutlinedTextField(
+                        value = definition,
+                        onValueChange = onDefinitionChange,
+                        enabled = !locked,
+                        label = { Text("Meaning") },
+                        minLines = 2,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (definitionStale) {
+                        Text("The meaning may be stale for the current target.", color = MaterialTheme.colorScheme.error)
+                        TextButton(enabled = !locked, onClick = onAcknowledgeDefinition) { Text("Keep this meaning") }
+                    }
+                    OutlinedTextField(
+                        value = translation,
+                        onValueChange = onTranslationChange,
+                        enabled = !locked,
+                        label = { Text("Translation") },
+                        minLines = 2,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (translationPending) {
+                        Text("Translation is being prepared…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    translationError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    if (translationStale) Text("This translation is for an earlier sentence.", color = MaterialTheme.colorScheme.error)
+                    if (translationError != null) {
+                        TextButton(enabled = !locked, onClick = onRetryTranslation) { Text("Retry translation") }
+                    }
+                    if (pitchAlternatives.isNotEmpty()) {
+                        Text("Pitch accent", style = MaterialTheme.typography.labelLarge)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            pitchAlternatives.forEach { accent ->
+                                OutlinedButton(
+                                    enabled = !locked,
+                                    onClick = { onSelectPitch(accent) },
+                                ) { Text(if (accent == selectedPitchAccent) "Selected: $accent" else "$accent") }
+                            }
+                        }
+                    }
+                }
+            }
             if (hasMoreEntries && onLoadMoreEntries != null) {
                 TextButton(
                     onClick = onLoadMoreEntries,
@@ -176,55 +297,6 @@ internal fun TargetScreen(
                 )
             }
             FlowPrimaryButton(text = "Continue", onClick = onContinue, enabled = canContinue && !locked)
-        }
-    }
-}
-
-/**
- * Boundary adjustment for a contiguous selection: extend or trim one word at a time. The study
- * reaches the same spans by dragging across pills; labelled controls keep it operable with
- * TalkBack and switch access (SPEC.md §4.3.3).
- */
-@Composable
-private fun SpanControls(
-    target: TargetSpan,
-    tokens: List<JapaneseToken>,
-    enabled: Boolean,
-    onSpanChange: (TargetSpan) -> Unit,
-) {
-    val surface = spanSurface(tokens, target).orEmpty()
-    val extendLeft = extendSpan(tokens, target, SpanEdge.Left)
-    val extendRight = extendSpan(tokens, target, SpanEdge.Right)
-    val trimLeft = trimSpan(tokens, target, SpanEdge.Left)
-    val trimRight = trimSpan(tokens, target, SpanEdge.Right)
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            if (surface.isBlank()) "Selection" else "Selected: $surface",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextButton(
-                enabled = enabled && extendLeft != null,
-                onClick = { extendLeft?.let(onSpanChange) },
-                modifier = Modifier.heightIn(min = 48.dp),
-            ) { Text("◀ Extend") }
-            TextButton(
-                enabled = enabled && extendRight != null,
-                onClick = { extendRight?.let(onSpanChange) },
-                modifier = Modifier.heightIn(min = 48.dp),
-            ) { Text("Extend ▶") }
-            if (trimLeft != null || trimRight != null) {
-                TextButton(
-                    enabled = enabled,
-                    onClick = { (trimLeft ?: trimRight)?.let(onSpanChange) },
-                    modifier = Modifier.heightIn(min = 48.dp),
-                ) { Text("Trim") }
-            }
         }
     }
 }
@@ -292,11 +364,8 @@ private fun WordPill(
     ) {
         Text(
             surface,
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
-            style = MaterialTheme.typography.headlineMedium.copy(
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Normal,
-            ),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Normal),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -356,7 +425,13 @@ private fun MeaningCard(
             ) {
                 if (checked) FlowIcons.Check(Modifier.size(16.dp), MaterialTheme.colorScheme.onPrimary)
             }
-            Text(gloss, style = MaterialTheme.typography.bodyLarge)
+        Text(
+            gloss,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
         }
     }
 }

@@ -18,6 +18,17 @@ class JapaneseMorphologyTest {
         assertEquals(AnalyzedLemma("食べる", "たべる"), resolveAnalyzedLemma(tokens, TargetSpan(0, 3)))
     }
 
+    @Test fun inflected出来るSelectionResolvesToTheAJTDictionaryReading() {
+        val sentence = "出来た"
+        val tokens = listOf(
+            token(0, 2, "出来", "出来る", "動詞-一般", "でき", "できる"),
+            token(2, 3, "た", "た", "助動詞-タ", "た"),
+        )
+
+        assertEquals(AnalyzedLemma("出来る", "できる"), resolveAnalyzedLemma(tokens, TargetSpan(0, 3)))
+        assertEquals("できた", resolveSurfaceReading(sentence, tokens, TargetSpan(0, 3)))
+    }
+
     @Test fun sentenceFuriganaSuggestionsExcludeTargetAndUseAnalyzerReadings() {
         val sentence = "昨日は学校"
         val tokens = listOf(

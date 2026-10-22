@@ -37,9 +37,10 @@ internal class AjtPitchIndex internal constructor(
     val isOpen: Boolean get() = database.isOpen
     override fun pitch(expression: String, reading: String): List<AjtPitchRecord> {
         if (expression.isBlank() || reading.isBlank()) return emptyList()
-        return database.rawQuery(
-            "SELECT pitch_html, pitch_number FROM pitch_ajt WHERE expression=? AND reading=? ORDER BY source_order",
-            arrayOf(expression, hiragana(reading)),
+        val matches = database.rawQuery(
+            """SELECT pitch_html, pitch_number FROM pitch_ajt
+               WHERE reading=? AND (headword=? OR reading=?) ORDER BY source_order""",
+            arrayOf(hiragana(reading), katakana(expression), hiragana(expression)),
         ).use { cursor ->
             buildList {
                 while (cursor.moveToNext()) {
@@ -48,6 +49,9 @@ internal class AjtPitchIndex internal constructor(
                 }
             }
         }
+        // AJT's formatted output removes duplicate renderings after lookup. Keep the first source
+        // record, as its repository query does, without losing the original rows in the asset.
+        return matches.distinctBy { it.html to it.accent }
     }
 
     /**
@@ -78,7 +82,7 @@ internal class AjtPitchIndex internal constructor(
     companion object {
         const val ASSET_NAME = "pitch_ajt.sqlite"
         const val GZIP_ASSET_NAME = "pitch_ajt.sqlite.gz"
-        const val SCHEMA_VERSION = 1
+        const val SCHEMA_VERSION = 2
 
         /** Returns an opened, unvalidated handle, or `null` when the bundled index is unavailable. */
         fun open(context: Context): AjtPitchIndex? {
@@ -132,7 +136,9 @@ internal class AjtPitchIndex internal constructor(
             }
         }
 
-        private val REQUIRED_COLUMNS = setOf("expression", "reading", "pitch_html", "pitch_number", "source_order")
+        private val REQUIRED_COLUMNS = setOf(
+            "expression", "headword", "reading", "pitch_html", "pitch_number", "source_order",
+        )
         private const val MIN_BYTES = 1024L * 1024L
     }
 }

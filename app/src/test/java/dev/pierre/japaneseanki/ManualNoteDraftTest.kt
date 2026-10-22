@@ -37,7 +37,25 @@ class ManualNoteDraftTest {
         assertEquals("猫[ねこ]", fields["VocabFurigana"])
         assertEquals("cat", fields["VocabDef"])
         assertEquals("", fields["fm_focus_words"])
-        assertEquals(AnkiFieldContract.requiredFields.toSet(), fields.keys)
+        assertEquals((AnkiFieldContract.requiredFields + AnkiFieldContract.optionalFields).toSet(), fields.keys)
+    }
+
+    @Test fun selectedJmdictPartOfSpeechIsEscapedAndOptionalForOlderModels() {
+        val values = draft(sentenceReading = "ねこ", vocabularyReading = "ねこ")
+            .copy(vocabularyPartOfSpeech = listOf("n", "<tag>"))
+            .fieldsByName()!!
+        assertEquals("n, &lt;tag&gt;", values["VocabPartOfSpeech"])
+
+        val legacy = AnkiFieldContract.mapToModelOrder(AnkiFieldContract.requiredFields, values)
+        assertTrue(legacy.isValid)
+        assertEquals(AnkiFieldContract.requiredFields.size, legacy.values.size)
+
+        val extended = AnkiFieldContract.mapToModelOrder(
+            AnkiFieldContract.requiredFields + "VocabPartOfSpeech",
+            values,
+        )
+        assertTrue(extended.isValid)
+        assertEquals("n, &lt;tag&gt;", extended.values.last())
     }
 
     @Test fun analyzedTargetFuriganaDoesNotBlockSendingAndKeepsOutsideAnnotation() {

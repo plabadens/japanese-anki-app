@@ -1,6 +1,12 @@
 package dev.pierre.japaneseanki
 
 import java.io.File
+import java.io.IOException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import javax.net.ssl.SSLException
+import dev.pierre.japaneseanki.speech.SpeechException
+import dev.pierre.japaneseanki.speech.SpeechFailure
 
 /**
  * Synchronous string persistence for draft audio state.
@@ -36,6 +42,8 @@ object DraftAudioPreferences {
     const val STATUS_READY = "ready"
     const val STATUS_PENDING = "pending"
     const val STATUS_FAILED = "failed"
+    fun failureRetryable(item: AudioItem): String = "${prefix(item)}_failure_retryable"
+    fun diagnostic(item: AudioItem, field: String): String = "${prefix(item)}_diagnostic_$field"
 
     fun prefix(item: AudioItem): String = when (item) {
         AudioItem.SENTENCE -> "draft_audio_sentence"
@@ -67,6 +75,22 @@ data class DraftAudioInput(
     }
 }
 
+data class DraftAudioDiagnostic(
+    val category: String,
+    val httpStatus: Int?,
+    val googleStatus: String?,
+    val googleReason: String?,
+    val exceptionClass: String?,
+    val durationMillis: Long,
+    val item: AudioItem,
+    val revision: Long,
+    val attemptId: Long,
+    val inputBytes: Int?,
+    val requestBytes: Int?,
+    val voiceName: String?,
+    val hintCount: Int?,
+)
+
 /** Per-item presentation state. Only [Ready] carries a durable, validated file. */
 sealed interface DraftAudioState {
     val identity: String?
@@ -86,6 +110,7 @@ sealed interface DraftAudioState {
         override val identity: String,
         val retryable: Boolean,
         val message: String,
+        val diagnostic: DraftAudioDiagnostic? = null,
     ) : DraftAudioState
 }
 
@@ -110,7 +135,11 @@ sealed interface DraftAudioAttemptResult {
     /** The attempt was invalidated (new input, cancel, discard, restart) before acceptance. */
     data object Stale : DraftAudioAttemptResult
 
-    data class Failed(val message: String, val retryable: Boolean) : DraftAudioAttemptResult
+    data class Failed(
+        val message: String,
+        val retryable: Boolean,
+        val diagnostic: DraftAudioDiagnostic? = null,
+    ) : DraftAudioAttemptResult
 }
 
 /** Immutable audio references pinned for one Send. */
@@ -190,7 +219,10 @@ class DraftAudioController(
                     input.identity, retryable = true, message = AUDIO_FILE_MISSING,
                 )
             previous is DraftAudioState.Failed && (previous.identity.isNullOrBlank() || previous.identity == input.identity) ->
-                previous.copy(identity = input.identity, retryable = true)
+                previous.copy(
+                    identity = input.identity,
+                    retryable = if (previous.identity.isNullOrBlank()) true else previous.retryable,
+                )
             previous is DraftAudioState.NeedsContinue && previous.identity == input.identity -> previous
             else -> DraftAudioState.NeedsContinue(input.identity)
         }
@@ -211,6 +243,25 @@ class DraftAudioController(
         val state = states[item]
         if (state !is DraftAudioState.NeedsContinue || state.identity != input.identity) return null
         beginLocked(input)
+    }
+
+    /**
+     * Atomically reserves once-only audio work for a fresh Continue into Review. Only inputs
+     * already declared for [revision] in NeedsContinue are eligible; restored, Ready, Failed,
+     * Generating, and stale-revision items are left alone. The authorization callback must persist
+     * its marker synchronously and return false if that commit fails.
+     */
+    fun beginReviewEntry(revision: Long, authorize: () -> Boolean): List<DraftAudioAttempt> = synchronized(gate) {
+        if (disposed || frozen != null || revision < 0) return emptyList()
+        val pending = AudioItem.entries.mapNotNull { item ->
+            val input = inputs[item] ?: return@mapNotNull null
+            val state = states[item]
+            input.takeIf {
+                input.revision == revision && state is DraftAudioState.NeedsContinue && state.identity == input.identity
+            }
+        }
+        if (pending.isEmpty() || !authorize()) return emptyList()
+        pending.mapNotNull(::beginLocked)
     }
 
     /** Explicit per-item Retry for a failed item; a Ready sibling is left untouched. */
@@ -238,6 +289,7 @@ class DraftAudioController(
      */
     fun runAttempt(attempt: DraftAudioAttempt): DraftAudioAttemptResult {
         val staging = attempt.staging
+        val startedAt = System.nanoTime()
         try {
             if (!isCurrent(attempt.token)) return DraftAudioAttemptResult.Stale
             var fromCache = false
@@ -294,7 +346,9 @@ class DraftAudioController(
             revokeCancelledAttempt(attempt)
             throw cancelled
         } catch (error: Exception) {
-            return failAttempt(attempt, messageFor(error), retryable = true)
+            val diagnostic = diagnosticFor(error, attempt, elapsedMillis(startedAt))
+            val retryable = retryable(error)
+            return failAttempt(attempt, messageFor(error, diagnostic.category), retryable, diagnostic)
         } finally {
             // The worker owns the staging file until this point; a published file no longer
             // exists under the staging root, so this only removes failed/partial output.
@@ -419,7 +473,12 @@ class DraftAudioController(
             return null
         }
         states[input.item] = DraftAudioState.Generating(input.identity, attemptId)
-        persistLocked()
+        if (!persistLocked()) {
+            states[input.item] = DraftAudioState.NeedsContinue(input.identity)
+            staging.close()
+            diagnose("audio attempt not started because its pending state could not be persisted")
+            return null
+        }
         return DraftAudioAttempt(token, input, staging)
     }
 
@@ -449,13 +508,18 @@ class DraftAudioController(
         }
     }
 
-    private fun failAttempt(attempt: DraftAudioAttempt, message: String, retryable: Boolean): DraftAudioAttemptResult {
+    private fun failAttempt(
+        attempt: DraftAudioAttempt,
+        message: String,
+        retryable: Boolean,
+        diagnostic: DraftAudioDiagnostic? = null,
+    ): DraftAudioAttemptResult {
         val token = attempt.token
         return synchronized(gate) {
             if (!isCurrentLocked(token)) return@synchronized DraftAudioAttemptResult.Stale
-            states[token.item] = DraftAudioState.Failed(token.inputIdentity, retryable, message)
+            states[token.item] = DraftAudioState.Failed(token.inputIdentity, retryable, message, diagnostic)
             persistLocked()
-            DraftAudioAttemptResult.Failed(message, retryable)
+            DraftAudioAttemptResult.Failed(message, retryable, diagnostic)
         }
     }
 
@@ -510,6 +574,9 @@ class DraftAudioController(
                 persistence.read(DraftAudioPreferences.modified(item))?.toLongOrNull(),
             )
             val frozenPath = persistence.read(DraftAudioPreferences.frozenPath(item))
+            val persistedFailureRetryable = persistence.read(DraftAudioPreferences.failureRetryable(item))
+                ?.toBooleanStrictOrNull()
+            val restoredDiagnostic = readDiagnostic(item)
             if (!frozenPath.isNullOrBlank()) {
                 runCatching { java.io.File(frozenPath).canonicalPath }.getOrNull()?.let { protected += it }
             }
@@ -526,7 +593,12 @@ class DraftAudioController(
                 status == DraftAudioPreferences.STATUS_READY ->
                     DraftAudioState.Failed(identity, retryable = true, message = AUDIO_FILE_MISSING)
                 status == null && identity.isBlank() -> DraftAudioState.Idle
-                else -> DraftAudioState.Failed(identity, retryable = true, message = INTERRUPTED_AUDIO_STATE)
+                else -> DraftAudioState.Failed(
+                    identity,
+                    retryable = persistedFailureRetryable ?: true,
+                    message = INTERRUPTED_AUDIO_STATE,
+                    diagnostic = restoredDiagnostic,
+                )
             }
         }
         protectedAtRestore = protected
@@ -581,6 +653,13 @@ class DraftAudioController(
                     clearFileKeys(changes, item)
                 }
             }
+            if (state is DraftAudioState.Failed) {
+                changes[DraftAudioPreferences.failureRetryable(item)] = state.retryable.toString()
+                writeDiagnostic(changes, item, state.diagnostic)
+            } else {
+                changes[DraftAudioPreferences.failureRetryable(item)] = null
+                writeDiagnostic(changes, item, null)
+            }
             val frozenFile = frozen?.files?.get(item)
             changes[DraftAudioPreferences.frozenPath(item)] = frozenFile?.path
         }
@@ -594,16 +673,123 @@ class DraftAudioController(
         changes[DraftAudioPreferences.modified(item)] = null
     }
 
-    private fun messageFor(error: Exception): String {
-        val message = error.message?.trim().orEmpty()
-        if (message.isEmpty() || message.length > MAX_MESSAGE) return "Audio generation failed. Tap Retry."
-        return message
+    private fun writeDiagnostic(
+        changes: MutableMap<String, String?>,
+        item: AudioItem,
+        diagnostic: DraftAudioDiagnostic?,
+    ) {
+        val fields = mapOf(
+            "category" to diagnostic?.category?.takeIf { category -> SpeechFailure.entries.any { it.name == category } },
+            "http_status" to diagnostic?.httpStatus?.takeIf { it in 100..599 }?.toString(),
+            "google_status" to diagnostic?.googleStatus?.takeIf(::isSafeDiagnosticToken),
+            "google_reason" to diagnostic?.googleReason?.takeIf(::isSafeDiagnosticToken),
+            "exception_class" to diagnostic?.exceptionClass?.takeIf { it.matches(SAFE_EXCEPTION_CLASS) },
+            "duration_ms" to diagnostic?.durationMillis?.takeIf { it >= 0 }?.toString(),
+            "revision" to diagnostic?.revision?.takeIf { it >= 0 }?.toString(),
+            "attempt_id" to diagnostic?.attemptId?.takeIf { it >= 0 }?.toString(),
+            "input_bytes" to diagnostic?.inputBytes?.takeIf { it >= 0 }?.toString(),
+            "request_bytes" to diagnostic?.requestBytes?.takeIf { it >= 0 }?.toString(),
+            "voice_name" to diagnostic?.voiceName?.takeIf { it.matches(SAFE_VOICE_NAME) },
+            "hint_count" to diagnostic?.hintCount?.takeIf { it >= 0 }?.toString(),
+        )
+        fields.forEach { (field, value) ->
+            changes[DraftAudioPreferences.diagnostic(item, field)] = value
+        }
     }
+
+    private fun readDiagnostic(item: AudioItem): DraftAudioDiagnostic? {
+        fun read(field: String): String? = persistence.read(DraftAudioPreferences.diagnostic(item, field))
+        val category = read("category")?.takeIf { it in SpeechFailure.entries.map(SpeechFailure::name) } ?: return null
+        val duration = read("duration_ms")?.toLongOrNull()?.takeIf { it >= 0 } ?: return null
+        val revision = read("revision")?.toLongOrNull()?.takeIf { it >= 0 } ?: return null
+        val attemptId = read("attempt_id")?.toLongOrNull()?.takeIf { it >= 0 } ?: return null
+        val httpStatus = read("http_status")?.toIntOrNull()?.takeIf { it in 100..599 }
+        val hintCount = read("hint_count")?.toIntOrNull()?.takeIf { it >= 0 }
+        val inputBytes = read("input_bytes")?.toIntOrNull()?.takeIf { it >= 0 }
+        val requestBytes = read("request_bytes")?.toIntOrNull()?.takeIf { it >= 0 }
+        val googleStatus = read("google_status")?.takeIf(::isSafeDiagnosticToken)
+        val googleReason = read("google_reason")?.takeIf(::isSafeDiagnosticToken)
+        val exceptionClass = read("exception_class")?.takeIf { it.matches(SAFE_EXCEPTION_CLASS) }
+        val voiceName = read("voice_name")?.takeIf { it.matches(SAFE_VOICE_NAME) }
+        return DraftAudioDiagnostic(
+            category, httpStatus, googleStatus, googleReason, exceptionClass, duration,
+            item, revision, attemptId, inputBytes, requestBytes, voiceName, hintCount,
+        )
+    }
+
+    private fun isSafeDiagnosticToken(value: String): Boolean =
+        value.length in 1..80 && value.all {
+            it in 'A'..'Z' || it in 'a'..'z' || it in '0'..'9' || it in "_.-"
+        }
+
+    private fun diagnosticFor(error: Exception, attempt: DraftAudioAttempt, elapsedMillis: Long): DraftAudioDiagnostic {
+        val speechError = error as? SpeechException
+        val speechDiagnostic = speechError?.diagnostic
+        val request = speechDiagnostic?.request
+        val category = speechError?.failure?.name ?: when (error) {
+            is SocketTimeoutException -> "TIMEOUT"
+            is UnknownHostException -> "DNS"
+            is SSLException -> "TLS"
+            is AudioSourceMissingException, is java.io.FileNotFoundException -> "SOURCE_MISSING"
+            is IllegalArgumentException -> "INVALID_REQUEST"
+            is IllegalStateException -> "SETUP"
+            is IOException -> "NETWORK"
+            else -> "UNKNOWN"
+        }
+        return DraftAudioDiagnostic(
+            category = category,
+            httpStatus = speechDiagnostic?.httpStatus?.takeIf { it in 100..599 },
+            googleStatus = speechDiagnostic?.googleStatus?.takeIf(::isSafeDiagnosticToken),
+            googleReason = speechDiagnostic?.googleReason?.takeIf(::isSafeDiagnosticToken),
+            exceptionClass = if (speechDiagnostic != null) {
+                speechDiagnostic.exceptionClass?.takeIf { it.matches(SAFE_EXCEPTION_CLASS) }
+            } else {
+                error.javaClass.simpleName.takeIf { it.matches(SAFE_EXCEPTION_CLASS) }
+            },
+            durationMillis = (speechDiagnostic?.durationMillis ?: elapsedMillis).coerceAtLeast(0L),
+            item = attempt.input.item,
+            revision = attempt.input.revision,
+            attemptId = attempt.token.attemptId,
+            inputBytes = request?.inputBytes?.takeIf { it >= 0 }
+                ?: attempt.input.text.toByteArray(Charsets.UTF_8).size,
+            requestBytes = request?.requestBytes?.takeIf { it >= 0 },
+            voiceName = request?.voiceName?.takeIf { it.matches(SAFE_VOICE_NAME) }
+                ?: attempt.input.cacheKey.voice.takeIf { it.matches(SAFE_VOICE_NAME) },
+            hintCount = request?.hintCount?.takeIf { it >= 0 },
+        )
+    }
+
+    private fun retryable(error: Exception): Boolean = when (error) {
+        is SpeechException -> error.retryable
+        is SocketTimeoutException, is UnknownHostException, is SSLException, is IOException ->
+            error !is AudioSourceMissingException && error !is java.io.FileNotFoundException
+        is IllegalArgumentException, is IllegalStateException -> false
+        else -> false
+    }
+
+    private fun messageFor(error: Exception, category: String): String =
+        (error as? SpeechException)?.message?.takeIf(String::isNotBlank) ?: when (category) {
+            "TIMEOUT" -> "The audio service timed out. Tap Retry."
+            "DNS" -> "The audio service host could not be resolved. Check the connection and settings."
+            "TLS" -> "A secure connection to the audio service failed. Check the device date and network."
+            "NETWORK" -> "The audio service could not be reached. Tap Retry when it is available."
+            "SOURCE_MISSING" -> "No recording is available for this selected entry."
+            "INVALID_REQUEST" -> "The audio request is invalid. Correct the input or settings."
+            "SETUP", "AUTHORIZATION", "API_NOT_ENABLED", "BILLING" ->
+                "Audio generation is not configured. Check the Google Cloud settings."
+            "QUOTA" -> "The audio service quota was reached. Retry later."
+            "INVALID_AUDIO", "INVALID_RESPONSE" -> "The audio service returned unusable audio. Tap Retry."
+            else -> "Audio generation failed. Check the input and settings before retrying."
+        }
+
+    private fun elapsedMillis(started: Long): Long =
+        ((System.nanoTime() - started).coerceAtLeast(0L) / 1_000_000L)
 
     private companion object {
         const val AUDIO_FILE_MISSING = "The saved audio file is missing. Tap Retry to generate it again."
         const val INTERRUPTED_AUDIO_STATE = "Audio generation was interrupted. Tap Retry to generate it again."
         const val LEGACY_AUDIO_STATE = "This audio was saved by an older version. Tap Retry to generate it again."
-        const val MAX_MESSAGE = 300
+        val SAFE_EXCEPTION_CLASS = Regex("[A-Za-z0-9_\$]{1,128}")
+        val SAFE_VOICE_NAME = Regex("[A-Za-z0-9_.-]{1,128}")
     }
 }

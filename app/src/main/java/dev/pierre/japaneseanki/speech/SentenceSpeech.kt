@@ -149,23 +149,65 @@ data class SentenceSpeechRequest(
 
 enum class SpeechFailure {
     NETWORK,
+    TIMEOUT,
+    DNS,
+    TLS,
     AUTHORIZATION,
-
-    /** The Cloud Text-to-Speech API is not enabled for the project. */
     API_NOT_ENABLED,
-
-    /** The project has no active billing account. */
     BILLING,
     QUOTA,
     INVALID_REQUEST,
     INVALID_RESPONSE,
     INVALID_AUDIO,
+    SETUP,
+    SOURCE_MISSING,
+    UNKNOWN,
     CANCELLED,
 }
 
-/** Sanitized provider failure: messages never contain credentials, sentence text, or response bodies. */
-class SpeechException(val failure: SpeechFailure, message: String, cause: Throwable? = null) :
-    Exception(message, cause)
+/** Safe request metadata: content, credentials, response bodies, and media are never retained. */
+data class SpeechRequestMetadata(
+    val operation: SpeechOperation,
+    val inputBytes: Int? = null,
+    val requestBytes: Int? = null,
+    val voiceName: String? = null,
+    val hintCount: Int? = null,
+)
+
+enum class SpeechOperation { VOICE_LIST, SYNTHESIS }
+
+data class SpeechDiagnostic(
+    val category: SpeechFailure,
+    val httpStatus: Int?,
+    val googleStatus: String?,
+    val googleReason: String?,
+    val exceptionClass: String?,
+    val durationMillis: Long?,
+    val request: SpeechRequestMetadata,
+)
+
+val SpeechFailure.retryable: Boolean
+    get() = when (this) {
+        SpeechFailure.NETWORK, SpeechFailure.TIMEOUT, SpeechFailure.DNS, SpeechFailure.TLS,
+        SpeechFailure.QUOTA, SpeechFailure.INVALID_RESPONSE, SpeechFailure.INVALID_AUDIO -> true
+        else -> false
+    }
+
+/** Sanitized provider failure; diagnostic fields contain only bounded enums, codes, and counts. */
+class SpeechException(
+    val failure: SpeechFailure,
+    message: String,
+    cause: Throwable? = null,
+    val diagnostic: SpeechDiagnostic? = null,
+    val retryable: Boolean = failure.retryable,
+) : Exception(message, cause) {
+    internal fun withDiagnostic(value: SpeechDiagnostic): SpeechException = SpeechException(
+        failure = failure,
+        message = message ?: "Speech request failed.",
+        diagnostic = value,
+        retryable = retryable,
+    )
+}
 
 /** Replaceable sentence-speech boundary. The workflow never builds Google JSON itself. */
 interface SentenceSpeechProvider {

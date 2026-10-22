@@ -11,7 +11,7 @@ class ReviewAudioPresentationTest {
 
     @Test fun labelsExposeReadyPlayingGeneratingAndFailedStates() {
         assertEquals("Play Sentence audio", reviewAudioControlLabel("Sentence", ReviewAudioPresentation.Ready))
-        assertEquals("Pause Vocabulary audio", reviewAudioControlLabel("Vocabulary", ReviewAudioPresentation.Playing))
+        assertEquals("Stop Word audio", reviewAudioControlLabel("Word", ReviewAudioPresentation.Playing))
         assertEquals("Generating Sentence audio", reviewAudioControlLabel("Sentence", ReviewAudioPresentation.Generating))
         assertEquals(
             "Explain unavailable Vocabulary audio",

@@ -60,6 +60,19 @@ class TokenGroupingTest {
     }
 
     @Test
+    fun groupingLeavesTheRawMorphemeListAvailableForIdentityReconciliation() {
+        val raw = morphemes.toMutableList()
+        val before = raw.toList()
+
+        val grouped = groupTokens(raw)
+
+        assertEquals(before, raw)
+        assertEquals(listOf("図書館", "で", "本", "を", "読みました", "。"), grouped.map { it.surface })
+        assertEquals(TargetSpan(0, 2), raw.first().span)
+        assertEquals(TargetSpan(0, 3), grouped.first().span)
+    }
+
+    @Test
     fun groupedPredicateStillResolvesTheDictionaryLemmaAndSurfaceReading() {
         val grouped = groupTokens(morphemes)
 

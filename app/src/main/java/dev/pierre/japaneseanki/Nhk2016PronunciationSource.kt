@@ -61,8 +61,9 @@ class Nhk2016PronunciationSource(
             "NHK recordings require a resolved vocabulary entry"
         }
         val spelling = spellingFor(request).trim()
-        if (spelling.isEmpty()) throw IOException("NHK recording spelling is unavailable")
-        val recording = recordingFor(spelling) ?: throw IOException("No NHK recording matches this spelling")
+        if (spelling.isEmpty()) throw AudioSourceMissingException("NHK recording spelling is unavailable")
+        val recording = recordingFor(spelling)
+            ?: throw AudioSourceMissingException("No NHK recording matches this spelling")
         val parent = output.absoluteFile.parentFile ?: throw IOException("Invalid audio output path")
         if (!parent.exists() && !parent.mkdirs()) throw IOException("Could not create audio output directory")
         val temporary = File(parent, ".${UUID.randomUUID()}.ogg")
@@ -71,7 +72,11 @@ class Nhk2016PronunciationSource(
             connection.connectTimeout = TIMEOUT_MILLIS
             connection.readTimeout = TIMEOUT_MILLIS
             connection.instanceFollowRedirects = false
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) throw IOException("NHK recording is unavailable")
+            val status = connection.responseCode
+            if (status == HttpURLConnection.HTTP_NOT_FOUND || status == HttpURLConnection.HTTP_GONE) {
+                throw AudioSourceMissingException("No NHK recording matches this spelling")
+            }
+            if (status != HttpURLConnection.HTTP_OK) throw IOException("NHK recording service is unavailable")
             connection.inputStream.use { input ->
                 temporary.outputStream().use { stream ->
                     val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
