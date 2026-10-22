@@ -34,7 +34,7 @@ and dated status reports neither control the UI nor establish compliance.
 ## Quick start
 
 ```sh
-nix develop                     # JDK 17, Gradle 8.14.4, SDK 37.0, build-tools 36.0.0, NDK, CMake, emulator, adb
+nix develop                     # JDK 17, Gradle 9.7.1, SDK 37.0, build-tools 36.0.0, NDK, CMake, emulator, adb
 ./scripts/test-core.sh          # fast lane: platform-independent core tests
 gradle -Pandroid.aapt2FromMavenOverride="$ANDROID_HOME/build-tools/36.0.0/aapt2" \
   testDebugUnitTest assembleDebug

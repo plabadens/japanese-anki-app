@@ -8,6 +8,7 @@
       system = "x86_64-linux";
       pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
       jdk = pkgs.jdk17;
+      gradle = pkgs.gradle_9;
       mecabSource = pkgs.fetchFromGitHub {
         owner = "taku910";
         repo = "mecab";
@@ -113,7 +114,7 @@
           version = "0.1.0";
           src = apkSource;
 
-          nativeBuildInputs = [ jdk pkgs.gradle ];
+          nativeBuildInputs = [ jdk gradle ];
           buildInputs = [ android.androidsdk ];
           env = toolchainEnv // {
             JAVA_HOME = "${jdk}";
@@ -122,12 +123,13 @@
           gradleBuildTask = task;
           gradleCheckTask = "testDebugUnitTest";
           gradleFlags = [
+            "--max-workers=1"
             "-Pandroid.aapt2FromMavenOverride=${sdkRoot}/build-tools/36.0.0/aapt2"
             "-Dorg.gradle.java.home=${jdk}"
           ];
           doCheck = true;
 
-          mitmCache = pkgs.gradle.fetchDeps {
+          mitmCache = gradle.fetchDeps {
             inherit (finalAttrs) pname;
             pkg = finalAttrs.finalPackage;
             data = ./nix/gradle/deps.json;
@@ -156,7 +158,7 @@
         outputName = "japanese-anki-0.4-x86_64-debug.apk";
       };
       coreTests = pkgs.runCommand "japanese-anki-core-tests" {
-        nativeBuildInputs = [ jdk pkgs.gradle pkgs.python3 ];
+        nativeBuildInputs = [ jdk gradle pkgs.python3 ];
       } ''
         cp -r ${coreCheckSource} source
         chmod -R u+w source
@@ -182,7 +184,7 @@
       checks.${system}.core = coreTests;
 
       devShells.${system}.default = pkgs.mkShell (toolchainEnv // {
-        packages = [ jdk pkgs.gradle android.androidsdk android.platform-tools pkgs.git pkgs.python3 ];
+        packages = [ jdk gradle android.androidsdk android.platform-tools pkgs.git pkgs.python3 ];
         EMULATOR_ADB = "${emulatorAdb}/bin/emulator-adb";
         JAVA_HOME = jdk.home;
         LANG = "C.UTF-8";
