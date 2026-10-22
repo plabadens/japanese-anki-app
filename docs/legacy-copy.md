@@ -1,0 +1,385 @@
+# Existing copy awaiting its owning surface work
+
+These resources preserve shipped wording verbatim while the owning cards replace or retire old surfaces. They are not additions to approved product copy.
+
+| Resource key | Surface | Reason retained | Owning card |
+|---|---|---|---|
+| `legacy_card_entry_count` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_capture_capture_failed` | Capture camera or Type surface | Existing shutter accessibility state; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_capture_in_progress` | Capture camera or Type surface | Existing shutter accessibility state; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_capture_photo` | Capture camera or Type surface | Existing shutter accessibility name; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_choose_photo_from_device` | Capture camera or Type surface | Existing gallery accessibility name; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_flash` | Capture camera or Type surface | Existing flash accessibility name; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_input_title` | Capture camera or Type surface | Existing visible title; this task only moves it to a resource. | `t_f6a4efe9` |
+
+| `legacy_capture_saving_photo` | Capture camera or Type surface | Existing shutter accessibility name; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_card_audio_error_state` | Target, Review or an associated sheet | Existing audio accessibility state; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_audio_in_progress_state` | Target, Review or an associated sheet | Existing audio accessibility state; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_audio_playing_state` | Target, Review or an associated sheet | Existing audio accessibility state; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_audio_setup_needed_state` | Target, Review or an associated sheet | Existing audio accessibility state; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_flow_step_accessibility` | Target, Review or an associated sheet | Existing progress accessibility label; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_review_title` | Target, Review or an associated sheet | Existing visible title; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_some_kanji_have_no_available_reading` | Target, Review or an associated sheet | Existing sentence accessibility state; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_tag_accessibility` | Target, Review or an associated sheet | Existing tag accessibility name; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_target_selected` | Target, Review or an associated sheet | Existing sentence accessibility state; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_target_title` | Target, Review or an associated sheet | Existing visible title; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_view_whole_photo` | Target, Review or an associated sheet | Existing photo accessibility name; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_word_accessibility` | Target, Review or an associated sheet | Existing word accessibility name; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_full_photo` | Target, Review or an associated sheet | Existing full-photo accessibility name; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_close_photo` | Target, Review or an associated sheet | Existing photo-close accessibility name; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_sending_state` | Target, Review or an associated sheet | Existing send accessibility state; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_edit_preparation` | Target, Review or an associated sheet | Existing preparation action label; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_audio_prepare_control` | Target, Review or an associated sheet | Existing audio accessibility control label; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_audio_play_control` | Target, Review or an associated sheet | Existing audio accessibility control label; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_audio_stop_control` | Target, Review or an associated sheet | Existing audio accessibility control label; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_audio_generating_control` | Target, Review or an associated sheet | Existing audio accessibility control label; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_audio_advisory_control` | Target, Review or an associated sheet | Existing audio accessibility control label; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_audio_retry_control` | Target, Review or an associated sheet | Existing audio accessibility control label; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_audio_generating_blocker` | Target, Review or an associated sheet | Existing send-blocker message; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_audio_needs_preparation_blocker` | Target, Review or an associated sheet | Existing send-blocker message; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_audio_unavailable_blocker` | Target, Review or an associated sheet | Existing send-blocker message; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_audio_advisory_blocker` | Target, Review or an associated sheet | Existing send-blocker message; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_audio_message` | Target, Review or an associated sheet | Existing provider message is passed through unchanged. | `t_fc85a8b2` |
+| `legacy_card_audio_generation_failed` | Target, Review or an associated sheet | Existing audio-generation error message; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_audio_no_diagnostic_details` | Target, Review or an associated sheet | Existing audio-error fallback; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_audio_playback_failed` | Target, Review or an associated sheet | Existing playback error message; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_audio_not_ready_to_send` | Target, Review or an associated sheet | Existing send-blocker fallback; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_translation_setup_needed` | Target, Review or an associated sheet | Existing translation status headline; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_translation_interrupted` | Target, Review or an associated sheet | Existing translation status headline; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_translation_failed` | Target, Review or an associated sheet | Existing translation status headline; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_translation_in_progress` | Target, Review or an associated sheet | Existing translation status headline; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_sentence_audio_not_ready` | Target, Review or an associated sheet | Existing audio status headline; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_word_audio_not_ready` | Target, Review or an associated sheet | Existing audio status headline; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_translation_needs_review` | Target, Review or an associated sheet | Existing translation status headline; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_open_settings_action` | Target, Review or an associated sheet | Existing translation recovery action; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_generate_action` | Target, Review or an associated sheet | Existing audio action label; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_sentence_audio_field` | Target, Review or an associated sheet | Existing audio-field label used in legacy status copy. | `t_fc85a8b2` |
+| `legacy_card_word_audio_field` | Target, Review or an associated sheet | Existing audio-field label used in legacy status copy. | `t_fc85a8b2` |
+| `legacy_card_audio_needs_preparation_state` | Target, Review or an associated sheet | Existing audio accessibility state; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_audio_unavailable_state` | Target, Review or an associated sheet | Existing audio accessibility state; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_audio_setup_needed_headline` | Target, Review or an associated sheet | Existing audio status headline; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_preparing_image_status` | Target, Review or an associated sheet | Existing image status message; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_image_unavailable_status` | Target, Review or an associated sheet | Existing image status message; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_reading_label` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_settings_reusable_audio_cache` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_translation_test_passed` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_capture_add_photo_optional` | Capture camera or Type surface | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_camera_access_is_needed_to_take_a_photo_ty` | Capture camera or Type surface | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_change_photo` | Capture camera or Type surface | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_choose_the_text_region` | Capture draft confirmation or OCR passage sheet | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_discard_draft` | Capture draft confirmation or OCR passage sheet | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_discard_this_draft` | Capture draft confirmation or OCR passage sheet | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_keep_working` | Capture draft confirmation or OCR passage sheet | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_reading_the_photo_on_this_device` | Capture camera or Type surface | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_replace_current_draft` | Capture draft confirmation or OCR passage sheet | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_retry_ocr` | Capture camera or Type surface | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_retry_photo` | Capture camera or Type surface | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_review_choices` | Capture camera or Type surface | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_text_choices_are_ready` | Capture camera or Type surface | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_the_current_draft_will_be_replaced_by_text` | Capture draft confirmation or OCR passage sheet | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_the_current_draft_will_be_replaced_by_the` | Capture draft confirmation or OCR passage sheet | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_the_sentence_target_photo_and_any_generate` | Capture draft confirmation or OCR passage sheet | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_this_draft_is_already_empty` | Capture draft confirmation or OCR passage sheet | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_type_the_japanese_sentence` | Capture camera or Type surface | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_card_already_in_ankidroid` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_analyzing_the_sentence` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_blocked` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_choose_dictionary_entry` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_choose_text_from_photo` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_copy` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_edit_and_recheck` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_edit_notes_tags` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_edit_preparation_corrections` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_edit_sentence` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_hide_preparation_corrections` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_i_checked_clear_frozen_recovery` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_i_checked_configure_destination` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_i_checked_resolve_outcome` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_keep_this_meaning` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_load_more_dictionary_matches` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_meaning` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_more_than_one_source_pattern_is_listed_for` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_no_definition_yet` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_no_words_are_available_yet_edit_the_senten` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_notes_optional` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_open_matching_note_in_ankidroid` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_other_pitch_patterns` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_pending_send_needs_review` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_photo_attached` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_pitch_accent` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_pitch_data_missing_for_this_reading` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_preparation_corrections` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_preparing_image` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_preparing_photo` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_preparing_the_offline_dictionary_for_first` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_recovery_is_held_until_ankidroid_setup_suc` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_remove_interrupted_image` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_replace_photo` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_resume_frozen_send` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_retry_frozen_send` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_retry_media_import_may_duplicate` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_retry_pending_send_check` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_retry_send` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_retry_translation` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_retry_unidic_setup` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_sent_to_ankidroid` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_sentence_readings` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_sentence_translation` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_tags_optional` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_the_meaning_is_for_earlier_input_return_to` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_the_meaning_may_be_stale_for_the_current_t` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_the_saved_note_id_cannot_be_found_no_autom` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_this_reading_has_no_source_listed_pattern` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_this_translation_is_for_an_earlier_sentenc` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_translation` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_translation_is_being_prepared` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_treat_pending_send_as_complete` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_vocabulary_reading` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_why_is_pitch_missing` | Target, Review or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_settings_add_a_key_to_list_voices` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_android_keystore_stays_on_this_device_and` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_ankidroid_detected_grant_api_permission_to` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_ankidroid_not_detected_install_it_before_s` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_ankidroid_setup` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_applied_to_each_new_note_per_note_edits_do` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_audio_cache` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_changing_the_voice_invalidates_sentence_au` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_choose_destination_deck` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_choose_note_type` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_choose_sentence_voice` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_clear_audio_cache` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_clearing` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_cloud_translation_api_and_restrict_this_ke` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_current_draft_audio_is_kept_separately` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_data_sources_and_licenses` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_destination_deck` | Settings picker or editor | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_empty_translation_blocks_send_retry_keeps` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_fixed_path_no_model_or_provider_choice` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_google_cloud` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_google_cloud_translation_basic_default_neu` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_google_cloud_translation_basic_default_neu_2` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_grant_ankidroid_api_permission` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_grant_the_ankidroid_api_permission_before` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_in_an_authentication_header_never_in_a_url` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_install_ankidroid_to_set_up_export` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_jmdict_and_kanjium_attribution_is_availabl` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_key_saved_for_speech_and_translation` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_key_saved_securely` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_listing_japanese_chirp_3_hd_voices` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_listing_japanese_voices` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_loading_note_types_and_decks` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_loading_saved_settings` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_local_license_copies_are_bundled_with_the` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_mecab_0_996_taku_kudo_and_nippon_telegraph` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_no_decks_are_available_check_ankidroid_set` | Settings picker or editor | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_no_existing_decks_available_in_ankidroid` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_no_japanese_chirp_3_hd_voices_were_returne` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_no_key_saved` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_no_key_saved_local_preparation_works_speec` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_no_note_types_available_in_ankidroid` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_note_types_and_decks_are_loaded_from_ankid` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_one_api_key_for_sentence_speech_and_transl` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_one_api_key_for_sentence_speech_and_transl_2` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_open_cc_by_sa_4_0` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_open_edrdg_license` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_previously_selected_deck_unavailable` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_previously_selected_note_type_unavailable` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_project_setup_enable_billing_enable_the_cl` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_refresh_voices` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_retry_ankidroid_setup` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_save` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_save_the_key_then_refresh_voices` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_saved_voice_not_in_this_list` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_saving` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_saving_the_key_sends_no_request` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_select_part_of_the_sentence_then_use_it_as` | Settings picker or editor | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_sentence_voice_chirp_3_hd` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_show_key` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_showing_a_cached_voice_list_it_has_not_bee` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_showing_the_cached_list_it_is_not_verified` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_showing_the_cached_list_which_is_not_fresh` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_sources` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_sources_licenses` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_speech_cloud_text_to_speech` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_synthesize_or_bill_any_speech` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_test_translation` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_testing` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_testing_translation` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_the_bundled_mixed_source_ajt_pitch_data_st` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_the_current_draft_s_audio_is_kept_outside` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_the_disclosed_sample_is_sent_only_when_you` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_the_saved_google_cloud_key_could_not_be_op` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_the_saved_voice_is_no_longer_listed_choose` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_the_saved_voice_is_not_in_google_s_current` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_the_test_sends_one_disclosed_sample_senten` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_translation_cloud_translation_basic` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_translation_has_not_been_tested_in_this_se` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_translation_not_tested_in_this_session` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_translation_test` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_unidic_cwj_3_1_1_the_unidic_consortium_and` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_use_selection_as_target` | Settings picker or editor | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_validates_speech_access_only_not_translati` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_voice_list_not_checked_yet` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_voice_listing_does_not_synthesize_audio_it` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_voice_listing_not_checked_yet_refresh_voic` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_capture_could_not_open_that_photo_choose_another_i` | Capture camera or Type surface | Existing visible error/status copy; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_could_not_open_that_photo_choose_another_i_2` | Capture camera or Type surface | Existing visible error/status copy; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_could_not_read_this_photo_type_or_edit_the` | Capture camera or Type surface | Existing visible error/status copy; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_no_text_was_found_type_or_edit_the_sentenc` | Capture camera or Type surface | Existing visible error/status copy; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_this_draft_came_from_a_photo_so_it_needs_i` | Capture camera or Type surface | Existing visible error/status copy; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_this_photo_could_not_be_prepared_for_anki` | Capture camera or Type surface | Existing visible error/status copy; this task only moves it to a resource. | `t_f6a4efe9` |
+
+| `legacy_card_a_matching_note_exists_for_the_frozen_revi` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_allow_ankidroid_api_access_in_settings_bef` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_ankidroid_browser_is_unavailable_note_1_d` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_ankidroid_did_not_add_the_note_you_can_saf` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_ankidroid_setup_could_not_be_loaded_open_s` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_ankidroid_setup_is_still_loading_wait_for` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_blocked_a_note_with_this_sentence_and_voca` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_checking_the_frozen_send_revision_in_ankid` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_checking_the_saved_note_id_and_destination` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_choose_a_dictionary_entry_to_resolve_this` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_choose_a_source_listed_pitch_pattern_befor` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_choose_an_ankidroid_destination_deck_in_se` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_choose_an_ankidroid_note_type_in_settings` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_could_not_analyze_this_sentence_select_a_t` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_could_not_import_the_selected_image_the_dr` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_could_not_load_more_dictionary_matches` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_could_not_read_note_types_and_decks_check` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_could_not_record_this_review_authorization` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_could_not_send_the_note_check_ankidroid_ap` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_could_not_verify_the_frozen_send_retry_the` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_could_not_verify_the_saved_note_id_retry_t` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_dictionary_lookup_failed_retry_before_sele` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_finish_setup_in_settings_before_reviewing` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_frozen_recovery_cleared_after_review_the_d` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_no_matching_note_was_found_but_the_frozen` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_no_matching_note_was_found_for_the_frozen` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_no_pitch_pattern_can_be_resolved_for_this` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_note_1_d_recovered_in_the_selected_deck` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_note_sent_to_ankidroid` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_outcome_acknowledged_choose_a_valid_destin` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_pending_send_cleared_after_review_configur` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_pending_send_held_for_manual_resolution_co` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_pending_send_marked_complete` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_restore_the_frozen_note_s_ankidroid_note_t` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_resuming_the_frozen_send_will_reuse_the_sa` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_retrying_the_frozen_media_sequence_may_dup` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_retrying_the_frozen_send_the_draft_remains` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_still_needed_1_s` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_the_frozen_note_type_fields_changed_confir` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_the_frozen_note_type_is_unavailable_confir` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_the_frozen_send_destination_is_unavailable` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_the_frozen_send_is_unavailable_keep_the_dr` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_the_frozen_send_record_is_incomplete_keep` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_the_image_is_still_being_prepared_send_bec` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_the_inserted_note_id_was_not_saved_the_out` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_the_interrupted_image_was_discarded_the_re` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_the_missing_saved_note_outcome_was_explici` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_the_note_fields_are_incomplete_return_to_p` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_the_offline_dictionary_is_still_loading_wa` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_the_saved_note_has_cards_in_another_or_mix` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_the_saved_note_id_has_no_verifiable_cards` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_the_selected_image_is_missing_or_not_ready` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_the_selected_image_is_not_ready_to_send` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_translation_is_unavailable_tap_retry_to_co` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_translation_needs_retry_tap_retry_to_conti` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_translation_paused_while_sending_retry_aft` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_translation_request_could_not_be_recorded` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_translation_was_interrupted_tap_retry_to_c` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_translation_was_not_started_tap_retry_to_c` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_wait_for_or_retry_the_missing_audio_before` | Target, Review or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_onboarding_checking_unidic_runtime_archive` | Onboarding wizard steps | Existing visible error/status copy; this task only moves it to a resource. | `t_cf3dee18` |
+| `legacy_onboarding_mecab_native_analysis_could_not_load_you_c` | Onboarding wizard steps | Existing visible error/status copy; this task only moves it to a resource. | `t_cf3dee18` |
+| `legacy_onboarding_offline_dictionary_could_not_be_prepared_a` | Onboarding wizard steps | Existing visible error/status copy; this task only moves it to a resource. | `t_cf3dee18` |
+| `legacy_onboarding_unidic_could_not_be_downloaded_verified_or` | Onboarding wizard steps | Existing visible error/status copy; this task only moves it to a resource. | `t_cf3dee18` |
+| `legacy_settings_audio_cache_cleared_draft_audio_is_unaffec` | Settings, pickers, viewers and editors | Existing visible error/status copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_could_not_load_saved_settings` | Settings, pickers, viewers and editors | Existing visible error/status copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_save_the_current_key_successfully_before_r` | Settings, pickers, viewers and editors | Existing visible error/status copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_settings_are_still_loading_back_out_again` | Settings, pickers, viewers and editors | Existing visible error/status copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_settings_could_not_be_saved_the_key_was_no` | Settings, pickers, viewers and editors | Existing visible error/status copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_setup_could_not_be_marked_complete_back_re` | Settings, pickers, viewers and editors | Existing visible error/status copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_the_audio_cache_could_not_be_cleared` | Settings, pickers, viewers and editors | Existing visible error/status copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_the_google_cloud_key_contains_whitespace` | Settings, pickers, viewers and editors | Existing visible error/status copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_to_finish_setup_save_a_google_cloud_key_an` | Settings, pickers, viewers and editors | Existing visible error/status copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_translation_test_failed` | Settings, pickers, viewers and editors | Existing visible error/status copy; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_card_continue_action` | Target, Review or an associated sheet | Existing Target action label; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_ankidroid_field_mapping` | Target, Review or an associated sheet | Existing Send validation prefix; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_note_fields_do_not_match_note_type` | Target, Review or an associated sheet | Existing Send validation message; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_target_choose_hint` | Target, Review or an associated sheet | Existing Target hint; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_dictionary_searching` | Target, Review or an associated sheet | Existing Target status; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_dictionary_preparing` | Target, Review or an associated sheet | Existing Target status; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_choose_dictionary_entry_hint` | Target, Review or an associated sheet | Existing Target status; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_no_dictionary_match_for_selection` | Target, Review or an associated sheet | Existing Target status; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_target_continue_hint` | Target, Review or an associated sheet | Existing Target hint; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_dictionary_continue_hint` | Target, Review or an associated sheet | Existing Target hint; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_meaning_continue_hint` | Target, Review or an associated sheet | Existing Target hint; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_pitch_continue_hint` | Target, Review or an associated sheet | Existing Target hint; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_matching_note_exists` | Target, Review or an associated sheet | Existing duplicate-note status; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_send_recovery_media_receipts_recorded` | Target, Review or an associated sheet | Existing Send recovery message; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_send_recovery_previous_send_interrupted` | Target, Review or an associated sheet | Existing Send recovery message; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_send_recovery_note_saved_verifying_cards` | Target, Review or an associated sheet | Existing Send recovery message; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_send_recovery_destination_verified_initial` | Target, Review or an associated sheet | Existing Send recovery message; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_send_recovery_media_receipts_saved` | Target, Review or an associated sheet | Existing Send recovery message; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_send_recovery_note_insertion_uncertain` | Target, Review or an associated sheet | Existing Send recovery message; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_send_recovery_note_assignment_interrupted` | Target, Review or an associated sheet | Existing Send recovery message; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_send_recovery_destination_verified` | Target, Review or an associated sheet | Existing Send recovery message; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_send_recovery_media_preparation_interrupted` | Target, Review or an associated sheet | Existing Send recovery message; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_media_preparation` | Target, Review or an associated sheet | Existing Send recovery fallback label; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_media_label` | Target, Review or an associated sheet | Existing Send recovery fallback label; this task only moves it to a resource. | `t_fc85a8b2` |
+
+| `legacy_capture_continue_action` | Capture camera or Type surface | Existing Type action label; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_preparing_photo_for_anki` | Capture camera or Type surface | Existing image status; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_photo_attached` | Capture camera or Type surface | Existing image status; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_settings_jmdict_source_notice` | Settings, pickers, viewers and editors | Existing source attribution with runtime dictionary metadata; this task only moves the copy into a resource. | `t_307ced47` |
+| `legacy_settings_kanjium_source_notice` | Settings, pickers, viewers and editors | Existing source attribution with runtime dictionary metadata; this task only moves the copy into a resource. | `t_307ced47` |
+| `legacy_card_send_recovery_media_import_uncertain` | Target, Review or an associated sheet | Existing Send recovery message; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_send_recovery_media_import_stage_uncertain` | Target, Review or an associated sheet | Existing Send recovery message; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_settings_voice_list_safe_error` | Settings, pickers, viewers and editors | Existing voice-list failure message; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_settings_save_fallback` | Settings, pickers, viewers and editors | Existing settings-save fallback; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_settings_settings_persist_failed` | Settings, pickers, viewers and editors | Existing settings-save error; this task only moves it to a resource. | `t_307ced47` |
+| `legacy_card_vocabulary_reading_kana_required` | Target, Review or an associated sheet | Existing reading-validation message; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_no_dictionary_entry_loaded` | Target, Review or an associated sheet | Existing reading-validation message; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_reading_not_listed_for_word` | Target, Review or an associated sheet | Existing reading-validation message; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_this_word` | Target, Review or an associated sheet | Existing reading-validation fallback; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_sentence_audio_not_configured` | Target, Review or an associated sheet | Existing audio setup advisory; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_word_audio_unavailable` | Target, Review or an associated sheet | Existing audio setup advisory; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_saved_cloud_key_unreadable` | Target, Review or an associated sheet | Existing audio setup advisory; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_no_cloud_key_saved` | Target, Review or an associated sheet | Existing audio setup advisory; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_no_verified_sentence_voice` | Target, Review or an associated sheet | Existing audio setup advisory; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_sentence_voice_unverified` | Target, Review or an associated sheet | Existing audio setup advisory; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_select_dictionary_entry_for_audio` | Target, Review or an associated sheet | Existing audio setup advisory; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_ajt_pitch_record_missing` | Target, Review or an associated sheet | Existing pitch failure message; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_ajt_pitch_index_missing` | Target, Review or an associated sheet | Existing pitch setup error; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_ajt_pitch_index_empty` | Target, Review or an associated sheet | Existing pitch setup error; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_ajt_pitch_index_invalid` | Target, Review or an associated sheet | Existing pitch setup error; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_ajt_pitch_index_open_failed` | Target, Review or an associated sheet | Existing pitch setup error; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_capture_camera_capture_failed` | Capture camera or Type surface | Existing camera failure message; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_card_selected_pitch_accent` | Target, Review or an associated sheet | Existing selected-pitch indicator; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_tags_from_confirmed_note_save_failed` | Target, Review or an associated sheet | Existing Send-state error; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_capture_draft_image_source_save_failed` | Capture camera or Type surface | Existing draft-storage error; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_pending_photo_replacement_save_failed` | Capture camera or Type surface | Existing draft-storage error; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_card_frozen_note_destination_invalid` | Target, Review or an associated sheet | Existing recovery error; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_resolved_send_state_save_failed` | Target, Review or an associated sheet | Existing recovery error; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_frozen_image_receipt_unavailable` | Target, Review or an associated sheet | Existing Send recovery error; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_selected_image_not_ready_for_import` | Target, Review or an associated sheet | Existing Send validation error; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_draft_audio_not_frozen` | Target, Review or an associated sheet | Existing Send validation error; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_note_changed_before_send_freeze` | Target, Review or an associated sheet | Existing Send validation error; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_frozen_submission_recovery_save_failed` | Target, Review or an associated sheet | Existing recovery error; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_sentence_audio_missing_media_identity` | Target, Review or an associated sheet | Existing Send validation error; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_word_audio_missing_media_identity` | Target, Review or an associated sheet | Existing Send validation error; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_frozen_media_changed_before_import` | Target, Review or an associated sheet | Existing Send validation error; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_media_receipt_save_failed` | Target, Review or an associated sheet | Existing recovery error; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_completed_media_recovery_save_failed` | Target, Review or an associated sheet | Existing recovery error; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_frozen_submission_save_failed` | Target, Review or an associated sheet | Existing recovery error; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_inserted_note_has_no_cards` | Target, Review or an associated sheet | Existing recovery error; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_inserted_note_id_save_failed` | Target, Review or an associated sheet | Existing recovery error; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_verified_destination_save_failed` | Target, Review or an associated sheet | Existing recovery error; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_send_retry_suffix` | Target, Review or an associated sheet | Existing Send retry explanation; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_target_selected_state` | Target, Review or an associated sheet | Existing selected-target accessibility state; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_meaning_selected_state` | Target, Review or an associated sheet | Existing selected-meaning accessibility state; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_card_not_selected_state` | Target, Review or an associated sheet | Existing unselected accessibility state; this task only moves it to a resource. | `t_fc85a8b2` |
+| `legacy_capture_selected_state` | Capture camera or Type surface | Existing mode-selector accessibility state; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_not_selected_state` | Capture camera or Type surface | Existing mode-selector accessibility state; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_flash_on_state` | Capture camera or Type surface | Existing flash-toggle accessibility state; this task only moves it to a resource. | `t_f6a4efe9` |
+| `legacy_capture_flash_off_state` | Capture camera or Type surface | Existing flash-toggle accessibility state; this task only moves it to a resource. | `t_f6a4efe9` |

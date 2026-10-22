@@ -1,6 +1,8 @@
 package dev.pierre.japaneseanki.ui
 
 import java.util.concurrent.atomic.AtomicBoolean
+import androidx.annotation.StringRes
+import dev.pierre.japaneseanki.R
 
 /** A portrait 4:3 sensor preview is displayed upright in a 3:4 viewport. */
 internal data class CameraPreviewSizeDp(val width: Float, val height: Float)
@@ -27,8 +29,8 @@ internal fun captureActionsEnabled(screenEnabled: Boolean, captureInProgress: Bo
 internal data class CaptureShutterPresentation(
     val diameterDp: Int,
     val showProgress: Boolean,
-    val contentDescription: String,
-    val stateDescription: String,
+    @StringRes val contentDescription: Int,
+    @StringRes val stateDescription: Int,
 )
 
 /** Keep the button's measured bounds identical in ready, pending and failed states. */
@@ -37,20 +39,20 @@ internal fun captureShutterPresentation(captureInProgress: Boolean, captureFaile
         captureInProgress -> CaptureShutterPresentation(
             diameterDp = CAMERA_SHUTTER_SIZE_DP,
             showProgress = true,
-            contentDescription = "Saving photo",
-            stateDescription = "Capture in progress",
+            contentDescription = R.string.legacy_capture_saving_photo,
+            stateDescription = R.string.legacy_capture_capture_in_progress,
         )
         captureFailed -> CaptureShutterPresentation(
             diameterDp = CAMERA_SHUTTER_SIZE_DP,
             showProgress = false,
-            contentDescription = "Capture photo",
-            stateDescription = "Capture failed",
+            contentDescription = R.string.legacy_capture_capture_photo,
+            stateDescription = R.string.legacy_capture_capture_failed,
         )
         else -> CaptureShutterPresentation(
             diameterDp = CAMERA_SHUTTER_SIZE_DP,
             showProgress = false,
-            contentDescription = "Capture photo",
-            stateDescription = "Ready",
+            contentDescription = R.string.legacy_capture_capture_photo,
+            stateDescription = R.string.ready,
         )
     }
 

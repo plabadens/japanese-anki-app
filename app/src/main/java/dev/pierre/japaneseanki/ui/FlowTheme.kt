@@ -31,6 +31,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.progressBarRangeInfo
@@ -38,6 +39,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.pierre.japaneseanki.R
 
 /**
  * Semantic roles from the portrait expressive-flow study (mockup/expressive-flow/README.md).
@@ -144,10 +146,10 @@ internal fun FlowTheme(darkTheme: Boolean, content: @Composable () -> Unit) {
     )
 }
 
-internal enum class FlowStep(val label: String) {
-    Input("Input"),
-    Target("Target"),
-    Review("Review"),
+internal enum class FlowStep(val labelResource: Int) {
+    Input(R.string.legacy_capture_input_title),
+    Target(R.string.legacy_card_target_title),
+    Review(R.string.legacy_card_review_title),
 }
 
 /**
@@ -164,11 +166,17 @@ internal val AppContentMaxWidth = 520.dp
 internal fun FlowProgress(current: FlowStep, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
     val completed = colors.onSurfaceVariant
+    val stepDescription = stringResource(
+        R.string.legacy_card_flow_step_accessibility,
+        (current.ordinal + 1).toString(),
+        FlowStep.entries.size.toString(),
+        stringResource(current.labelResource),
+    )
     Row(
         modifier = modifier
             .fillMaxWidth()
             .semantics {
-                contentDescription = "Step ${current.ordinal + 1} of ${FlowStep.entries.size}: ${current.label}"
+                contentDescription = stepDescription
                 progressBarRangeInfo = ProgressBarRangeInfo(
                     current = (current.ordinal + 1).toFloat(),
                     range = 1f..FlowStep.entries.size.toFloat(),
@@ -211,6 +219,9 @@ internal fun FlowTopBar(
     onClose: (() -> Unit)? = null,
     onSettings: (() -> Unit)? = null,
 ) {
+    val backLabel = stringResource(R.string.back)
+    val discardLabel = stringResource(R.string.legacy_capture_discard_draft)
+    val settingsLabel = stringResource(R.string.settings)
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -218,12 +229,12 @@ internal fun FlowTopBar(
         when {
             onBack != null -> IconButton(
                 onClick = onBack,
-                modifier = Modifier.semantics { contentDescription = "Back" },
+                modifier = Modifier.semantics { contentDescription = backLabel },
             ) { FlowIcons.Back(Modifier.size(24.dp)) }
 
             onClose != null -> IconButton(
                 onClick = onClose,
-                modifier = Modifier.semantics { contentDescription = "Discard draft" },
+                modifier = Modifier.semantics { contentDescription = discardLabel },
             ) { FlowIcons.Close(Modifier.size(22.dp)) }
 
             else -> Box(Modifier.size(12.dp))
@@ -236,7 +247,7 @@ internal fun FlowTopBar(
                 .padding(start = if (onBack == null && onClose == null) 4.dp else 0.dp),
         )
         if (onSettings != null) {
-            IconButton(onClick = onSettings, modifier = Modifier.semantics { contentDescription = "Settings" }) {
+            IconButton(onClick = onSettings, modifier = Modifier.semantics { contentDescription = settingsLabel }) {
                 Icon(MaterialSymbols.Settings, contentDescription = null, modifier = Modifier.size(24.dp))
             }
         }
