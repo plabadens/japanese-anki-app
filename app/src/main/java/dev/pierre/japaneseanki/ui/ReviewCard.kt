@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -86,13 +87,28 @@ internal sealed interface ReviewAudioPresentation {
 }
 
 internal fun reviewAudioControlLabel(field: String, audio: ReviewAudioPresentation): String = when (audio) {
-    ReviewAudioPresentation.Unavailable -> "$field audio unavailable"
-    ReviewAudioPresentation.NeedsPreparation -> "Prepare $field audio"
+    ReviewAudioPresentation.Unavailable, ReviewAudioPresentation.NeedsPreparation -> "Prepare $field audio"
     ReviewAudioPresentation.Ready -> "Play $field audio"
     ReviewAudioPresentation.Playing -> "Stop $field audio"
     ReviewAudioPresentation.Generating -> "Generating $field audio"
     is ReviewAudioPresentation.Failed -> "Explain unavailable $field audio"
 }
+
+internal fun reviewAudioSendBlocker(field: String, audio: ReviewAudioPresentation): String? = when (audio) {
+    ReviewAudioPresentation.Ready, ReviewAudioPresentation.Playing -> null
+    ReviewAudioPresentation.Generating -> "$field audio is being generated. Wait for it to finish."
+    ReviewAudioPresentation.NeedsPreparation ->
+        "$field audio has not been generated. Tap the speaker control to generate it."
+    ReviewAudioPresentation.Unavailable ->
+        "$field audio is unavailable. Tap the speaker control to check what is needed."
+    is ReviewAudioPresentation.Failed -> audio.message
+}
+
+internal fun reviewAudioGenerationFailureMessage(field: String, detail: String): String =
+    "$field audio generation failed: ${detail.ifBlank { "No diagnostic details are available." }}"
+
+internal fun reviewAudioPlaybackFailureMessage(field: String): String =
+    "$field audio could not be played on this device. Tap Retry to try again."
 
 internal enum class ReviewEditableField { Notes, Tags }
 
@@ -665,23 +681,38 @@ private fun ReviewAudioButton(
     val controlSize = ReviewAudioControlSize
     var failureExpanded by remember(audio) { mutableStateOf(false) }
     when (audio) {
-        ReviewAudioPresentation.Unavailable -> Box(
-            Modifier.size(controlSize).semantics {
-                contentDescription = reviewAudioControlLabel(field, audio)
-                stateDescription = "Unavailable"
-            },
-            contentAlignment = Alignment.Center,
-        ) {
-            AudioControlGlyph(playing = false, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(32.dp))
-        }
-        ReviewAudioPresentation.NeedsPreparation -> Box(
-            Modifier.size(controlSize).semantics {
-                contentDescription = reviewAudioControlLabel(field, audio)
-                stateDescription = "Needs preparation"
-            },
-            contentAlignment = Alignment.Center,
-        ) {
-            AudioControlGlyph(playing = false, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(32.dp))
+        ReviewAudioPresentation.Unavailable, ReviewAudioPresentation.NeedsPreparation -> {
+            val description = reviewAudioControlLabel(field, audio)
+            val state = if (audio == ReviewAudioPresentation.NeedsPreparation) "Needs preparation" else "Unavailable"
+            if (onRetry == null) {
+                Box(
+                    Modifier.size(controlSize).semantics {
+                        contentDescription = description
+                        stateDescription = state
+                    },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    AudioControlGlyph(
+                        playing = false,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(32.dp),
+                    )
+                }
+            } else {
+                IconButton(
+                    onClick = onRetry,
+                    modifier = Modifier.size(controlSize).semantics {
+                        contentDescription = description
+                        stateDescription = state
+                    },
+                ) {
+                    AudioControlGlyph(
+                        playing = false,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(32.dp),
+                    )
+                }
+            }
         }
         ReviewAudioPresentation.Ready, ReviewAudioPresentation.Playing -> {
             if (onToggle == null) {
@@ -721,7 +752,10 @@ private fun ReviewAudioButton(
             },
             contentAlignment = Alignment.Center,
         ) { CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) }
-        is ReviewAudioPresentation.Failed -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        is ReviewAudioPresentation.Failed -> Column(
+            modifier = Modifier.widthIn(max = 180.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
             IconButton(
                 onClick = { failureExpanded = !failureExpanded },
                 modifier = Modifier.size(controlSize).semantics {

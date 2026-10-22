@@ -58,6 +58,9 @@ import dev.pierre.japaneseanki.ui.ReviewCard
 import dev.pierre.japaneseanki.ui.AppContentMaxWidth
 import dev.pierre.japaneseanki.ui.ReviewSendPresentation
 import dev.pierre.japaneseanki.ui.ReviewAudioPresentation
+import dev.pierre.japaneseanki.ui.reviewAudioGenerationFailureMessage
+import dev.pierre.japaneseanki.ui.reviewAudioPlaybackFailureMessage
+import dev.pierre.japaneseanki.ui.reviewAudioSendBlocker
 import dev.pierre.japaneseanki.ui.FlowProgress
 import dev.pierre.japaneseanki.ui.FlowStep
 import dev.pierre.japaneseanki.ui.FlowTheme
@@ -266,12 +269,18 @@ internal data class DraftAudio(
 }
 
 /** UI view of the controller's per-item state; the controller stays the only source of truth. */
-private fun DraftAudioState.toDraftAudio(): DraftAudio = when (this) {
+private fun DraftAudioState.toDraftAudio(item: AudioItem): DraftAudio = when (this) {
     DraftAudioState.Idle -> DraftAudio()
     is DraftAudioState.NeedsContinue -> DraftAudio(identity = identity, needsContinue = true)
     is DraftAudioState.Generating -> DraftAudio(generating = true, identity = identity)
     is DraftAudioState.Ready -> DraftAudio(path = file.path, identity = identity)
-    is DraftAudioState.Failed -> DraftAudio(error = message, identity = identity)
+    is DraftAudioState.Failed -> DraftAudio(
+        error = reviewAudioGenerationFailureMessage(
+            if (item == AudioItem.SENTENCE) "Sentence" else "Word",
+            message,
+        ),
+        identity = identity,
+    )
 }
 
 enum class AppRoute { Capture, Target, Review }
@@ -688,7 +697,7 @@ class MainActivity : ComponentActivity() {
             fun audioView(item: AudioItem): DraftAudio {
                 audioConfigErrors[item]?.let { return DraftAudio(error = it) }
                 audioPlaybackErrors[item]?.let { return DraftAudio(error = it) }
-                return (audioSnapshot.items[item] ?: DraftAudioState.Idle).toDraftAudio()
+                return (audioSnapshot.items[item] ?: DraftAudioState.Idle).toDraftAudio(item)
             }
 
             fun audioReady(item: AudioItem, identity: String): Boolean {
@@ -701,7 +710,21 @@ class MainActivity : ComponentActivity() {
                 if (attempt == null) return
                 audioSnapshot = audioController.snapshot()
                 coroutineScope.launch {
-                    withContext(Dispatchers.IO) { audioController.runAttempt(attempt) }
+                    when (val result = withContext(Dispatchers.IO) { audioController.runAttempt(attempt) }) {
+                        is DraftAudioAttemptResult.Accepted -> Log.i(
+                            "DraftAudio",
+                            "${attempt.input.item.name} audio accepted fromCache=${result.fromCache}",
+                        )
+                        is DraftAudioAttemptResult.Failed -> Log.e(
+                            "DraftAudio",
+                            "${attempt.input.item.name} audio generation failed " +
+                                "category=${result.diagnostic?.category ?: "UNKNOWN"} retryable=${result.retryable}",
+                        )
+                        DraftAudioAttemptResult.Stale -> Log.i(
+                            "DraftAudio",
+                            "${attempt.input.item.name} audio attempt became stale",
+                        )
+                    }
                     audioSnapshot = audioController.snapshot()
                 }
             }
@@ -1644,25 +1667,36 @@ class MainActivity : ComponentActivity() {
                     audioPlayer = player
                     audioLease = lease
                     playingAudio = item
-                } catch (_: Exception) {
+                } catch (error: Exception) {
+                    Log.e("DraftAudio", "${item.name} playback failed ${error.javaClass.simpleName}")
                     lease.close()
                     player.release()
                     playingAudio = null
                     audioPlaybackErrors = audioPlaybackErrors + (
-                        item to if (item == AudioItem.SENTENCE) {
-                            "This sentence audio could not be played."
-                        } else {
-                            "This word recording could not be played."
-                        }
+                        item to reviewAudioPlaybackFailureMessage(
+                            if (item == AudioItem.SENTENCE) "Sentence" else "Word",
                         )
+                    )
                 }
             }
 
             fun audioReadyFile(item: AudioItem): DraftAudioFile? =
                 (audioSnapshot.items[item] as? DraftAudioState.Ready)?.file
 
-            fun audioActionLabel(item: AudioItem): String =
-                if (audioSnapshot.items[item] is DraftAudioState.NeedsContinue) "Generate" else "Retry"
+            fun audioSettingsRequired(item: AudioItem): Boolean = item == AudioItem.SENTENCE && (
+                settingsScreenState.credentialUnreadable || !settingsScreenState.credentialStored ||
+                    selectedVoiceName.isBlank() ||
+                    settingsScreenState.voiceCatalog.provenance != VoiceCatalogProvenance.AUTHORITATIVE ||
+                    settingsScreenState.voiceCatalog.voices.none { it.name == selectedVoiceName }
+                )
+
+            fun audioActionLabel(item: AudioItem): String = when {
+                audioConfigErrors.containsKey(item) && audioSettingsRequired(item) -> "Open Settings"
+                audioConfigErrors.containsKey(item) -> "Edit preparation"
+                (audioSnapshot.items[item] as? DraftAudioState.Failed)?.retryable == false -> "Edit preparation"
+                audioSnapshot.items[item] is DraftAudioState.NeedsContinue -> "Generate"
+                else -> "Retry"
+            }
 
             /** The single user-authorized audio action: Generate, Retry, or repair a playback failure. */
             fun onAudioAction(item: AudioItem) {
@@ -1671,11 +1705,30 @@ class MainActivity : ComponentActivity() {
                         audioPlaybackErrors = audioPlaybackErrors - item
                         audioReadyFile(item)?.let { playAudio(item, it) }
                     }
+                    audioConfigErrors.containsKey(item) && audioSettingsRequired(item) -> openSettings()
                     audioConfigErrors.containsKey(item) -> {
                         audioConfigErrors = audioConfigErrors - item
-                        audioInputRevision++
+                        generationStarted = false
+                        route = AppRoute.Target
                     }
-                    else -> runAudioAttempt(audioController.confirm(item) ?: audioController.retry(item))
+                    (audioSnapshot.items[item] as? DraftAudioState.Failed)?.retryable == false -> {
+                        generationStarted = false
+                        route = AppRoute.Target
+                    }
+                    else -> {
+                        val attempt = audioController.confirm(item) ?: audioController.retry(item)
+                        if (attempt != null) {
+                            runAudioAttempt(attempt)
+                        } else {
+                            val message = if (item == AudioItem.SENTENCE) {
+                                "Sentence audio is not configured. Add a Google Cloud key and verified voice in Settings."
+                            } else {
+                                "Word audio is unavailable. Select a dictionary entry in preparation."
+                            }
+                            audioConfigErrors = audioConfigErrors + (item to message)
+                            Log.w("DraftAudio", "${item.name} audio unavailable: no current input")
+                        }
+                    }
                 }
             }
 
@@ -1689,6 +1742,10 @@ class MainActivity : ComponentActivity() {
                 // work; restore/revisit cannot authorize generation by itself.
                 if (submissionLocked) return@LaunchedEffect
 
+                val declaredAudioRevision = declaredReviewAudioRevision(
+                    pendingReviewAuthorization,
+                    reviewAuthorizationSequence,
+                )
                 val sentenceText = editor.text.trim()
                 val selectedTarget = target
                 val authoritativeCatalog = settingsScreenState.voiceCatalog.takeIf {
@@ -1716,7 +1773,7 @@ class MainActivity : ComponentActivity() {
                             item = AudioItem.SENTENCE,
                             identity = currentSentenceIdentity.value,
                             text = sentenceText,
-                            revision = 0,
+                            revision = declaredAudioRevision,
                             cacheKey = AudioCacheKey(
                                 source = "google-chirp3-hd",
                                 text = sentenceText,
@@ -1733,13 +1790,27 @@ class MainActivity : ComponentActivity() {
                     // and must not be presented as retryable generation attempts.
                     val sentenceConfigError = when {
                         sentenceText.isEmpty() || selectedTarget == null -> null
-                        voice == null -> if (!settingsScreenState.credentialStored) {
-                            "Save a Google Cloud key and verify a sentence voice in Settings."
-                        } else {
-                            "Open Settings and reload voices to verify the selected sentence voice."
+                        voice == null -> when {
+                            settingsScreenState.credentialUnreadable ->
+                                "The saved Google Cloud API key could not be opened. Re-enter it and choose a verified sentence voice in Settings."
+                            !settingsScreenState.credentialStored ->
+                                "No Google Cloud API key is saved. Add one and choose a verified sentence voice in Settings."
+                            selectedVoiceName.isBlank() ->
+                                "No verified sentence voice is selected. Choose one in Settings before generating sentence audio."
+                            else ->
+                                "The selected sentence voice is not verified. Reload voices and choose a verified voice in Settings."
                         }
                         hintResult is HintResult.Impossible -> hintResult.reason
                         else -> null
+                    }
+                    if (sentenceConfigError != null) {
+                        val cause = when {
+                            settingsScreenState.credentialUnreadable -> "saved Google Cloud credential is unreadable"
+                            !settingsScreenState.credentialStored -> "no Google Cloud credential is saved"
+                            voice == null -> "no verified sentence voice is selected"
+                            else -> "sentence pronunciation hints are unavailable"
+                        }
+                        Log.i("DraftAudio", "Sentence audio unavailable: $cause")
                     }
                     audioConfigErrors = if (sentenceConfigError == null) {
                         audioConfigErrors - AudioItem.SENTENCE
@@ -1774,7 +1845,7 @@ class MainActivity : ComponentActivity() {
                             item = AudioItem.VOCABULARY,
                             identity = currentWordIdentity.value,
                             text = vocabulary,
-                            revision = 0,
+                            revision = declaredAudioRevision,
                             entryIdentity = entryIdentity,
                             cacheKey = AudioCacheKey(
                                 source = "nhk-2016",
@@ -1787,7 +1858,7 @@ class MainActivity : ComponentActivity() {
                             providerPayload = AudioSynthesisRequest(
                                 item = AudioItem.VOCABULARY,
                                 text = vocabulary,
-                                revision = 0,
+                                revision = declaredAudioRevision,
                                 entryIdentity = entryIdentity,
                             ),
                         ),
@@ -1804,8 +1875,15 @@ class MainActivity : ComponentActivity() {
                     return@LaunchedEffect
                 }
                 pendingReviewAuthorization = null
-                reviewAudioCoordinator.onReviewEntry(revision, ReviewAudioEntryCause.EXPLICIT_CONTINUE)
-                    .forEach(::runAudioAttempt)
+                val attempts = reviewAudioCoordinator.onReviewEntry(
+                    revision,
+                    ReviewAudioEntryCause.EXPLICIT_CONTINUE,
+                )
+                Log.i(
+                    "DraftAudio",
+                    "Review entry revision=$revision audioAttempts=${attempts.joinToString(",") { it.input.item.name }}",
+                )
+                attempts.forEach(::runAudioAttempt)
                 audioSnapshot = audioController.snapshot()
             }
 
@@ -3294,17 +3372,58 @@ class MainActivity : ComponentActivity() {
                             }
                             editor = updated
                         }
+                        val sendBlockers = buildList {
+                            if (imagePending) {
+                                add("The image is still being prepared. Send becomes available when it is ready.")
+                            } else if (imageAttached && !imageProcessing && imageError == null && !imageReady) {
+                                add("The selected image is not ready to send.")
+                            } else if (!sendImageReady) {
+                                add("The selected image is missing or not ready to send.")
+                            }
+                            if (!frozenRetryReady && !sentenceAudioReady) {
+                                add(reviewAudioSendBlocker("Sentence", sentenceAudio.presentation())
+                                    ?: "Sentence audio is not ready to send.")
+                            }
+                            if (!frozenRetryReady && !wordAudioReady) {
+                                add(reviewAudioSendBlocker("Word", wordAudio.presentation())
+                                    ?: "Word audio is not ready to send.")
+                            }
+                            if (!apiPermissionGranted) {
+                                add("Allow AnkiDroid API access in Settings before sending.")
+                            }
+                            if (selectedModel == null) add("Choose an AnkiDroid note type in Settings before sending.")
+                            if (selectedDeck == null) add("Choose an AnkiDroid destination deck in Settings before sending.")
+                            if (fieldsByName == null && !frozenRetryReady) {
+                                add("The note fields are incomplete. Return to preparation and complete the note.")
+                            }
+                            validationErrors.firstOrNull()?.let { add("Still needed: $it") }
+                            if (effectiveMapping?.isValid != true) {
+                                add(
+                                    effectiveMapping?.errors?.firstOrNull()?.let { "AnkiDroid field mapping: $it" }
+                                        ?: "The note fields do not match the selected AnkiDroid note type.",
+                                )
+                            }
+                            if (!frozenDestinationReady) {
+                                add("Restore the frozen note's AnkiDroid note type and deck in Settings before retrying.")
+                            }
+                            if (!frozenRetryReady && pitch == null) {
+                                add("Choose a source-listed pitch pattern before sending.")
+                            }
+                            if (!frozenRetryReady && (dictionaryLoading || dictionarySearchLoading)) {
+                                add("The offline dictionary is still loading. Wait for it to finish before sending.")
+                            }
+                            if (setupError != null) {
+                                add(setupError)
+                            } else if (!setupLoadedSuccessfully) {
+                                add("AnkiDroid setup could not be loaded. Open Settings and retry setup.")
+                            }
+                            if (setupLoading) add("AnkiDroid setup is still loading. Wait for it to finish.")
+                        }
                         val submitHint = when {
                             completedSubmission != null || duplicateBlocked || recoveryRequired -> null
                             isSubmitting -> null
                             submitMessage != null -> null
-                            imagePending -> "The image is still being prepared. Send becomes available when it is ready."
-                            imageAttached && !imageProcessing && imageError == null && !imageReady ->
-                                "The selected image is not ready to send."
-                            !apiPermissionGranted -> "Allow AnkiDroid API access in Settings before sending."
-                            validationErrors.isNotEmpty() -> "Still needed: ${validationErrors.first()}"
-                            !canSend -> "Complete the note before sending."
-                            else -> null
+                            else -> sendBlockers.firstOrNull()
                         }
                         val loadMoreMatches: () -> Unit = {
                             val query = target?.textIn(editor.text)
