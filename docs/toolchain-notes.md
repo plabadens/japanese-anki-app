@@ -1,5 +1,8 @@
 # Toolchain upgrade notes
 
+**How to use it:** REFERENCE. Deferred toolchain work and the reasons it is deferred. Read before
+proposing a toolchain change; do not perform the AGP migration as a side effect of another task.
+
 Deferred build-toolchain work that is deliberately not done yet. Each item records
 why it is deferred and what must be verified before the change is made.
 
@@ -35,8 +38,8 @@ features, or when AGP 9.x is the current stable that the pinned nixpkgs provides
   application modules by default, `targetSdk` defaulting to `compileSdk`, Kotlin
   Gradle plugin pairing, and build-feature default changes.
 - Regenerate the Gradle dependency lock (`scripts/update-gradle-deps.sh`) and
-  re-verify the Nix build outputs (`.#debugApk`, `.#apk`) plus the offline
-  reproducibility comparison in `SPEC.md` §12.3.
+  re-verify the Nix build outputs (`.#debugApk`, `.#apk`) and the full gate set in
+  `docs/BEST-PRACTICES.md` §5.
 - Re-run the full unit-test suite and the on-device/emulator checks for the
   AnkiDroid provider, media import and native library loading.
 

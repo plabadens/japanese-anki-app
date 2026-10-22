@@ -1,0 +1,311 @@
+name: Release APK
+
+# A signed, installable APK is cut deliberately by pushing a version tag. Merges to main only
+# produce debug APKs (build-apk.yml); those are debug-signed and cannot update a release install.
+#
+#   git tag v0.5 && git push origin v0.5            # normal release
+#   git tag v0.5-iss12 && git push origin v0.5-iss12  # same version, issue 12 hotfix
+#
+# The tag must match versionName in app/build.gradle.kts (v<versionName>), and every release
+# must bump versionCode or the phone refuses the install.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish, e.g. v0.5 or v0.5-iss12"
+        required: true
+        type: string
+      ref:
+        description: "Commit or branch to build when the tag does not exist yet"
+        required: false
+        default: main
+        type: string
+      issue_number:
+        description: "Issue to link and comment on (blank: inferred from a -issN tag)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: release-apk-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Nix release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 1
+
+      - name: Resolve tag and version
+        id: meta
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            tag="${INPUT_TAG}"
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+          case "$tag" in
+            v*) ;;
+            *)
+              echo "::error::tag '${tag}' must start with v"
+              exit 1
+              ;;
+          esac
+
+          version_name="$(sed -n 's/^[[:space:]]*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts | head -n 1)"
+          version_code="$(sed -n 's/^[[:space:]]*versionCode = \([0-9]\+\).*/\1/p' app/build.gradle.kts | head -n 1)"
+          if [ -z "$version_name" ] || [ -z "$version_code" ]; then
+            echo "::error::could not read versionName/versionCode from app/build.gradle.kts"
+            exit 1
+          fi
+
+          # The tag names the artifact, so a tag that disagrees with versionName would publish a
+          # mislabelled release. Accept only v<versionName> and v<versionName>-issN.
+          case "$tag" in
+            "v${version_name}"|"v${version_name}-iss"*) ;;
+            *)
+              echo "::error::tag '${tag}' does not match versionName '${version_name}': expected v${version_name} or v${version_name}-issN"
+              exit 1
+              ;;
+          esac
+
+          {
+            echo "tag=${tag}"
+            echo "version_name=${version_name}"
+            echo "version_code=${version_code}"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "TAG=${tag}"
+            echo "VERSION_NAME=${version_name}"
+            echo "VERSION_CODE=${version_code}"
+          } >> "$GITHUB_ENV"
+
+          {
+            echo "### ${tag}"
+            echo
+            echo "versionName \`${version_name}\`, versionCode \`${version_code}\`, commit \`${GITHUB_SHA}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Fail before the long native build if the release identity is not available. The
+      # Gradle fallback to an unsigned release build exists for local work, not for publishing.
+      - name: Require release signing secrets
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              missing+=("$name")
+            fi
+          done
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "::error::missing repository secrets: ${missing[*]}"
+            echo "See docs/agent-flow.md (Signing) for the one-time setup. Refusing to publish an unsigned release."
+            exit 1
+          fi
+
+      - name: Materialize the signing keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          signing_dir="${RUNNER_TEMP}/signing"
+          install -d -m 0700 "$signing_dir"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 --decode > "$signing_dir/release.jks"
+          if [ ! -s "$signing_dir/release.jks" ]; then
+            echo "::error::decoded keystore is empty; ANDROID_KEYSTORE_BASE64 is not valid base64 keystore material"
+            exit 1
+          fi
+          printf 'keystore: %s bytes\n' "$(stat --printf='%s' "$signing_dir/release.jks")"
+
+      # The runner's preinstalled Android SDK is not the flake-pinned API 37 SDK, and the native
+      # closure plus Gradle caches need room. Nix supplies the entire toolchain.
+      - name: Reclaim runner disk
+        run: |
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          df -h
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      - name: Cache Gradle downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+          key: gradle-release-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml', 'gradle.properties', 'build.gradle.kts', 'app/build.gradle.kts', 'nix/gradle/deps.json') }}
+          restore-keys: |
+            gradle-release-${{ runner.os }}-
+            gradle-${{ runner.os }}-
+
+      - name: Build, test and assemble the release APK
+        env:
+          JAPANESE_ANKI_RELEASE_KEYSTORE: ${{ runner.temp }}/signing/release.jks
+          JAPANESE_ANKI_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          JAPANESE_ANKI_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          JAPANESE_ANKI_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: nix develop --command bash ./.github/scripts/ci-build-release-apk.sh
+
+      - name: Verify signature, ABI, applicationId and version
+        env:
+          ANDROID_RELEASE_CERT_SHA256: ${{ vars.ANDROID_RELEASE_CERT_SHA256 }}
+        run: nix develop --command bash ./.github/scripts/verify-release-apk.sh "$VERSION_NAME" "$VERSION_CODE" dist
+
+      - name: Write release notes
+        id: notes
+        env:
+          INPUT_ISSUE: ${{ inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          issue="${INPUT_ISSUE:-}"
+          if [ -z "$issue" ] && [[ "$TAG" =~ -iss([0-9]+)$ ]]; then
+            issue="${BASH_REMATCH[1]}"
+          fi
+          echo "issue=${issue}" >> "$GITHUB_OUTPUT"
+
+          apk="japanese-anki-${VERSION_NAME}-arm64-v8a-release.apk"
+          digest="$(cut -d' ' -f1 dist/SHA256SUMS.txt)"
+          {
+            echo "Release-signed arm64-v8a build for Android 17 (API 37)."
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| versionName | \`${VERSION_NAME}\` |"
+            echo "| versionCode | \`${VERSION_CODE}\` |"
+            echo "| APK | \`${apk}\` |"
+            echo "| SHA-256 | \`${digest}\` |"
+            echo "| commit | \`${GITHUB_SHA}\` |"
+            if [ -n "$issue" ]; then
+              echo "| issue | #${issue} |"
+            fi
+            echo
+            echo "Install on the phone (Chrome on the phone can open the link directly):"
+            echo
+            echo '```'
+            echo "adb install -r ${apk}"
+            echo '```'
+            echo
+            echo "The APK is signed with the stable release key, so tapping it on the phone updates"
+            echo "the existing release install in place. If Android answers"
+            echo "\`INSTALL_FAILED_UPDATE_INCOMPATIBLE\` the installed copy was signed with a different"
+            echo "key (a debug or locally built APK): uninstall once, then install this one."
+            echo
+            echo "The 426 MiB UniDic runtime archive is not duplicated here: the app downloads it"
+            echo "from the pinned tag \`v0.4\` on first run. See docs/agent-flow.md."
+          } > dist/RELEASE_NOTES.md
+
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_REF: ${{ inputs.ref }}
+        run: |
+          set -euo pipefail
+          repo="${GITHUB_REPOSITORY}"
+          assets=(dist/*.apk dist/SHA256SUMS.txt dist/apksigner-verify.txt)
+
+          latest_flag="--latest=true"
+          if [[ "$TAG" == *-iss* ]]; then
+            # Issue hotfixes are not the canonical release for a version.
+            latest_flag="--latest=false"
+          fi
+
+          if gh release view "$TAG" --repo "$repo" > /dev/null 2>&1; then
+            gh release upload "$TAG" "${assets[@]}" --clobber --repo "$repo"
+            gh release edit "$TAG" --notes-file dist/RELEASE_NOTES.md --repo "$repo"
+          elif [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            gh release create "$TAG" "${assets[@]}" --repo "$repo" --verify-tag \
+              --title "Japanese Anki ${VERSION_NAME} (${TAG})" \
+              --notes-file dist/RELEASE_NOTES.md "$latest_flag"
+          else
+            gh release create "$TAG" "${assets[@]}" --repo "$repo" \
+              --target "${INPUT_REF:-main}" \
+              --title "Japanese Anki ${VERSION_NAME} (${TAG})" \
+              --notes-file dist/RELEASE_NOTES.md "$latest_flag"
+          fi
+
+      - name: Comment the download link on the issue
+        if: steps.notes.outputs.issue != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ steps.notes.outputs.issue }}
+        run: |
+          set -euo pipefail
+          repo="${GITHUB_REPOSITORY}"
+          apk="japanese-anki-${VERSION_NAME}-arm64-v8a-release.apk"
+          url="https://github.com/${repo}/releases/download/${TAG}/${apk}"
+          digest="$(cut -d' ' -f1 dist/SHA256SUMS.txt)"
+
+          body="$(mktemp)"
+          {
+            echo "Release-signed build for \`${TAG}\` (versionCode ${VERSION_CODE}) is published:"
+            echo
+            echo "${url}"
+            echo
+            echo "SHA-256: \`${digest}\`"
+            echo
+            echo "Tap the link on the phone to download, then open it to update in place."
+            echo "Nothing else is needed on a phone that already runs a release-signed build."
+          } > "$body"
+
+          gh issue comment "$ISSUE_NUMBER" --repo "$repo" --body-file "$body"
+          gh issue edit "$ISSUE_NUMBER" --repo "$repo" --add-label "state:fix-ready" 2>/dev/null \
+            || echo "label state:fix-ready does not exist yet; skipped (see docs/agent-flow.md)"
+          gh issue edit "$ISSUE_NUMBER" --repo "$repo" --remove-label "state:fixing" 2>/dev/null \
+            || true
+
+      - name: Upload the release APK as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: japanese-anki-release-apk-${{ steps.meta.outputs.tag }}
+          path: |
+            dist/*.apk
+            dist/SHA256SUMS.txt
+            dist/apksigner-verify.txt
+          retention-days: 14
+          compression-level: 0
+          if-no-files-found: error
+
+      - name: Write summary
+        run: |
+          {
+            echo
+            echo "Published \`${TAG}\` from \`${GITHUB_SHA}\`."
+            echo
+            echo '```'
+            cat dist/SHA256SUMS.txt
+            echo '```'
+            echo
+            echo "Signer certificate:"
+            echo
+            echo '```'
+            grep 'certificate SHA-256 digest' dist/apksigner-verify.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

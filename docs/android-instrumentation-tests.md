@@ -1,5 +1,8 @@
 # Android instrumentation tests
 
+**How to use it:** REFERENCE. The runbook for `app/src/androidTest` on a dedicated API-37 x86_64 AVD.
+Part of the gate set described in `docs/BEST-PRACTICES.md` §5.
+
 The project uses the AndroidX JUnit runner for `app/src/androidTest`. Its pinned
 test-only dependencies are declared in `gradle/libs.versions.toml` and covered by
 `nix/gradle/deps.json`; production dependencies and the Android toolchain are not

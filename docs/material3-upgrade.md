@@ -1,10 +1,13 @@
 # Material3 dependency upgrade
 
+**How to use it:** EVIDENCE. Why `material3` is pinned to 1.4.0 and which Expressive APIs actually
+exist in it. A successful dependency build is not native UI acceptance.
+
 ## Outcome
 
 The project now pins `androidx.compose.material3:material3` **1.4.0** in `gradle/libs.versions.toml`, overriding the Compose BOM's previous 1.3.2 resolution. The BOM (2025.09.00), Kotlin (2.2.20), and AGP (8.13.2) are unchanged. No native UI implementation, application behavior, specification, or toolchain migration is included in this change.
 
-1.5.0-beta01 was attempted but its AAR metadata requires **AGP 9.1.0 or newer**. The actual failing build is retained in `evidence/material3-upgrade/beta-build-tests.log`. Since the user authorized either 1.4.0 or 1.5 beta, stable 1.4.0 was selected instead of silently expanding the work into an AGP/Gradle migration.
+1.5.0-beta01 was attempted but its AAR metadata requires **AGP 9.1.0 or newer**. The actual failing build is retained in `archive/evidence/material3-upgrade/beta-build-tests.log`. Since the user authorized either 1.4.0 or 1.5 beta, stable 1.4.0 was selected instead of silently expanding the work into an AGP/Gradle migration.
 
 ## Verified execution
 
@@ -34,16 +37,16 @@ Actual results:
 
 Evidence:
 
-- `evidence/material3-upgrade/stable-build-tests.log`
-- `evidence/material3-upgrade/unit-test-summary.json`
-- `evidence/material3-upgrade/nix-dependency-update.log`
-- `evidence/material3-upgrade/baseline-dependency-insight.log`
-- `evidence/material3-upgrade/beta-dependency-insight.log`
-- `evidence/material3-upgrade/beta-build-tests.log`
+- `archive/evidence/material3-upgrade/stable-build-tests.log`
+- `archive/evidence/material3-upgrade/unit-test-summary.json`
+- `archive/evidence/material3-upgrade/nix-dependency-update.log`
+- `archive/evidence/material3-upgrade/baseline-dependency-insight.log`
+- `archive/evidence/material3-upgrade/beta-dependency-insight.log`
+- `archive/evidence/material3-upgrade/beta-build-tests.log`
 
 ## Capability boundary
 
-The inspected 1.4.0 Android AAR contains `ExperimentalMaterial3ExpressiveApi`, `MotionScheme`, expressive motion tokens, and button/icon-button classes. The inventory is recorded, with its exact AAR hash, in `evidence/material3-upgrade/material3-1.4.0-api-inventory.json`.
+The inspected 1.4.0 Android AAR contains `ExperimentalMaterial3ExpressiveApi`, `MotionScheme`, expressive motion tokens, and button/icon-button classes. The inventory is recorded, with its exact AAR hash, in `archive/evidence/material3-upgrade/material3-1.4.0-api-inventory.json`.
 
 The `ButtonGroup` and `LoadingIndicator` matches in that inventory are **token classes**, not proof that the corresponding public composables are available. Do not implement nonexistent APIs based on their names. The study uses HTML composition equivalents; its Material 3 Expressive visual direction is not a claim that the Android application already uses every Expressive component. Native implementation must check the actual API and use named Material3 fallbacks or obtain approval for the necessary newer toolchain.
 

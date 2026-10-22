@@ -1,0 +1,118 @@
+name: Bug report
+description: Something broke, crashed, or produced a wrong card. Filled from the phone in under a minute.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        File this from the phone browser: **Issues → New issue → Bug report**.
+        Pick from the lists instead of typing where you can, attach the screenshot, and submit.
+        The build below is automated and will pick the issue up; nothing else is needed from you.
+
+        * Installed APKs: <https://github.com/plabadens/japanese-anki-app/releases>
+        * How the loop works: <https://github.com/plabadens/japanese-anki-app/blob/main/docs/agent-flow.md>
+
+  - type: dropdown
+    id: app_version
+    attributes:
+      label: App version
+      description: Settings → About shows version name and version code.
+      options:
+        - "0.4 (versionCode 4) — current release"
+        - "0.3 (versionCode 3)"
+        - "A newer build from a GitHub Release (say which below)"
+        - "A build I compiled myself (say which below)"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: build_channel
+    attributes:
+      label: Which APK is installed
+      description: >
+        The arm64-v8a release APK is the one published on the Releases page for the phone.
+        x86_64 builds only run in the emulator. Debug and release builds use different
+        signing keys, which changes whether an update installs over the top.
+      options:
+        - "arm64-v8a release APK from a GitHub Release (normal phone install)"
+        - "arm64-v8a debug APK from a CI workflow artifact"
+        - "x86_64 debug APK in the emulator"
+        - "Built locally with nix develop / gradle"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Device
+      description: Model and ABI, e.g. "Pixel 7 (arm64-v8a)".
+      placeholder: "Pixel 7 (arm64-v8a)"
+    validations:
+      required: true
+
+  - type: input
+    id: android_version
+    attributes:
+      label: Android version
+      description: Settings → About phone → Android version. The app targets API 37.
+      placeholder: "Android 17 (API 37)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened
+      description: One or two sentences. Include the exact error text or toast if there was one.
+      placeholder: "Tapping Send to AnkiDroid shows \"AnkiDroid not installed\" although it is installed."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps starting from app launch. Say if it happens every time.
+      placeholder: |
+        1. Open the app
+        2. Scan a sentence with the camera
+        3. Tap Send to AnkiDroid
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+
+  - type: upload
+    id: screenshot
+    attributes:
+      label: Screenshot
+      description: Attach a screenshot of the broken screen. Drag it in, or tap to choose from the camera roll.
+    validations:
+      required: false
+
+  - type: textarea
+    id: logcat
+    attributes:
+      label: Logcat (optional)
+      description: >
+        Only if it crashed and you have adb nearby: `adb logcat -d -b crash > crash.txt`, then attach or paste.
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Quick checks
+      options:
+        - label: This is a regression — it worked in an earlier version.
+        - label: The app crashed (closed itself or showed "app keeps stopping").
+        - label: This only happens with one particular sentence, kanji, or card.

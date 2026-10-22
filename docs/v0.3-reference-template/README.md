@@ -1,5 +1,10 @@
 # Reference template for v0.3 (corrected pitch parser)
 
+**How to use it:** REFERENCE, not a v0.3 snapshot. `Recognition/front.html` here is the corrected
+parser for the AJT HTML the app exports (nested nasal/handakuten/devoiced marks, accent numbers of
+ten or more); `parser-test.mjs` proves it. The copy in `misc/Sentence (JA)/` does **not** carry this
+fix, so use this one when validating `SPEC.md` §8 rendering.
+
 `misc/Sentence (JA)/` is the reference note type. Its front template parses the exported
 `VocabPitch` HTML to draw the pitch diagram, and that parser could not read the field as the
 app now writes it:

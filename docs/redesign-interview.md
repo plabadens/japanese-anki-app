@@ -1,5 +1,9 @@
 # Core-workflow redesign interview
 
+**How to use it:** REFERENCE. This is the user's own rationale, recorded before the SPEC rewrite. It
+is the source for `docs/DESIGN.md` and for the workflow rules in `SPEC.md` §4, but it is explicitly
+not a second specification: where it and `SPEC.md` differ, `SPEC.md` governs.
+
 Status: interview rationale, not a second specification. The rewritten `SPEC.md` is authoritative. Do not implement historical proposals below as additional requirements.
 
 Baseline checkpoint: `cd1c27a` (main checkout only; worktrees excluded).

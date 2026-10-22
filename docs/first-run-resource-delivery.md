@@ -1,5 +1,10 @@
 # First-run resource delivery: implementation and proposal
 
+**How to use it:** REFERENCE. The asset inventory below (sizes, hashes, licences) is current and is
+the source of truth for what ships and what is downloaded; the implementation and onboarding notes
+are a point-in-time snapshot from the v0.4 publication. Behaviour is specified in `SPEC.md` §3, §4.8
+and §6.1.
+
 Status: one build-pinned UniDic runtime resource is wired to the downloader and analyzer; NHK-2016 index is bundled and lookup is offline. The v0.4 release is now published directly with the two ABI APKs, the pinned UniDic ZIP and SHA256SUMS.txt. The release page and UniDic URL return HTTP 200, and public downloads of all three payload assets match the hosted checksums. This verifies asset availability/integrity, not a fresh-install Android first-run journey; cancel/resume and Wi-Fi/mobile-data confirmation remain unimplemented.
 
 ## Audited resources

@@ -1,0 +1,70 @@
+name: Feature request
+description: Ask for a behaviour change or a new capability in the card-creation flow.
+title: "[feat] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Feature requests do not enter the automated fix loop by default: they need a decision
+        on scope before any code is written. See
+        <https://github.com/plabadens/japanese-anki-app/blob/main/docs/agent-flow.md> for how
+        bugs and features are routed differently.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is painful today
+      description: Describe the task you are trying to finish, not the solution.
+      placeholder: "When mining a sentence I have to type the reading twice, once for the target and once for the vocabulary field."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you want instead
+      description: Concrete behaviour, including which screen it happens on.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - "Capture / camera OCR"
+        - "Sentence analysis (MeCab, tokens, furigana)"
+        - "Dictionary lookup (JMdict, Kanjium)"
+        - "Pitch accent (AJT contour)"
+        - "AnkiDroid export and field mapping"
+        - "Speech / audio"
+        - "Settings and first-run setup"
+        - "Build, install, or release process"
+        - "Other"
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: Include the current workaround, if any.
+    validations:
+      required: false
+
+  - type: upload
+    id: mockup
+    attributes:
+      label: Mockup or screenshot (optional)
+      description: A marked-up screenshot is usually faster than a paragraph.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: readiness
+    attributes:
+      label: Scope
+      options:
+        - label: This changes existing approved behaviour, not just an addition.
+        - label: I am willing to test an automated build of this on the phone.

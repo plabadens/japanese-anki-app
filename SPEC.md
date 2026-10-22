@@ -1,8 +1,10 @@
 # Japanese Anki Card Creator — Specification
 
-> **Current remediation authority:** [Live-testing remediation contract](docs/live-testing-remediation.md)
-> supersedes conflicting workflow, Settings, Review, camera, pitch-diagram and resource-delivery rules below.
-> Target alternatives and any pitch-backend migration remain proposal/approval gates; no second pitch backend is approved.
+**Status:** AUTHORITATIVE for required behavior, data contracts and acceptance criteria. It does not
+cover how the work is built, tested or verified — that is [docs/BEST-PRACTICES.md](docs/BEST-PRACTICES.md)
+— or what the app should feel like — that is [docs/DESIGN.md](docs/DESIGN.md). Document map:
+[docs/README.md](docs/README.md). Target alternatives and any pitch-backend migration remain
+proposal/approval gates; no second pitch backend is approved.
 
 **Target:** v0.3. This document defines the required product behavior, technical constraints, and acceptance criteria.
 
@@ -97,7 +99,7 @@ Use conventional top app bars, icon Back navigation, settings lists, bottom shee
 
 Support English UI, system light/dark mode, a portrait-only app composition with landscape photograph capture/import, 200% font scaling, TalkBack labels/states, at least 48 dp non-overlapping touch targets, 4.5:1 normal-text contrast and 3:1 actionable-icon contrast. Respect system-bar/keyboard insets; long content scrolls. Support reduced/disabled animation settings and do not use color alone to communicate state.
 
-Use a small interactive **Compose prototype built from production components** to validate the design, then reuse those components. Validate the complete journey, including interaction and accessibility.
+Intent, tone and the visual language these rules serve are in [docs/DESIGN.md](docs/DESIGN.md); the prototype-then-reuse working method is in [docs/BEST-PRACTICES.md](docs/BEST-PRACTICES.md) §10.
 
 ### 4.2 Capture
 
@@ -350,27 +352,23 @@ Before applying a source change that invalidates manual corrections, explain whi
 
 ## 12. Build and dependency maintenance
 
-`flake.nix` supplies the JDK, API-37 SDK/build tools, Gradle, NDK/native tools, and data-build dependencies needed by a fresh checkout. Pin versions/source revisions and document SDK licenses, build/test/install commands, and emulator provisioning. Do not rely on undeclared global tools.
+The shipped toolchain is the pinned Nix environment defined in §2: a fresh checkout must build and run its tests with the documented commands, without relying on an undeclared global tool. Bundled data must be reproducible from pinned sources with versions, hashes, licences and notices preserved, and signing material must stay outside the repository and the Nix store.
 
-Acceptance requires a successful build and test run from a clean checkout in the Nix environment. Record the exact commands and resulting APK. Dependency fetching is permitted.
-
-Keep dataset transformations repeatable, preserve upstream coverage, record versions/hashes/licenses, and include required attribution/notices in Sources/Licenses. Review linguistic fixtures after dataset updates. AJT code reuse and derived data each require their own licensing review; do not equate an add-on code license with recording rights.
-
-Keep signing secrets outside the repository/Nix store and document a local sideload/update procedure.
+How that is done — gate commands, dependency-lock refresh, dataset rebuild procedure, filtered Nix source sets, deferred toolchain work and signing setup — is in [docs/BEST-PRACTICES.md](docs/BEST-PRACTICES.md) §5–§6. Acceptance of this section is R01.
 
 ## 13. Delivery priorities and quality evidence
 
-Build one connected vertical slice before expanding UI states: Photo/Type → local choice → actual generation → composed Review → confirmed AnkiDroid note. Every visible playback, edit, and send control in the delivered slice must perform its real operation.
+Build one connected vertical slice before widening the surface: capture or type → local choice → actual generation → composed Review → confirmed AnkiDroid note. Every visible playback, edit and send control in the delivered slice performs its real operation; a dead control is a defect, not a placeholder.
 
-Keep capture, correction, selection, and scrolling responsive. Do OCR, dictionary initialization, image work, network I/O, and export off the UI thread. Coalesce obsolete local analysis. Measure local preparation latency and memory on the selected runtime; do not hide image compression or network waits inside the low-latency choice phase.
+Local preparation stays responsive: capture, correction, selection and scrolling never wait on OCR, dictionary initialization, image work, network I/O or export, and obsolete local analysis is discarded rather than queued. Latency and memory of the local phase are measured on the selected runtime; image compression and network waits are not hidden inside it.
 
-Use an interactive Compose prototype and screenshots from the real app to evaluate composition, touch flow, keyboard, Back, and rotation. Check light/dark and large text before calling the UI complete.
+Quality evidence for a release includes real Japanese mining examples, source-backed phonetic fixtures, image comparisons, and an exported note rendered in AnkiDroid. Sentence-TTS quality is evaluated by live audition when credentials are available (§15); controlled provider tests establish request and error handling, not speech quality.
 
-Quality evidence must include real Japanese mining examples, source-backed phonetic fixtures, image comparisons, and an exported note rendered in AnkiDroid. Evaluate sentence-TTS quality through a live audition when credentials are available, under the delivery policy in §15. Controlled provider tests establish request/error handling, not live speech quality.
+The working order, prototype loop and gate sequence that produce this slice are in [docs/BEST-PRACTICES.md](docs/BEST-PRACTICES.md) §5 and §10.
 
 ## 14. Acceptance checklist
 
-Record the tested revision, fixture, environment, actual result, and evidence for each scenario. An unrun or blocked check is not a pass. Apply the credential-dependent verification policy in §15 to live-service checks.
+Record the tested revision, fixture, environment, actual result, and evidence for each scenario. An unrun or blocked check is not a pass. Apply the credential-dependent verification policy in §15 to live-service checks, and the evidence rules in [docs/BEST-PRACTICES.md](docs/BEST-PRACTICES.md) §9 to how results are recorded.
 
 | ID | Scenario | Required result |
 |---|---|---|
@@ -412,23 +410,17 @@ Record the tested revision, fixture, environment, actual result, and evidence fo
 
 ## 15. Delivery and verification policy
 
-Deliver an installable v0.3 APK, a checksum, installation/setup instructions, screenshots, and an acceptance report with explicit PASS, FAIL, and NOT RUN results. Configure credentials through app Settings after installation; do not embed developer credentials.
+Deliver the installable APK for both ABIs, a checksum, installation/setup instructions, screenshots of the delivered build, and an acceptance report with explicit PASS, FAIL, PARTIAL and NOT RUN results per §14 row. Configure credentials through app Settings after installation; do not embed developer credentials.
 
-The Google Cloud API key is not required for APK delivery. Exercise shared credential entry/access, separate service validation, translation request/response/error handling, voice-list filtering/state, synthesis/error handling, and cache behavior with controlled transport/provider tests. Without credentials, report live Google listing, synthesis, listening assessment, and translation quality as **NOT RUN**. Controlled-response tests support integration evidence but do not substitute for live-service verification. Missing in-app credentials block only the operations that require them, not local preparation.
-
-Required verification areas:
-
-1. **Linguistic data and rendering:** source licensing/attribution, derived-index fidelity, complete readings, Kotlin serialization fixtures, recording reading/accent matching, and reference-template rendering of nasalization/devoicing and pitch contours.
-2. **Cloud operations:** Google Chirp 3 HD hint/voice/MP3 contracts, one protected shared API key with per-service validation, and Cloud Translation Basic v2 default NMT Japanese-to-English requests. Assess live pronunciation and translation quality when the key is available and the corresponding service is enabled; clearly distinguish it from controlled-response evidence. No provider substitution or unhinted retry.
-3. **Images:** orientation, full-frame bounds, 1080 px limit, WebP quality 75, metadata removal, readability, and AnkiDroid rendering on realistic image fixtures.
-4. **Platform and export:** Nix build/tests, both ABI packages, API-37 x86_64 runtime, AnkiDroid fields/media/destination, duplicate checks, and interrupted-submission recovery.
-5. **Interaction and privacy:** responsive local preparation, usable Compose workflow, accessibility, durable drafts, SDK diagnostics, secret protection, and local-photo processing.
+The Google Cloud API key is not required for APK delivery. Exercise shared credential entry/access, separate service validation, translation request/response/error handling, voice-list filtering/state, synthesis and error handling, and cache behavior with controlled transport and provider tests. Without credentials, report live Google listing, synthesis, listening assessment and translation quality as **NOT RUN**. Controlled-response tests support integration evidence but do not substitute for live-service verification. Missing in-app credentials block only the operations that require them, not local preparation.
 
 Do not silently remove required content, fabricate phonetics or test results, upload photographs, or export partial notes to satisfy acceptance.
 
+How that evidence is produced, gated and recorded — clean-checkout build, evidence areas, gate ladder, verdict definitions — is in [docs/BEST-PRACTICES.md](docs/BEST-PRACTICES.md) §9.
+
 ## 16. References
 
-This document is the product contract for v0.3.
+This document is the product contract for v0.3. The vision and feel it serves are in [docs/DESIGN.md](docs/DESIGN.md); the engineering standards behind its build and verification requirements are in [docs/BEST-PRACTICES.md](docs/BEST-PRACTICES.md); the full document map is [docs/README.md](docs/README.md).
 
 - `misc/Sentence (JA)/template.json` defines the reference field schema. `Recognition/front.html`, `Recognition/back.html`, and `template.css` provide the reference presentation. Validate their compatibility under §8.
 - [AJT Japanese pinned source](https://github.com/Ajatt-Tools/Japanese/tree/5729b8c080823eadaa121c76e0f23c55d6a81935) — furigana behavior, pitch HTML, and phonetic data.
