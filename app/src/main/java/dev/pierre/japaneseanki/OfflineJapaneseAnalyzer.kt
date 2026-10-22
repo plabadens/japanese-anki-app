@@ -3,34 +3,49 @@ package dev.pierre.japaneseanki
 import android.content.Context
 import java.io.File
 import java.io.FileOutputStream
-import java.util.Locale
 import java.util.zip.ZipInputStream
+
+internal data class OfflineAnalyzerProgress(
+    val label: String,
+    val downloadedBytes: Long? = null,
+    val totalBytes: Long? = null,
+)
 
 internal class OfflineJapaneseAnalyzer(context: Context) {
     private val appContext = context.applicationContext
     @Volatile private var tagger: NativeMeCab? = null
 
-    fun prepare(onStatus: (String) -> Unit = {}) {
+    fun prepare(onStatus: (OfflineAnalyzerProgress) -> Unit = {}) {
         if (tagger != null) return
         synchronized(installationLock) {
             if (tagger != null) return
             val destination = File(appContext.filesDir, DIRECTORY)
             if (!isInstalled(destination)) {
-                onStatus("Checking UniDic runtime archive")
+                onStatus(OfflineAnalyzerProgress("Verifying…"))
                 val resource = UniDicResourceCatalog.manifest.resources.single()
                 val archive = VerifiedFirstRunResourceInstaller(
                     File(appContext.filesDir, RESOURCE_DIRECTORY),
                 ).install(resource) { progress ->
-                    onStatus(progress.describeForUi())
+                    onStatus(
+                        when (progress.phase) {
+                            ResourceProgressPhase.DOWNLOADING -> OfflineAnalyzerProgress(
+                                "Downloading…",
+                                progress.completedBytes,
+                                progress.totalBytes,
+                            )
+                            ResourceProgressPhase.VERIFYING,
+                            ResourceProgressPhase.VALIDATING_ARCHIVE -> OfflineAnalyzerProgress("Verifying…")
+                            ResourceProgressPhase.ACTIVATING -> OfflineAnalyzerProgress("Installing…")
+                        },
+                    )
                 }.location
-                onStatus("Unpacking UniDic: 0% (about 725 MB)")
-                install(destination, archive) { extracted ->
-                    onStatus("Unpacking UniDic: ${(extracted * 100).toInt()}% (about 725 MB)")
-                }
+                onStatus(OfflineAnalyzerProgress("Installing…"))
+                install(destination, archive) {}
             } else {
-                onStatus("UniDic is ready")
+                onStatus(OfflineAnalyzerProgress("Ready"))
             }
             tagger = NativeMeCab(destination)
+            onStatus(OfflineAnalyzerProgress("Ready"))
         }
     }
 
@@ -97,32 +112,11 @@ internal class OfflineJapaneseAnalyzer(context: Context) {
             FILE_SIZES.values.sum() == TOTAL_BYTES &&
             FILE_SIZES.all { (name, size) -> File(directory, name).length() == size }
 
-    private fun ResourceProgress.describeForUi(): String {
-        val completedMb = completedBytes / MEBIBYTE
-        val totalMb = totalBytes / MEBIBYTE
-        return when (phase) {
-            ResourceProgressPhase.DOWNLOADING -> String.format(
-                Locale.US,
-                "Downloading UniDic: %.1f of %.1f MiB",
-                completedMb,
-                totalMb,
-            )
-            ResourceProgressPhase.VERIFYING -> "Verifying UniDic SHA-256"
-            ResourceProgressPhase.VALIDATING_ARCHIVE -> String.format(
-                Locale.US,
-                "Validating UniDic archive: %.1f of %.1f MiB",
-                completedMb,
-                totalMb,
-            )
-            ResourceProgressPhase.ACTIVATING -> "Activating verified UniDic archive"
-        }
-    }
-
     companion object {
         private const val DIRECTORY = "unidic-cwj-3.1.1"
         private const val RESOURCE_DIRECTORY = "first-run-resources"
         private const val TOTAL_BYTES = 724_593_605L
-        private const val MEBIBYTE = 1024.0 * 1024.0
+
         private val FILE_SIZES = mapOf(
             "char.bin" to 262_496L,
             "dicrc" to 1_785L,

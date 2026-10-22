@@ -5,6 +5,7 @@ import android.net.Uri
 import android.widget.ImageView
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,13 +18,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -50,6 +52,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -211,6 +214,8 @@ internal fun ReviewCard(
     onEdit: () -> Unit,
     onTagsChange: (String) -> Unit,
     onNotesChange: (String) -> Unit,
+    onEditNote: () -> Unit = {},
+    onEditTags: () -> Unit = {},
     editingEnabled: Boolean = true,
     translationPending: Boolean = false,
     translationError: String? = null,
@@ -264,14 +269,7 @@ internal fun ReviewCard(
     selectedPitchAccent: Int? = null,
     onSelectPitch: (Int) -> Unit = {},
 ) {
-    var editing by remember { mutableStateOf(false) }
-    var notesDraft by remember(notes) { mutableStateOf(notes) }
-    var tagsDraft by remember(tags) { mutableStateOf(tags.joinToString(" ")) }
     var photoExpanded by remember { mutableStateOf(false) }
-    val editableFields = reviewEditableFields(editing, editingEnabled)
-    val fieldCallbacks = remember(onNotesChange, onTagsChange) {
-        ReviewFieldCallbacks(onNotesChange, onTagsChange)
-    }
     val preSendStatusAndAction = when {
         sentenceAudio is ReviewAudioPresentation.Advisory ->
             ReviewStatusPresentation(sentenceAudio.headline, ReviewStatusRole.Information, sentenceAudio.actionLabel) to onRetrySentenceAudio
@@ -312,7 +310,7 @@ internal fun ReviewCard(
                     enabled = editingEnabled,
                     onClick = onReopenOcrChooser,
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Choose text from photo") }
+                ) { Text("Choose sentence") }
             }
             if (imagePath != null || imageStatus != null) {
                 ReviewPhotoSlot(
@@ -404,61 +402,53 @@ internal fun ReviewCard(
                 }
             }
 
-            if (editableFields.isEmpty()) {
-                if (tags.isNotEmpty()) {
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        tags.filter(String::isNotBlank).forEach { tag ->
-                            AssistChip(
-                                onClick = { editing = true },
-                                enabled = editingEnabled,
-                                label = { Text(tag) },
-                                modifier = Modifier.semantics { contentDescription = "Tag $tag" },
-                            )
-                        }
+            if (tags.isEmpty()) {
+                TextButton(
+                    enabled = editingEnabled,
+                    onClick = onEditTags,
+                    modifier = Modifier.heightIn(min = 48.dp),
+                ) { Text("Add tags") }
+            } else {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth()
+                        .clickable(enabled = editingEnabled, role = Role.Button, onClick = onEditTags)
+                        .semantics { contentDescription = "Edit tags" },
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    tags.filter(String::isNotBlank).forEach { tag ->
+                        Text(
+                            tag,
+                            modifier = Modifier
+                                .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(12.dp))
+                                .padding(horizontal = 10.dp, vertical = 4.dp),
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            style = MaterialTheme.typography.labelLarge,
+                        )
                     }
                 }
-                if (notes.isNotBlank()) {
-                    Text(notes, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+            }
+            if (notes.isBlank()) {
+                TextButton(
+                    enabled = editingEnabled,
+                    onClick = onEditNote,
+                    modifier = Modifier.heightIn(min = 48.dp),
+                ) { Text("Add note") }
             } else {
-                OutlinedTextField(
-                    value = notesDraft,
-                    onValueChange = { value ->
-                        notesDraft = value
-                        fieldCallbacks.update(ReviewEditableField.Notes, value)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Notes (optional)") },
-                    minLines = 2,
-                )
-                OutlinedTextField(
-                    value = tagsDraft,
-                    onValueChange = { value ->
-                        tagsDraft = value
-                        fieldCallbacks.update(ReviewEditableField.Tags, value)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Tags (optional)") },
-                    singleLine = true,
+                Text(
+                    notes,
+                    modifier = Modifier.fillMaxWidth()
+                        .clickable(enabled = editingEnabled, role = Role.Button, onClick = onEditNote)
+                        .semantics { contentDescription = "Edit note" },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TextButton(
-                    enabled = editingEnabled,
-                    onClick = { onEdit() },
-                    modifier = Modifier.heightIn(min = 48.dp),
-                ) { Text(ReviewPreparationActionLabel) }
-                Spacer(Modifier.weight(1f))
-                TextButton(
-                    enabled = editingEnabled,
-                    onClick = { editing = !editing },
-                    modifier = Modifier.heightIn(min = 48.dp),
-                ) { Text(if (editing) "Done" else "Edit notes & tags") }
-            }
+            TextButton(
+                enabled = editingEnabled,
+                onClick = onEdit,
+                modifier = Modifier.heightIn(min = 48.dp),
+            ) { Text(ReviewPreparationActionLabel) }
         }
 
         Column(
@@ -555,7 +545,7 @@ private fun ReviewPhotoSlot(
                 onClick = onExpand,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp).size(48.dp)
                     .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(24.dp))
-                    .semantics { contentDescription = "View whole photo" },
+                    .semantics { contentDescription = "View photo" },
             ) { FlowIcons.Expand(Modifier.size(22.dp)) }
         } else {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -577,22 +567,29 @@ private fun ReviewPhotoSlot(
 @Composable
 private fun FullPhotoDialog(imagePath: String, onDismiss: () -> Unit) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(Color.Black)
-                .semantics { contentDescription = "Full photo" },
+        Column(
+            Modifier.fillMaxSize().background(Color.Black).navigationBarsPadding(),
         ) {
+            Row(
+                Modifier.fillMaxWidth().statusBarsPadding().height(56.dp).padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Photo",
+                    modifier = Modifier.weight(1f).padding(start = 8.dp),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Color.White,
+                )
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.size(48.dp).semantics { contentDescription = "Close" },
+                ) { Text("✕", color = Color.White, fontSize = 24.sp) }
+            }
             AndroidView(
                 factory = { context -> ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_CENTER } },
                 update = { it.setImageURI(Uri.fromFile(File(imagePath))) },
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxWidth().weight(1f),
             )
-            IconButton(
-                onClick = onDismiss,
-                modifier = Modifier.align(Alignment.TopEnd).padding(16.dp).size(48.dp)
-                    .semantics { contentDescription = "Close photo" },
-            ) { Text("✕", color = Color.White, fontSize = 24.sp) }
         }
     }
 }

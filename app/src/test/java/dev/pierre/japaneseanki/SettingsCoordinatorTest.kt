@@ -60,7 +60,7 @@ class SettingsCoordinatorTest {
 
         assertEquals(1, results.size)
         assertTrue(results.single().isFailure)
-        assertEquals("Settings could not be saved.", coordinator.currentSaveError())
+        assertEquals("Could not save your changes.", coordinator.currentSaveError())
         persistence.failValues = false
         assertTrue(coordinator.flush().isSuccess)
         assertEquals(SettingsValues(modelId = 3), persistence.savedValues)
@@ -94,7 +94,7 @@ class SettingsCoordinatorTest {
 
         assertEquals(1, persistence.keyWrites)
         assertEquals("", persistence.savedCredential)
-        assertEquals("The Google Cloud key could not be saved securely.", coordinator.currentSaveError())
+        assertEquals("Could not save your changes.", coordinator.currentSaveError())
         assertFalse(coordinator.isCredentialStored())
         persistence.failKey = false
         assertTrue(coordinator.flush().isSuccess)

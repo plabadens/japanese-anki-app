@@ -1,10 +1,7 @@
 package dev.pierre.japaneseanki.ui
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -55,11 +52,9 @@ internal fun TargetScreen(
     onEditSentence: () -> Unit,
     entryLabel: String?,
     entryDetail: String?,
-    entryCount: Int,
+    meaningChoiceCount: Int,
+    meaningResolved: Boolean,
     onChooseEntry: () -> Unit,
-    senses: List<String>,
-    selectedSenses: Set<Int>,
-    onToggleSense: (Int, Boolean) -> Unit,
     meaningStatus: String?,
     canContinue: Boolean,
     continueHint: String?,
@@ -168,9 +163,9 @@ internal fun TargetScreen(
                         )
                     }
                     Spacer(Modifier.weight(1f))
-                    if (entryCount > 1) {
+                    if (meaningChoiceCount > 1) {
                         TextButton(enabled = !locked, onClick = onChooseEntry) {
-                            Text("$entryCount entries")
+                            Text(if (meaningResolved) "Change meaning" else "Choose meaning")
                             Spacer(Modifier.size(4.dp))
                             FlowIcons.ChevronDown(Modifier.size(16.dp))
                         }
@@ -180,17 +175,7 @@ internal fun TargetScreen(
             meaningStatus?.let { status ->
                 Text(status, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            if (senses.isNotEmpty()) {
-                Text("Meaning", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                senses.forEachIndexed { index, gloss ->
-                    MeaningCard(
-                        gloss = gloss,
-                        checked = index in selectedSenses,
-                        enabled = !locked,
-                        onCheckedChange = { checked -> onToggleSense(index, checked) },
-                    )
-                }
-            }
+
             TextButton(enabled = !locked, onClick = { correctionsExpanded = !correctionsExpanded }) {
                 Text(if (correctionsExpanded) "Hide preparation corrections" else "Edit preparation corrections")
             }
@@ -369,69 +354,5 @@ private fun WordPill(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-    }
-}
-
-/** A meaning is selected by an explicit check plus a contrasting outline, never colour alone. */
-@Composable
-private fun MeaningCard(
-    gloss: String,
-    checked: Boolean,
-    enabled: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    val shape = RoundedCornerShape(16.dp)
-    Surface(
-        onClick = { onCheckedChange(!checked) },
-        enabled = enabled,
-        shape = shape,
-        color = if (checked) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        border = BorderStroke(
-            if (checked) 2.dp else 1.dp,
-            if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-        ),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp)
-            .semantics {
-                contentDescription = gloss
-                stateDescription = if (checked) "Selected meaning" else "Not selected"
-            },
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .then(
-                        if (checked) {
-                            Modifier
-                        } else {
-                            Modifier.border(BorderStroke(2.dp, MaterialTheme.colorScheme.outline), RoundedCornerShape(6.dp))
-                        },
-                    )
-                    .then(
-                        if (checked) {
-                            Modifier.background(MaterialTheme.colorScheme.primary, RoundedCornerShape(6.dp))
-                        } else {
-                            Modifier
-                        },
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (checked) FlowIcons.Check(Modifier.size(16.dp), MaterialTheme.colorScheme.onPrimary)
-            }
-        Text(
-            gloss,
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyLarge,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        }
     }
 }
