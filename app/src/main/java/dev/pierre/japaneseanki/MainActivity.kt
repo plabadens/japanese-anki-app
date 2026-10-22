@@ -62,8 +62,6 @@ import dev.pierre.japaneseanki.ui.ReviewAudioPresentation
 import dev.pierre.japaneseanki.ui.reviewAudioGenerationFailureMessage
 import dev.pierre.japaneseanki.ui.reviewAudioPlaybackFailureMessage
 import dev.pierre.japaneseanki.ui.reviewAudioSendBlocker
-import dev.pierre.japaneseanki.ui.FlowProgress
-import dev.pierre.japaneseanki.ui.FlowStep
 import dev.pierre.japaneseanki.ui.FlowTheme
 import dev.pierre.japaneseanki.ui.FlowTopBar
 import dev.pierre.japaneseanki.ui.InputScreen
@@ -3328,34 +3326,25 @@ class MainActivity : ComponentActivity() {
                     ) {
                         var submitAction: () -> Unit = {}
                         val reviewTarget = displayTarget?.takeIf { it.textIn(displaySentence) != null }
-                        FlowTopBar(
-                            title = when (visibleRoute) {
-                                AppRoute.Capture -> "Input"
-                                AppRoute.Target -> "Target"
-                                AppRoute.Review -> "Review"
-                            },
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            onBack = if (navigationLocked) null else when (visibleRoute) {
-                                AppRoute.Review -> ({ generationStarted = false; route = AppRoute.Target })
-                                AppRoute.Target -> ({ route = AppRoute.Capture })
-                                AppRoute.Capture -> null
-                            },
-                            onSettings = if (!navigationLocked) ({ openSettings() }) else null,
-                            onClose = if (visibleRoute == AppRoute.Capture && !navigationLocked) {
-                                ({ showDiscardConfirm = true })
-                            } else {
-                                null
-                            },
-                        )
-                        FlowProgress(
-                            current = when (visibleRoute) {
-                                AppRoute.Capture -> FlowStep.Input
-                                AppRoute.Target -> FlowStep.Target
-                                AppRoute.Review -> FlowStep.Review
-                            },
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                        )
-                        if (analyzerLoading || analyzerError != null || dictionaryLoading || dictionaryError != null) {
+                        if (visibleRoute != AppRoute.Capture) {
+                            FlowTopBar(
+                                title = when (visibleRoute) {
+                                    AppRoute.Capture -> ""
+                                    AppRoute.Target -> "Target"
+                                    AppRoute.Review -> "Review"
+                                },
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                onBack = if (navigationLocked) null else when (visibleRoute) {
+                                    AppRoute.Review -> ({ generationStarted = false; route = AppRoute.Target })
+                                    AppRoute.Target -> ({ route = AppRoute.Capture })
+                                    AppRoute.Capture -> null
+                                },
+                                onSettings = if (!navigationLocked) ({ openSettings() }) else null,
+                            )
+                        }
+                        if (visibleRoute != AppRoute.Capture &&
+                            (analyzerLoading || analyzerError != null || dictionaryLoading || dictionaryError != null)
+                        ) {
                             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
                                 if (analyzerLoading) {
                                     Text(analyzerStatus, style = MaterialTheme.typography.bodySmall)
@@ -3541,7 +3530,6 @@ class MainActivity : ComponentActivity() {
                                         )
                                     }
                                 },
-                                imageAttached = imageAttached,
                                 imageStatus = when {
                                     imageProcessing -> "Preparing the photo for Anki…"
                                     imageError != null -> imageError
@@ -3559,6 +3547,7 @@ class MainActivity : ComponentActivity() {
                                         )
                                     }
                                 },
+                                onSettings = { openSettings() },
                             )
                             AppRoute.Target -> TargetScreen(
                                 sentence = editor.text,

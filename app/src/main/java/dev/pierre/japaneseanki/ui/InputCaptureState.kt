@@ -2,24 +2,39 @@ package dev.pierre.japaneseanki.ui
 
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** A portrait 4:3 sensor preview is displayed upright in a 3:4 viewport. */
+/** The upright 3:4 viewport for a 4:3 camera sensor. */
 internal data class CameraPreviewSizeDp(val width: Float, val height: Float)
 
+internal data class CameraCaptureLayoutDp(
+    val preview: CameraPreviewSizeDp,
+    val equalGap: Float,
+)
+
 /**
- * The sensor viewport always uses the full available width. Short panes scroll their controls;
- * they do not silently narrow the camera image to make the controls fit.
+ * Sizes the full-width preview when there is room; otherwise it narrows symmetrically after both
+ * equal control-row gaps reach their 12 dp floor.
  */
-internal fun cameraPreviewSizeDp(availableWidth: Float): CameraPreviewSizeDp {
+internal fun cameraCaptureLayoutDp(availableWidth: Float, availableHeight: Float): CameraCaptureLayoutDp {
     require(availableWidth.isFinite() && availableWidth >= 0f) { "availableWidth must be finite and non-negative" }
-    return CameraPreviewSizeDp(width = availableWidth, height = availableWidth * 4f / 3f)
+    require(availableHeight.isFinite() && availableHeight >= 0f) { "availableHeight must be finite and non-negative" }
+
+    val maxPreviewHeight = (availableHeight - CAMERA_CONTROL_ROW_HEIGHT_DP - 2 * CAMERA_CAPTURE_GAP_FLOOR_DP)
+        .coerceAtLeast(0f)
+    val previewWidth = minOf(availableWidth, maxPreviewHeight * 3f / 4f)
+    val preview = CameraPreviewSizeDp(previewWidth, previewWidth * 4f / 3f)
+    val equalGap = maxOf(
+        CAMERA_CAPTURE_GAP_FLOOR_DP.toFloat(),
+        (availableHeight - preview.height - CAMERA_CONTROL_ROW_HEIGHT_DP) / 2f,
+    )
+    return CameraCaptureLayoutDp(preview, equalGap)
 }
 
-internal const val CAMERA_CONTROL_ROW_HEIGHT_DP = 96
-internal const val CAMERA_SHUTTER_SIZE_DP = 80
+internal const val CAMERA_TOP_BAR_HEIGHT_DP = 56
+internal const val CAMERA_CONTROL_ROW_HEIGHT_DP = 48
+internal const val CAMERA_SHUTTER_SIZE_DP = 48
 internal const val CAMERA_SIDE_SLOT_SIZE_DP = 48
-internal const val INPUT_MODE_SELECTOR_MIN_HEIGHT_DP = 48
-internal const val INPUT_STATUS_SLOT_HEIGHT_DP = 88
-internal const val INPUT_STATUS_OVERLAY_MAX_HEIGHT_DP = 112
+internal const val CAMERA_CAPTURE_GAP_FLOOR_DP = 12
+internal const val CAMERA_MODE_SWITCH_HEIGHT_DP = 38
 
 internal fun captureActionsEnabled(screenEnabled: Boolean, captureInProgress: Boolean): Boolean =
     screenEnabled && !captureInProgress
