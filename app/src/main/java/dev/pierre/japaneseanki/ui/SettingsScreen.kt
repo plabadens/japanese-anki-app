@@ -1,28 +1,22 @@
 package dev.pierre.japaneseanki.ui
 
-import androidx.compose.ui.res.stringResource
-
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -32,8 +26,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import dev.pierre.japaneseanki.R
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -57,31 +52,48 @@ internal class SettingsScreenState(
     val credentialUnreadable: Boolean = false,
     val error: String? = null,
     val voiceCatalog: VoiceCatalogState = VoiceCatalogState(),
+    val ankiConnected: Boolean = false,
+    val ankiInstalled: Boolean = false,
+    val onboardingIncomplete: Boolean = false,
+    val dictionaryStatus: String = "Verifying…",
+    val cacheBusy: Boolean = false,
+    val cacheMessage: String? = null,
 )
 
-/**
- * Autosaved Settings surface. The owner supplies debounced persistence and flushes it before Back;
- * this composable intentionally has no Save action and never calls a provider itself.
- */
+/** Autosaved Settings surface. Back flushes pending changes; no Save action is shown. */
 @Composable
 internal fun SettingsScreen(
     state: SettingsScreenState,
     noteTypes: List<AnkiNoteType>,
     decks: List<AnkiDeck>,
     onBack: () -> Unit,
+    onFinishSetup: () -> Unit,
+    onConnectAnki: () -> Unit,
     onModelChange: (Long?) -> Unit,
     onDeckChange: (Long?) -> Unit,
     onDefaultTagsChange: (String) -> Unit,
     onGoogleKeyChange: (String) -> Unit,
     onVoiceChange: (String) -> Unit,
     onReloadVoices: () -> Unit,
+    onOpenDownloads: () -> Unit,
+    onClearCache: () -> Unit,
+    onOpenSources: () -> Unit,
     modifier: Modifier = Modifier,
-    additionalSections: @Composable ColumnScope.() -> Unit = {},
 ) {
-    var modelMenu by remember { mutableStateOf(false) }
-    var deckMenu by remember { mutableStateOf(false) }
-    var voiceMenu by remember { mutableStateOf(false) }
+    var modelPickerOpen by remember { mutableStateOf(false) }
+    var deckPickerOpen by remember { mutableStateOf(false) }
+    var voicePickerOpen by remember { mutableStateOf(false) }
     var showKey by remember { mutableStateOf(false) }
+    var clearCacheConfirm by remember { mutableStateOf(false) }
+
+    val compatibleNoteTypes = remember(noteTypes) {
+        noteTypes.filter { model ->
+            AnkiFieldContract.mapToModelOrder(model.fields, emptyMap()).isValid
+        }
+    }
+    val selectedModel = compatibleNoteTypes.firstOrNull { it.id == state.values.modelId }
+    val selectedDeck = decks.firstOrNull { it.id == state.values.deckId }
+    val selectedVoice = state.voiceCatalog.voices.firstOrNull { it.name == state.values.voiceName }
 
     Column(modifier.fillMaxSize().imePadding()) {
         FlowTopBar(
@@ -89,84 +101,48 @@ internal fun SettingsScreen(
             onBack = onBack,
             modifier = Modifier.statusBarsPadding().padding(horizontal = 8.dp, vertical = 4.dp),
         )
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         Column(
             modifier = Modifier.fillMaxWidth().weight(1f).navigationBarsPadding()
                 .verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(stringResource(R.string.anki), style = MaterialTheme.typography.titleMedium)
-            Text(stringResource(R.string.note_type), style = MaterialTheme.typography.titleSmall)
-            Column {
-                OutlinedButton(
-                    onClick = { modelMenu = true },
-                    enabled = !state.loading && noteTypes.isNotEmpty(),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        noteTypes.firstOrNull { it.id == state.values.modelId }?.name
-                            ?: if (state.values.modelId == null) stringResource(R.string.legacy_settings_choose_note_type) else stringResource(R.string.legacy_settings_previously_selected_note_type_unavailable),
-                    )
-                }
-                DropdownMenu(expanded = modelMenu, onDismissRequest = { modelMenu = false }) {
-                    noteTypes.forEach { model ->
-                        DropdownMenuItem(
-                            text = { Text(model.name) },
-                            onClick = { modelMenu = false; onModelChange(model.id) },
-                        )
-                    }
-                }
-            }
-            noteTypes.firstOrNull { it.id == state.values.modelId }?.let { model ->
-                AnkiFieldContract.mapToModelOrder(model.fields, emptyMap()).errors.forEach {
-                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            if (state.onboardingIncomplete) {
+                TextButton(onClick = onFinishSetup, modifier = Modifier.fillMaxWidth()) {
+                    Text("Finish setup")
                 }
             }
 
-            Text(stringResource(R.string.legacy_settings_destination_deck), style = MaterialTheme.typography.titleSmall)
-            Column {
-                OutlinedButton(
-                    onClick = { deckMenu = true },
-                    enabled = !state.loading && decks.isNotEmpty(),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        decks.firstOrNull { it.id == state.values.deckId }?.name
-                            ?: if (state.values.deckId == null) stringResource(R.string.legacy_settings_choose_destination_deck) else stringResource(R.string.legacy_settings_previously_selected_deck_unavailable),
-                    )
-                }
-                DropdownMenu(expanded = deckMenu, onDismissRequest = { deckMenu = false }) {
-                    decks.forEach { deck ->
-                        DropdownMenuItem(
-                            text = { Text(deck.name) },
-                            onClick = { deckMenu = false; onDeckChange(deck.id) },
-                        )
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text("AnkiDroid", style = MaterialTheme.typography.bodyLarge)
+                Text(if (state.ankiConnected) "Connected" else "Not connected")
+                if (!state.ankiConnected) {
+                    TextButton(onClick = onConnectAnki) {
+                        Text(if (state.ankiInstalled) "Connect AnkiDroid" else "Install AnkiDroid")
                     }
-                }
-            }
-            if (state.loading) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CircularProgressIndicator(modifier = Modifier.padding(2.dp), strokeWidth = 2.dp)
-                    Text(stringResource(R.string.legacy_settings_loading_saved_settings))
                 }
             }
             OutlinedTextField(
-                value = state.values.defaultTags,
-                onValueChange = onDefaultTagsChange,
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text(stringResource(R.string.default_tags)) },
-                supportingText = { Text(stringResource(R.string.legacy_settings_applied_to_each_new_note_per_note_edits_do)) },
-                minLines = 2,
-                maxLines = 4,
-                enabled = !state.loading,
+                value = selectedModel?.name.orEmpty(),
+                onValueChange = {},
+                modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { modelPickerOpen = true },
+                label = { Text("Note type") },
+                readOnly = true,
+                enabled = !state.loading && compatibleNoteTypes.isNotEmpty(),
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = selectedDeck?.name.orEmpty(),
+                onValueChange = {},
+                modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { deckPickerOpen = true },
+                label = { Text("Deck") },
+                readOnly = true,
+                enabled = !state.loading && decks.isNotEmpty(),
+                singleLine = true,
             )
 
-            HorizontalDivider()
-            Text(stringResource(R.string.legacy_settings_google_cloud), style = MaterialTheme.typography.titleMedium)
-            Text(
-                stringResource(R.string.legacy_settings_one_api_key_for_sentence_speech_and_transl),
-                style = MaterialTheme.typography.bodySmall,
-            )
             OutlinedTextField(
                 value = state.googleKey,
                 onValueChange = onGoogleKeyChange,
@@ -178,97 +154,167 @@ internal fun SettingsScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = showKey, onCheckedChange = { showKey = it }, enabled = !state.loading)
-                Text(stringResource(R.string.legacy_settings_show_key))
-                Text(
-                    if (state.credentialStored) stringResource(R.string.legacy_settings_key_saved_securely) else stringResource(R.string.legacy_settings_no_key_saved),
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(start = 8.dp),
-                )
+                TextButton(
+                    onClick = { showKey = !showKey },
+                    enabled = !state.loading,
+                    modifier = Modifier.semantics {
+                        contentDescription = if (showKey) "Hide API key" else "Show API key"
+                    },
+                ) { Text(if (showKey) "Hide API key" else "Show API key") }
             }
-            if (state.credentialUnreadable) {
-                Text(
-                    stringResource(R.string.legacy_settings_the_saved_google_cloud_key_could_not_be_op),
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
+            OutlinedTextField(
+                value = selectedVoice?.displayName ?: state.values.voiceName,
+                onValueChange = {},
+                modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { voicePickerOpen = true },
+                label = { Text("Sentence voice") },
+                readOnly = true,
+                enabled = !state.loading,
+                singleLine = true,
+            )
+            TextButton(
+                enabled = !state.loading && !state.voiceCatalog.loading,
+                onClick = onReloadVoices,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Reload voices") }
+            if (state.voiceCatalog.loading) Text("Loading voices…")
 
-            Text(stringResource(R.string.legacy_settings_sentence_voice_chirp_3_hd), style = MaterialTheme.typography.titleSmall)
-            when {
-                state.voiceCatalog.loading -> Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    CircularProgressIndicator(modifier = Modifier.padding(2.dp), strokeWidth = 2.dp)
-                    Text(stringResource(R.string.legacy_settings_listing_japanese_voices))
+            OutlinedTextField(
+                value = state.values.defaultTags,
+                onValueChange = onDefaultTagsChange,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Default tags") },
+                minLines = 1,
+                maxLines = 3,
+                enabled = !state.loading,
+            )
+
+            TextButton(onClick = onOpenDownloads, modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Dictionary", modifier = Modifier.weight(1f))
+                    Text(state.dictionaryStatus)
                 }
-                state.voiceCatalog.error != null -> Text(
-                    state.voiceCatalog.error + if (state.voiceCatalog.hasCachedList)
-                        stringResource(R.string.legacy_settings_showing_the_cached_list_it_is_not_verified)
-                    else "",
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                state.voiceCatalog.provenance == VoiceCatalogProvenance.CACHED -> Text(
-                    stringResource(R.string.legacy_settings_showing_a_cached_voice_list_it_has_not_bee),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                state.voiceCatalog.provenance == VoiceCatalogProvenance.AUTHORITATIVE && state.voiceCatalog.voices.isEmpty() -> Text(
-                    stringResource(R.string.legacy_settings_no_japanese_chirp_3_hd_voices_were_returne),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                state.voiceCatalog.provenance == VoiceCatalogProvenance.NONE -> Text(
-                    if (state.googleKey.isBlank()) stringResource(R.string.legacy_settings_add_a_key_to_list_voices) else stringResource(R.string.legacy_settings_voice_list_not_checked_yet),
-                    style = MaterialTheme.typography.bodySmall,
-                )
             }
-            Column {
-                val selectedVoice = state.voiceCatalog.voices.firstOrNull { it.name == state.values.voiceName }
-                OutlinedButton(
-                    onClick = { voiceMenu = true },
-                    enabled = !state.loading && state.voiceCatalog.voices.isNotEmpty(),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        selectedVoice?.let { "${it.displayName} · ${it.name}" }
-                            ?: if (state.values.voiceName.isBlank()) stringResource(R.string.legacy_settings_choose_sentence_voice)
-                            else stringResource(R.string.legacy_settings_saved_voice_not_in_this_list),
-                    )
+            TextButton(
+                enabled = !state.cacheBusy,
+                onClick = { clearCacheConfirm = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Clear cache") }
+            state.cacheMessage?.let { message ->
+                Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (message == "Could not clear the cache.") {
+                    TextButton(onClick = onClearCache) { Text("Retry") }
                 }
-                DropdownMenu(
-                    expanded = voiceMenu,
-                    onDismissRequest = { voiceMenu = false },
-                    modifier = Modifier.heightIn(max = 320.dp),
-                ) {
-                    state.voiceCatalog.voices.forEach { voice: CloudVoice ->
-                        DropdownMenuItem(
-                            text = { Text("${voice.displayName} · ${voice.name}") },
-                            onClick = { voiceMenu = false; onVoiceChange(voice.name) },
-                        )
+            }
+            TextButton(onClick = onOpenSources, modifier = Modifier.fillMaxWidth()) {
+                Text("Sources and licenses")
+            }
+            state.error?.let { message ->
+                Text(message, color = MaterialTheme.colorScheme.error)
+                if (message == "Could not save your changes.") {
+                    TextButton(onClick = onBack) { Text("Retry") }
+                }
+            }
+        }
+    }
+
+    if (modelPickerOpen) {
+        PickerDialog(
+            title = "Note type",
+            selectedId = state.values.modelId,
+            rows = compatibleNoteTypes.map { PickerRow(it.id, it.name) },
+            onSelect = { id -> modelPickerOpen = false; onModelChange(id) },
+            onDismiss = { modelPickerOpen = false },
+        )
+    }
+    if (deckPickerOpen) {
+        PickerDialog(
+            title = "Deck",
+            selectedId = state.values.deckId,
+            rows = decks.map { PickerRow(it.id, it.name) },
+            onSelect = { id -> deckPickerOpen = false; onDeckChange(id) },
+            onDismiss = { deckPickerOpen = false },
+        )
+    }
+    if (voicePickerOpen) {
+        val voiceRows = state.voiceCatalog.voices.mapIndexed { index, voice ->
+            PickerRow(index.toLong(), "${voice.displayName} · ${voice.name}")
+        }
+        PickerDialog(
+            title = "Sentence voice",
+            selectedId = state.voiceCatalog.voices.indexOfFirst { it.name == state.values.voiceName }
+                .takeIf { it >= 0 }?.toLong(),
+            rows = voiceRows,
+            emptyMessage = when {
+                state.voiceCatalog.error != null -> "Could not load voices."
+                state.voiceCatalog.provenance == VoiceCatalogProvenance.AUTHORITATIVE ->
+                    "No compatible Japanese voices found."
+                else -> null
+            },
+            cachedMessage = if (state.voiceCatalog.provenance == VoiceCatalogProvenance.CACHED) {
+                "Saved voices · offline"
+            } else null,
+            loadingMessage = if (state.voiceCatalog.loading) "Loading voices…" else null,
+            onSelect = { index ->
+                state.voiceCatalog.voices.getOrNull(index.toInt())?.let { onVoiceChange(it.name) }
+                voicePickerOpen = false
+            },
+            onDismiss = { voicePickerOpen = false },
+        )
+    }
+    if (clearCacheConfirm) {
+        AlertDialog(
+            onDismissRequest = { clearCacheConfirm = false },
+            title = { Text("Clear cache?") },
+            text = { Text("Your current draft and saved notes will be kept.") },
+            confirmButton = {
+                TextButton(onClick = { clearCacheConfirm = false; onClearCache() }) {
+                    Text("Clear cache")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { clearCacheConfirm = false }) { Text("Cancel") }
+            },
+        )
+    }
+}
+
+private data class PickerRow(val id: Long, val label: String)
+
+@Composable
+private fun PickerDialog(
+    title: String,
+    selectedId: Long?,
+    rows: List<PickerRow>,
+    onSelect: (Long) -> Unit,
+    onDismiss: () -> Unit,
+    emptyMessage: String? = null,
+    cachedMessage: String? = null,
+    loadingMessage: String? = null,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(
+                Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState()),
+            ) {
+                loadingMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                cachedMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                emptyMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                rows.forEach { row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { onSelect(row.id) },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = row.id == selectedId, onClick = { onSelect(row.id) })
+                        Text(row.label, modifier = Modifier.weight(1f))
                     }
                 }
             }
-            if (state.voiceCatalog.selectedVoiceMissing(state.values.voiceName)) {
-                Text(
-                    stringResource(R.string.legacy_settings_the_saved_voice_is_not_in_google_s_current),
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-            val reloadVoicesLabel = stringResource(R.string.reload_voices)
-            TextButton(
-                enabled = state.credentialStored && !state.voiceCatalog.loading && !state.loading,
-                onClick = onReloadVoices,
-                modifier = Modifier.semantics { contentDescription = reloadVoicesLabel },
-            ) { Text(stringResource(R.string.reload_voices)) }
-            Text(
-                stringResource(R.string.legacy_settings_voice_listing_does_not_synthesize_audio_it),
-                style = MaterialTheme.typography.bodySmall,
-            )
-
-            state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            additionalSections()
-        }
-    }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
 }

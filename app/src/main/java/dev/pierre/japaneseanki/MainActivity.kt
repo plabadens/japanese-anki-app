@@ -9,6 +9,7 @@ import android.content.SharedPreferences
 import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.text.Html
 import android.util.Log
 import android.media.MediaPlayer
 import android.provider.Settings
@@ -18,6 +19,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -46,9 +52,13 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.InputChip
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.ui.window.Dialog
@@ -56,6 +66,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import dev.pierre.japaneseanki.ui.ReviewCard
 import dev.pierre.japaneseanki.ui.AppContentMaxWidth
 import dev.pierre.japaneseanki.ui.ReviewSendPresentation
@@ -97,10 +108,13 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import java.io.File
+import java.nio.charset.Charset
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 
 private const val ANKIDROID_READ_WRITE_PERMISSION =
     "com.ichi2.anki.permission.READ_WRITE_DATABASE"
@@ -350,7 +364,7 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    @OptIn(ExperimentalMaterial3Api::class)
+    @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         sharedText.value = textFromIntent(intent)
@@ -415,6 +429,7 @@ class MainActivity : ComponentActivity() {
                     preferences.getBoolean("definition_manual", false))
             }
             var showDictionarySheet by remember { mutableStateOf(false) }
+            var definitionSheetText by remember { mutableStateOf<String?>(null) }
             val restoredTranslationText = preferences.getString("translation", "").orEmpty()
             val restoredTranslationSource = preferences.getString("translation_source", null)
                 ?.let { saved -> TranslationSource.entries.firstOrNull { it.name == saved } }
@@ -498,6 +513,14 @@ class MainActivity : ComponentActivity() {
                 ?.let(::File)?.takeIf(File::isFile)
             var showReplace by remember { mutableStateOf(restoredPendingPhoto != null) }
             var showSources by remember { mutableStateOf(false) }
+            var showDownloads by remember { mutableStateOf(false) }
+            var showNoteEditor by remember { mutableStateOf(false) }
+            var showTagsEditor by remember { mutableStateOf(false) }
+            var noteEditorDraft by remember(showNoteEditor) { mutableStateOf(notes) }
+            var tagEditorDraft by remember(showTagsEditor) {
+                mutableStateOf(tags.split(Regex("\\s+")).filter(String::isNotBlank))
+            }
+            var tagEntryDraft by remember(showTagsEditor) { mutableStateOf("") }
             val previouslyConfigured = settings.contains(GoogleCloudCredential.PREF) &&
                 settings.getString(SettingsPreferenceKeys.GOOGLE_VOICE, "").orEmpty().isNotBlank()
             var onboardingComplete by remember {
@@ -505,6 +528,7 @@ class MainActivity : ComponentActivity() {
             }
             var showSettings by remember { mutableStateOf(!onboardingComplete) }
             var showSentenceEditor by remember { mutableStateOf(false) }
+            var sentenceEditorDraft by remember(showSentenceEditor) { mutableStateOf(editor) }
             var showDeckSheet by remember { mutableStateOf(false) }
             var showDiscardConfirm by remember { mutableStateOf(false) }
             var audioCacheBytes by remember { mutableStateOf(0L) }
@@ -555,7 +579,9 @@ class MainActivity : ComponentActivity() {
             var dictionaryInfo by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
             var analyzerReady by remember { mutableStateOf(false) }
             var analyzerLoading by remember { mutableStateOf(false) }
-            var analyzerStatus by remember { mutableStateOf("Checking UniDic runtime archive") }
+            var analyzerStatus by remember { mutableStateOf("Verifying…") }
+            var analyzerByteProgress by remember { mutableStateOf<String?>(null) }
+            var analyzerProgressFraction by remember { mutableStateOf<Float?>(null) }
             var analyzerRetry by remember { mutableStateOf(0) }
             var analyzerError by remember { mutableStateOf<String?>(null) }
             var tokenizationLoading by remember { mutableStateOf(false) }
@@ -578,6 +604,11 @@ class MainActivity : ComponentActivity() {
             )
             val analyzedTarget = target?.let { resolveAnalyzedLemma(japaneseTokens, it) }
             var dictionaryEntries by remember { mutableStateOf<List<DictionaryEntry>>(emptyList()) }
+            val meaningChoices = dictionaryEntries.flatMap { entry ->
+                entry.senses.mapIndexed { index, sense ->
+                    Triple(entry, index, sense.glosses.joinToString("; "))
+                }
+            }
             var dictionarySearchLoading by remember { mutableStateOf(false) }
             var dictionaryHasMore by remember { mutableStateOf(false) }
             var selectedDictionaryEntry by remember { mutableStateOf<DictionaryEntry?>(null) }
@@ -875,6 +906,12 @@ class MainActivity : ComponentActivity() {
                     loading = loading,
                     error = coordinator.currentSaveError() ?: settingsError,
                     voiceCatalog = catalog,
+                    ankiConnected = ankiDroidInstalled && apiPermissionGranted,
+                    ankiInstalled = ankiDroidInstalled,
+                    onboardingIncomplete = !onboardingComplete,
+                    dictionaryStatus = analyzerError ?: analyzerStatus,
+                    cacheBusy = audioCacheBusy,
+                    cacheMessage = audioCacheMessage,
                 )
                 selectedModelId = values.modelId
                 selectedDeckId = values.deckId
@@ -897,7 +934,7 @@ class MainActivity : ComponentActivity() {
                         null
                     }
                     val safeError = if (voices == null) {
-                        this@MainActivity.getString(R.string.legacy_settings_voice_list_safe_error)
+                        "Could not load voices."
                     } else null
                     withContext(Dispatchers.IO) {
                         coordinator.completeVoiceLoad(request, voices = voices, safeError = safeError)
@@ -931,12 +968,15 @@ class MainActivity : ComponentActivity() {
                     if (result.isSuccess) {
                         syncSettingsScreen(coordinator)
                         if (!onboardingComplete && !coordinator.canFinishOnboarding()) {
-                            settingsError = this@MainActivity.getString(R.string.legacy_settings_to_finish_setup_save_a_google_cloud_key_an)
+                            settingsError = when {
+                                !coordinator.isCredentialStored() -> "Enter a Google Cloud API key."
+                                else -> "Choose an available sentence voice."
+                            }
                             syncSettingsScreen(coordinator)
                             return@launch
                         }
                         if (!onboardingComplete && !settings.edit().putBoolean("onboarding_complete", true).commit()) {
-                            settingsError = this@MainActivity.getString(R.string.legacy_settings_setup_could_not_be_marked_complete_back_re)
+                            settingsError = "Could not save your changes."
                             syncSettingsScreen(coordinator)
                             return@launch
                         }
@@ -945,8 +985,7 @@ class MainActivity : ComponentActivity() {
                         settingsCoordinator = null
                         showSettings = false
                     } else {
-                        settingsError = result.exceptionOrNull()?.message
-                            ?: this@MainActivity.getString(R.string.legacy_settings_settings_save_fallback)
+                        settingsError = "Could not save your changes."
                         syncSettingsScreen(coordinator)
                     }
                 }
@@ -1378,26 +1417,59 @@ class MainActivity : ComponentActivity() {
                 val callbackGeneration = setupGeneration
                 analyzerLoading = true
                 analyzerError = null
-                analyzerStatus = this@MainActivity.getString(R.string.legacy_onboarding_checking_unidic_runtime_archive)
+                analyzerStatus = "Verifying…"
+                analyzerByteProgress = null
+                analyzerProgressFraction = null
                 try {
                     withContext(Dispatchers.IO) {
                         offlineAnalyzer.prepare(
-                            onStatus = { status ->
-                                if (asyncSetupIsCurrent(callbackGeneration)) analyzerStatus = status
+                            onStatus = { progress ->
+                                if (asyncSetupIsCurrent(callbackGeneration)) {
+                                    analyzerStatus = progress.label
+                                    val transferBytes = if (progress.label == "Downloading…") {
+                                        val downloaded = progress.downloadedBytes
+                                        val total = progress.totalBytes
+                                        if (downloaded != null && total != null) downloaded to total else null
+                                    } else null
+                                    analyzerByteProgress = transferBytes?.let { (downloaded, total) ->
+                                        "${android.text.format.Formatter.formatFileSize(applicationContext, downloaded)} of " +
+                                            android.text.format.Formatter.formatFileSize(applicationContext, total)
+                                    }
+                                    analyzerProgressFraction = transferBytes?.takeIf { it.second > 0 }?.let { (downloaded, total) ->
+                                        (downloaded.toDouble() / total.toDouble()).coerceIn(0.0, 1.0).toFloat()
+                                    }
+                                }
                             },
                         )
                     }
                     if (!asyncSetupIsCurrent(callbackGeneration)) return@LaunchedEffect
                     analyzerReady = true
+                    analyzerStatus = "Ready"
+                    analyzerByteProgress = null
+                    analyzerProgressFraction = null
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (error: LinkageError) {
                     Log.e("OfflineAnalyzer", "Could not load MeCab native analysis", error)
-                    if (asyncSetupIsCurrent(callbackGeneration)) analyzerError = this@MainActivity.getString(R.string.legacy_onboarding_mecab_native_analysis_could_not_load_you_c)
+                    if (asyncSetupIsCurrent(callbackGeneration)) {
+                        analyzerError = "MeCab native analysis could not load. You can still select a sentence span and search the dictionary."
+                        analyzerStatus = analyzerError!!
+                        analyzerByteProgress = null
+                        analyzerProgressFraction = null
+                    }
                 } catch (error: Exception) {
                     Log.e("OfflineAnalyzer", "Could not prepare UniDic analysis", error)
                     if (asyncSetupIsCurrent(callbackGeneration)) {
-                        analyzerError = this@MainActivity.getString(R.string.legacy_onboarding_unidic_could_not_be_downloaded_verified_or)
+                        analyzerError = when (error) {
+                            is ResourceTransferException -> "Could not download the dictionary."
+                            is ResourceIntegrityException, is ResourceArchiveException -> "Could not verify the dictionary download."
+                            is ResourceStorageException -> "Not enough storage to install the dictionary."
+                            is ResourceActivationException -> "Could not install the dictionary."
+                            else -> "Could not install the dictionary."
+                        }
+                        analyzerStatus = analyzerError!!
+                        analyzerByteProgress = null
+                        analyzerProgressFraction = null
                     }
                 } finally {
                     analyzerLoading = false
@@ -1427,7 +1499,7 @@ class MainActivity : ComponentActivity() {
 
             fun dismissDictionarySheet() {
                 showDictionarySheet = false
-                if (VocabularyResolution.isUnresolved(dictionaryEntries.size, selectedDictionaryEntry?.id)) {
+                if (selectedDictionaryEntry == null && meaningChoices.isNotEmpty()) {
                     clearUnresolvedVocabulary()
                 }
             }
@@ -1933,13 +2005,15 @@ class MainActivity : ComponentActivity() {
                             it.id == selectedDictionaryEntryId &&
                                 it.expression == vocabulary && it.reading == vocabularyReading
                         }
-                        val entry = restoredEntry ?: entries.firstOrNull()
+                        val needsMeaningChoice = restoredEntry == null &&
+                            entries.sumOf { maxOf(1, it.senses.size) } > 1
+                        val entry = restoredEntry ?: if (needsMeaningChoice) null else entries.firstOrNull()
                         selectedDictionaryEntry = entry
                         selectedSenseIndices = if (entry != null) {
                             if (restoredEntry != null) {
                                 preferences.getStringSet("dictionary_sense_indices", null)
                                     ?.mapNotNull(String::toIntOrNull)?.filter { it in entry.senses.indices }
-                                    ?.toSet()?.takeIf { it.isNotEmpty() } ?: setOf(0)
+                                    ?.firstOrNull()?.let(::setOf) ?: setOf(0)
                             } else if (entry.senses.isEmpty()) emptySet() else setOf(0)
                         } else emptySet()
                         if (entry != null) {
@@ -1967,7 +2041,7 @@ class MainActivity : ComponentActivity() {
                                 }.joinToString("\n")
                             }
                         }
-                        if (VocabularyResolution.isUnresolved(entries.size, entry?.id)) {
+                        if (needsMeaningChoice) {
                             // Several entries compete and none is chosen: clear the previous word
                             // before the chooser is shown, so dismissing it cannot show stale data.
                             clearUnresolvedVocabulary()
@@ -2100,47 +2174,9 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            val saveSettings: () -> Unit = {
-                val google = googleKey.trim()
-                if (google.isNotEmpty() && google.any { it.isWhitespace() }) {
-                    settingsError = this@MainActivity.getString(R.string.legacy_settings_the_google_cloud_key_contains_whitespace)
-                } else {
-                    settingsSaving = true
-                    settingsError = null
-                    coroutineScope.launch {
-                        try {
-                            withContext(Dispatchers.IO) {
-                                settings.edit()
-                                    .remove("default_tags")
-                                    .putString("google_tts_voice", selectedVoiceName)
-                                    .commit()
-                                check(GoogleCloudCredential.write(settings, google)) {
-                                    this@MainActivity.getString(R.string.legacy_settings_settings_persist_failed)
-                                }
-                                // The obsolete OpenRouter ciphertext is deleted, never read back as
-                                // a Google key. Drafts and media are untouched.
-                                GoogleCloudCredential.removeObsoleteOpenRouterStorage(settings)
-                            }
-                            // Saving writes only local state; it sends nothing. The previous listing
-                            // belongs to the old key, so speech status returns to "not checked"
-                            // until Refresh voices is tapped.
-                            googleKey = google
-                            translationTestResult = null
-                            cloudVoicesError = null
-                            cloudVoices = emptyList()
-                            voiceListAttempted = false
-                        } catch (cancelled: CancellationException) {
-                            throw cancelled
-                        } catch (_: Exception) {
-                            settingsError = this@MainActivity.getString(R.string.legacy_settings_settings_could_not_be_saved_the_key_was_no)
-                        } finally {
-                            settingsSaving = false
-                        }
-                    }
-                }
-            }
             if (showSettings) {
-                Dialog(
+                FlowTheme(darkTheme = isSystemInDarkTheme()) {
+                    Dialog(
                     onDismissRequest = { closeSettings() },
                     properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
                 ) {
@@ -2154,10 +2190,27 @@ class MainActivity : ComponentActivity() {
                                 credentialUnreadable = settingsScreenState.credentialUnreadable,
                                 error = settingsError ?: settingsScreenState.error,
                                 voiceCatalog = settingsScreenState.voiceCatalog,
+                                ankiConnected = ankiDroidInstalled && apiPermissionGranted,
+                                ankiInstalled = ankiDroidInstalled,
+                                onboardingIncomplete = !onboardingComplete,
+                                dictionaryStatus = analyzerError ?: analyzerStatus,
+                                cacheBusy = audioCacheBusy,
+                                cacheMessage = audioCacheMessage,
                             ),
                             noteTypes = noteTypes,
                             decks = decks,
                             onBack = { closeSettings() },
+                            onFinishSetup = { closeSettings() },
+                            onConnectAnki = {
+                                if (ankiDroidInstalled && !apiPermissionGranted) {
+                                    apiPermissionLauncher.launch(ANKIDROID_READ_WRITE_PERMISSION)
+                                } else if (!ankiDroidInstalled) {
+                                    val openedStore = runCatching {
+                                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.ichi2.anki")))
+                                    }.isSuccess
+                                    if (!openedStore) settingsError = "Install AnkiDroid to send this card."
+                                }
+                            },
                             onModelChange = { modelId ->
                                 settingsCoordinator?.let { coordinator ->
                                     coordinator.updateValues(coordinator.currentValues().copy(modelId = modelId))
@@ -2193,7 +2246,11 @@ class MainActivity : ComponentActivity() {
                                 settingsCoordinator?.let { coordinator ->
                                     val request = coordinator.reloadVoices()
                                     if (request == null) {
-                                        settingsError = this@MainActivity.getString(R.string.legacy_settings_save_the_current_key_successfully_before_r)
+                                        settingsError = if (coordinator.currentGoogleKey().isBlank()) {
+                                            "Enter a Google Cloud API key."
+                                        } else {
+                                            "Could not save your changes."
+                                        }
                                         syncSettingsScreen(coordinator)
                                     } else {
                                         settingsError = null
@@ -2201,463 +2258,125 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             },
-                            modifier = Modifier.fillMaxSize(),
-                            additionalSections = {
-                                androidx.compose.material3.HorizontalDivider()
-                                Text(stringResource(R.string.legacy_settings_ankidroid_setup), style = MaterialTheme.typography.titleMedium)
-                                when {
-                                    !ankiDroidInstalled -> Text(stringResource(R.string.legacy_settings_install_ankidroid_to_set_up_export))
-                                    !apiPermissionGranted -> {
-                                        Text(stringResource(R.string.legacy_settings_grant_the_ankidroid_api_permission_before))
-                                        Button(
-                                            enabled = !navigationLocked,
-                                            onClick = { apiPermissionLauncher.launch(ANKIDROID_READ_WRITE_PERMISSION) },
-                                        ) { Text(stringResource(R.string.legacy_settings_grant_ankidroid_api_permission)) }
+                            onOpenDownloads = { showDownloads = true },
+                            onClearCache = {
+                                audioCacheBusy = true
+                                audioCacheMessage = null
+                                coroutineScope.launch {
+                                    try {
+                                        withContext(Dispatchers.IO) { reusableAudioCache.clear() }
+                                        audioCacheMessage = "Cache cleared"
+                                    } catch (_: Exception) {
+                                        audioCacheMessage = "Could not clear the cache."
+                                    } finally {
+                                        audioCacheBusy = false
                                     }
-                                    setupLoading -> Text(stringResource(R.string.legacy_settings_loading_note_types_and_decks))
-                                    setupError != null -> {
-                                        Text(setupError!!, color = MaterialTheme.colorScheme.error)
-                                        TextButton(onClick = { setupReload++ }) { Text(stringResource(R.string.legacy_settings_retry_ankidroid_setup)) }
-                                    }
-                                    else -> Text(stringResource(R.string.legacy_settings_note_types_and_decks_are_loaded_from_ankid))
                                 }
-
-                                androidx.compose.material3.HorizontalDivider()
-                                Text(stringResource(R.string.legacy_settings_audio_cache), style = MaterialTheme.typography.titleMedium)
-                                Text(
-                                    stringResource(R.string.legacy_settings_reusable_audio_cache, formatCacheSize(audioCacheBytes)) +
-                                        stringResource(R.string.legacy_settings_current_draft_audio_is_kept_separately),
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                                TextButton(
-                                    enabled = !audioCacheBusy && !settingsSaving,
-                                    onClick = {
-                                        audioCacheBusy = true
-                                        audioCacheMessage = null
-                                        coroutineScope.launch {
-                                            try {
-                                                val remaining = withContext(Dispatchers.IO) {
-                                                    reusableAudioCache.clear()
-                                                    reusableAudioCache.sizeBytes()
-                                                }
-                                                audioCacheBytes = remaining
-                                                audioCacheMessage = this@MainActivity.getString(R.string.legacy_settings_audio_cache_cleared_draft_audio_is_unaffec)
-                                            } catch (_: Exception) {
-                                                audioCacheMessage = this@MainActivity.getString(R.string.legacy_settings_the_audio_cache_could_not_be_cleared)
-                                            } finally {
-                                                audioCacheBusy = false
-                                            }
-                                        }
-                                    },
-                                ) { Text(if (audioCacheBusy) stringResource(R.string.legacy_settings_clearing) else stringResource(R.string.legacy_settings_clear_audio_cache)) }
-                                audioCacheMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-
-                                androidx.compose.material3.HorizontalDivider()
-                                Text(stringResource(R.string.legacy_settings_translation_test), style = MaterialTheme.typography.titleMedium)
-                                Text(
-                                    stringResource(R.string.legacy_settings_google_cloud_translation_basic_default_neu) +
-                                        stringResource(R.string.legacy_settings_the_disclosed_sample_is_sent_only_when_you),
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                                when {
-                                    translationTestRunning -> Row(verticalAlignment = Alignment.CenterVertically) {
-                                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                        Text(stringResource(R.string.legacy_settings_testing_translation))
-                                    }
-                                    translationTestResult is TranslationResult.Ready -> Text(
-                                        stringResource(
-                                            R.string.legacy_settings_translation_test_passed,
-                                            TRANSLATION_TEST_SAMPLE,
-                                            (translationTestResult as TranslationResult.Ready).text,
-                                        ),
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
-                                    translationTestResult is TranslationResult.Failed -> Text(
-                                        (translationTestResult as TranslationResult.Failed).message,
-                                        color = MaterialTheme.colorScheme.error,
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
-                                    else -> Text(stringResource(R.string.legacy_settings_translation_has_not_been_tested_in_this_se), style = MaterialTheme.typography.bodySmall)
-                                }
-                                TextButton(
-                                    enabled = settingsScreenState.credentialStored && !translationTestRunning && !settingsSaving,
-                                    onClick = {
-                                        translationTestRunning = true
-                                        translationTestResult = null
-                                        coroutineScope.launch {
-                                            try {
-                                                translationTestResult = withContext(Dispatchers.IO) {
-                                                    translationService.translate(TRANSLATION_TEST_SAMPLE)
-                                                }
-                                            } catch (cancelled: CancellationException) {
-                                                throw cancelled
-                                            } catch (_: Exception) {
-                                                translationTestResult = TranslationResult.Failed(this@MainActivity.getString(R.string.legacy_settings_translation_test_failed))
-                                            } finally {
-                                                translationTestRunning = false
-                                            }
-                                        }
-                                    },
-                                ) { Text(if (translationTestRunning) stringResource(R.string.legacy_settings_testing) else stringResource(R.string.legacy_settings_test_translation)) }
-
-                                androidx.compose.material3.HorizontalDivider()
-                                Text(stringResource(R.string.sources), style = MaterialTheme.typography.titleMedium)
-                                Text(
-                                    stringResource(R.string.legacy_settings_jmdict_and_kanjium_attribution_is_availabl) +
-                                        stringResource(R.string.legacy_settings_the_bundled_mixed_source_ajt_pitch_data_st),
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                                TextButton(onClick = { showSources = true }) { Text(stringResource(R.string.legacy_settings_sources_licenses)) }
                             },
+                            onOpenSources = { showSources = true },
+                            modifier = Modifier.fillMaxSize(),
                         )
                     }
+                    }
                 }
             }
-            if (false && showSettings) {
-                Dialog(
-                    onDismissRequest = { if (!settingsSaving) showSettings = false },
+            if (showSources) {
+                FlowTheme(darkTheme = isSystemInDarkTheme()) {
+                    Dialog(
+                    onDismissRequest = { showSources = false },
                     properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
                 ) {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        color = MaterialTheme.colorScheme.background,
-                    ) {
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().statusBarsPadding()
-                                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                TextButton(
-                                    enabled = !settingsSaving,
-                                    onClick = { showSettings = false },
-                                ) { Text(stringResource(R.string.back)) }
-                                Text(
-                                    stringResource(R.string.settings),
-                                    style = MaterialTheme.typography.titleLarge,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                TextButton(
-                                    enabled = !settingsLoading && !settingsSaving,
-                                    onClick = saveSettings,
-                                ) { Text(if (settingsSaving) stringResource(R.string.legacy_settings_saving) else stringResource(R.string.legacy_settings_save)) }
-                            }
+                    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                        Column(Modifier.fillMaxSize()) {
+                            FlowTopBar(
+                                title = "Sources and licenses",
+                                onBack = { showSources = false },
+                                modifier = Modifier.statusBarsPadding().padding(horizontal = 8.dp, vertical = 4.dp),
+                            )
                             Column(
-                                modifier = Modifier.fillMaxWidth().weight(1f)
-                                    .navigationBarsPadding()
-                                    .verticalScroll(rememberScrollState())
-                                    .padding(horizontal = 20.dp, vertical = 8.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                Modifier.fillMaxWidth().weight(1f).navigationBarsPadding()
+                                    .verticalScroll(rememberScrollState()).padding(20.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
-                                Text(stringResource(R.string.anki), style = MaterialTheme.typography.titleMedium)
-                                when {
-                                    !ankiDroidInstalled -> Text(
-                                        stringResource(R.string.legacy_settings_ankidroid_not_detected_install_it_before_s),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                    )
-                                    !apiPermissionGranted -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Text(stringResource(R.string.legacy_settings_ankidroid_detected_grant_api_permission_to))
-                                        Button(enabled = !isSubmitting, onClick = {
-                                            apiPermissionLauncher.launch(ANKIDROID_READ_WRITE_PERMISSION)
-                                        }) { Text(stringResource(R.string.legacy_settings_grant_ankidroid_api_permission)) }
-                                    }
-                                    else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        if (setupLoading) Text(stringResource(R.string.legacy_settings_loading_note_types_and_decks))
-                                        setupError?.let {
-                                            Text(it)
-                                            TextButton(onClick = { setupReload++ }) { Text(stringResource(R.string.retry)) }
-                                        }
-                                        Text(stringResource(R.string.note_type), style = MaterialTheme.typography.titleSmall)
-                                        Box {
-                                            OutlinedButton(
-                                                onClick = { showModelMenu = true },
-                                                enabled = !settingsLoading && !settingsSaving && noteTypes.isNotEmpty(),
-                                            ) {
-                                                Text(selectedModel?.name ?: if (selectedModelId == null) stringResource(R.string.legacy_settings_choose_note_type) else stringResource(R.string.legacy_settings_previously_selected_note_type_unavailable))
-                                            }
-                                            DropdownMenu(
-                                                expanded = showModelMenu,
-                                                onDismissRequest = { showModelMenu = false },
-                                            ) {
-                                                noteTypes.forEach { model ->
-                                                    DropdownMenuItem(
-                                                        text = { Text(model.name) },
-                                                        onClick = { selectedModelId = model.id; showModelMenu = false },
-                                                    )
-                                                }
-                                            }
-                                        }
-                                        selectedModel?.let { model ->
-                                            AnkiFieldContract.mapToModelOrder(model.fields, emptyMap()).errors
-                                                .forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
-                                        }
-                                        Text(stringResource(R.string.legacy_settings_destination_deck), style = MaterialTheme.typography.titleSmall)
-                                        Box {
-                                            OutlinedButton(
-                                                onClick = { showDeckMenu = true },
-                                                enabled = !settingsLoading && !settingsSaving && decks.isNotEmpty(),
-                                            ) {
-                                                Text(selectedDeck?.name ?: if (selectedDeckId == null) stringResource(R.string.legacy_settings_choose_destination_deck) else stringResource(R.string.legacy_settings_previously_selected_deck_unavailable))
-                                            }
-                                            DropdownMenu(
-                                                expanded = showDeckMenu,
-                                                onDismissRequest = { showDeckMenu = false },
-                                            ) {
-                                                decks.forEach { deck ->
-                                                    DropdownMenuItem(
-                                                        text = { Text(deck.name) },
-                                                        onClick = { selectedDeckId = deck.id; showDeckMenu = false },
-                                                    )
-                                                }
-                                            }
-                                        }
-                                        if (!setupLoading && setupError == null && noteTypes.isEmpty()) {
-                                            Text(stringResource(R.string.legacy_settings_no_note_types_available_in_ankidroid))
-                                        }
-                                        if (!setupLoading && setupError == null && decks.isEmpty()) {
-                                            Text(stringResource(R.string.legacy_settings_no_existing_decks_available_in_ankidroid))
-                                        }
-                                    }
+                                Text("JMdict © James William Breen and EDRDG; CC BY-SA 4.0. ${dictionaryInfo["jmdict_source"].orEmpty()}")
+                                Text("The pitch accent notation, verb particle data, phonetics, homonyms, and other additions or modifications to EDICT, KANJIDIC, or KRADFILE were provided by Uros O. through his free database. Kanjium CC BY-SA 4.0. ${dictionaryInfo["kanjium_commit"].orEmpty()}")
+                                Text("MeCab 0.996 © Taku Kudo and Nippon Telegraph and Telephone Corporation; BSD license.")
+                                Text("UniDic CWJ 3.1.1 © the UniDic Consortium and Teruaki Oka; distributed under the included BSD license.")
+                                val licenseDocuments = remember {
+                                    fun readAsset(path: String, charset: Charset = Charsets.UTF_8): String = runCatching {
+                                        assets.open(path).bufferedReader(charset).use { it.readText() }
+                                    }.getOrDefault("")
+                                    listOf(
+                                        runCatching {
+                                            Html.fromHtml(
+                                                readAsset("licenses/EDRDG-licence.html", Charsets.ISO_8859_1),
+                                                Html.FROM_HTML_MODE_LEGACY,
+                                            ).toString()
+                                        }.getOrDefault(""),
+                                        readAsset("licenses/CC-BY-SA-4.0.txt"),
+                                        readAsset("licenses/mecab/BSD"),
+                                        readAsset("licenses/unidic/BSD"),
+                                    ).filter(String::isNotBlank).joinToString("\n\n")
                                 }
-                                Text(stringResource(R.string.legacy_settings_google_cloud), style = MaterialTheme.typography.titleMedium)
+                                Text(licenseDocuments)
+                            }
+                        }
+                    }
+                    }
+                }
+            }
+            if (showDownloads) {
+                FlowTheme(darkTheme = isSystemInDarkTheme()) {
+                    Dialog(
+                    onDismissRequest = { showDownloads = false },
+                    properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+                ) {
+                    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                        Column(Modifier.fillMaxSize()) {
+                            FlowTopBar(
+                                title = "Downloads",
+                                onBack = { showDownloads = false },
+                                modifier = Modifier.statusBarsPadding().padding(horizontal = 8.dp, vertical = 4.dp),
+                            )
+                            Column(
+                                Modifier.fillMaxWidth().weight(1f).navigationBarsPadding().padding(20.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Text("Dictionary", style = MaterialTheme.typography.bodyLarge)
                                 Text(
-                                    stringResource(R.string.legacy_settings_one_api_key_for_sentence_speech_and_transl_2) +
-                                        stringResource(R.string.legacy_settings_android_keystore_stays_on_this_device_and) +
-                                        stringResource(R.string.legacy_settings_in_an_authentication_header_never_in_a_url),
-                                    style = MaterialTheme.typography.bodySmall,
+                                    analyzerStatus,
+                                    color = if (analyzerError != null) MaterialTheme.colorScheme.error
+                                    else MaterialTheme.colorScheme.onSurface,
                                 )
-                                Text(
-                                    stringResource(R.string.legacy_settings_project_setup_enable_billing_enable_the_cl) +
-                                        stringResource(R.string.legacy_settings_cloud_translation_api_and_restrict_this_ke) +
-                                        stringResource(R.string.legacy_settings_saving_the_key_sends_no_request),
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                                if (settingsLoading) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                        Text(stringResource(R.string.legacy_settings_loading_saved_settings))
-                                    }
-                                }
-                                OutlinedTextField(
-                                    value = googleKey,
-                                    onValueChange = { googleKey = it },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    label = { Text(stringResource(R.string.google_key)) },
-                                    visualTransformation = if (googleKeyVisible) VisualTransformation.None
-                                        else PasswordVisualTransformation(),
-                                    singleLine = true,
-                                    enabled = !settingsLoading && !settingsSaving,
-                                )
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Checkbox(
-                                        checked = googleKeyVisible,
-                                        onCheckedChange = { googleKeyVisible = it },
-                                        enabled = !settingsLoading && !settingsSaving,
-                                    )
-                                    Text(stringResource(R.string.legacy_settings_show_key))
-                                }
-                                Text(
-                                    if (settings.contains(GoogleCloudCredential.PREF)) {
-                                        stringResource(R.string.legacy_settings_key_saved_for_speech_and_translation)
+                                if (analyzerStatus == "Downloading…") {
+                                    val progress = analyzerProgressFraction
+                                    if (progress == null) {
+                                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                                     } else {
-                                        stringResource(R.string.legacy_settings_no_key_saved_local_preparation_works_speec)
-                                    },
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                                Text(stringResource(R.string.legacy_settings_speech_cloud_text_to_speech), style = MaterialTheme.typography.titleSmall)
-                                Text(stringResource(R.string.sentence_voice), style = MaterialTheme.typography.bodyMedium)
-                                when {
-                                    cloudVoicesLoading -> Row(verticalAlignment = Alignment.CenterVertically) {
-                                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                        Text(stringResource(R.string.legacy_settings_listing_japanese_chirp_3_hd_voices))
-                                    }
-                                    cloudVoicesError != null -> Text(
-                                        buildString {
-                                            append(cloudVoicesError)
-                                            if (cloudVoicesCached && cloudVoices.isNotEmpty()) {
-                                                append(stringResource(R.string.legacy_settings_showing_the_cached_list_which_is_not_fresh))
-                                            }
-                                        },
-                                        color = MaterialTheme.colorScheme.error,
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
-                                    cloudVoices.isEmpty() && settings.contains(GoogleCloudCredential.PREF) && voiceListAttempted ->
-                                        Text(stringResource(R.string.legacy_settings_no_japanese_chirp_3_hd_voices_were_returne), style = MaterialTheme.typography.bodySmall)
-                                    cloudVoices.isEmpty() && settings.contains(GoogleCloudCredential.PREF) ->
-                                        Text(
-                                            stringResource(R.string.legacy_settings_voice_listing_not_checked_yet_refresh_voic),
-                                            style = MaterialTheme.typography.bodySmall,
+                                        LinearProgressIndicator(
+                                            progress = { progress },
+                                            modifier = Modifier.fillMaxWidth(),
                                         )
-                                }
-                                Box {
-                                    OutlinedButton(
-                                        onClick = { showVoiceMenu = true },
-                                        enabled = !settingsLoading && !settingsSaving && cloudVoices.isNotEmpty(),
-                                    ) {
-                                        val voice = cloudVoices.firstOrNull { it.name == selectedVoiceName }
-                                        Text(voice?.let { "${it.displayName} · ${it.name}" }
-                                            ?: if (selectedVoiceName.isBlank()) stringResource(R.string.legacy_settings_choose_sentence_voice)
-                                            else stringResource(R.string.legacy_settings_saved_voice_not_in_this_list))
                                     }
-                                    DropdownMenu(
-                                        expanded = showVoiceMenu,
-                                        onDismissRequest = { showVoiceMenu = false },
-                                        modifier = Modifier.heightIn(max = 320.dp),
-                                    ) {
-                                        cloudVoices.forEach { voice ->
-                                            DropdownMenuItem(
-                                                text = { Text("${voice.displayName} · ${voice.name}") },
-                                                onClick = {
-                                                    selectedVoiceName = voice.name
-                                                    showVoiceMenu = false
-                                                },
-                                            )
-                                        }
+                                    analyzerByteProgress?.let { Text(it) }
+                                }
+                                if (analyzerError != null) {
+                                    TextButton(onClick = { analyzerRetry++ }) { Text("Retry") }
+                                }
+                                if (!onboardingComplete) {
+                                    TextButton(onClick = { showDownloads = false; closeSettings() }) {
+                                    Text("Finish setup")
                                     }
-                                }
-                                if (selectedVoiceName.isNotBlank() && cloudVoices.isNotEmpty() &&
-                                    cloudVoices.none { it.name == selectedVoiceName }
-                                ) {
-                                    Text(
-                                        stringResource(R.string.legacy_settings_the_saved_voice_is_no_longer_listed_choose),
-                                        color = MaterialTheme.colorScheme.error,
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
-                                }
-                                TextButton(
-                                    enabled = !cloudVoicesLoading && !settingsSaving && settings.contains(GoogleCloudCredential.PREF),
-                                    onClick = { voiceRefresh++ },
-                                ) { Text(stringResource(R.string.legacy_settings_refresh_voices)) }
-                                if (!settings.contains(GoogleCloudCredential.PREF) && googleKey.isNotBlank()) {
-                                    Text(stringResource(R.string.legacy_settings_save_the_key_then_refresh_voices), style = MaterialTheme.typography.bodySmall)
-                                }
-                                Text(
-                                    stringResource(R.string.legacy_settings_changing_the_voice_invalidates_sentence_au) +
-                                        stringResource(R.string.legacy_settings_synthesize_or_bill_any_speech),
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                                Text(stringResource(R.string.legacy_settings_audio_cache), style = MaterialTheme.typography.titleMedium)
-                                Text(
-                                    stringResource(R.string.legacy_settings_reusable_audio_cache, formatCacheSize(audioCacheBytes)) +
-                                        stringResource(R.string.legacy_settings_the_current_draft_s_audio_is_kept_outside),
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                                TextButton(
-                                    enabled = !audioCacheBusy && !settingsSaving,
-                                    onClick = {
-                                        audioCacheBusy = true
-                                        audioCacheMessage = null
-                                        coroutineScope.launch {
-                                            try {
-                                                val remaining = withContext(Dispatchers.IO) {
-                                                    reusableAudioCache.clear()
-                                                    reusableAudioCache.sizeBytes()
-                                                }
-                                                audioCacheBytes = remaining
-                                                audioCacheMessage = this@MainActivity.getString(R.string.legacy_settings_audio_cache_cleared_draft_audio_is_unaffec)
-                                            } catch (_: Exception) {
-                                                audioCacheMessage = this@MainActivity.getString(R.string.legacy_settings_the_audio_cache_could_not_be_cleared)
-                                            } finally {
-                                                audioCacheBusy = false
-                                            }
-                                        }
-                                    },
-                                ) { Text(if (audioCacheBusy) stringResource(R.string.legacy_settings_clearing) else stringResource(R.string.legacy_settings_clear_audio_cache)) }
-                                audioCacheMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                                Text(stringResource(R.string.legacy_settings_translation_cloud_translation_basic), style = MaterialTheme.typography.titleMedium)
-                                Text(
-                                    stringResource(R.string.legacy_settings_google_cloud_translation_basic_default_neu_2) +
-                                        stringResource(R.string.legacy_settings_fixed_path_no_model_or_provider_choice),
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                                val testedTranslation = translationTestResult
-                                when {
-                                    translationTestRunning -> Row(verticalAlignment = Alignment.CenterVertically) {
-                                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                        Text(stringResource(R.string.legacy_settings_testing_translation))
-                                    }
-                                    testedTranslation is TranslationResult.Ready -> Text(
-                                        stringResource(
-                                            R.string.legacy_settings_translation_test_passed,
-                                            TRANSLATION_TEST_SAMPLE,
-                                            testedTranslation.text,
-                                        ),
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
-                                    testedTranslation is TranslationResult.Failed -> Text(
-                                        testedTranslation.message,
-                                        color = MaterialTheme.colorScheme.error,
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
-                                    else -> Text(
-                                        stringResource(R.string.legacy_settings_translation_not_tested_in_this_session),
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
-                                }
-                                TextButton(
-                                    enabled = !translationTestRunning && !settingsSaving &&
-                                        settings.contains(GoogleCloudCredential.PREF),
-                                    onClick = {
-                                        translationTestRunning = true
-                                        translationTestResult = null
-                                        coroutineScope.launch {
-                                            try {
-                                                translationTestResult = withContext(Dispatchers.IO) {
-                                                    translationService.translate(TRANSLATION_TEST_SAMPLE)
-                                                }
-                                            } finally {
-                                                translationTestRunning = false
-                                            }
-                                        }
-                                    },
-                                ) { Text(if (translationTestRunning) stringResource(R.string.legacy_settings_testing) else stringResource(R.string.legacy_settings_test_translation)) }
-                                Text(
-                                    stringResource(R.string.legacy_settings_the_test_sends_one_disclosed_sample_senten) +
-                                        stringResource(R.string.legacy_settings_empty_translation_blocks_send_retry_keeps) +
-                                        stringResource(R.string.legacy_settings_validates_speech_access_only_not_translati),
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                                settingsError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                                Text(stringResource(R.string.legacy_settings_sources), style = MaterialTheme.typography.titleMedium)
-                                TextButton(onClick = { showSettings = false; showSources = true }) {
-                                    Text(stringResource(R.string.legacy_settings_sources_licenses))
-                                }
                                 }
                             }
                         }
                     }
+                    }
                 }
-            if (showSources) {
-                AlertDialog(
-                    onDismissRequest = { showSources = false },
-                    title = { Text(stringResource(R.string.legacy_settings_data_sources_and_licenses)) },
-                    text = {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(stringResource(R.string.legacy_settings_jmdict_source_notice, dictionaryInfo["jmdict_source"].orEmpty()))
-                            Text(stringResource(R.string.legacy_settings_kanjium_source_notice, dictionaryInfo["kanjium_commit"].orEmpty()))
-                            Text(stringResource(R.string.legacy_settings_mecab_0_996_taku_kudo_and_nippon_telegraph))
-                            Text(stringResource(R.string.legacy_settings_unidic_cwj_3_1_1_the_unidic_consortium_and))
-                            Text(stringResource(R.string.legacy_settings_local_license_copies_are_bundled_with_the))
-                            TextButton(onClick = {
-                                runCatching {
-                                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.edrdg.org/edrdg/licence.html")))
-                                }
-                            }) { Text(stringResource(R.string.legacy_settings_open_edrdg_license)) }
-                            TextButton(onClick = {
-                                runCatching {
-                                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://creativecommons.org/licenses/by-sa/4.0/")))
-                                }
-                            }) { Text(stringResource(R.string.legacy_settings_open_cc_by_sa_4_0)) }
-                        }
-                    },
-                    confirmButton = {
-                        TextButton(onClick = { showSources = false }) { Text(stringResource(R.string.done)) }
-                    },
-                )
             }
             if (!submissionLocked && showReplace && (incoming != null || pendingPhotoFile != null || pendingSharedImageUri != null)) {
-                val replacingSentence = incoming != null
-                AlertDialog(
+                FlowTheme(darkTheme = isSystemInDarkTheme()) {
+                    AlertDialog(
                     onDismissRequest = {
                         discardSharePayload()
                         showReplace = false
@@ -2667,11 +2386,8 @@ class MainActivity : ComponentActivity() {
                         preferences.edit().remove("pending_replacement_image_path").commit()
                         pendingSharedImageUri = null
                     },
-                    title = { Text(stringResource(R.string.legacy_capture_replace_current_draft)) },
-                    text = {
-                        Text(if (replacingSentence) stringResource(R.string.legacy_capture_the_current_draft_will_be_replaced_by_the)
-                            else stringResource(R.string.legacy_capture_the_current_draft_will_be_replaced_by_text))
-                    },
+                    title = { Text("Replace this draft?") },
+                    text = { Text("Your current draft will be discarded.") },
                     confirmButton = {
                         TextButton(onClick = {
                             when {
@@ -2708,7 +2424,7 @@ class MainActivity : ComponentActivity() {
                                             requestPhoto(copied)
                                         } catch (_: Exception) {
                                             if (asyncDraftIsCurrent(callbackGeneration)) {
-                                                ocrError = this@MainActivity.getString(R.string.legacy_capture_could_not_open_that_photo_choose_another_i)
+                                                ocrError = "Could not open this photo."
                                             }
                                         }
                                     }
@@ -2728,18 +2444,20 @@ class MainActivity : ComponentActivity() {
                             pendingSharedImageUri = null
                         }) { Text(stringResource(R.string.keep_draft)) }
                     },
-                )
+                    )
+                }
             }
 
             if (showOcrSheet && ocrChoices.size > 1) {
-                ModalBottomSheet(onDismissRequest = { showOcrSheet = false }) {
+                FlowTheme(darkTheme = isSystemInDarkTheme()) {
+                    ModalBottomSheet(onDismissRequest = { showOcrSheet = false }) {
                     Column(
                         Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState())
                             .padding(horizontal = 20.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text(stringResource(R.string.legacy_capture_choose_the_text_region), style = MaterialTheme.typography.titleLarge)
-                        ocrChoices.forEachIndexed { index, block ->
+                        Text("Choose sentence", style = MaterialTheme.typography.titleLarge)
+                        ocrChoices.forEach { block ->
                             OutlinedButton(
                                 enabled = !submissionLocked,
                                 onClick = {
@@ -2748,8 +2466,13 @@ class MainActivity : ComponentActivity() {
                                     applyOcrText(block.text, ocrFocusFraction(block.bounds, ocrImageHeight))
                                 },
                                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                            ) { Text("${index + 1}. ${block.text.trim()}") }
+                            ) { Text(block.text.trim()) }
                         }
+                        TextButton(
+                            onClick = { showOcrSheet = false },
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        ) { Text("Cancel") }
+                    }
                     }
                 }
             }
@@ -3081,7 +2804,7 @@ class MainActivity : ComponentActivity() {
                     persistence = SharedPreferencesSettingsPersistence(settings),
                     onSaveResult = { result ->
                         coroutineScope.launch(Dispatchers.Main.immediate) {
-                            settingsError = result.exceptionOrNull()?.message
+                            settingsError = if (result.isSuccess) null else "Could not save your changes."
                             settingsSaving = false
                             settingsCoordinator?.let { syncSettingsScreen(it, loading = settingsLoading) }
                         }
@@ -3304,13 +3027,14 @@ class MainActivity : ComponentActivity() {
 
             androidx.activity.compose.BackHandler(
                 enabled = !navigationLocked && (
-                    showSettings || showSources || showDictionarySheet || showOcrSheet ||
+                    showDownloads || showSettings || showSources || showDictionarySheet || showOcrSheet ||
                         route != AppRoute.Capture
                     ),
             ) {
                 when {
-                    showSettings -> closeSettings()
+                    showDownloads -> showDownloads = false
                     showSources -> showSources = false
+                    showSettings -> closeSettings()
                     showDictionarySheet -> dismissDictionarySheet()
                     showOcrSheet -> showOcrSheet = false
                     route == AppRoute.Review -> {
@@ -3602,37 +3326,17 @@ class MainActivity : ComponentActivity() {
                                 onEditSentence = { showSentenceEditor = true },
                                 entryLabel = selectedDictionaryEntry?.expression ?: vocabulary.takeIf { it.isNotBlank() },
                                 entryDetail = selectedDictionaryEntry?.reading,
-                                entryCount = dictionaryEntries.size,
-                                onChooseEntry = { showDictionarySheet = true },
-                                senses = selectedDictionaryEntry?.senses
-                                    ?.map { sense -> sense.glosses.joinToString("; ") }
-                                    ?: emptyList(),
-                                selectedSenses = selectedSenseIndices,
-                                onToggleSense = { index, checked ->
-                                    if (!submissionLocked) {
-                                        val newSelection = if (checked) {
-                                            selectedSenseIndices + index
-                                        } else {
-                                            selectedSenseIndices - index
-                                        }
-                                        selectedSenseIndices = newSelection
-                                        selectedDictionaryEntry?.let { entry ->
-                                            definition = newSelection.sorted().mapNotNull { selected ->
-                                                entry.senses.getOrNull(selected)?.glosses?.joinToString("; ")
-                                            }.joinToString("\n")
-                                        }
-                                        definitionManuallyEdited = false
-                                        definitionProvenanceKnown = true
-                                    }
-                                },
+                                meaningChoiceCount = meaningChoices.size,
+                                meaningResolved = selectedDictionaryEntry != null && selectedSenseIndices.isNotEmpty(),
+                                onChooseEntry = { if (meaningChoices.size > 1) showDictionarySheet = true },
                                 meaningStatus = when {
                                     ocrError != null -> ocrError
                                     preparationAuthorizationError != null -> preparationAuthorizationError
-                                    target == null -> stringResource(R.string.legacy_card_target_choose_hint)
-                                    dictionarySearchLoading -> stringResource(R.string.legacy_card_dictionary_searching)
-                                    selectedDictionaryEntry == null && dictionaryLoading -> stringResource(R.string.legacy_card_dictionary_preparing)
-                                    selectedDictionaryEntry == null && dictionaryEntries.size > 1 -> stringResource(R.string.legacy_card_choose_dictionary_entry_hint)
-                                    selectedDictionaryEntry == null && dictionaryReady -> stringResource(R.string.legacy_card_no_dictionary_match_for_selection)
+                                    target == null -> "Tap a word to choose the target."
+                                    dictionarySearchLoading -> "Searching JMdict…"
+                                    selectedDictionaryEntry == null && dictionaryLoading -> "Preparing the offline dictionary…"
+                                    selectedDictionaryEntry == null && meaningChoices.size > 1 -> null
+                                    selectedDictionaryEntry == null && dictionaryReady -> "No dictionary match for this selection."
                                     vocabularyReadingError != null -> vocabularyReadingError
                                     pitchIndexError != null -> pitchIndexError
                                     else -> null
@@ -3769,6 +3473,19 @@ class MainActivity : ComponentActivity() {
                                         },
                                         onTagsChange = { text -> if (!submissionLocked) tags = text },
                                         onNotesChange = { text -> if (!submissionLocked) notes = text },
+                                        onEditNote = {
+                                            if (!submissionLocked && completedSubmission == null) {
+                                                noteEditorDraft = notes
+                                                showNoteEditor = true
+                                            }
+                                        },
+                                        onEditTags = {
+                                            if (!submissionLocked && completedSubmission == null) {
+                                                tagEditorDraft = AnkiFieldContract.parseTags(tags).toList()
+                                                tagEntryDraft = ""
+                                                showTagsEditor = true
+                                            }
+                                        },
                                         sendPresentation = when {
                                             isSubmitting -> ReviewSendPresentation.Sending
                                             completedSubmission != null -> ReviewSendPresentation.Status(
@@ -3819,36 +3536,94 @@ class MainActivity : ComponentActivity() {
                                 ) {
                                     Text(stringResource(R.string.edit_sentence), style = MaterialTheme.typography.titleLarge)
                                     OutlinedTextField(
-                                        value = editor,
-                                        onValueChange = updateEditor,
+                                        value = sentenceEditorDraft,
+                                        onValueChange = { sentenceEditorDraft = it },
                                         modifier = Modifier.fillMaxWidth(),
                                         label = { Text(stringResource(R.string.sentence)) },
                                         minLines = 3,
                                     )
-                                    Text(
-                                        stringResource(R.string.legacy_settings_select_part_of_the_sentence_then_use_it_as),
-                                        style = MaterialTheme.typography.bodySmall,
+                                    TextButton(
+                                        enabled = sentenceEditorDraft.text.isNotBlank(),
+                                        onClick = {
+                                            updateEditor(sentenceEditorDraft)
+                                            showSentenceEditor = false
+                                        },
+                                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                                    ) { Text("Done") }
+                                }
+                            }
+                        }
+                        if (showNoteEditor) {
+                            ModalBottomSheet(onDismissRequest = { showNoteEditor = false }) {
+                                Column(
+                                    Modifier.fillMaxWidth().heightIn(max = 620.dp).verticalScroll(rememberScrollState())
+                                        .padding(horizontal = 24.dp, vertical = 8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    Text("Note", style = MaterialTheme.typography.titleLarge)
+                                    OutlinedTextField(
+                                        value = noteEditorDraft,
+                                        onValueChange = { noteEditorDraft = it },
+                                        modifier = Modifier.fillMaxWidth().semantics {
+                                            contentDescription = "Note"
+                                        },
+                                        minLines = 4,
+                                        maxLines = 8,
                                     )
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        OutlinedButton(
-                                            enabled = editor.selection.start != editor.selection.end,
-                                            onClick = {
-                                                selectTarget(
-                                                    TargetSpan.fromSelection(
-                                                        editor.text,
-                                                        editor.selection.start,
-                                                        editor.selection.end,
-                                                    ),
-                                                )
-                                                showSentenceEditor = false
-                                            },
-                                            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                                        ) { Text(stringResource(R.string.legacy_settings_use_selection_as_target)) }
-                                        Button(
-                                            onClick = { showSentenceEditor = false },
-                                            modifier = Modifier.heightIn(min = 48.dp),
-                                        ) { Text(stringResource(R.string.done)) }
+                                    TextButton(
+                                        onClick = { notes = noteEditorDraft; showNoteEditor = false },
+                                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                                    ) { Text("Done") }
+                                }
+                            }
+                        }
+                        if (showTagsEditor) {
+                            val addTagEntry = {
+                                val additions = AnkiFieldContract.parseTags(tagEntryDraft)
+                                tagEditorDraft = (tagEditorDraft + additions).distinct()
+                                tagEntryDraft = ""
+                            }
+                            ModalBottomSheet(onDismissRequest = { showTagsEditor = false }) {
+                                Column(
+                                    Modifier.fillMaxWidth().heightIn(max = 620.dp).verticalScroll(rememberScrollState())
+                                        .padding(horizontal = 24.dp, vertical = 8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    Text("Tags", style = MaterialTheme.typography.titleLarge)
+                                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        tagEditorDraft.forEach { tag ->
+                                            InputChip(
+                                                selected = true,
+                                                onClick = { tagEditorDraft = tagEditorDraft.filterNot { it == tag } },
+                                                label = { Text(tag) },
+                                                trailingIcon = {
+                                                    IconButton(
+                                                        onClick = { tagEditorDraft = tagEditorDraft.filterNot { it == tag } },
+                                                        modifier = Modifier.semantics {
+                                                            contentDescription = "Remove $tag"
+                                                        },
+                                                    ) { Text("×") }
+                                                },
+                                            )
+                                        }
                                     }
+                                    OutlinedTextField(
+                                        value = tagEntryDraft,
+                                        onValueChange = { tagEntryDraft = it },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        label = { Text("Add a tag") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                        keyboardActions = KeyboardActions(onDone = { addTagEntry() }),
+                                    )
+                                    TextButton(
+                                        onClick = {
+                                            addTagEntry()
+                                            tags = tagEditorDraft.joinToString(" ")
+                                            showTagsEditor = false
+                                        },
+                                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                                    ) { Text("Done") }
                                 }
                             }
                         }
@@ -4312,52 +4087,93 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
-                if (showDictionarySheet && target?.textIn(editor.text) != null && dictionaryEntries.size > 1 &&
-                    selectedDictionaryEntry == null
-                ) {
+                if (showDictionarySheet && target?.textIn(editor.text) != null && meaningChoices.size > 1) {
+                    fun chooseMeaning(entry: DictionaryEntry, senseIndex: Int, meaning: String) {
+                        if (submissionLocked) return
+                        if (!definitionProvenanceKnown) {
+                            val previousGlosses = selectedDictionaryEntry?.let { previous ->
+                                selectedSenseIndices.sorted().mapNotNull { previous.senses.getOrNull(it) }
+                                    .joinToString("\n") { it.glosses.joinToString("; ") }
+                            }.orEmpty()
+                            definitionManuallyEdited = definition.isNotBlank() && definition != previousGlosses
+                            definitionProvenanceKnown = true
+                        }
+                        pitchAccentText = ""
+                        vocabularyReadingError = null
+                        pitchIndexError = null
+                        if (definitionManuallyEdited && definition.isNotBlank()) dependentFieldsStale = true
+                        vocabulary = entry.expression
+                        vocabularyReading = entry.reading
+                        selectedDictionaryEntry = entry
+                        selectedDictionaryEntryId = entry.id
+                        selectedSenseIndices = setOf(senseIndex)
+                        if (!definitionManuallyEdited) definition = meaning
+                        showDictionarySheet = false
+                    }
                     ModalBottomSheet(onDismissRequest = { dismissDictionarySheet() }) {
                         Column(
                             Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState())
                                 .padding(horizontal = 20.dp, vertical = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            Text(stringResource(R.string.legacy_card_choose_dictionary_entry), style = MaterialTheme.typography.titleLarge)
-                            dictionaryEntries.forEach { entry ->
-                                OutlinedButton(
-                                    enabled = !submissionLocked,
-                                    onClick = {
-                                        if (!definitionProvenanceKnown) {
-                                            val savedSenseIndices = preferences.getStringSet("dictionary_sense_indices", null)
-                                                ?.mapNotNull(String::toIntOrNull)?.filter { it in entry.senses.indices }
-                                                ?.takeIf { it.isNotEmpty() } ?: listOf(0)
-                                            val savedGlosses = savedSenseIndices.sorted().mapNotNull { index ->
-                                                entry.senses.getOrNull(index)?.glosses?.joinToString("; ")
-                                            }.joinToString("\n")
-                                            definitionManuallyEdited = definition.isNotBlank() && definition != savedGlosses
-                                            definitionProvenanceKnown = true
+                            Text("Choose meaning", style = MaterialTheme.typography.titleLarge)
+                            meaningChoices.forEach { (entry, senseIndex, meaning) ->
+                                val selected = selectedDictionaryEntryId == entry.id &&
+                                    senseIndex in selectedSenseIndices
+                                Column {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().clickable(enabled = !submissionLocked) {
+                                            chooseMeaning(entry, senseIndex, meaning)
+                                        },
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        RadioButton(
+                                            selected = selected,
+                                            onClick = { chooseMeaning(entry, senseIndex, meaning) },
+                                            enabled = !submissionLocked,
+                                        )
+                                        Column(Modifier.weight(1f)) {
+                                            Text("${entry.expression} · ${entry.reading}")
+                                            Text(
+                                                meaning,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
                                         }
-                                        pitchAccentText = ""
-                                        vocabularyReadingError = null
-                                        pitchIndexError = null
-                                        if (definitionManuallyEdited && definition.isNotBlank()) dependentFieldsStale = true
-                                        vocabulary = entry.expression
-                                        vocabularyReading = entry.reading
-                                        selectedDictionaryEntry = entry
-                                        selectedDictionaryEntryId = entry.id
-                                        selectedSenseIndices = if (entry.senses.isEmpty()) emptySet() else setOf(0)
-                                        if (!definitionManuallyEdited) {
-                                            definition = entry.senses.firstOrNull()?.glosses?.joinToString("; ").orEmpty()
-                                        }
-                                        showDictionarySheet = false
-                                    },
-                                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                                ) {
-                                    Column(horizontalAlignment = Alignment.Start) {
-                                        Text("${entry.expression} · ${entry.reading}")
-                                        Text(entry.senses.firstOrNull()?.glosses?.joinToString("; ").orEmpty())
                                     }
+                                    TextButton(
+                                        onClick = {
+                                            showDictionarySheet = false
+                                            definitionSheetText = meaning
+                                        },
+                                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                                    ) { Text("View full definition") }
                                 }
                             }
+                        }
+                    }
+                }
+                if (definitionSheetText != null) {
+                    ModalBottomSheet(
+                        onDismissRequest = {
+                            definitionSheetText = null
+                            showDictionarySheet = true
+                        },
+                    ) {
+                        Column(
+                            Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState())
+                                .padding(horizontal = 24.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Text("Definition", style = MaterialTheme.typography.titleLarge)
+                            Text(definitionSheetText.orEmpty())
+                            TextButton(
+                                onClick = {
+                                    definitionSheetText = null
+                                    showDictionarySheet = true
+                                },
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                            ) { Text("Close") }
                         }
                     }
                 }

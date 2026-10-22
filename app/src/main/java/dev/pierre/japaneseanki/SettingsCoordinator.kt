@@ -223,7 +223,7 @@ internal class SettingsCoordinator(
         }
         return try {
             if (valuesDirty) {
-                check(persistence.saveValues(values)) { "Settings could not be saved." }
+                check(persistence.saveValues(values)) { "Could not save your changes." }
                 persistedValues = values
                 valuesDirty = false
             }
@@ -232,7 +232,7 @@ internal class SettingsCoordinator(
                     "The Google Cloud key contains whitespace."
                 }
                 check(persistence.saveGoogleKey(credential)) {
-                    "The Google Cloud key could not be saved securely."
+                    "Could not save your changes."
                 }
                 persistedCredential = credential.trim()
                 credentialDirty = false
@@ -242,12 +242,11 @@ internal class SettingsCoordinator(
         } catch (error: IllegalArgumentException) {
             val message = error.message?.takeIf {
                 it == "The Google Cloud key contains whitespace."
-            } ?: "Settings could not be saved."
+            } ?: "Could not save your changes."
             saveError = message
             Result.failure(IllegalStateException(message))
         } catch (_: Exception) {
-            val message = if (credentialDirty) "The Google Cloud key could not be saved securely."
-                else "Settings could not be saved."
+            val message = "Could not save your changes."
             saveError = message
             Result.failure(IllegalStateException(message))
         }
