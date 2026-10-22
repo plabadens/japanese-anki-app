@@ -2,11 +2,11 @@
 
 ## Authority and scope
 
-This document supersedes conflicting workflow/UI/resource rules in SPEC.md. Preserve all unrelated safety, privacy, source provenance, complete-note and credential-dependent verification requirements. Implement independent obvious fixes now; target alternatives, pitch-source migration and unresolved distribution choices require separate proposals/decisions. Never introduce a second pitch backend or a fallback chain. Do not publish or push anything without explicit authorization. Do not access credentials or invoke paid services for tests.
+This document supersedes conflicting workflow/UI/resource rules in SPEC.md. Preserve all unrelated safety, privacy, source provenance, complete-note and credential-dependent verification requirements. Implement independent obvious fixes now; target alternatives, pitch-source migration and unresolved distribution choices require separate proposals/decisions. Never introduce a second pitch backend or a fallback chain. Do not access credentials or invoke paid services for tests.
 
 ## Settled behavior
 
-Latest user decisions: production Target is **A, hero sentence with compact Material word pills**; B remains a prototype only. **Google Play Services-managed Japanese ML Kit model download without an app-pinned model hash is explicitly approved.** This OCR-only exception supersedes strict model-hash wording below; all app-managed datasets remain build-hash-verified and no model payload belongs in the release APK. Onboarding must wait for usable OCR, handle download/check failures and retries honestly, and verify offline recognition after delivery. Use indeterminate progress if the API cannot expose bytes. No recognition-backend change, privacy/telemetry waiver, push or publication is authorized. Remove prototype debug text from production.
+Latest user decisions: production Target is **A, hero sentence with compact Material word pills**; B remains a prototype only. **The Japanese ML Kit model is bundled in the APK.** Asset policy is now bundle-by-default: an asset is provisioned at first run only when shipping it would dominate the download, which today means UniDic alone (~426 MB, build-hash-verified, progress reported). The NHK-2016 index, the dictionary, the pitch dataset and the OCR model all ship inside the APK. Onboarding must wait for usable OCR, handle initialization failures and retries honestly, and verify offline recognition. No recognition-backend change or privacy/telemetry waiver is authorized. Remove prototype debug text from production.
 
 ### Capture
 

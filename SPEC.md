@@ -58,11 +58,11 @@ A clean checkout must build and run its tests using documented commands inside `
 
 | Operation | Selected path |
 |---|---|
-| OCR | On-device Japanese recognition; first-run model delivery must meet supported integrity/privacy constraints (§4.8) |
+| OCR | On-device Japanese recognition, model bundled in the APK |
 | Tokenization and initial readings | Packaged MeCab native code and first-run verified UniDic; adapt AJT behavior where relevant (§5) |
-| English dictionary/meaning selection | First-run verified JMdict Japanese/English data |
-| Pitch and phonetic marks | One complete pinned AJT dataset, first-run verified and locally indexed with original annotations (§5) |
-| Word recording | Pinned NHK-2016 index and its recordings (§6) |
+| English dictionary/meaning selection | Bundled JMdict-derived Japanese/English data |
+| Pitch and phonetic marks | One complete pinned AJT dataset, bundled and locally indexed with original annotations (§5) |
+| Word recording | Bundled NHK-2016 index, with its recordings fetched per word (§6) |
 | Sentence TTS | Google Cloud Chirp 3 HD, with phonetic hints and a cloud-listed Japanese voice selected in Settings (§6) |
 | Translation | Google Cloud Translation Basic v2, default neural machine translation (NMT), Japanese → English (§7) |
 | Image export | Android platform lossy WebP, at most 1080 px on the long edge (§7) |
@@ -70,7 +70,9 @@ A clean checkout must build and run its tests using documented commands inside `
 
 Use one provider path per operation, with reuse of valid cached results. Settings discovers voices within Google Chirp 3 HD. Translation uses Google Cloud Translation Basic's default NMT model. Speech and translation share one runtime Google Cloud API key. An unavailable service fails visibly and preserves the draft.
 
-Do not bundle offline datasets or model payloads in the release APK. Provision full UniDic, Japanese/English JMdict, the complete selected AJT dataset, and recording indexes through first-run downloads with build-pinned hashes and progress (§4.8). Once provisioned and validated, these resources must work without network access. Native executable code and required notices remain packaged; do not download executable code. Model delivery must satisfy supported-platform and integrity/privacy constraints; do not silently exempt OCR from the resource requirement.
+Bundle assets by default. Provision an asset at first run only when shipping it would dominate the download: today that means UniDic alone, at roughly 426 MB compressed, which would otherwise inflate the APK toward half a gigabyte. Everything else ships inside the APK — the Japanese OCR model, the NHK-2016 index, the dictionary and the pitch dataset — because at a few megabytes to a few tens of megabytes each, a first-run download costs more in failure modes than it saves in bytes.
+
+The runtime-provisioned payload (UniDic) is downloaded once with a build-pinned hash and progress (§4.8). Once provisioned and validated, all resources must work without network access. Native executable code and required notices remain packaged; do not download executable code.
 
 ### Included
 
