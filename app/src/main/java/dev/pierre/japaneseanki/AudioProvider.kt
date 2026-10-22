@@ -22,6 +22,9 @@ fun interface AudioProvider {
     fun synthesize(request: AudioSynthesisRequest, output: File): File
 }
 
+/** A permanent source miss; retrying the same resolved entry cannot produce a recording. */
+class AudioSourceMissingException(message: String) : IOException(message)
+
 /**
  * The audio containers this app can validate, cache, materialize and hand to AnkiDroid.
  *

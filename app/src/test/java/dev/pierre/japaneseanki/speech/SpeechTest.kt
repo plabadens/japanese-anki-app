@@ -2,9 +2,11 @@ package dev.pierre.japaneseanki.speech
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import java.net.SocketTimeoutException
 import java.util.Base64
 
 class SpeechHintBuilderTest {
@@ -183,6 +185,94 @@ class GoogleSpeechProviderTest {
         val noKey = GoogleChirpSpeechProvider({ "" }, FakeTransport(), 1_000)
         val missing = runCatching { noKey.listVoices() }.exceptionOrNull()
         assertEquals(SpeechFailure.AUTHORIZATION, (missing as SpeechException).failure)
+    }
+
+    @Test
+    fun http400DetailsAreRetainedAsSafeStructuredDiagnostics() {
+        val errorBody = """{"error":{"status":"INVALID_ARGUMENT","message":"private sentence and key","details":[{"reason":"INVALID_ARGUMENT"}]}}"""
+            .toByteArray(Charsets.UTF_8)
+        val transport = FakeTransport(400, errorBody)
+        val provider = GoogleChirpSpeechProvider({ "never-in-diagnostics" }, transport, 1_000)
+        val error = runCatching {
+            provider.synthesize(SentenceSpeechRequest("悪逆", voice, listOf(ReadingHint("悪逆", "アクギャク"))), File("unused.mp3"))
+        }.exceptionOrNull() as SpeechException
+
+        assertEquals(SpeechFailure.INVALID_REQUEST, error.failure)
+        assertFalse("invalid request must not be retried unchanged", error.retryable)
+        assertEquals(400, error.diagnostic?.httpStatus)
+        assertEquals("INVALID_ARGUMENT", error.diagnostic?.googleStatus)
+        assertEquals("INVALID_ARGUMENT", error.diagnostic?.googleReason)
+        assertTrue(error.diagnostic?.durationMillis != null && error.diagnostic!!.durationMillis!! >= 0)
+        assertEquals("SYNTHESIS", error.diagnostic?.request?.operation?.name)
+        assertEquals(1, error.diagnostic?.request?.hintCount)
+        assertTrue((error.diagnostic?.request?.inputBytes ?: 0) > "悪逆".toByteArray(Charsets.UTF_8).size)
+        val diagnostics = error.diagnostic.toString()
+        assertFalse(diagnostics.contains("private sentence"))
+        assertFalse(diagnostics.contains("never-in-diagnostics"))
+        assertFalse(diagnostics.contains("悪逆"))
+        assertEquals(1, transport.calls)
+    }
+
+    @Test
+    fun unknownClientErrorsArePermanentAndDoNotExposeProviderProse() {
+        val response = """{"error":{"status":"NOT_FOUND","message":"private provider detail"}}"""
+            .toByteArray(Charsets.UTF_8)
+        val transport = FakeTransport(404, response)
+        val error = runCatching {
+            GoogleChirpSpeechProvider({ "k" }, transport, 1_000)
+                .synthesize(SentenceSpeechRequest("猫", voice, emptyList()), File("unused.mp3"))
+        }.exceptionOrNull() as SpeechException
+
+        assertEquals(SpeechFailure.INVALID_REQUEST, error.failure)
+        assertFalse(error.retryable)
+        assertEquals(404, error.diagnostic?.httpStatus)
+        assertFalse(error.message.orEmpty().contains("private provider detail"))
+        assertEquals(1, transport.calls)
+    }
+
+    @Test
+    fun timeoutAndServiceUnavailableRemainDistinctAndRetryable() {
+        val timeoutTransport = object : GoogleSpeechTransport {
+            override fun get(url: String, apiKey: String, timeoutMillis: Int): SpeechHttpResponse =
+                throw SocketTimeoutException("read timed out")
+
+            override fun post(url: String, apiKey: String, json: ByteArray, timeoutMillis: Int): SpeechHttpResponse =
+                throw SocketTimeoutException("read timed out")
+        }
+        val timeout = runCatching {
+            GoogleChirpSpeechProvider({ "k" }, timeoutTransport, 1_000)
+                .synthesize(SentenceSpeechRequest("猫", voice, emptyList()), File("unused.mp3"))
+        }.exceptionOrNull() as SpeechException
+
+        val unavailable = runCatching {
+            GoogleChirpSpeechProvider({ "k" }, FakeTransport(503, ByteArray(0)), 1_000)
+                .synthesize(SentenceSpeechRequest("猫", voice, emptyList()), File("unused.mp3"))
+        }.exceptionOrNull() as SpeechException
+
+        assertEquals(SpeechFailure.TIMEOUT, timeout.failure)
+        assertEquals("SocketTimeoutException", timeout.diagnostic?.exceptionClass)
+        assertTrue(timeout.retryable)
+        assertNull(timeout.diagnostic?.httpStatus)
+        assertEquals(SpeechFailure.NETWORK, unavailable.failure)
+        assertEquals(503, unavailable.diagnostic?.httpStatus)
+        assertNull(unavailable.diagnostic?.exceptionClass)
+        assertTrue(unavailable.retryable)
+        assertFalse(timeout.failure == unavailable.failure)
+    }
+
+    @Test
+    fun synthesisEnforcesUtf8ContentLimitWithoutCallingTransport() {
+        val transport = FakeTransport()
+        val oversized = "猫".repeat(1_668) // 5,004 UTF-8 bytes; UTF-16 length alone would miss this.
+        val error = runCatching {
+            GoogleChirpSpeechProvider({ "k" }, transport, 1_000)
+                .synthesize(SentenceSpeechRequest(oversized, voice, emptyList()), File("unused.mp3"))
+        }.exceptionOrNull() as SpeechException
+
+        assertEquals(SpeechFailure.INVALID_REQUEST, error.failure)
+        assertFalse(error.retryable)
+        assertEquals(0, transport.calls)
+        assertEquals(5_004, error.diagnostic?.request?.inputBytes)
     }
 
     @Test

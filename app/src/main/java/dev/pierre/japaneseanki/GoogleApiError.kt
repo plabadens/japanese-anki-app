@@ -18,21 +18,30 @@ internal enum class GoogleApiProblem {
     INVALID_REQUEST,
 }
 
-internal data class GoogleApiErrorDetails(val status: String, val reason: String, val message: String)
+internal data class GoogleApiErrorDetails(
+    val status: String,
+    val reason: String,
+    val mentionsBilling: Boolean = false,
+    val mentionsDisabledApi: Boolean = false,
+)
 
 internal fun parseGoogleApiError(body: String): GoogleApiErrorDetails {
     val root = runCatching { MiniJson.parse(body) as? Map<*, *> }.getOrNull()
-    val error = root?.get("error") as? Map<*, *> ?: return GoogleApiErrorDetails("", "", "")
+    val error = root?.get("error") as? Map<*, *> ?: return GoogleApiErrorDetails("", "")
     val details = error["details"] as? List<*> ?: emptyList<Any?>()
     val reason = details.asSequence()
         .mapNotNull { it as? Map<*, *> }
         .mapNotNull { it["reason"] as? String }
+        .mapNotNull(::safeGoogleToken)
         .firstOrNull()
         .orEmpty()
+    val message = (error["message"] as? String).orEmpty().lowercase()
     return GoogleApiErrorDetails(
-        status = (error["status"] as? String).orEmpty().uppercase(),
-        reason = reason.uppercase(),
-        message = (error["message"] as? String).orEmpty(),
+        status = safeGoogleToken(error["status"] as? String).orEmpty(),
+        reason = reason,
+        // Provider prose is used only for classification; it is never retained or exposed.
+        mentionsBilling = "billing" in message,
+        mentionsDisabledApi = "disabled" in message || "not enabled" in message,
     )
 }
 
@@ -40,16 +49,15 @@ internal fun classifyGoogleApiError(code: Int, body: String): GoogleApiProblem =
     classifyGoogleApiError(code, parseGoogleApiError(body))
 
 internal fun classifyGoogleApiError(code: Int, error: GoogleApiErrorDetails): GoogleApiProblem {
-    val message = error.message.lowercase()
     return when {
         error.reason in KEY_REASONS -> GoogleApiProblem.AUTHENTICATION
         error.reason == "SERVICE_DISABLED" -> GoogleApiProblem.API_NOT_ENABLED
         error.reason in BILLING_REASONS -> GoogleApiProblem.BILLING
-        "billing" in message -> GoogleApiProblem.BILLING
+        error.mentionsBilling -> GoogleApiProblem.BILLING
         error.reason in QUOTA_REASONS || code == 429 || error.status == "RESOURCE_EXHAUSTED" ->
             GoogleApiProblem.QUOTA
         code == 401 -> GoogleApiProblem.AUTHENTICATION
-        code == 403 -> if ("disabled" in message || "not enabled" in message) {
+        code == 403 -> if (error.mentionsDisabledApi) {
             GoogleApiProblem.API_NOT_ENABLED
         } else {
             GoogleApiProblem.AUTHENTICATION
@@ -58,6 +66,10 @@ internal fun classifyGoogleApiError(code: Int, error: GoogleApiErrorDetails): Go
         else -> GoogleApiProblem.NONE
     }
 }
+
+private fun safeGoogleToken(value: String?): String? = value
+    ?.takeIf { it.length in 1..80 && it.all { char -> char in 'A'..'Z' || char in 'a'..'z' || char in '0'..'9' || char in "_.-" } }
+    ?.uppercase()
 
 private val KEY_REASONS = setOf(
     "API_KEY_INVALID", "API_KEY_EXPIRED", "API_KEY_SERVICE_BLOCKED", "CONSUMER_INVALID",

@@ -9,7 +9,10 @@ import java.io.File
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import java.util.Base64
+import javax.net.ssl.SSLException
 
 /** Minimal HTTP result; headers are not needed and response bodies stay in memory. */
 data class SpeechHttpResponse(val code: Int, val body: ByteArray)
@@ -67,21 +70,27 @@ class GoogleChirpSpeechProvider(
     private val timeoutMillis: Int = 20_000,
 ) : SentenceSpeechProvider {
 
-    override fun listVoices(): List<CloudVoice> {
+    override fun listVoices(): List<CloudVoice> = diagnosedRequest(
+        SpeechRequestMetadata(SpeechOperation.VOICE_LIST),
+    ) { updateStatus ->
         val key = requireCredential()
-        val response = network("Voice listing") { transport.get(VOICES_URL, key, timeoutMillis) }
-        requireSuccess(response, "Voice listing")
-        return parseJapaneseChirpVoices(response.body.toString(Charsets.UTF_8))
+        val response = transport.get(VOICES_URL, key, timeoutMillis)
+        updateStatus(response.code)
+        requireSuccess(response, "Voice listing", SpeechRequestMetadata(SpeechOperation.VOICE_LIST))
+        parseJapaneseChirpVoices(response.body.toString(Charsets.UTF_8))
     }
 
     override fun synthesize(request: SentenceSpeechRequest, destination: File): File {
-        val key = requireCredential()
-        val payload = buildSynthesisJson(request)
-        val response = network("Speech synthesis") {
-            transport.post(SYNTHESIZE_URL, key, payload.toByteArray(Charsets.UTF_8), timeoutMillis)
+        val json = buildSynthesisJson(request)
+        val body = json.toByteArray(Charsets.UTF_8)
+        val metadata = synthesisRequestMetadata(request, synthesisContentBytes(request), body.size)
+        val audio = diagnosedRequest(metadata) { updateStatus ->
+            val key = requireCredential()
+            val response = transport.post(SYNTHESIZE_URL, key, body, timeoutMillis)
+            updateStatus(response.code)
+            requireSuccess(response, "Speech synthesis", metadata)
+            decodeAudioResponse(response.body)
         }
-        requireSuccess(response, "Speech synthesis")
-        val audio = decodeAudioResponse(response.body)
         val parent = destination.absoluteFile.parentFile ?: throw SpeechException(
             SpeechFailure.INVALID_AUDIO, "Audio destination has no directory",
         )
@@ -114,44 +123,122 @@ class GoogleChirpSpeechProvider(
         return key
     }
 
-    /** A dropped connection is a network failure, not a generic provider failure. */
-    private fun <T> network(operation: String, block: () -> T): T = try {
-        block()
-    } catch (error: SpeechException) {
-        throw error
-    } catch (_: IOException) {
-        throw SpeechException(SpeechFailure.NETWORK, "$operation service is unavailable.")
+    private inline fun <T> diagnosedRequest(
+        metadata: SpeechRequestMetadata,
+        block: (updateStatus: (Int) -> Unit) -> T,
+    ): T {
+        val started = System.nanoTime()
+        var status: Int? = null
+        try {
+            return block { status = it }
+        } catch (error: SpeechException) {
+            val previous = error.diagnostic
+            throw error.withDiagnostic(
+                SpeechDiagnostic(
+                    category = error.failure,
+                    httpStatus = previous?.httpStatus ?: status,
+                    googleStatus = previous?.googleStatus,
+                    googleReason = previous?.googleReason,
+                    exceptionClass = previous?.exceptionClass,
+                    durationMillis = elapsedMillis(started),
+                    request = metadata,
+                ),
+            )
+        } catch (error: SocketTimeoutException) {
+            throw transportFailure(SpeechFailure.TIMEOUT, operationName(metadata) + " timed out.", error, metadata, status, started)
+        } catch (error: UnknownHostException) {
+            throw transportFailure(SpeechFailure.DNS, operationName(metadata) + " service host could not be resolved.", error, metadata, status, started)
+        } catch (error: SSLException) {
+            throw transportFailure(SpeechFailure.TLS, "A secure connection to the ${operationName(metadata).lowercase()} service failed.", error, metadata, status, started)
+        } catch (error: IOException) {
+            throw transportFailure(SpeechFailure.NETWORK, operationName(metadata) + " service is unavailable.", error, metadata, status, started)
+        }
     }
 
-    private fun requireSuccess(response: SpeechHttpResponse, operation: String) {
+    private fun operationName(metadata: SpeechRequestMetadata): String = when (metadata.operation) {
+        SpeechOperation.VOICE_LIST -> "Voice listing"
+        SpeechOperation.SYNTHESIS -> "Speech synthesis"
+    }
+
+    private fun transportFailure(
+        failure: SpeechFailure,
+        message: String,
+        error: Exception,
+        metadata: SpeechRequestMetadata,
+        status: Int?,
+        started: Long,
+    ) = SpeechException(
+        failure = failure,
+        message = message,
+        diagnostic = SpeechDiagnostic(
+            category = failure,
+            httpStatus = status,
+            googleStatus = null,
+            googleReason = null,
+            exceptionClass = error.javaClass.simpleName,
+            durationMillis = elapsedMillis(started),
+            request = metadata,
+        ),
+    )
+
+    private fun elapsedMillis(started: Long): Long =
+        ((System.nanoTime() - started).coerceAtLeast(0L) / 1_000_000L)
+
+    private fun requireSuccess(response: SpeechHttpResponse, operation: String, metadata: SpeechRequestMetadata) {
         if (response.code in 200..299) return
         if (response.code in 300..399) {
             throw SpeechException(
                 SpeechFailure.AUTHORIZATION, "$operation was redirected; the credential was not forwarded.",
+                diagnostic = SpeechDiagnostic(
+                    SpeechFailure.AUTHORIZATION, response.code, null, null, null, null, metadata,
+                ),
             )
         }
-        val failure = when (classifyGoogleApiError(response.code, response.body.toString(Charsets.UTF_8))) {
+        val apiError = dev.pierre.japaneseanki.parseGoogleApiError(response.body.toString(Charsets.UTF_8))
+        val failure = when (classifyGoogleApiError(response.code, apiError)) {
             GoogleApiProblem.AUTHENTICATION -> SpeechFailure.AUTHORIZATION
             GoogleApiProblem.API_NOT_ENABLED -> SpeechFailure.API_NOT_ENABLED
             GoogleApiProblem.BILLING -> SpeechFailure.BILLING
             GoogleApiProblem.QUOTA -> SpeechFailure.QUOTA
             GoogleApiProblem.INVALID_REQUEST -> SpeechFailure.INVALID_REQUEST
-            GoogleApiProblem.NONE ->
-                if (response.code in 500..599) SpeechFailure.NETWORK else SpeechFailure.INVALID_RESPONSE
+            GoogleApiProblem.NONE -> when {
+                response.code in 500..599 -> SpeechFailure.NETWORK
+                response.code in 400..499 -> SpeechFailure.INVALID_REQUEST
+                else -> SpeechFailure.INVALID_RESPONSE
+            }
         }
-        throw SpeechException(failure, messageFor(failure, operation))
+        throw SpeechException(
+            failure,
+            messageFor(failure, operation),
+            diagnostic = SpeechDiagnostic(
+                category = failure,
+                httpStatus = response.code,
+                googleStatus = apiError.status.takeIf(String::isNotBlank),
+                googleReason = apiError.reason.takeIf(String::isNotBlank),
+                exceptionClass = null,
+                durationMillis = null,
+                request = metadata,
+            ),
+        )
     }
 
     private fun messageFor(failure: SpeechFailure, operation: String): String = when (failure) {
+        SpeechFailure.NETWORK -> "$operation service is unavailable."
+        SpeechFailure.TIMEOUT -> "$operation timed out."
+        SpeechFailure.DNS -> "$operation service host could not be resolved."
+        SpeechFailure.TLS -> "A secure connection to the $operation service failed."
         SpeechFailure.AUTHORIZATION -> "$operation authorization failed."
         SpeechFailure.API_NOT_ENABLED ->
             "The Cloud Text-to-Speech API is not enabled for this Google Cloud project."
         SpeechFailure.BILLING -> "Billing is not enabled for this Google Cloud project."
         SpeechFailure.QUOTA -> "$operation quota was reached."
         SpeechFailure.INVALID_REQUEST -> "$operation request was rejected by Google Cloud."
-        SpeechFailure.NETWORK -> "$operation service is unavailable."
-        SpeechFailure.INVALID_RESPONSE, SpeechFailure.INVALID_AUDIO, SpeechFailure.CANCELLED ->
-            "$operation failed."
+        SpeechFailure.INVALID_RESPONSE -> "$operation failed."
+        SpeechFailure.INVALID_AUDIO -> "$operation failed."
+        SpeechFailure.SETUP -> "$operation is not configured."
+        SpeechFailure.SOURCE_MISSING -> "No source audio is available for this request."
+        SpeechFailure.UNKNOWN -> "$operation failed."
+        SpeechFailure.CANCELLED -> "$operation was cancelled."
     }
 
     private fun decodeAudioResponse(body: ByteArray): ByteArray {
@@ -171,6 +258,22 @@ class GoogleChirpSpeechProvider(
 /** Serializes the exact outbound synthesis request. Kept pure for tests. */
 fun buildSynthesisJson(request: SentenceSpeechRequest): String {
     require(request.text.isNotBlank())
+    val contentBytes = synthesisContentBytes(request)
+    if (contentBytes > MAX_TTS_CONTENT_BYTES) {
+        throw SpeechException(
+            SpeechFailure.INVALID_REQUEST,
+            "Speech input exceeds the 5,000-byte Cloud Text-to-Speech content limit.",
+            diagnostic = SpeechDiagnostic(
+                category = SpeechFailure.INVALID_REQUEST,
+                httpStatus = null,
+                googleStatus = null,
+                googleReason = null,
+                exceptionClass = null,
+                durationMillis = 0,
+                request = synthesisRequestMetadata(request, contentBytes, requestBytes = null),
+            ),
+        )
+    }
     val input = StringBuilder()
     input.append("{\"text\":").append(MiniJson.quote(request.text))
     if (request.hints.isNotEmpty()) {
@@ -185,7 +288,7 @@ fun buildSynthesisJson(request: SentenceSpeechRequest): String {
         input.append(",\"customPronunciations\":{\"pronunciations\":").append(hints).append('}')
     }
     input.append('}')
-    return buildString {
+    val serialized = buildString {
         append("{\"input\":").append(input)
         append(",\"voice\":{\"languageCode\":").append(MiniJson.quote(request.languageCode))
         append(",\"name\":").append(MiniJson.quote(request.voice.name)).append('}')
@@ -194,7 +297,32 @@ fun buildSynthesisJson(request: SentenceSpeechRequest): String {
         append('}')
         append('}')
     }
+    return serialized
 }
+
+private fun synthesisContentBytes(request: SentenceSpeechRequest): Int {
+    val bytes = request.text.toByteArray(Charsets.UTF_8).size.toLong() + request.hints.sumOf { hint ->
+        hint.phrase.toByteArray(Charsets.UTF_8).size.toLong() + hint.reading.toByteArray(Charsets.UTF_8).size.toLong()
+    }
+    return bytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+}
+
+private fun synthesisRequestMetadata(
+    request: SentenceSpeechRequest,
+    inputBytes: Int,
+    requestBytes: Int?,
+): SpeechRequestMetadata = SpeechRequestMetadata(
+    operation = SpeechOperation.SYNTHESIS,
+    inputBytes = inputBytes,
+    requestBytes = requestBytes,
+    voiceName = request.voice.name.takeIf(::isSafeVoiceId),
+    hintCount = request.hints.size,
+)
+
+private fun isSafeVoiceId(value: String): Boolean =
+    value.length in 1..128 && value.all {
+        it in 'A'..'Z' || it in 'a'..'z' || it in '0'..'9' || it in "_.-"
+    }
 
 /** Parses `GET /v1/voices` and keeps only Japanese-capable Chirp 3 HD entries. */
 fun parseJapaneseChirpVoices(json: String): List<CloudVoice> {
@@ -236,5 +364,6 @@ internal fun requireMp3(file: File) {
 private const val VOICES_URL = "https://texttospeech.googleapis.com/v1/voices?languageCode=ja-JP"
 private const val SYNTHESIZE_URL = "https://texttospeech.googleapis.com/v1/text:synthesize"
 private const val CHIRP3_HD_MARKER = "Chirp3-HD"
+private const val MAX_TTS_CONTENT_BYTES = 5_000
 private const val MIN_MP3_BYTES = 256
 private const val MAX_AUDIO_BYTES = 20L * 1024 * 1024

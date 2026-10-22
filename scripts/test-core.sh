@@ -30,6 +30,7 @@ java -cp "$gradle_lib/*" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler \
   app/src/main/java/dev/pierre/japaneseanki/AudioGeneration.kt \
   app/src/main/java/dev/pierre/japaneseanki/DraftAudioStore.kt \
   app/src/main/java/dev/pierre/japaneseanki/DraftAudioController.kt \
+  app/src/main/java/dev/pierre/japaneseanki/ReviewAudioGenerationCoordinator.kt \
   app/src/main/java/dev/pierre/japaneseanki/Nhk2016PronunciationSource.kt \
   app/src/main/java/dev/pierre/japaneseanki/PitchAccent.kt \
   app/src/main/java/dev/pierre/japaneseanki/AjtPitchHtml.kt \
