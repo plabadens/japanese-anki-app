@@ -252,17 +252,18 @@ internal fun validateAudioReceipt(item: FrozenAudioItem, source: File): AudioRec
     return if (current == item.identity) AudioReceiptValidation.VALID else AudioReceiptValidation.SOURCE_CHANGED
 }
 
-internal enum class NoteInsertedRecoveryDecision { MOVE, COMPLETE, RESOLVE, FAIL }
+internal enum class NoteInsertedRecoveryDecision { COMPLETE, NEEDS_REVIEW, INDETERMINATE, FAIL }
 
 internal fun noteInsertedRecoveryDecision(
     noteId: Long?,
     cards: List<AnkiCardLocation>?,
     deckId: Long,
 ): NoteInsertedRecoveryDecision = when {
-    noteId == null || cards == null || cards.isEmpty() -> NoteInsertedRecoveryDecision.RESOLVE
-    deckId <= 0L -> NoteInsertedRecoveryDecision.FAIL
+    noteId == null || cards == null || cards.isEmpty() -> NoteInsertedRecoveryDecision.INDETERMINATE
+    noteId <= 0L || deckId <= 0L -> NoteInsertedRecoveryDecision.FAIL
+    cards.any { it.ord < 0 || it.deckId <= 0L } -> NoteInsertedRecoveryDecision.FAIL
     cards.all { it.deckId == deckId } -> NoteInsertedRecoveryDecision.COMPLETE
-    else -> NoteInsertedRecoveryDecision.MOVE
+    else -> NoteInsertedRecoveryDecision.NEEDS_REVIEW
 }
 
 internal fun nextSubmissionRevision(currentSequence: Long, currentPendingRevision: Long): Long =
