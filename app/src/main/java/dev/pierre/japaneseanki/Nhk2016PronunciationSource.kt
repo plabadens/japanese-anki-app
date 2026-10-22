@@ -9,51 +9,16 @@ import java.nio.file.StandardCopyOption
 import java.util.UUID
 
 /**
- * Progress for the one-off NHK index download (37 MB for the pinned revision). Published from the
- * worker thread; `null` means nothing is in flight.
- */
-data class NhkIndexProgress(val receivedBytes: Long, val totalBytes: Long?) {
-    val determinate: Boolean get() = totalBytes != null && totalBytes > 0
-
-    val fraction: Float?
-        get() = totalBytes?.takeIf { it > 0 }?.let { total ->
-            (receivedBytes.coerceAtMost(total).toFloat() / total).coerceIn(0f, 1f)
-        }
-
-    fun describe(): String = if (determinate) {
-        String.format(
-            java.util.Locale.US,
-            "Downloading the NHK pronunciation index: %.1f of %.1f MB",
-            receivedBytes / MB,
-            totalBytes!! / MB,
-        )
-    } else {
-        String.format(
-            java.util.Locale.US,
-            "Downloading the NHK pronunciation index: %.1f MB received",
-            receivedBytes / MB,
-        )
-    }
-
-    private companion object {
-        const val MB = 1024.0 * 1024.0
-    }
-}
-
-/**
  * On-demand adapter for AJATT NHK-2016 index at commit b0207d240f0f28cdc2dd491dd83343c3a5630119.
  * The index repository is GPL-3.0; that index license does not establish the provenance or rights
  * of the linked NHK sound recordings. Recording use remains subject to verification by the integrator.
  */
 class Nhk2016PronunciationSource(
-    private val dataDirectory: File,
+    private val readIndexText: () -> String,
     private val spellingFor: (AudioSynthesisRequest) -> String = { it.text },
-    private val onIndexProgress: (NhkIndexProgress?) -> Unit = {},
-    private val isIndexFetchCancelled: () -> Boolean = { false },
-    private val readIndexText: (File) -> String = { it.readText(Charsets.UTF_8) },
     private val connectionFactory: (URL) -> HttpURLConnection = { it.openConnection() as HttpURLConnection },
 ) : AudioProvider {
-    /** Serialises the one-off 37 MB index download; a second word waits instead of fetching again. */
+    /** Keep one large bundled-index scan in flight at a time. */
     private val indexLock = Any()
 
     override fun synthesize(request: AudioSynthesisRequest, output: File): File {
@@ -62,11 +27,11 @@ class Nhk2016PronunciationSource(
         }
         val spelling = spellingFor(request).trim()
         if (spelling.isEmpty()) throw IOException("NHK recording spelling is unavailable")
-        val recording = recordingFor(spelling) ?: throw IOException("No NHK recording matches this spelling")
+        val recording = findRecording(spelling) ?: throw IOException("No NHK recording matches this spelling")
         val parent = output.absoluteFile.parentFile ?: throw IOException("Invalid audio output path")
         if (!parent.exists() && !parent.mkdirs()) throw IOException("Could not create audio output directory")
         val temporary = File(parent, ".${UUID.randomUUID()}.ogg")
-        val connection = connectionFactory(URL("$RAW_ROOT/media/$recording"))
+        val connection = connectionFactory(URL("$MEDIA_ROOT/$recording"))
         try {
             connection.connectTimeout = TIMEOUT_MILLIS
             connection.readTimeout = TIMEOUT_MILLIS
@@ -99,78 +64,22 @@ class Nhk2016PronunciationSource(
         }
     }
 
-    private fun recordingFor(spelling: String): String? = synchronized(indexLock) {
-        if (!dataDirectory.exists() && !dataDirectory.mkdirs()) throw IOException("NHK index storage is unavailable")
-        val index = File(dataDirectory, "nhk-2016-b0207d240f0f.json")
-        if (!index.isFile || index.length() !in 1..MAX_INDEX_BYTES) {
-            // A fresh download answers this lookup inside its own validation pass; the result is
-            // released only after the index has been published atomically, so there is no second
-            // read of the file we just wrote.
-            downloadIndex(index, spelling)
-        } else {
-            try {
-                IndexHeadwords(readIndexText(index)).recording(spelling)
-            } catch (_: IllegalArgumentException) {
-                index.delete()
-                throw IOException("NHK pronunciation index is invalid")
-            }
-        }
-    }
-
-    private fun downloadIndex(destination: File, spelling: String): String? {
-        val temporary = File(dataDirectory, ".${UUID.randomUUID()}.json")
-        val connection = connectionFactory(URL("$RAW_ROOT/index.json"))
-        var published = -PROGRESS_STEP_BYTES
-        var total = 0L
+    /** Resolves an index record without network or storage access; only the recording is fetched. */
+    internal fun findRecording(spelling: String): String? = synchronized(indexLock) {
         try {
-            connection.connectTimeout = TIMEOUT_MILLIS
-            connection.readTimeout = TIMEOUT_MILLIS
-            connection.instanceFollowRedirects = false
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) throw IOException("NHK pronunciation index is unavailable")
-            val expected = connection.contentLengthLong.takeIf { it > 0 }
-            onIndexProgress(NhkIndexProgress(0, expected))
-            connection.inputStream.use { input -> temporary.outputStream().use { output ->
-                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                while (true) {
-                    val size = input.read(buffer)
-                    if (size < 0) break
-                    total += size
-                    if (total > MAX_INDEX_BYTES) throw IOException("NHK pronunciation index is too large")
-                    if (isIndexFetchCancelled()) throw IOException("NHK pronunciation index download cancelled")
-                    output.write(buffer, 0, size)
-                    if (total - published >= PROGRESS_STEP_BYTES) {
-                        published = total
-                        onIndexProgress(NhkIndexProgress(total, expected))
-                    }
-                }
-            } }
-            onIndexProgress(NhkIndexProgress(total, expected ?: total))
-            // One pass validates every headword and filename while capturing the requested
-            // recording; the published index is then used without a second read or scan.
-            val recording = IndexHeadwords(readIndexText(temporary)).recording(spelling)
-            Files.move(temporary.toPath(), destination.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-            return recording
-        } catch (error: IOException) {
-            throw error
-        } catch (error: Exception) {
-            throw IOException("NHK pronunciation index could not be saved", error)
-        } finally {
-            temporary.delete()
-            connection.disconnect()
-            onIndexProgress(null)
+            IndexHeadwords(readIndexText()).recording(spelling)
+        } catch (_: IllegalArgumentException) {
+            throw IOException("Bundled NHK pronunciation index is invalid")
         }
     }
 
     companion object {
         const val SOURCE_VERSION = "b0207d240f0f28cdc2dd491dd83343c3a5630119"
         const val SOURCE_LICENSE = "GPL-3.0 (index repository only; recording rights are not verified)"
-        private const val RAW_ROOT = "https://raw.githubusercontent.com/Ajatt-Tools/nhk_2016_pronunciations_index/$SOURCE_VERSION"
+        const val ASSET_NAME = "nhk-2016-b0207d240f0f.json"
+        private const val MEDIA_ROOT = "https://raw.githubusercontent.com/Ajatt-Tools/nhk_2016_pronunciations_index/$SOURCE_VERSION/media"
         private const val TIMEOUT_MILLIS = 20_000
-        private const val MAX_INDEX_BYTES = 64L * 1024 * 1024
         private const val MAX_RECORDING_BYTES = 8L * 1024 * 1024
-
-        /** Publish at most one progress event per this many bytes (about 64 updates for 37 MB). */
-        private const val PROGRESS_STEP_BYTES = 256L * 1024
     }
 }
 

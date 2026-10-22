@@ -28,7 +28,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -164,9 +163,6 @@ internal fun ReviewCard(
     onAcknowledgeDefinition: () -> Unit = {},
     onVocabularyReadingChange: (String) -> Boolean = { false },
     vocabularyReadingError: String? = null,
-    vocabularyAudioProgress: String? = null,
-    vocabularyAudioProgressFraction: Float? = null,
-    onCancelVocabularyAudio: (() -> Unit)? = null,
     generatingFields: Set<String> = emptySet(),
     sentenceAudio: ReviewAudioPresentation = ReviewAudioPresentation.Unavailable,
     vocabularyAudio: ReviewAudioPresentation = ReviewAudioPresentation.Unavailable,
@@ -367,30 +363,6 @@ internal fun ReviewCard(
                             onClick = { editingField = "Definition" },
                             modifier = Modifier.heightIn(min = 48.dp),
                         ) { Text("Edit meaning") }
-                    }
-                    if (vocabularyAudioProgress != null) {
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            if (vocabularyAudioProgressFraction != null) {
-                                LinearProgressIndicator(
-                                    progress = { vocabularyAudioProgressFraction },
-                                    modifier = Modifier.fillMaxWidth().semantics {
-                                        stateDescription = "Downloading ${(vocabularyAudioProgressFraction * 100).toInt()} percent"
-                                    },
-                                )
-                            } else {
-                                LinearProgressIndicator(
-                                    modifier = Modifier.fillMaxWidth().semantics { stateDescription = "Downloading" },
-                                )
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(vocabularyAudioProgress, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                                if (onCancelVocabularyAudio != null) {
-                                    TextButton(onClick = onCancelVocabularyAudio, modifier = Modifier.heightIn(min = 48.dp)) {
-                                        Text("Cancel")
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
             }

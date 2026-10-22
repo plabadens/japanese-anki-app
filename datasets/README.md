@@ -22,4 +22,11 @@ See [`mecab/README.md`](mecab/README.md) and [`unidic/README.md`](unidic/README.
 - Required attribution: “The pitch accent notation, verb particle data, phonetics, homonyms and other additions or modifications to EDICT, KANJIDIC or KRADFILE were provided by Uros O. through his free database.”
 - Source data is a tab-separated spelling, reading, accent-position list. A comma-separated list represents alternatives; `0` is a valid heiban pattern.
 
+## NHK-2016 pronunciation index
+
+- Source: `index.json` from [Ajatt-Tools/nhk_2016_pronunciations_index](https://github.com/Ajatt-Tools/nhk_2016_pronunciations_index), commit `b0207d240f0f28cdc2dd491dd83343c3a5630119`.
+- Source bytes: 36,971,461; SHA-256: `9d9714b79c15ae6586d053665bf6cd0b881fcd56ed42ed3b4d758ea0499f1137`.
+- The exact index is bundled as `app/src/main/assets/nhk-2016-b0207d240f0f.json`; Android instrumentation checks its size, digest and offline headword lookup.
+- The index repository is GPL-3.0; the full license is bundled at `app/src/main/assets/licenses/NHK-2016-GPL-3.0.txt`. This does not establish rights to NHK sound recordings. Recording files remain fetched per word and their rights remain a separate review item.
+
 The source inputs are copied without modification. Rebuild the deterministic SQLite asset with `python3 scripts/build_dictionary.py --jmdict-source 'EDRDG JMdict_e.gz, YYYY-MM-DD snapshot'`; the script records both input hashes in the database metadata. Re-run it after updating either input. Any generated/combined dictionary database must retain the applicable CC BY-SA attribution and license notices. The app's code is not relicensed by the data license.

@@ -37,9 +37,13 @@ The sandbox build has no keystore configured, so `.#debugApk` signs with a throw
 debug key and cannot replace an existing install; for an update-compatible APK use
 the Gradle path with `JAPANESE_ANKI_DEBUG_KEYSTORE` set (see `app/build.gradle.kts`).
 
-The fixed-output inputs pin MeCab and UniDic; the flake packages UniDic into a
-deterministic 426 MiB runtime dictionary asset, which expands to about 725 MB in
-app-private storage on first use. The app targets API 37 and requires API 37.
+The fixed-output inputs pin MeCab and UniDic. The APK does not contain the 426 MiB
+runtime dictionary ZIP: at release, it downloads the build-pinned UniDic v0.4
+release asset on first use, verifies its SHA-256 and archive contents, then extracts
+about 725 MB to app-private storage. `nix build .#unidicRuntime` produces that asset;
+it must be uploaded with the APK before the release is usable. The
+Japanese OCR model, NHK index, dictionary and pitch data remain bundled; the app
+targets API 37 and requires API 37.
 
 ## Android emulator (Nix, API 37 x86_64)
 
@@ -86,4 +90,4 @@ For the redesign, provision an API-37 x86_64 emulator and follow the R-series ch
 
 ## Current implementation
 
-The editor supports durable manual sentence/target/vocabulary/reading/definition/translation/notes/tags entry, readiness feedback, stale-value blocking, pitch entry/contour, Android `SEND` / `PROCESS_TEXT`, AnkiDroid setup, safe field mapping, duplicate blocking, and interrupted-send reconciliation. Settings cover default tags, optional Azure credentials (encrypted with Android Keystore), Android TTS engine/installed offline Japanese voice selection, and speech rates. Speech generation and cache controls are not active yet. JMdict and Kanjium are bundled in an offline SQLite index for lookup, sense selection, and pitch. UniDic CWJ 3.1.1 and MeCab 0.996 are pinned; token chips, inflection-aware lemma lookup, editable target/vocabulary reading suggestions, and best-effort sentence furigana with per-token corrections are wired. Native CMake builds succeeded for `arm64-v8a` and `x86_64`, and a host JNI smoke test verified token/feature output. The debug APK is built and smoke-tested on a Pixel 7/API 37, including first-launch UniDic extraction, tokenization, and offline dictionary lookup. AnkiDroid integration references v2.24.0 commit `ebcf8e0e34921628b9b8a496c66ffd4adbb3705f` (the release available on Google Play; its note/media provider, contract, browser manifest, and browser search files are byte-identical to the previously referenced v2.24.1 revisions); provider behavior and insertion with trailing empty fields remain release gates. Audio generation, image/media workflows, remaining settings, acceptance testing, and reproducible APK builds are not implemented or verified.
+The editor supports durable manual sentence/target/vocabulary/reading/definition/translation/notes/tags entry, readiness feedback, stale-value blocking, pitch entry/contour, Android `SEND` / `PROCESS_TEXT`, AnkiDroid setup, safe field mapping, duplicate blocking, and interrupted-send reconciliation. Settings cover default tags, optional Azure credentials (encrypted with Android Keystore), Android TTS engine/installed offline Japanese voice selection, and speech rates. Speech generation and cache controls are not active yet. JMdict and Kanjium are bundled in an offline SQLite index for lookup, sense selection, and pitch. UniDic CWJ 3.1.1 and MeCab 0.996 are pinned; token chips, inflection-aware lemma lookup, editable target/vocabulary reading suggestions, and best-effort sentence furigana with per-token corrections are wired. Native CMake builds succeeded for `arm64-v8a` and `x86_64`, and a host JNI smoke test verified token/feature output. An earlier debug APK was smoke-tested on a Pixel 7/API 37 with packaged UniDic. This branch switches to verified first-run UniDic provisioning; that fresh-install path is not deployable until the pinned v0.4 release asset is published and is not represented by the earlier smoke test. AnkiDroid integration references v2.24.0 commit `ebcf8e0e34921628b9b8a496c66ffd4adbb3705f` (the release available on Google Play; its note/media provider, contract, browser manifest, and browser search files are byte-identical to the previously referenced v2.24.1 revisions); provider behavior and insertion with trailing empty fields remain release gates. Audio generation, image/media workflows, remaining settings, acceptance testing, and reproducible APK builds are not implemented or verified.

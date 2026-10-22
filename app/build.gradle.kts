@@ -1,5 +1,4 @@
 import org.gradle.api.artifacts.ProjectDependency
-import org.gradle.api.tasks.Copy
 
 plugins {
     alias(libs.plugins.android.application)
@@ -7,24 +6,8 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-val unidicRuntimeArchive = providers.environmentVariable("UNIDIC_RUNTIME_ARCHIVE").orNull
-    ?: error("Build inside the Nix development shell to provide pinned UniDic data")
 val mecabSourceDir = providers.environmentVariable("MECAB_SOURCE_DIR").orNull
     ?: error("Build inside the Nix development shell to provide pinned MeCab source")
-val packageUniDic = tasks.register<Copy>("packageUniDicRuntime") {
-    from(unidicRuntimeArchive)
-    into(layout.buildDirectory.dir("generated/unidicAssets"))
-    rename { "unidic-cwj-3.1.1.zip" }
-    // The pinned archive comes from the read-only Nix store, and Copy preserves that mode.
-    // A repeated `--rerun-tasks` build then cannot overwrite its own output ("Permission
-    // denied"), so clear the bit on the stale destination and publish a writable file.
-    doFirst {
-        val stale = layout.buildDirectory.file("generated/unidicAssets/unidic-cwj-3.1.1.zip")
-            .get().asFile
-        if (stale.exists()) stale.setWritable(true)
-    }
-    filePermissions { unix("rw-r--r--") }
-}
 
 android {
     namespace = "dev.pierre.japaneseanki"
@@ -60,10 +43,8 @@ android {
     }
 
     androidResources {
-        noCompress += listOf("gz", "zip")
+        noCompress += "gz"
     }
-
-    sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/unidicAssets"))
 
     buildTypes {
         if (sharedDebugKeystore != null) {
@@ -89,8 +70,6 @@ android {
         }
     }
 }
-
-tasks.named("preBuild").configure { dependsOn(packageUniDic) }
 
 if (System.getenv("IN_GRADLE_UPDATE_DEPS") == "1") {
     // AGP resolves this only when release lint executes, after the recorder scans configurations.
