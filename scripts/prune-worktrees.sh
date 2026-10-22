@@ -4,10 +4,13 @@
 #   ./scripts/prune-worktrees.sh          # dry run: print the plan, change nothing
 #   ./scripts/prune-worktrees.sh --apply  # remove the planned worktrees/branches
 #
+# Merge target defaults to `main`; pass --base dev to clear work already merged into
+# the integration branch instead.
+#
 # A branch is removable in exactly two cases:
-#   merged      its tip is an ancestor of main (`git merge-base --is-ancestor`)
-#   superseded  every commit on `main..<branch>` is already applied on main:
-#               `git cherry main <branch>` prints no `+` lines (any `+` means at
+#   merged      its tip is an ancestor of the base ref (`git merge-base --is-ancestor`)
+#   superseded  every commit on `<base>..<branch>` is already applied on the base:
+#               `git cherry <base> <branch>` prints no `+` lines (any `+` means at
 #               least one commit's patch is absent, so the branch is kept)
 # Everything else is reported as KEEP (real work) and never touched.
 #
@@ -30,20 +33,24 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 apply=0
 keep_globs=()
+main_ref=main
 while [ $# -gt 0 ]; do
   case "$1" in
     --apply) apply=1 ;;
     --keep) shift; [ $# -gt 0 ] || { echo "--keep needs a branch or glob" >&2; exit 2; }
             keep_globs+=("$1") ;;
     --keep=*) keep_globs+=("${1#--keep=}") ;;
+    --base) shift; [ $# -gt 0 ] || { echo "--base needs a ref" >&2; exit 2; }
+            main_ref="$1" ;;
+    --base=*) main_ref="${1#--base=}" ;;
     -h|--help) awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "${BASH_SOURCE[0]}"; exit 0 ;;
-    *) echo "usage: $0 [--apply] [--keep <branch-or-glob>]..." >&2; exit 2 ;;
+    *) echo "usage: $0 [--apply] [--base <ref>] [--keep <branch-or-glob>]..." >&2; exit 2 ;;
   esac
   shift
 done
 
-main_ref=main
-main_tip="$(git rev-parse --verify "${main_ref}^{commit}")"
+main_tip="$(git rev-parse --verify "${main_ref}^{commit}")" \
+  || { echo "base ref '$main_ref' does not exist" >&2; exit 2; }
 root="$(git rev-parse --show-toplevel)"
 
 is_kept_by_glob() {
