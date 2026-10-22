@@ -33,8 +33,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.ProgressBarRangeInfo
-import androidx.compose.ui.semantics.progressBarRangeInfo
+
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -146,70 +145,12 @@ internal fun FlowTheme(darkTheme: Boolean, content: @Composable () -> Unit) {
     )
 }
 
-internal enum class FlowStep(val labelResource: Int) {
-    Input(R.string.legacy_capture_input_title),
-    Target(R.string.legacy_card_target_title),
-    Review(R.string.legacy_card_review_title),
-}
-
 /**
  * Widest the portrait composition may become. A rotated or tablet window keeps the study's
  * single-column composition centred instead of stretching its photo slot and sentence.
  */
 internal val AppContentMaxWidth = 520.dp
 
-/**
- * Compact three-segment progress bar: completed segments filled, current outlined and filled,
- * remaining segments empty. It is the only step indicator in the portrait composition.
- */
-@Composable
-internal fun FlowProgress(current: FlowStep, modifier: Modifier = Modifier) {
-    val colors = MaterialTheme.colorScheme
-    val completed = colors.onSurfaceVariant
-    val stepDescription = stringResource(
-        R.string.legacy_card_flow_step_accessibility,
-        (current.ordinal + 1).toString(),
-        FlowStep.entries.size.toString(),
-        stringResource(current.labelResource),
-    )
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .semantics {
-                contentDescription = stepDescription
-                progressBarRangeInfo = ProgressBarRangeInfo(
-                    current = (current.ordinal + 1).toFloat(),
-                    range = 1f..FlowStep.entries.size.toFloat(),
-                    steps = FlowStep.entries.size - 1,
-                )
-            },
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        FlowStep.entries.forEach { step ->
-            val isCurrent = step == current
-            val isCompleted = step.ordinal < current.ordinal
-            Box(
-                Modifier
-                    .weight(1f)
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp))
-                    .drawBehind {
-                        when {
-                            isCompleted -> drawRect(completed)
-                            isCurrent -> {
-                                drawRect(colors.primary, alpha = 0.25f)
-                                drawRect(
-                                    colors.primary,
-                                    style = Stroke(width = 2.dp.toPx()),
-                                )
-                            }
-                            else -> drawRect(colors.outline, alpha = 0.35f)
-                        }
-                    },
-            )
-        }
-    }
-}
 
 @Composable
 internal fun FlowTopBar(
