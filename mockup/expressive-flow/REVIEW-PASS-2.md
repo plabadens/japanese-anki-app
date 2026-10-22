@@ -1,5 +1,7 @@
 # Review pass 2 — landscape, translation order, photo fill
 
+**Historical review:** its successor is now the [approved screen/copy contract](../../docs/sentence-mining-flow.md), not the older README/remediation direction. Those fixture results do not authorize a tracker, preparation page, extra headings or correction controls in the next native implementation.
+
 **Date:** 2026-10-21
 **Target:** current `mockup/expressive-flow` build (`flow.html`, `study.js`, `flow-layout.css`, `study.css`).
 **Status:** delta review. The earlier `P0-P3-HANDOFF.md` is historical; the P0 flow fixes in `REMEDIATION.md` are implemented and are not re-litigated here.

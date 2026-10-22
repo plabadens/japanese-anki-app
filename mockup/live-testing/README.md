@@ -1,5 +1,7 @@
 # Live-testing concept gallery
 
+**Historical A/B exploration.** The approved [screen-and-copy contract](../../docs/sentence-mining-flow.md) requires one selectable sentence (no duplicate hero), progress A and native evidence. Neither Target prototype below controls the current screen inventory, strings, headings or loading. Keep the gallery as decision history, not a conformance reference.
+
 Open `index.html` locally. This is an interactive HTML/CSS/JS discussion prototype, not native Compose evidence. Fixture data and actions are explicitly illustrative: no camera, dictionary/provider, resource download, persistent settings backend, or Anki service is connected. API key input is a visual fixture and is not submitted or persisted.
 
 ## Target alternatives

@@ -1,5 +1,7 @@
 # First-run resource delivery: implementation and proposal
 
+**UI contract update — 22 October 2026:** [sentence-mining-flow.md](sentence-mining-flow.md) and SPEC.md §4.8/R03/R37 control setup. Dictionary starts early in a real wizard and continues as one durable background task; Downloads/onboarding/notification own its real-byte/phase indicator, never Camera. Pause/resume/cancel, restart disclosure and Wi-Fi/mobile consent are required. Technical observations and historic verification below do not establish those behaviors. Progress A controls mining work, not a navigation/download checklist.
+
 Status: one build-pinned UniDic runtime resource is wired to the downloader and analyzer; NHK-2016 index is bundled and lookup is offline. The v0.4 release is now published directly with the two ABI APKs, the pinned UniDic ZIP and SHA256SUMS.txt. The release page and UniDic URL return HTTP 200, and public downloads of all three payload assets match the hosted checksums. This verifies asset availability/integrity, not a fresh-install Android first-run journey; cancel/resume and Wi-Fi/mobile-data confirmation remain unimplemented.
 
 ## Audited resources

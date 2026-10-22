@@ -1,5 +1,7 @@
 # Expressive-flow — P0–P3 remediation handoff
 
+**Consumed historical handoff, not pending instructions.** The [approved screen/copy contract](../../docs/sentence-mining-flow.md), selected progress A and aligned SPEC.md R01–R39 supersede the authority order and UI changes below. Preserve diagnostic/safety lessons; do not restore old controls, headings, copy or progress from this checklist.
+
 **For:** the agent revising the Input → Target → Review design study.
 **Date:** 2026-10-21.
 **Status:** action list derived from a driven review of `flow.html`, not a new design brief.

@@ -1,5 +1,7 @@
 # UI plan and outstanding visual work
 
+**Retired UI authority:** [sentence-mining-flow.md](sentence-mining-flow.md), approved 22 October 2026 with progress A, now controls every view/string. This plan and all mockup references below are historical, not a competing screen inventory. SPEC.md R01–R39 is the current acceptance checklist.
+
 **Historical / superseded:** this plan describes the earlier row-per-field UI and HTML mockups. The Compose/Material 3 Expressive redesign in `SPEC.md` §4 replaces its interaction checklist and next-wave plan. Do not implement the old monochrome restrictions, custom camera rotation, fixed Settings placement, optional-enrichment states, or mandatory empty rows below. Preserve the bug/wiring reports as historical lessons, not proof of current behavior.
 
 Recorded after reviewing the built UI against the retired `mockup/screens/*` and `mockup/shared.css` (both removed; current reference is `mockup/expressive-flow`).

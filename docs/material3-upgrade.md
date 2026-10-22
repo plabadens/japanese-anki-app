@@ -43,9 +43,11 @@ Evidence:
 
 ## Capability boundary
 
+**Current implementation rule:** the approved [screen/copy contract](sentence-mining-flow.md) controls native component/motion requirements. This older inventory/build report is not standing permission for substitutes. The later resolved-artifact inspection records Expressive classes; neither class names nor historical token-only matches prove a callable signature compiles. Compile the required native components/opt-ins and verify the theme on the actual dependency graph; propose any dependency/contract adjustment before substituting behavior. Existing build evidence above remains historical evidence only.
+
 The inspected 1.4.0 Android AAR contains `ExperimentalMaterial3ExpressiveApi`, `MotionScheme`, expressive motion tokens, and button/icon-button classes. The inventory is recorded, with its exact AAR hash, in `evidence/material3-upgrade/material3-1.4.0-api-inventory.json`.
 
-The `ButtonGroup` and `LoadingIndicator` matches in that inventory are **token classes**, not proof that the corresponding public composables are available. Do not implement nonexistent APIs based on their names. The study uses HTML composition equivalents; its Material 3 Expressive visual direction is not a claim that the Android application already uses every Expressive component. Native implementation must check the actual API and use named Material3 fallbacks or obtain approval for the necessary newer toolchain.
+That earlier inventory's `ButtonGroup`/`LoadingIndicator` token-class matches did not prove public composable availability; they are not proof of absence either. The HTML study used composition equivalents and never established native component usage. Actual compile/API validation is decisive. No automatic fallback or unapproved toolchain expansion is authorized.
 
 ## Existing toolchain warnings
 

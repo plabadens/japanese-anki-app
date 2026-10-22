@@ -1,6 +1,6 @@
 # Core-workflow redesign interview
 
-Status: interview rationale, not a second specification. The rewritten `SPEC.md` is authoritative. Do not implement historical proposals below as additional requirements.
+Status: historical interview rationale, not a second specification. The approved [sentence-mining screen/copy contract](sentence-mining-flow.md), progress A and aligned SPEC.md R01–R39 are current. Do not implement historical proposals below as additional requirements.
 
 Baseline checkpoint: `cd1c27a` (main checkout only; worktrees excluded).
 

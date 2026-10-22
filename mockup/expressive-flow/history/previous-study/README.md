@@ -1,5 +1,7 @@
 # Input → Target → Review — UI proposal
 
+**Historical exploration only:** use the [approved 22 October screen/copy contract](../../../../docs/sentence-mining-flow.md) and progress A, not this counter/transition/correction workflow. This study is not native conformance evidence.
+
 **Status:** exploratory design mockups for discussion, not a production UI or a specification replacement. The existing Kotlin/Compose app and the user’s modified `SPEC.md` are unchanged.
 
 ## Recommendation

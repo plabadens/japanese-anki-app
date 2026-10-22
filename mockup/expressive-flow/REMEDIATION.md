@@ -1,5 +1,7 @@
 # Review remediation — current UI study
 
+**Historical / superseded:** the [approved 22 October screen-and-copy contract](../../docs/sentence-mining-flow.md) controls the next implementation. Its progress A removes the tracker/preparation page and generated-field repair workflow described below. Those historical user decisions and browser results must not be treated as current instructions or native acceptance.
+
 ## Authority and scope
 
 The user's latest decisions take precedence over the earlier review's visual proposals: **restore the top progress bar; center the camera and support landscape photographs in a portrait-only composition; keep the photo in Review and make it fill its slot; select targets by tapping word pills; draw pitch with straight lines and no axis legend.** These decisions are implemented in the offline HTML study and recorded in `SPEC.md` §4.1, §4.2, §4.5, R04, R20 and R21. They are not a native Compose UI implementation.

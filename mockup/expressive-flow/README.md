@@ -1,5 +1,7 @@
 # Japanese Anki — Input · Target · Review
 
+**Historical discussion prototype, not implementation authority.** The approved [screen-and-copy contract](../../docs/sentence-mining-flow.md) supersedes this flow, its three-segment tracker, preparation page, correction controls and extra headings. Progress A is selected; do not reintroduce old elements from this mockup. Browser evidence below describes this old fixture, not native compliance.
+
 An offline, interactive UI mockup for a native Kotlin/Compose app. Camera, OCR, dictionary lookup, network generation, audio playback and AnkiDroid submission are represented by explicit fixtures; they are not connected services.
 
 ## Flow

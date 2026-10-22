@@ -1,5 +1,7 @@
 # Implementation status — 2026-10-14
 
+**Historical only:** the approved 22 October [screen-and-copy contract](sentence-mining-flow.md) and SPEC.md R01–R39 supersede all workflow claims below. Progress A, automatic supported content and the limited sentence/meaning correction path are required; this snapshot does not authorize old editors or establish current compliance.
+
 **Pre-redesign evidence:** the revised `SPEC.md` changes platform, providers, pitch data, media format, UI, and export eligibility. This report does not establish implementation or acceptance of that redesign; removed fallbacks and byte-identical builds are no longer work to complete.
 
 Non-normative status snapshot for baseline commit `88c52525f9264afaaaab55d8100f47493c97fa76`. Requirements live in [../SPEC.md](../SPEC.md). This document records evidence and historical claims, not feature acceptance.

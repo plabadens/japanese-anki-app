@@ -1,18 +1,16 @@
 # Japanese Anki Card Creator — Specification
 
-> **Current remediation authority:** [Live-testing remediation contract](docs/live-testing-remediation.md)
-> supersedes conflicting workflow, Settings, Review, camera, pitch-diagram and resource-delivery rules below.
-> Target alternatives and any pitch-backend migration remain proposal/approval gates; no second pitch backend is approved.
+> **Approved UI authority:** [Sentence-mining flow and exact-copy contract](docs/sentence-mining-flow.md), approved 22 October 2026 with **progress A**. It is the sole screen/copy/choreography authority; this specification retains the aligned technical, completeness, privacy and submission requirements. Historical remediation notes and mockups do not override it. No second pitch backend is approved.
 
-**Target:** v0.3. This document defines the required product behavior, technical constraints, and acceptance criteria.
+**Target:** next development revision after v0.4. This document defines required behavior and acceptance, not a claim that the current APK meets them. Changes land on dev; promotion to main and publication require a separate merge train and authorization.
 
 **Product:** A personal, sideloaded Android app built with Kotlin and Jetpack Compose.
 
 ## 1. Purpose and quality contract
 
-Mine one interesting Japanese sentence and one new vocabulary item, anchored by the situation and preferably a photograph. The normal journey is:
+**Mission: get everything right the first time, without presenting unnecessary choices.** Mine one interesting Japanese sentence and one new vocabulary item, anchored by the situation and preferably a photograph. The normal journey is:
 
-> Capture or type → choose the sentence → choose the target and meaning → generate → inspect → send to AnkiDroid.
+> Capture or type → choose the word (and meaning only if genuinely ambiguous) → inspect the card → send to AnkiDroid.
 
 The user selects the vocabulary and intended meaning, glances at the completed note, may play the word pronunciation, optionally adds notes/tags, then sends. Listening to every sentence recording is not a prerequisite. Evaluate the chosen sentence voice before relying on this workflow.
 
@@ -23,16 +21,16 @@ The app creates Anki **notes**; AnkiDroid owns the note type, templates, cards, 
 | Content | Completion requirement |
 |---|---|
 | Sentence and target | Nonempty Japanese sentence; one valid selected occurrence |
-| Vocabulary and definition | Resolved dictionary entry/reading and user-selected meaning |
+| Vocabulary and definition | Resolved dictionary entry/reading and intended meaning; ask only when interpretation is genuinely ambiguous |
 | Sentence and vocabulary furigana | Complete readings for kanji spans; kana-only text needs no ruby |
 | Pitch | A source-backed pattern for the selected vocabulary reading, retaining source phonetic annotations including nasalization |
 | Word audio | A matching recorded pronunciation, not synthesized substitution |
 | Sentence audio | Completed high-quality Japanese TTS for the current sentence |
-| Translation | Completed English sentence translation, with targeted corrections allowed |
+| Translation | Completed English sentence translation; no free-form correction editor |
 | Image | Retained for Photo input; preferred but optional for Type/text-share input |
 | Notes and tags | Optional |
 
-Missing required data, failed generation, unresolved corrections, and unfinished selected media **block export**. Never send a degraded note for later repair. A missing dictionary, pitch, or recorded-pronunciation entry is an accepted reason that a sentence/word cannot be mined with this app. Log lookup misses locally (§11).
+Missing required data, failed generation, unresolved readings and unfinished selected media **block export**. Never send a degraded note for later repair. A missing dictionary, pitch, or recorded-pronunciation entry is an accepted reason that a sentence/word cannot be mined with this app. Retain the draft and offer sentence/word/meaning correction, not an internal-field repair form. Log lookup misses locally (§11).
 
 Completeness is testable; universal linguistic correctness is not. Do not invent readings, pitch marks, pronunciation-match claims, or confidence scores. Known-bad results must be corrected or rejected. A successful HTTP response alone is not evidence of pronunciation quality.
 
@@ -78,12 +76,12 @@ The runtime-provisioned payload (UniDic) is downloaded once with a build-pinned 
 
 - One sentence, one contiguous target, one image, and one durable draft.
 - Camera, system image picker, typing/paste, plain-text share, one-image share, and selected-text (`PROCESS_TEXT`) entry.
-- Dictionary entry/sense selection, automatic enrichment, targeted corrections, playback, and new-note creation.
-- Destination and default tags in autosaved Settings; defaults seed each fresh note, with per-note Review overrides and existing-tag suggestions.
+- Automatic dictionary/reading/pitch resolution; word selection and genuine meaning disambiguation; sentence editing, automatic enrichment, playback and new-note creation.
+- Destination and default tags in autosaved Settings; defaults seed each fresh note, with separate per-note note/tag editors in Review.
 
 ### Excluded
 
-Batch mining, draft libraries, background clipboard monitoring, generated mnemonic stories/images, vocabulary-knowledge tracking, review/sync/editing existing notes, deck/template installation, arbitrary field mapping, microphone/audio import/editing, image crop tools, freehand pitch editing, provider fallbacks, background generation queues, and automatic retry after restart.
+Batch mining, draft libraries, background clipboard monitoring, generated mnemonic stories/images, vocabulary-knowledge tracking, review/sync/editing existing notes, deck/template installation, arbitrary field mapping, microphone/audio import/editing, image crop tools, generated-field correction workbenches (translation, definition, reading/furigana or pitch editors), pitch-alternative pickers, provider fallbacks, background generation queues, and automatic retry after restart. Durable background dictionary provisioning is explicitly included, not a generation queue.
 
 Review is a native Compose presentation of the note content. The app does not render the Anki template or attempt pixel-identical card previews.
 
@@ -93,55 +91,54 @@ Review is a native Compose presentation of the note content. The app does not re
 
 Use actual Compose Material 3 Expressive components, typography, color roles, shapes, state layers, and restrained transitions. Use a coherent light/dark theme; normal Material accent/error colors and appropriate motion are welcome. Pitch colors must remain distinguishable and must not be changed accidentally by theme tinting.
 
-Use conventional top app bars, icon Back navigation, settings lists, bottom sheets, chips, progress, and brief success feedback where appropriate. Settings is reachable at the top right of Capture, Target and Review. Use native component behavior and Material color roles consistently. One visible blocker owns its explanation/recovery; do not duplicate status/instructions across body/footer or classify ungenerated content as an error. Sheets are left-aligned; definition previews use one ellipsized line without truncating stored/exported meanings.
+Use the approved contract's exact surface inventory, ordered contents and copy IDs; do not add headings, strings or controls independently. Every screen has one top task heading and no in-content section headings; fields keep concise labels. Settings is reachable at the top right of Capture, Target and Review. Sheets are left-aligned; definition previews use one ellipsized line without truncating stored/exported meanings. One actionable blocker owns its explanation/recovery, without duplicated footer/body status or treating pending work as failure.
+
+Progress A is mandatory: no daily-flow step tracker/counter; one grouped busy indicator in Review's stable bottom action area, then the ready Send action. Pending speakers have accessible state, not individual spinners. Independently initiated retries may own one scoped indicator, never a second signal for the same work. Downloads/onboarding own one truthful UniDic transfer indicator, not Camera. Use short Expressive LoadingIndicator versus longer indeterminate progress according to expected duration, never invented percentages or a loading-to-determinate morph.
+
+Use the theme's expressive motion scheme with spatial versus effects springs and native component behavior. Word selection and confirmed delivery are the expressive focal points; no gamification or new completion screen. Use sparse platform action haptics on committed selections, accepted shutter and verified delivery, respecting system preferences and avoiding lifecycle duplicates. Camera/Type uses a single-choice connected button group with stable external bounds. At least 8 dp chip spacing complements 48 dp effective targets. Reduced/disabled motion retains static busy semantics and immediate operability. See the design contract's component/motion tables and official sources; a lookalike custom animation is not compliance.
 
 Support English UI, system light/dark mode, a portrait-only app composition with landscape photograph capture/import, 200% font scaling, TalkBack labels/states, at least 48 dp non-overlapping touch targets, 4.5:1 normal-text contrast and 3:1 actionable-icon contrast. Respect system-bar/keyboard insets; long content scrolls. Support reduced/disabled animation settings and do not use color alone to communicate state.
 
-Use a small interactive **Compose prototype built from production components** to validate the design, then reuse those components. Validate the complete journey, including interaction and accessibility.
+Validate production Compose components and the connected journey against the approved text contract. Existing HTML mockups are historical references, not authority to restore extra UI. One UI owner integrates shared screens; components and tests trace visible/accessibility copy to the shared catalogue.
 
 ### 4.2 Capture
 
-Offer **Camera** (initial default) and **Type** in a bottom mode toggle, remembering the last used mode. Use CameraX with standard uncropped 4:3 capture and orientation-aware capture. The app interface remains portrait-only; landscape captures and picked/shared landscape images are stored orientation-corrected and displayed correctly in the portrait composition. Use a full-width uncropped viewfinder (upright portrait aspect 3:4) without synthetic masks/card padding/rounded clipping; ordinary chrome/extra space below is allowed. Preview position and dimensions must not move during capture, progress or errors. Reserve stable control/status slots and match saved bounds without stretching. Lock competing capture actions while a still is pending.
+Offer **Camera** (initial default) and **Type** in a bottom connected single-choice button group, remembering the last used mode. Use CameraX with standard uncropped 4:3 capture and orientation-aware capture. The app interface remains portrait-only; landscape captures and picked/shared landscape images are stored orientation-corrected and displayed correctly in the portrait composition. Use a full-width uncropped viewfinder (upright portrait aspect 3:4) without synthetic masks/card padding/rounded clipping; ordinary chrome/extra space below is allowed. Preview position and dimensions must not move during capture, progress or errors. Reserve stable control/status slots and match saved bounds without stretching. Lock competing capture actions while a still is pending.
+
+The sole title is Capture. Camera mode has Gallery left, shutter centred, an equal-width empty right slot and the Camera/Type group beneath; no Type caption beside the shutter. Type has one sentence field, optional photo/Remove photo and Attach photo, then Choose word. Resume draft replaces the Downloads app-bar action when a retained draft exists; Downloads remains reachable through Settings. Do not add a third trailing action, dashboard, subtitle or dictionary progress panel.
 
 The usual sequence—rotate to landscape, capture, rotate back to portrait, continue—must preserve the photo and draft without switching the interface to a landscape composition. Store orientation-corrected media. Request camera permission through the normal Android flow; denial preserves work and leaves Type/image-picker entry usable.
 
-Photo input uses the capture/picked/shared image as its contextual image. It can be replaced without rerunning OCR or altering the sentence, but the photo-origin draft still requires an image. Type input may attach, replace, or remove an image independently. Taking a contextual photo from Type must not replace typed text with OCR. Input origin belongs to the draft, not the currently displayed mode switch; toggling modes cannot bypass the image rule.
+Photo input uses the capture/picked/shared image as its contextual image. A new shutter/gallery input replaces a retained Photo draft only after replacement confirmation; it follows the normal OCR path. Do not add a photo-repair surface. Type input may attach or remove an image independently; attachments never run OCR or replace typed text. Input origin belongs to the draft, not the displayed mode switch; toggling modes cannot bypass the required-image rule. Back and Resume draft preserve the existing sentence/selection/results without recapture or network work.
 
 ### 4.3 Sentence, target, and meaning — local phase
 
 1. Run OCR on a locally decoded source image **before** export downscaling/lossy encoding. Keep enough source detail to recognize small text; do not use the compressed 1080 px note image as the OCR input.
-2. Show recognized text below a small photo reference. A single clear region populates the editable sentence directly. For several plausible regions, show readable selectable excerpts; the user chooses one, then trims/corrects it. No bounding-box drag editor, zoom-coordinate selection, or second selection mode. Choosing text never crops the image.
-3. Tokenize locally without blocking input. Present the exact original sentence prominently, preserving occurrence-aware spans and separate raw morphology/grouped units. The approved production design is Target A: compact Material word pills below the hero sentence. Tapping a pill selects that whole word and updates lookup automatically. Target B's sentence-native handles remain a discussion prototype, not a second production selection mode. Do not preselect an initial target without a tap or force-open a chooser on every tap. Remove visible Extend/Trim controls; preserve accessible selection equivalents. Correct the sentence through a compact action in this preparation surface, not a separate full row. Do not ship prototype debug offsets or explanatory fixture text.
-4. Show dictionary spelling, reading, and English senses. Resolve entry ambiguity and let the user select the intended meaning. A sole entry can resolve silently, but its meaning is visible before the user continues. Select one sense by default; allow several and targeted definition edits. Do not blend unrelated readings or meanings.
+2. A single viable OCR passage proceeds directly to Target. Several plausible passages open one excerpt-choice sheet. Dismissal retains the photograph and a visible Choose sentence reopen action; it never silently commits a passage. Choosing text never crops the image. No bounding-box/zoom-coordinate editor.
+3. Tokenize locally without blocking input. Target's title is Choose word. Its one sentence display consists of compact selectable word units in natural reading order, including visible nonselectable punctuation. No duplicate hero sentence. Preserve raw morphology/grouped units, Unicode and occurrence spans. A tap selects the whole word and immediately updates local lookup; no initial target, Extend/Trim controls or chooser on every tap. Edit sentence is left-aligned directly below the sentence and opens the sole sentence editor. An optional photo thumbnail opens an uncropped viewer.
+4. Resolve supported dictionary spelling/reading/meaning automatically. Show the resolved headword, reading, intended meaning and source-backed pitch. Ask only about genuinely competing viable interpretations, through one combined meaning-choice sheet, not consecutive entry/sense forms. Change meaning appears only when an alternative exists. Complete definitions remain accessible without altering exported text. No free-form definition or multi-sense editing workbench.
 5. Validate local reading/pitch availability and any locally searchable recording index before paid requests. A local miss keeps the selection and explains the problem; no adjacent-word guess or free-text replacement lemma.
-6. **Continue** confirms the preparation and starts generation. Do not trigger network calls merely because text was typed or a token tapped.
+6. **Review card** authorizes missing network preparation for the current selection and immediately opens Review. Enable it only after required local resolution and audio setup. Do not trigger network generation merely because text was typed or a token tapped.
 
 A target identifies a span/occurrence, not a global text replacement. Preserve Unicode boundaries and highlight only the chosen occurrence. An inflection such as `食べた` remains in the sentence while vocabulary resolves to `食べる`. The vocabulary reading, pitch, and recording must agree on the chosen entry/reading.
 
-### 4.4 Generate — network phase
+### 4.4 Review entry — network work, not another screen
 
 Freeze the preparation inputs for a generation revision. Start the required recording fetch, sentence TTS, and translation; independent operations may run concurrently. Finish image encoding without blocking the local choice flow.
 
-Fresh explicit Continue authorizes work for the frozen revision upon entering Review: automatically obtain recorded word audio, synthesize sentence audio, and translate without extra Generate taps. Show small inline per-item spinners in the composed Review, not a blocking loading screen or editable field inventory. Large speaker-icon controls provide playback/stop; do not auto-play. Recomposition, revisiting or process restoration must not duplicate paid work or automatically restart failed/interrupted operations. Send is unavailable until required content/media are ready. Preserve source and successful results; manual Retry repeats only appropriate failed/invalidated work on the same path. Permanent/input/setup errors require correction. Cancel stops or ignores obsolete work; no result may attach to a newer revision.
+Fresh explicit Review card authorizes work for the frozen revision upon entering Review: automatically obtain recorded word audio, synthesize sentence audio and translate without Generate taps or a generation page. Progress A puts one indicator and the preparing state in the fixed bottom action area while completed content remains readable. No per-item spinners, animated skeletons or processing checklist. Large speaker-icon controls provide playback/stop and accessible pending state; no auto-play. Recomposition, revisits and process restoration never duplicate paid work or automatically restart failed/interrupted operations. Send remains unavailable until all required content/media are ready. Manual Retry repeats only the safe failed item and preserves successful siblings. Permanent/input/setup errors require the contracted sentence/meaning/Settings route. Cancel or ignore obsolete work; no result may attach to a newer revision.
 
 A required dataset miss is not fixed by repeatedly calling a service. Show that distinction and offer reselection/correction/discard. A network error is not logged as evidence that a dataset lacks the word.
 
-### 4.5 Review and corrections
+### 4.5 Review and deliberately limited editing
 
 Present a composed learning artifact: contextual image when present, prominent Japanese sentence with target/ruby, its translation immediately beneath the sentence, then a vocabulary/definition block with pitch and word playback. Sentence playback remains available but secondary. There are no permanent text boxes, mandatory row per stored field, empty image placeholder for Type, or always-present empty Notes row.
 
-**Send to AnkiDroid** is the primary action. Only **Notes and Tags** are editable in Review, using scoped secondary editors. Display chosen tags and notes without duplicate read-only copies while editing. Large speaker buttons play word/sentence audio; small inline spinners represent pending audio. A top-right Settings gear preserves the draft. Destination selection belongs only in Settings, not a recurring Review control. Return to retained preparation for content corrections.
+**Send to AnkiDroid** is the ready primary action. Only optional Notes and Tags are editable in Review, through separate content-linked editors: quiet Add note/Add tags when absent; tapping existing note/tag content when present. No combined metadata control or permanent empty fields. The sole heading is Review; translation sits directly beneath the sentence without a field heading. Settings preserves the draft; destination selection stays in Settings.
 
-Targeted editing in retained preparation, not Review, supports:
+There is no preparation-corrections panel, catch-all repair menu or free-form translation/definition/furigana/reading/pitch editor. Back returns to the same Target selection; Edit sentence and word/meaning selection are the human correction path. New source input follows Capture replacement confirmation. If supported content cannot be derived, retain the draft and show the one actionable blocker; never invent values or ask the user to repair internal fields.
 
-- Sentence/target/entry/senses through the same preparation flow, not another set of nested reselection sheets.
-- A reading correction for a selected kanji span; no raw bracket/HTML editor. Vocabulary reading changes must re-resolve dictionary/recording/pitch identity, not manufacture a nonexistent pronunciation.
-- Definition and translation text corrections.
-- Selecting another source-listed pitch pattern for the same reading, never drawing an accent by hand.
-- Replacing the image; removing it only where optional.
-- Explicit retry of rejected sentence audio from the same model/voice. No silent switch to a different voice or provider; persistent bad pronunciation requires correction or abandoning the note.
-
-Text editors expose **Done** and autosave. Back dismisses keyboard/editor first and preserves work. Source edits invalidate dependent results; rules are in §10. Do not require the user to listen to sentence audio before every export.
+Scoped editors commit with Done. Keyboard Back dismisses the keyboard first; dismissing the editor preserves its previously committed value, not partial keystrokes. Settings alone autosaves. Source edits invalidate only dependencies (§10). Explicit safe retry keeps the same model/voice/provider. Listening before every export is not required.
 
 ### 4.6 Send and next note
 
@@ -151,19 +148,27 @@ Blocked or uncertain submission retains the same content with actionable recover
 
 ### 4.7 Setup and incoming content
 
-Settings contains existing note type/deck selection, **Default tags**, one **Google Cloud API key** shared by speech/translation, separate service validation/status, a **Sentence voice** selector, cache clearing and Sources/Licenses. Use the app's shared theme/insets and normal Back arrow; there is **no Save button**. Autosave all settings consistently with protected/debounced credential persistence, visible storage failures and tested flush behavior. Defaults seed every fresh note; Review overrides affect that note only. Changing defaults must not overwrite the active draft. Show **Google Cloud Translation Basic — default neural (NMT)** read-only.
+Settings is its own native screen, not onboarding. Its one title is Settings. Use the exact contract order: AnkiDroid connection, Note type/Deck, protected Google Cloud API key, Sentence voice/Reload voices, Default tags, Dictionary/Downloads, Clear cache, Sources and licenses. No in-content headings, titled cards, provider/model description row or paid-test controls. Use shared theme/insets and icon Back, with **no Save button**. Autosave protected/debounced settings; Back flushes, and failure retains values and stays open with recovery. Defaults seed only fresh notes; changing preferences never retargets a locked submission.
+
+Only while setup is incomplete, put the existing Finish setup action before that list and in Downloads; it reopens the first incomplete wizard step. No additional Capture banner/action. Native Note type/Deck/Sentence voice pickers reuse their field labels as the single title; selection commits and dismissal retains the old value. Sources and licenses is the existing Back-navigable notice surface, reachable before download/credential completion via Use app and Settings. A project-service/billing remedy is performed outside the app; Settings can replace the key, not enable a remote API. Do not add a cloud-console action or status dashboard.
 
 On Settings open, load voices with an available key using Google Cloud `GET /v1/voices?languageCode=ja-JP`; provide a Reload action and filter to Japanese-capable Chirp 3 HD voices. Never synthesize paid previews merely on open. Populate a native selector from returned IDs, not a hardcoded catalogue. Show friendly names/metadata; retain the exact explicitly selected ID. Fence listing/cache/service status to credential and request revision. Expose loading/empty/auth/retry, honestly labelled cached offline display, and no selection when first fetch fails without cache. Onboarding uses the same settings/credential/listing contracts.
 
 Keep the saved selection through a refresh failure. If a successful refresh no longer lists that voice, require reselection before new synthesis; never silently pick another. Changing the saved voice invalidates only sentence audio (§10), not translation, readings, word recordings, or image. Voice listing is a separate metadata operation and must not automatically synthesize paid previews.
 
-AnkiDroid detection/API permission and required-field validation must succeed before export. A missing Google Cloud API key need not block local preparation, but blocks speech and translation requests. Setup uses one Google Cloud project with billing and both the Cloud Text-to-Speech API and Cloud Translation API enabled; restrict the shared key to those APIs. Validate the services separately and show which service has an authentication, API-enablement, billing, or quota problem when the response identifies it. Voice listing validates speech access only, not synthesis quality or translation access. A translation check is an explicit, potentially billable action using a disclosed sample sentence; entering a key alone must not trigger paid requests. Keep setup/errors discoverable before the user invests in a note.
+AnkiDroid detection/API permission and required-field validation must succeed before export. A missing Google Cloud API key does not block capturing or locally analyzing a draft, but audio setup is required before Review card. Setup uses one Google Cloud project with billing and both Cloud Text-to-Speech and Cloud Translation enabled; restrict the key to those APIs. Keep failures typed per service and show the applicable catalogue recovery, not duplicate status rows. Voice listing validates speech access only, not synthesis quality or translation access. No paid test/sample controls are part of the approved UI; key entry/opening Settings never triggers speech or translation requests.
 
 Text shares enter Type preparation; a single shared image follows Photo preparation. Neither guesses a target or sends automatically. Confirm before replacing a nonempty draft; declining preserves it. No broad clipboard or library permission, URL scraping, or multi-item share workflow.
 
 ### 4.8 First-run onboarding and resource provisioning
 
-Provide an onboarding wizard covering permissions, the protected shared Google API key/voice setup, and the one first-run data download: UniDic. Key and voice setup are required before completing onboarding; no skip-key completion path. Show UniDic transfer, hash/archive verification and extraction progress with actionable failures; do not freeze the interface. Default downloads to Wi-Fi; allow mobile data only after showing download size and obtaining explicit confirmation. Respect permission denial, explain required capabilities and preserve pending incoming content.
+Onboarding is a real ordered wizard: **Dictionary → Camera → Audio → AnkiDroid → Ready**, not Settings over Camera. Each step has its own sole top heading; no welcome page, step strip or counter. Start UniDic early; Next advances once the task starts or a valid install is found, while provisioning continues. Camera denial leaves typing/gallery available; already granted permission passes through. Audio requires a saved protected key and explicitly chosen eligible voice. Resolve a sole compatible note type automatically; ask for a deck, never invent it. Unavailable AnkiDroid may be configured later, with export blocked until verified.
+
+Finish requires validated dictionary installation plus saved key/valid voice; camera permission and AnkiDroid setup may be deferred. Use app while setup runs exits without falsely marking setup complete: capture/type/shared input is durable, analysis waits for UniDic and Review waits for audio setup. Ready shows four compact readiness rows, not extra headings or a second work checklist in the mining flow.
+
+The final wizard step uses Finish setup as its sole title while incomplete, Ready only after required conditions hold; native status icons/semantics avoid repeating Ready in the body. Use app remains available on unfinished steps. Blank-key validation follows an attempted progression, not untouched initial entry. Scoped note editors likewise do not duplicate their title as another visible field heading. Viewer/picker titles and all nonvisual pitch/state descriptions come from the same catalogue; do not invent accessibility prose outside it.
+
+The dictionary is a durable background task using supported Android facilities, independent of Camera/Settings/Activity lifetimes. Onboarding, Downloads and its notification refer to the same task. Preserve actual phase across backgrounding/process recreation and provide applicable pause/resume/cancel/retry without losing the draft. Resume must disclose a byte-zero restart before another large mobile transfer. One flat linear transfer indicator shows real bytes, then the same slot shows verification/installation without a fake overall percentage. Never put its progress panel in Capture. Default to Wi-Fi; mobile transfer needs size disclosure/consent, including after connectivity changes. Preserve pending incoming content and reuse valid installed data.
 
 The only first-run dataset download is the UniDic CWJ 3.1.1 runtime ZIP (`446,602,958` bytes; SHA-256 `4963afe095a031b9a15e97325795cf28c772ff108138172e69c786cbc4c9b3fe`), delivered from the versioned v0.4 GitHub release asset. Pin the URL, exact byte count, hash and five expected archive entries in the build. Verify transfer length and SHA-256, validate ZIP paths/CRC/entry sizes, then extract to a temporary directory and require the exact `FILE_SIZES` set and `TOTAL_BYTES` before activating. Failed downloads or extraction must not activate partial data; a valid existing installation is reused. The archive is data, not executable code. Never ship placeholder URLs/hashes or call a local fixture a deployed download.
 
@@ -183,13 +188,13 @@ Use packaged MeCab native code with verified provisioned UniDic for tokenization
 
 Generate sentence and vocabulary readings locally. Follow AJT-style okurigana preservation and whole-word handling for irregular readings; preserve punctuation and the selected occurrence. Render native inline ruby in Compose; export Anki bracket-furigana compatible with the existing note type's `furigana:` filters.
 
-Kana-only text is already complete. Every kanji-containing span needs a supported automatic or user-corrected reading. Unknown or pending spans are visibly unresolved and block Send until corrected; do not silently export them as if annotation succeeded. Allow targeted reading correction without changing the original sentence. Never invent per-character alignment where only a whole-word reading is supported.
+Kana-only text is already complete. Every kanji-containing span needs a supported automatically resolved reading. Unknown/pending spans block Send; retain the draft and expose the contracted Edit sentence or meaning/word-selection route, not a manual reading editor. Do not silently export unresolved annotations or invent per-character alignment where only a whole-word reading is supported.
 
 ### 5.3 Pitch, nasalization, and HTML output
 
 `VocabPitch` uses AJT **`html_and_number` with `HTMLPitchPatternStyle.none`**, which emits class-based spans: (`high`, `low`, `high_drop`, `low_rise`), nested `nasal`/`handakuten`/`devoiced` spans where supplied, and a trailing `pitch_number` span. Preserve nested structure and source phonetic distinctions. Golden fixtures include 悪逆 / アクギャク / accent 0, whose source marks the nasal キ and degree symbol inside a high span; the mark is not an extra mora.
 
-Select one matching pattern for the chosen spelling/reading. The first source-listed pattern is the deterministic default, not a frequency or correctness ranking. Other matching patterns are available in preparation. Missing pitch blocks export. Zero is valid heiban, never a missing sentinel.
+Resolve one source-backed pattern consistently with the chosen spelling/reading and recording. The first valid source-listed match is deterministic, not a frequency/correctness ranking. Retain source alternatives internally; do not expose a pitch-alternative picker. An unresolvable pattern/recording conflict blocks instead of guessing. Missing pitch blocks export. Zero is valid heiban, never a missing sentinel.
 
 Preserve complete mora sequences, contracted kana, small `っ`, `ん`, long vowels, source accent positions (including final-mora accents) and accent positions of ten or more in data/export/accessibility. Native diagram labels use katakana; solid and hollow markers have equal outer diameters and connector segments are clipped outside hollow interiors. End the drawn contour at the final mora circle: no extra tail or additional final-drop indicator. Do not discard source accent metadata to achieve this presentation. Permit scrolling for long readings; color alone cannot identify a pattern or selection.
 
@@ -209,17 +214,17 @@ Verify actual matching information, bounded downloads, response type, and playab
 
 Use **Google Cloud Text-to-Speech Chirp 3 HD directly**, with the Japanese voice explicitly selected in Settings (§4.7). Use synchronous file synthesis via `POST /v1/text:synthesize`, `languageCode = ja-JP`, the exact selected voice name, MP3 output, and a fixed delivery configuration. Validate decoding before marking complete. No voice cloning, recording, model catalogue, or fallback chain. Store the Google credential at runtime (§11).
 
-**Phonetic hints are required, not an optional best-effort feature.** Build the synthesis request from the current sentence and its structured, resolved readings, including manual corrections. Send Google Japanese yomigana pronunciation overrides for resolved kanji-containing spans using `input.customPronunciations.pronunciations` and `PHONETIC_ENCODING_JAPANESE_YOMIGANA`. Kana-only text needs no fabricated hint. Do not send Anki bracket notation, ruby HTML, parenthesized reading prose, or conversational instructions as spoken text. Keep exported sentence text unchanged; avoid replacing the entire sentence with kana.
+**Phonetic hints are required, not an optional best-effort feature.** Build the synthesis request from the current sentence and its structured, automatically resolved readings. Send Google Japanese yomigana pronunciation overrides for resolved kanji-containing spans using `input.customPronunciations.pronunciations` and `PHONETIC_ENCODING_JAPANESE_YOMIGANA`. Kana-only text needs no fabricated hint. Do not send Anki bracket notation, ruby HTML, parenthesized reading prose, or conversational instructions as spoken text. Keep exported sentence text unchanged; avoid replacing the entire sentence with kana.
 
 The hint builder must preserve inflection/okurigana and apply the sentence occurrence's reading, not blindly substitute the vocabulary lemma's reading. Do not apply one reading globally when the same spelling has different readings within the sentence. Use a tested occurrence-safe request representation, or report that the conflicting hints cannot be represented and block generation; never silently omit them. Reject invalid/unresolved readings before a paid request. Do not invent IPA, nasalization, or sentence-level pitch accents; yomigana hints specify readings, not a guarantee of dictionary accent in connected speech.
 
-An unsupported or rejected hint request is a generation failure; do not retry without hints. Tests must inspect the serialized outbound request and audition ambiguous-reading fixtures with the selected voice; a successful response alone does not establish that Google honored the hints. Japanese hint support for the exact voice/API combination requires runtime verification (§15). Reading corrections invalidate hinted sentence audio (§10).
+An unsupported or rejected hint request is a generation failure; do not retry without hints. Tests must inspect the serialized outbound request and audition ambiguous-reading fixtures with the selected voice; a successful response alone does not establish that Google honored the hints. Japanese hint support for the exact voice/API combination requires runtime verification (§15). Changes to the sentence or resolved reading identity invalidate hinted sentence audio (§10).
 
 Target sentence-TTS spend is **at most USD 5/month at roughly two cards/day**. Review non-promotional rates, billing units, top-up fees, and a retry allowance. Quality acceptance prioritizes correct readings, counters, particles, omissions/additions, and natural Japanese prosody over expressive acting. Do not claim perfect pitch-controlled sentence speech.
 
 ### 6.3 Lifecycle and reuse
 
-Generation begins automatically on Review entry authorized by fresh explicit Continue after the local meaning choice is confirmed. Never repeat billable work automatically on revisit, recomposition or process restoration. Preserve completed matching results; explicit Retry resumes only appropriate transient/invalidated work, not unchanged permanent rejections. Cancel or ignore superseded responses. Audio for outdated inputs is unavailable for playback/export. Do not auto-play audio.
+Generation begins automatically on Review entry authorized by fresh explicit Review card after local interpretation is resolved. Never repeat billable work automatically on revisit, recomposition or process restoration. Preserve completed matching results; explicit Retry resumes only appropriate transient/invalidated work, not unchanged permanent rejections. Cancel or ignore superseded responses. Audio for outdated inputs is unavailable for playback/export. Do not auto-play audio.
 
 Keep one bounded reusable audio cache with a 250 MB limit. Cache keys include source/model, text or recording identity, exact voice ID/configuration, the canonical phonetic-hint payload and hint-builder version for sentence speech, and revision where relevant. Active-draft media is durable and protected from eviction. Cache clearing must not remove the draft or AnkiDroid's copies. No cache-management dashboard is needed.
 
@@ -251,13 +256,13 @@ Use **Google Cloud Translation Basic v2 with its default neural machine translat
 
 Send only the original sentence text for translation; dictionary senses, reading hints, photographs, and private Notes remain outside the translation payload. Keep the selected dictionary meaning in the vocabulary definition. Translation consumes plain text, with no prompt or user-selectable model. Treat response text as untrusted plain text and safely serialize it for Anki export.
 
-Evaluate NMT against representative short mining sentences before release (§15), including ambiguous vocabulary, omitted subjects, colloquial language, and names. The app does not claim that translation is constrained to the user-selected dictionary sense. Require one nonempty English translation for the submitted sentence; malformed, empty, or failed output blocks export. The translation is editable in retained preparation, not Review. Preserve manual corrections according to §10. Keep request serialization, bounded response handling, sanitized errors, and injected transport tests separate from Compose; retry retains the same NMT path.
+Evaluate NMT against representative short mining sentences before release (§15), including ambiguous vocabulary, omitted subjects, colloquial language and names. The app does not claim that translation is constrained to the selected dictionary sense. Require one nonempty English translation for the sentence; malformed, empty, failed or known-bad output blocks export. There is no free-form translation editor. Retain supported sentence/meaning correction routes and unchanged valid results (§10). Keep request serialization, bounded response handling, sanitized errors and injected transport tests separate from Compose; retry retains the same NMT path.
 
 ### 7.3 Notes and tags
 
 Notes are optional plain text with line breaks preserved and HTML escaped. No generated mnemonic, rich-text toolbar, or separate source-entry feature; an existing template may interpret a user-written `Source:` prefix.
 
-Tags are optional Anki metadata, not fields. **Default tags** in Settings seed every fresh note; absent defaults means empty tags. Review changes affect only the current note, never the defaults or the next note's seed. Preserve active-draft tags when changing defaults. Offer existing AnkiDroid suggestions and hierarchical tags such as `JLPT::N4`; no tag-management screen. Suggestion failure must not block manual tags or export.
+Tags are optional Anki metadata, not fields. **Default tags** in Settings seed every fresh note; absent defaults means empty tags. Review changes affect only the current note, never the defaults or next note's seed. Preserve active-draft tags when changing defaults. The scoped Tags editor has removable input chips and one entry field, supports hierarchical tags such as `JLPT::N4`, and commits with Done. No tag-management screen or additional suggestion/status UI is required. Existing source suggestions, if shown inside that editor, are dynamic content, not a new surface; their failure never blocks manual tags or export.
 
 ## 8. Anki output contract
 
@@ -267,11 +272,11 @@ Select an existing note type by name and remember its ID; map by exact field nam
 |---|---|
 | `SentKanji` | Original sentence; only the selected occurrence wrapped in controlled `<b>` markup |
 | `SentFurigana` | Complete Anki bracket-furigana with the same highlighted occurrence |
-| `SentEng` | Current completed/corrected English translation |
+| `SentEng` | Current completed English translation |
 | `SentAudio` | Imported sentence audio reference |
 | `VocabKanji` | Resolved dictionary lemma |
 | `VocabFurigana` | Resolved vocabulary with Anki bracket-furigana |
-| `VocabDef` | Selected English senses or targeted correction, safely serialized |
+| `VocabDef` | Source meaning of the resolved selected interpretation, safely serialized |
 | `VocabPartOfSpeech` (when the note type has it) | Available JMdict POS from selected senses, respecting inherited data, stably deduplicated and safely serialized; empty when unavailable, never guessed from MeCab |
 | `VocabPitch` | One AJT-compatible HTML pattern with source-backed phonetic marks (§5) |
 | `VocabAudio` | Imported recorded-word audio reference |
@@ -301,7 +306,7 @@ Block when the selected model has a note in the destination deck with both the s
 
 Decode controlled markup, trim outer whitespace, and preserve internal text. The first-field duplicate helper alone is insufficient. Failed duplicate checks block insertion. Serialize sends and check immediately before insertion; external writers remain outside this app's transaction boundary.
 
-Offer Open in AnkiDroid using the source-supported `anki://x-callback-url/browser` route with encoded `search=nid:<noteId>`, targeted to AnkiDroid, after runtime verification. If unavailable, show the note/deck locator and retain the draft.
+The contracted Open AnkiDroid action may use the source-supported `anki://x-callback-url/browser` route with encoded `search=nid:<noteId>`, targeted to AnkiDroid, after runtime verification. If that route is unavailable, open the app normally and retain the frozen draft/read-only recovery. Note/deck identifiers remain diagnostic/reconciliation data; do not invent a separate locator UI.
 
 ### 9.3 Submission and interruption
 
@@ -315,29 +320,31 @@ During uninterrupted insertion, destination assignment may move only cards of th
 
 If insertion may have happened, do not retry blindly. Persist the frozen fields, phase, import receipts, known note ID, and pre-insertion duplicate result. Reconcile read-only using model/fields/card-deck membership. A concurrent matching note is not proof of authorship. Reuse safe media receipts, but never delete collection media as rollback.
 
-If the outcome remains uncertain, retain the submitted content and ask the user to check AnkiDroid. If insertion is known but destination incomplete, report the note ID/intended deck for manual repair and recheck. **No recovery card moves or second insertion.** Manual confirmation of existence prevents another insert but does not prove destination success; reset automatically only on verified completion. Do not promise exactly-once behavior the API cannot establish.
+If the outcome remains uncertain, retain the submitted content and offer Check AnkiDroid, which reconciles read-only. If insertion is known but destination incomplete, use the catalogue's destination failure and Open AnkiDroid route; retain identifiers/receipts for diagnostics and recheck. **No recovery card moves, second insertion or extra manual-confirmation button.** Existence alone never proves destination/authorship; reset automatically only on verified completion. Do not promise exactly-once behavior the API cannot establish.
+
+Read-only checking uses the contracted checking state in the same action area, never the sending state. Verification succeeds only on the required complete match; a proven pre-write failure permits safe Retry, while uncertainty retains the frozen snapshot and Check action. A missing query result alone does not prove no insertion occurred. Duplicate prevention before any write offers Open AnkiDroid and safe Back; it never reports another note as this submission's success.
 
 ## 10. One draft and deliberate rebuilding
 
-Autosave source text/image, target/entry/senses, current results, user corrections, generation status, and submission receipts. Restore after closure, rotation, and process death. Durable media must not depend on temporary picker permission or evictable cache entries. Confirm before discarding nonempty work.
+Autosave committed source text/image, target/interpretation, current results, per-note metadata, generation status and submission receipts. Scoped editor keystrokes are not committed until Done; dismissal retains the previous value. Restore committed work after closure, rotation and process death. Durable media must not depend on temporary picker permission or evictable cache entries. Confirm before replacing nonempty work.
 
-Use a small lifecycle: **Prepare → Generate → Review → Send** with retained failure states. Submission recovery is separate from generation retry. No background job queue or multi-draft repository.
+The visible lifecycle is **Capture → Target → Review → Send**, with generation inside Review, retained failure states and Resume draft. Submission recovery is separate from generation retry. Durable dictionary provisioning is the sole background setup task; no background generation queue or multi-draft repository.
 
 | Edit | Recompute/invalidate |
 |---|---|
 | Sentence | Target validity, sentence readings, translation, sentence audio; re-resolve affected vocabulary |
-| Target/entry/reading | Vocabulary definition/reading/pitch/recording and sentence highlight; recheck affected target ruby; translation remains valid if sentence text is unchanged |
-| Meaning | Definition only; sentence-only translation remains valid |
-| Sentence reading correction | Its ruby and phonetic hints; invalidate sentence audio and require deliberate regeneration |
-| Pitch alternative | Pitch output and recording pitch-consistency check |
-| Image | Processed image only; not sentence/OCR |
+| Target/resolved interpretation | Re-resolve vocabulary definition/reading/pitch/recording and highlight; invalidate affected ruby/hinted audio if reading identity changes; sentence-only translation remains valid |
+| Meaning change with unchanged entry/reading | Definition only; sentence-only translation remains valid |
+| Derived reading/hint-builder revision change | Re-resolve affected ruby/hints and invalidate sentence audio; no manual reading editor |
+| Type image attachment/removal | Processed image only; not sentence/OCR |
+| New Photo capture/gallery input | Confirm replacement, then normal OCR and new sentence/selection; not a photo-repair action |
 | Notes/tags | No generation |
 | Sentence voice change in Settings | Sentence audio only; regenerate deliberately with new voice and existing hints |
 | Translation request-contract version change | Translation only |
 
-Do not start billable work on every keystroke. Source-changing edits return to Prepare; Continue deliberately rebuilds affected results. Reuse unchanged valid results. Cancel/ignore obsolete completions and never play/export mismatched audio.
+Do not start billable work on every keystroke. Committed sentence/word/meaning changes resolve in Target; Review card deliberately rebuilds only missing/invalidated results. Reuse unchanged valid results. Cancel/ignore obsolete completions and never play/export mismatched audio. Returning unchanged to Review does not authorize another attempt.
 
-Before applying a source change that invalidates manual corrections, explain which corrections will be replaced and require confirmation. Cancel preserves the draft; confirmation replaces only affected corrections during rebuilding. Store one active value per field. Direct corrections with unchanged inputs survive retry. Required unresolved values block export.
+There are no manual generated-field overrides or correction-replacement dialogs. Store one current value per result. Optional per-note notes/tags and successful unchanged siblings survive retry. Replacing a draft requires the one shared replacement confirmation; required unresolved values still block export.
 
 ## 11. Privacy and diagnostics
 
@@ -376,25 +383,25 @@ Record the tested revision, fixture, environment, actual result, and evidence fo
 |---|---|---|
 | R01 | Clean checkout in Nix | Tests and APK build succeed using documented tools; API 37 config and both intended ABI artifacts verified |
 | R02 | API-37 x86_64 emulator | Startup, native libraries, provisioned dictionaries/OCR, media encoding, and complete creation flow work; no ARM64 runtime claim inferred |
-| R03 | Fresh install/UniDic provisioning | Only UniDic downloads; progress, SHA-256, exact archive entries and post-extraction `FILE_SIZES`/`TOTAL_BYTES` gate pass; failed/truncated data never activates; bundled OCR and NHK index work offline before UniDic is provisioned; provisioned tokenization works offline |
+| R03 | Fresh install/UniDic provisioning | Dictionary → Camera → Audio → AnkiDroid → Ready wizard; early UniDic task continues during setup/background/recreation; pause/resume/cancel/retry and Wi-Fi/mobile consent preserve draft. Real bytes/phase, SHA-256, exact archive entries and extracted size gates pass; failed data never activates. Bundled OCR/index work offline; tokenization works offline after validation. No provisioning panel in Camera |
 | R04 | Landscape capture → portrait continuation | Correct orientation/full frame; portrait UI preserved; no lost photo, text, selection, or duplicate generation |
 | R05 | One/multiple OCR regions and textbook text | Direct editable text for a single region; readable excerpt selection for several; correction before target selection; photo stays local |
 | R06 | Type and share inputs | Typed/text-shared image is optional; image attachment does not replace text; image sharing follows Photo; replacement confirmation protects draft |
-| R07 | Inflection, repeats, contiguous selection, Unicode | Correct lemma, one highlighted occurrence, intact surface/characters, no adjacent-target guess |
-| R08 | Ambiguous entries and senses | User chooses intended entry/meaning before generation; unrelated readings/senses never mixed |
+| R07 | Inflection, repeats, whole-word grouping, Unicode | One selectable sentence without duplicate hero; whole-word tap, correct lemma, one highlighted occurrence, intact surface/punctuation/characters, no adjacent-target guess or initial target; left-aligned Edit sentence |
+| R08 | Ambiguous interpretations | Supported interpretation resolves silently and stays visible; genuine ambiguity uses one meaning sheet, not entry-then-sense forms; Change meaning only for viable alternatives; dismissal/reopen retains selection and never commits arbitrarily |
 | R09 | Local dataset miss | Missing entry/pitch/recording-index match blocks the note, logs reason/source, preserves work, and avoids unnecessary paid requests |
-| R10 | Furigana correctness/correction | Okurigana, irregular whole-word readings, and kana-only text handled; unknown kanji readings block until resolved; targeted correction persists |
+| R10 | Automatic furigana | Okurigana, irregular whole-word readings and kana-only text handled; unknown kanji readings block with retained sentence/meaning recovery; no manual reading/furigana editor or fabricated alignment |
 | R11 | AJT HTML pitch parity | Golden fixtures cover zero, final drop, long/contracted morae, accent ≥10, nasalization and devoicing; source and final Anki rendering agree |
 | R12 | Recorded pronunciation | Correct spelling/reading/file; no synthesized substitution; missing/corrupt/unverified-match policy exercised; no unsupported pitch-match claim |
-| R13 | Chirp 3 HD speech and phonetic hints | Outbound request includes current yomigana hints and exact chosen voice; audition ambiguity, inflection, repeated spellings with different readings, corrections, counters, and kana-only input; no spoken markup/omissions/additions; rejected hints never trigger unhinted fallback; ≤USD 5/month estimate documented |
-| R14 | Translation | Basic v2 request explicitly sets Japanese → English, plain text, and NMT; shared key is in the authentication header, not the URL; only sentence text is sent; representative live translations assessed; failures block; manual corrections survive retry; meaning-only edits preserve translation |
+| R13 | Chirp 3 HD speech and phonetic hints | Outbound request includes current automatically resolved yomigana hints and exact chosen voice; audition ambiguity, inflection, repeated spellings with different readings, sentence edits, counters and kana-only input; no spoken markup/omissions/additions; rejected hints never trigger unhinted fallback; ≤USD 5/month estimate documented |
+| R14 | Translation | Basic v2 explicitly sets Japanese → English, plain text and NMT; shared key in authentication header, not URL; sentence-only payload; representative live translations assessed; failure blocks; successful unchanged output survives retry/meaning-only edits; no translation editor |
 | R15 | Offline/auth/quota/timeout/interruption | Specific retained failure, no provider/model switch, explicit Retry only, unchanged valid results reused |
 | R16 | Generation race or process death | Durable work restored; no automatic billable restart; obsolete responses cannot attach or change exported notes |
 | R17 | Image processing | Orientation/full frame, max 1080 long edge/no upscale, WebP/metadata removal, measured size/readability, decodable Android and Anki output |
 | R18 | Incomplete required result or attached image | Send unavailable; no partial note or silent media omission; Type-only image removal remains possible |
-| R19 | Source edit after manual correction | Clear destructive-change confirmation; cancel preserves current draft; accept rebuilds only affected results with no stale export |
-| R20 | Review and preparation corrections | Composed learning content, translation beneath sentence, only Notes/Tags editors, large speakers/inline progress, automatic authorized generation once; content corrections in retained preparation |
-| R21 | Material/accessibility/navigation | Native components, themes, motion settings, 200% fonts, TalkBack, 48 dp targets, contrast, insets, Back, portrait layout, and landscape capture/rotation work |
+| R19 | Committed source edit and draft replacement | Editor Done commits; dismissal preserves prior value. Sentence/word/meaning changes invalidate only dependent results; unchanged siblings and notes/tags survive. One replacement confirmation protects a retained draft; no correction-override dialog or stale export |
+| R20 | Review composition and progress A | One top heading; sentence then unlabelled translation then vocabulary/pitch; separate optional note/tag editors; no repair workbench. One stable-footer preparing/sending indicator, no per-field spinners, no stage tracker, no generation screen; large speakers with accessible pending state; meaningful single blocker/recovery |
+| R21 | Material/accessibility/navigation | Native expressive motion scheme and components/connected Camera-Type group; sparse system-respecting haptics without duplicate events; both themes, reduced/disabled motion, 200% fonts, TalkBack, 48 dp targets/8 dp chip spacing, numeric contrast, insets, Back and landscape-source capture. No extra headings or unapproved surfaces; emulator does not prove physical haptic feel |
 | R22 | Model/deck/permission failures | No draft loss or silent destination substitution; reordered/extra/trailing empty fields verified against actual AnkiDroid |
 | R23 | Duplicate rule | Same sentence+lemma+model in destination deck blocked; different sentence/lemma or other deck allowed; query failure blocks |
 | R24 | Successful export | Required fields, phonetic markup, image/audio, tags, and actual destination verified; confirmed success alone resets to fresh capture |
@@ -406,13 +413,17 @@ Record the tested revision, fixture, environment, actual result, and evidence fo
 | R30 | Shared Google Cloud setup | One credential entry supplies both adapters; service checks/status remain separate; disabled API/auth/billing/quota failures are actionable without discarding the key or draft; local preparation works without a key; key entry triggers no paid request |
 | R31 | Complete AJT ingestion | All three pinned CSV parts included/hashed; 受付 exact devoiced-ツ HTML and できる spelling variants resolve; no second backend; missing/rejected/infrastructure outcomes distinguished |
 | R32 | Settings and default tags | No Save button; icon Back; all values autosaved with visible failures; default tags seed each fresh note, per-note overrides never become defaults; voice list loads on open with Reload and fenced credential provenance |
-| R33 | Review-entry audio | Fresh Continue authorizes one missing-operation attempt on Review entry; inline spinners and big speaker controls; no auto-play or paid call duplication on revisit/recompose/process restore |
+| R33 | Review-entry audio | Fresh Review card authorizes one missing-operation attempt for a resolved revision; progress A groups initial work; isolated Retry repeats only safe failed item; no silent speaker or generic disabled-Send dead end, auto-play or paid duplication on revisit/recompose/process restore |
 | R34 | Part-of-speech export | VocabPartOfSpeech receives available selected-sense JMdict POS with inheritance/deduplication/escaping; missing POS stays empty; older note types lacking the optional field still work |
 | R35 | Bundle-by-default release packaging | APK is at most 130,000,000 bytes and excludes only the UniDic runtime ZIP; it includes bundled ML Kit Japanese OCR, NHK index, dictionary and pitch assets. UniDic is the sole first-run dataset download and must pass the build-pinned length/SHA/archive/extraction gates. Offline OCR and NHK headword lookup pass on a fresh install; per-word recording media remains on-demand. No executable-code download. |
+| R36 | Exact-copy/surface compliance | Inventory all visible/accessibility/notification strings against design catalogue IDs and display conditions; reject extra/missing controls or headings, duplicated explanations and orphaned/unapproved copy. Verify every catalogued exception, not only happy-path screenshots |
+| R37 | Durable setup and retained draft | Continue wizard during download; leave via Use app and resume setup without false completion. Recreate/kill/relaunch without duplicate task or paid work; Wi-Fi loss/mobile restart consent, cancel/retry and incoming shares preserve input; Finish enforces dictionary/key/voice; Resume draft restores the last stable work |
+| R38 | Cross-process dummy AnkiDroid | Separate test APK/UID with supported provider/permission contract exercises the production gateway; opens granted URIs, persists decodable WebP/MP3/Ogg bytes and notes, returns real-shaped receipts. Inject permission/media/insert/mismatch/lost-response failures, double Send and recreation; no blind duplicate after durable receipts. No test control channel/dependency in production |
+| R39 | Real AnkiDroid compatibility | Same media/fields/tags/deck assertions on supported real AnkiDroid in disposable isolated collection; verify note/media after URI grants are revoked and render them. A dummy/in-process fake alone never establishes compatibility |
 
 ## 15. Delivery and verification policy
 
-Deliver an installable v0.3 APK, a checksum, installation/setup instructions, screenshots, and an acceptance report with explicit PASS, FAIL, and NOT RUN results. Configure credentials through app Settings after installation; do not embed developer credentials.
+For a separately authorized delivery, provide installable ABI APKs, checksums, setup instructions, screenshots and an acceptance report with explicit PASS, FAIL and NOT RUN results. The present design/specification approval authorizes dev integration and compliance work, not main promotion or a release. Configure credentials through app Settings; do not embed developer credentials.
 
 The Google Cloud API key is not required for APK delivery. Exercise shared credential entry/access, separate service validation, translation request/response/error handling, voice-list filtering/state, synthesis/error handling, and cache behavior with controlled transport/provider tests. Without credentials, report live Google listing, synthesis, listening assessment, and translation quality as **NOT RUN**. Controlled-response tests support integration evidence but do not substitute for live-service verification. Missing in-app credentials block only the operations that require them, not local preparation.
 
@@ -422,13 +433,14 @@ Required verification areas:
 2. **Cloud operations:** Google Chirp 3 HD hint/voice/MP3 contracts, one protected shared API key with per-service validation, and Cloud Translation Basic v2 default NMT Japanese-to-English requests. Assess live pronunciation and translation quality when the key is available and the corresponding service is enabled; clearly distinguish it from controlled-response evidence. No provider substitution or unhinted retry.
 3. **Images:** orientation, full-frame bounds, 1080 px limit, WebP quality 75, metadata removal, readability, and AnkiDroid rendering on realistic image fixtures.
 4. **Platform and export:** Nix build/tests, both ABI packages, API-37 x86_64 runtime, AnkiDroid fields/media/destination, duplicate checks, and interrupted-submission recovery.
-5. **Interaction and privacy:** responsive local preparation, usable Compose workflow, accessibility, durable drafts, SDK diagnostics, secret protection, and local-photo processing.
+5. **Interaction and privacy:** approved screen/copy contract and progress A, responsive local preparation, native Material motion/haptic/accessibility evidence, durable background provisioning/drafts, SDK diagnostics, secret protection and local-photo processing.
+6. **Import boundary:** separate test-only dummy AnkiDroid with real cross-UID URI access/persisted bytes, deterministic failures and durable-receipt recovery, plus the real AnkiDroid happy path. Follow the design contract's complete import-verification arrangement; no personal collection is used or replaced.
 
 Do not silently remove required content, fabricate phonetics or test results, upload photographs, or export partial notes to satisfy acceptance.
 
 ## 16. References
 
-This document is the product contract for v0.3.
+This is the technical/content/safety contract for the next development revision. [The approved screen-and-copy contract](docs/sentence-mining-flow.md) controls all user-visible composition and wording; SPEC acceptance R01–R39 is current. Older matrices and mockups are historical evidence only.
 
 - `misc/Sentence (JA)/template.json` defines the reference field schema. `Recognition/front.html`, `Recognition/back.html`, and `template.css` provide the reference presentation. Validate their compatibility under §8.
 - [AJT Japanese pinned source](https://github.com/Ajatt-Tools/Japanese/tree/5729b8c080823eadaa121c76e0f23c55d6a81935) — furigana behavior, pitch HTML, and phonetic data.

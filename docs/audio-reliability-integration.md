@@ -1,5 +1,7 @@
 # Audio reliability: integration handoff (items 1, 5, 4)
 
+**Consumed technical handoff:** controller/storage/lease/frozen-send safeguards remain relevant; the UI copy and per-item Continue/Generate wiring below are superseded by the [approved screen/copy contract](sentence-mining-flow.md), progress A and SPEC.md R01–R39. Do not restore those old affordances. This report is historical component evidence, not proof of connected native compliance.
+
 This bundle delivers the audio storage fix, the production draft-audio controller and the
 ownership-aware retirement machinery. `MainActivity.kt` and `SubmissionRecovery.kt` are
 deliberately untouched: this document is the exact wiring recipe for the integration owner.

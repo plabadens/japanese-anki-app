@@ -2,9 +2,9 @@
 
 See `docs/toolchain-notes.md` for deferred toolchain work: the AGP 9.x upgrade (required eventually for the pinned `compileSdk = 37`), the release-APK lint lock gap, and emulator caveats.
 
-Native Android app for creating Japanese sentence-mining notes in AnkiDroid. See [SPEC.md](SPEC.md) for approved behavior and release gates.
+Native Android app for creating Japanese sentence-mining notes in AnkiDroid. Mission: **get everything right the first time, without unnecessary choices**. See [the approved screen-and-copy contract](docs/sentence-mining-flow.md) for every view/string and [SPEC.md](SPEC.md) for technical requirements and acceptance R01–R39. Feature work lands on [dev](docs/branching.md), not directly on main.
 
-**Redesign in progress:** `SPEC.md` now defines the API-37-only Compose workflow, local preparation, Google Chirp 3 HD sentence speech with reading hints and cloud-listed voices, Google Cloud Translation Basic v2 default NMT (both behind one shared Google Cloud API key), required complete notes, annotated AJT-compatible pitch, and 1080 px WebP images. The implementation/build observations below predate that rewrite; they are not claims that the redesign is implemented. The API-35 AVD and old acceptance matrix are historical tooling, not the new release target. Nix development builds remain required; byte-identical/sandboxed APK builds do not.
+**Design approved; implementation compliance pending:** the 22 October contract selects progress A: title-only navigation and one grouped Review busy state in the stable action area. One selectable sentence, no duplicate hero, no generated-field repair workbench, separate optional notes/tags and a backgroundable setup wizard. Native Material 3 Expressive motion/haptics support the task without gamification. Technical requirements retain API 37, Google Chirp 3 HD with reading hints, Google Cloud Translation Basic v2 NMT behind one shared protected key, complete notes, annotated AJT pitch and 1080 px WebP. Approval is not native acceptance. Existing mockups, old matrices and dated status reports do not control UI or establish compliance. Nix development builds remain required.
 
 ## Build environment (NixOS x86_64)
 
@@ -45,9 +45,10 @@ debug key and cannot replace an existing install; for an update-compatible APK u
 the Gradle path with `JAPANESE_ANKI_DEBUG_KEYSTORE` set (see `app/build.gradle.kts`).
 
 The fixed-output inputs pin MeCab and UniDic. The APK does not contain the 426 MiB
-runtime dictionary ZIP: at release, it downloads the build-pinned UniDic v0.4
-release asset on first use, verifies its SHA-256 and archive contents, then extracts
-about 725 MB to app-private storage. `nix build .#unidicRuntime` produces that asset;
+runtime dictionary ZIP. The approved flow provisions the pinned UniDic v0.4
+asset through backgroundable onboarding/Downloads, verifies its SHA-256/archive,
+then extracts about 725 MB privately. Full wizard/background compliance is pending,
+not established by the installer alone. `nix build .#unidicRuntime` produces the asset;
 it must be uploaded with the APK before the release is usable. The
 Japanese OCR model, NHK index, dictionary and pitch data remain bundled; the app
 targets API 37 and requires API 37.
@@ -95,6 +96,6 @@ Install AnkiDroid only in this emulator by downloading its APK from the official
 
 For the redesign, provision an API-37 x86_64 emulator and follow the R-series checklist in SPEC §14. Inject local image fixtures and use the Google Cloud Translation Basic NMT path for actual quality checks, with controlled responses for failure tests. No offline TTS engine or ARM64 emulator matrix is required. Verify ARM64 packaging separately; physical-device validation remains optional. Record emulator-only limitations honestly.
 
-## Current implementation
+## Implementation and evidence status
 
-The editor supports durable manual sentence/target/vocabulary/reading/definition/translation/notes/tags entry, readiness feedback, stale-value blocking, pitch entry/contour, Android `SEND` / `PROCESS_TEXT`, AnkiDroid setup, safe field mapping, duplicate blocking, and interrupted-send reconciliation. Settings cover default tags, optional Azure credentials (encrypted with Android Keystore), Android TTS engine/installed offline Japanese voice selection, and speech rates. Speech generation and cache controls are not active yet. JMdict and Kanjium are bundled in an offline SQLite index for lookup, sense selection, and pitch. UniDic CWJ 3.1.1 and MeCab 0.996 are pinned; token chips, inflection-aware lemma lookup, editable target/vocabulary reading suggestions, and best-effort sentence furigana with per-token corrections are wired. Native CMake builds succeeded for `arm64-v8a` and `x86_64`, and a host JNI smoke test verified token/feature output. An earlier debug APK was smoke-tested on a Pixel 7/API 37 with packaged UniDic. This branch switches to verified first-run UniDic provisioning; that fresh-install path is not deployable until the pinned v0.4 release asset is published and is not represented by the earlier smoke test. AnkiDroid integration references v2.24.0 commit `ebcf8e0e34921628b9b8a496c66ffd4adbb3705f` (the release available on Google Play; its note/media provider, contract, browser manifest, and browser search files are byte-identical to the previously referenced v2.24.1 revisions); provider behavior and insertion with trailing empty fields remain release gates. Audio generation, image/media workflows, remaining settings, acceptance testing, and reproducible APK builds are not implemented or verified.
+The published v0.4 payload and earlier test reports predate the approved screen/copy contract. See `docs/evidence/` for dated build/test evidence and `docs/first-run-resource-delivery.md` for resource availability and remaining setup gaps. Neither a published APK nor green component tests establishes the new flow or fixes the user-reported import failure. The compliance task must inventory every surface/string, exercise connected native journeys and verify imports with both a separate dummy provider APK and real AnkiDroid in disposable emulator collections. Label unrun gates explicitly; do not restore old manual-field editing, obsolete providers or prototype progress controls from historical status text.
