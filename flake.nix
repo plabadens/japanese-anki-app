@@ -90,14 +90,18 @@
       coreCheckSource = pkgs.lib.fileset.toSource {
         root = ./.;
         fileset = pkgs.lib.fileset.unions [
+          ./app/src/main/assets/pitch_ajt.sqlite.gz
           ./app/src/main/assets/dictionary.sqlite.gz
           ./app/src/main/java
           ./app/src/test/java
           ./datasets/jmdict/JMdict_e.gz
           ./datasets/kanjium/accents.txt
           ./scripts/build_dictionary.py
+          ./scripts/build_ajt_pitch.py
           ./scripts/package_unidic.py
           ./scripts/test-build-dictionary.py
+          ./scripts/test-build-ajt-pitch.py
+          ./scripts/test-ajt-pitch-asset.py
           ./scripts/test-core.sh
           ./scripts/test-dictionary-asset.py
           ./scripts/test-package-unidic.py
@@ -159,6 +163,8 @@
         chmod -R u+w source
         cd source
         python3 scripts/test-build-dictionary.py
+        python3 scripts/test-build-ajt-pitch.py
+        python3 scripts/test-ajt-pitch-asset.py
         python3 scripts/test-dictionary-asset.py
         python3 scripts/test-package-unidic.py
         bash scripts/test-core.sh

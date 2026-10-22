@@ -83,3 +83,17 @@ internal fun hiragana(reading: String): String = buildString(reading.length) {
         append(if (char in 'ァ'..'ヶ') char - 0x60 else char)
     }
 }
+
+/** AJT's formatted lookup key converts kana in the headword to katakana before querying. */
+internal fun katakana(expression: String): String = buildString(expression.length) {
+    expression.forEach { char ->
+        append(
+            when (char) {
+                in 'ぁ'..'ゖ' -> char + 0x60
+                'ゝ' -> 'ヽ'
+                'ゞ' -> 'ヾ'
+                else -> char
+            },
+        )
+    }
+}

@@ -36,10 +36,11 @@ class AjtPitchRepositoryAndroidTest {
             val installed = File(context.filesDir, "pitch_ajt-v${AjtPitchIndex.SCHEMA_VERSION}.sqlite")
             assertTrue(installed.isFile)
             val expected = directRecords(installed, "花茣蓙", "はなござ")
-            assertEquals(8, expected.size)
-            // Source order, including the four duplicated (accent, html) pairs.
-            assertEquals(listOf(0, 0, 2, 2, 0, 0, 2, 2), expected.map { it.accent })
-            assertEquals(expected, repository.pitch("花茣蓙", "はなござ"))
+            assertEquals(12, expected.size)
+            // Three shard copies of the four source renderings, all in pinned source order.
+            assertEquals(listOf(0, 0, 2, 2, 0, 0, 2, 2, 0, 0, 2, 2), expected.map { it.accent })
+            val rendered = expected.distinctBy { it.html to it.accent }
+            assertEquals(rendered, repository.pitch("花茣蓙", "はなござ"))
 
             val busy = repository.pitch("忙しさ", "いそがしさ").single()
             assertEquals(3, busy.accent)
@@ -47,8 +48,9 @@ class AjtPitchRepositoryAndroidTest {
             assertTrue(busy.html.contains("class=\"devoiced\""))
             assertTrue(busy.html.contains("class=\"handakuten\""))
 
-            // The pinned index carries katakana reading keys too; no folding is applied here.
-            assertEquals(expected, repository.pitch("花茣蓙", "ハナゴザ"))
+            // Both expression and requested reading follow AJT's kana conversion rules.
+            assertEquals(rendered, repository.pitch("花茣蓙", "ハナゴザ"))
+            assertEquals(rendered, repository.pitch("ハナゴザ", "はなござ"))
 
             assertEquals(emptyList<AjtPitchRecord>(), repository.pitch("存在しない語", "そんざいしないご"))
             assertEquals(emptyList<AjtPitchRecord>(), repository.pitch(" ", "はなござ"))
@@ -58,10 +60,60 @@ class AjtPitchRepositoryAndroidTest {
     }
 
     @Test
+    fun allFormattedPartsMatchTheUser受付FixtureAndKanaAlias() {
+        val repository = AjtPitchRepository(openStore = { AjtPitchIndex.open(context) })
+        try {
+            assertEquals(AjtPitchAvailability.Ready, repository.prepare())
+            val devoiced = "<span class=\"low_rise\">ウ</span><span class=\"high\">ケ" +
+                "<span class=\"devoiced\">ツ</span>ケ</span>"
+            val expected = listOf(AjtPitchRecord(devoiced, 0))
+            val plain = "<span class=\"low_rise\">ウ</span><span class=\"high\">ケツケ</span>"
+
+            assertEquals(expected, repository.pitch("受付", "うけつけ"))
+            // AJT's kana fallback considers every headword sharing this reading, then de-duplicates renderings.
+            assertEquals(
+                listOf(AjtPitchRecord(devoiced, 0), AjtPitchRecord(plain, 0)),
+                repository.pitch("うけつけ", "ウケツケ"),
+            )
+            assertEquals(setOf(2), AjtPitchHtml.marks(devoiced, "うけつけ").devoicedMorae)
+            assertTrue(AjtPitchHtml.marks(devoiced, "うけつけ").nasalMorae.isEmpty())
+
+            listOf("受けつけ", "受け付", "受け付け", "受付け", "受附").forEach { spelling ->
+                assertEquals(spelling, listOf(AjtPitchRecord(plain, 0)), repository.pitch(spelling, "うけつけ"))
+            }
+        } finally {
+            repository.close()
+        }
+    }
+
+    @Test
+    fun allFormattedPartsResolveできるSpellingsToOnePronunciation() {
+        val repository = AjtPitchRepository(openStore = { AjtPitchIndex.open(context) })
+        try {
+            assertEquals(AjtPitchAvailability.Ready, repository.prepare())
+            val expected = listOf(
+                AjtPitchRecord(
+                    "<span class=\"low_rise\">デ</span><span class=\"high_drop\">キ</span>" +
+                        "<span class=\"low\">ル</span>",
+                    2,
+                ),
+            )
+            listOf("出来る", "出來る", "出きる").forEach { spelling ->
+                assertEquals(spelling, expected, repository.pitch(spelling, "できる"))
+            }
+            val heiban = listOf(AjtPitchRecord("<span class=\"low_rise\">デ</span><span class=\"high\">キル</span>", 0))
+            assertEquals(expected + heiban, repository.pitch("できる", "できる"))
+            assertEquals(listOf(0, 2), repository.pitch("出切る", "できる").map { it.accent })
+        } finally {
+            repository.close()
+        }
+    }
+
+    @Test
     fun emptyIndexIsAnExplicitUnavailableState() {
         val file = temporaryDatabase("empty") { database ->
             database.execSQL(
-                """CREATE TABLE pitch_ajt (expression TEXT NOT NULL, reading TEXT NOT NULL,
+                """CREATE TABLE pitch_ajt (expression TEXT NOT NULL, headword TEXT NOT NULL, reading TEXT NOT NULL,
                    pitch_html TEXT NOT NULL, pitch_number INTEGER NOT NULL, source_order INTEGER NOT NULL)""",
             )
         }

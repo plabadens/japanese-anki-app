@@ -23,3 +23,11 @@ See [`mecab/README.md`](mecab/README.md) and [`unidic/README.md`](unidic/README.
 - Source data is a tab-separated spelling, reading, accent-position list. A comma-separated list represents alternatives; `0` is a valid heiban pattern.
 
 The source inputs are copied without modification. Rebuild the deterministic SQLite asset with `python3 scripts/build_dictionary.py --jmdict-source 'EDRDG JMdict_e.gz, YYYY-MM-DD snapshot'`; the script records both input hashes in the database metadata. Re-run it after updating either input. Any generated/combined dictionary database must retain the applicable CC BY-SA attribution and license notices. The app's code is not relicensed by the data license.
+
+## AJT pitch index
+
+- Behavioral/data source: [AJT Japanese](https://github.com/Ajatt-Tools/Japanese) at commit `5729b8c080823eadaa121c76e0f23c55d6a81935`; all three `pitch_accents_formatted.N.csv` parts are ingested in source order.
+- Source SHA-256 values (parts 1, 2, 3): `4068078c59667f963922a4c0adae9b56e9a878b41e769bb87249b7236e99d234`, `ddc8a9a92f80ad03834fe4f1e2a352ef4cc85921e96cccab03094376cc17c5c1`, `08a419115a6dafe19631294a56fad064092a62a377478d6263a714ea5c0a4bd1`.
+- Transformation: `scripts/build_ajt_pitch.py` preserves the raw expression, headword, reading, row order, numeric accent and nested phonetic annotations while converting AJT's angle-bracket notation to equivalent class spans. It does not infer missing nasalization or devoicing.
+- Attribution/licensing: the pinned AJT repository's `LICENSE` is AGPL-3.0 for its software. Its README says the pitch databases use NHK Japanese Pronunciation Accent Dictionary and Kanjium data; the formatted CSV files do not carry a separate data-license declaration in that repository. Do not treat the repository's software license as resolving third-party data rights, or apply Kanjium's CC BY-SA terms to the mixed-source CSV without evidence. Distribution licensing and any additional source attribution remain subject to review before release.
+- The generated `pitch_ajt.sqlite.gz` is a derived index, not a fresh source snapshot. Its current compressed size is 36,072,769 bytes and SHA-256 is `e26f89e787843ed3a127c16faa4dc226324f07221a361cd029cfdaf1f84c8e9a`.
