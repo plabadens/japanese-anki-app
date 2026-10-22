@@ -1,5 +1,6 @@
 package dev.pierre.japaneseanki.ui
 
+import android.util.Log
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
@@ -10,14 +11,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -26,6 +22,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,11 +31,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.io.File
+import java.io.IOException
 import java.util.UUID
 
 /**
@@ -63,8 +62,8 @@ internal fun rememberCameraController(): LifecycleCameraController {
 }
 
 /**
- * The live preview itself: an upright 3:4, corner-bracketed frame. The caller gives it an
- * edge-to-edge box with height = width * 4/3; any extra space is letterboxed, matching mockup 06.
+ * The live preview itself. The caller gives it an exact upright 3:4 viewport for the 4:3 sensor;
+ * the containing pane, not state-dependent feedback, controls its dimensions.
  */
 @Composable
 internal fun CameraViewfinder(controller: LifecycleCameraController, modifier: Modifier = Modifier) {
@@ -80,34 +79,6 @@ internal fun CameraViewfinder(controller: LifecycleCameraController, modifier: M
             },
             modifier = Modifier.fillMaxSize(),
         )
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            // A 4:3 sensor shown upright is a 3:4 (width:height) box — taller than wide.
-            val frameWidth = (maxHeight * 3f / 4f).coerceAtMost(maxWidth)
-            val frameHeight = (frameWidth * 4f / 3f).coerceAtMost(maxHeight)
-            val insetX = ((maxWidth - frameWidth) / 2).coerceAtLeast(0.dp)
-            val insetY = ((maxHeight - frameHeight) / 2).coerceAtLeast(0.dp)
-            if (insetX > 0.dp) {
-                Box(
-                    Modifier.fillMaxHeight().width(insetX).align(Alignment.TopStart)
-                        .background(Color.Black.copy(alpha = 0.6f)),
-                )
-                Box(
-                    Modifier.fillMaxHeight().width(insetX).align(Alignment.TopEnd)
-                        .background(Color.Black.copy(alpha = 0.6f)),
-                )
-            }
-            if (insetY > 0.dp) {
-                Box(
-                    Modifier.fillMaxWidth().height(insetY).align(Alignment.TopStart)
-                        .background(Color.Black.copy(alpha = 0.6f)),
-                )
-                Box(
-                    Modifier.fillMaxWidth().height(insetY).align(Alignment.BottomStart)
-                        .background(Color.Black.copy(alpha = 0.6f)),
-                )
-            }
-            // The study shows the photo frame itself, with no corner-bracket overlay.
-        }
     }
 }
 
@@ -119,40 +90,92 @@ internal fun CameraShutterButton(
     outputDirectory: File,
     onCaptured: (File) -> Unit,
     onError: (String) -> Unit,
+    onCaptureStateChanged: (Boolean) -> Unit,
+    captureFailed: Boolean,
+    operationGate: CaptureOperationGate,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    var capturing by remember { mutableStateOf(false) }
-    if (capturing) {
-        CircularProgressIndicator(modifier.size(74.dp), strokeWidth = 3.dp)
-    } else {
-            val takePhoto = {
-                capturing = true
-                val destination = File(outputDirectory, "${UUID.randomUUID()}.jpg")
-                val options = ImageCapture.OutputFileOptions.Builder(destination).build()
-                controller.takePicture(
-                    options,
-                    ContextCompat.getMainExecutor(context),
-                    object : ImageCapture.OnImageSavedCallback {
-                        override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
-                            capturing = false
-                            onCaptured(destination)
-                        }
-                        override fun onError(exception: ImageCaptureException) {
-                            capturing = false
-                            onError("Could not capture a photo. Try again.")
-                        }
-                    },
-                )
+    var capturing by remember(controller) { mutableStateOf(false) }
+    val presentation = captureShutterPresentation(capturing, captureFailed)
+    val currentOnCaptured by rememberUpdatedState(onCaptured)
+    val currentOnError by rememberUpdatedState(onError)
+    val currentOnCaptureStateChanged by rememberUpdatedState(onCaptureStateChanged)
+
+    val finish = {
+        if (operationGate.finish()) {
+            capturing = false
+            currentOnCaptureStateChanged(false)
+        }
+    }
+    val fail = { destination: File, stage: String, errorCode: Int?, cause: Throwable? ->
+        val partialRemoved = runCatching { !destination.exists() || destination.delete() }.getOrDefault(false)
+        val causeName = cause?.javaClass?.simpleName ?: "none"
+        Log.w(
+            CAMERA_CAPTURE_TAG,
+            "Photo save failed: stage=$stage code=${errorCode ?: "none"} cause=$causeName partialRemoved=$partialRemoved",
+        )
+        finish()
+        currentOnError(CAMERA_CAPTURE_ERROR_MESSAGE)
+    }
+    val takePhoto = takePhoto@{
+        if (!enabled || !operationGate.tryStart()) return@takePhoto
+        capturing = true
+        currentOnCaptureStateChanged(true)
+        val destination = File(outputDirectory, "${UUID.randomUUID()}.jpg")
+        try {
+            if (!outputDirectory.isDirectory) {
+                val created = outputDirectory.mkdirs()
+                if (!created && !outputDirectory.isDirectory) {
+                    throw IOException("Capture directory is unavailable")
+                }
             }
-            Box(
-                modifier.size(80.dp)
-                    .clip(CircleShape)
-                    .clickable(enabled = enabled, onClick = takePhoto)
-                    .border(BorderStroke(4.dp, MaterialTheme.colorScheme.primary), CircleShape)
-                    .padding(7.dp)
-                    .background(MaterialTheme.colorScheme.primary, CircleShape)
-                    .semantics { contentDescription = "Capture photo" },
+            val options = ImageCapture.OutputFileOptions.Builder(destination).build()
+            controller.takePicture(
+                options,
+                ContextCompat.getMainExecutor(context),
+                object : ImageCapture.OnImageSavedCallback {
+                    override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                        if (!destination.isFile || destination.length() == 0L) {
+                            fail(destination, "empty_output", null, null)
+                            return
+                        }
+                        finish()
+                        currentOnCaptured(destination)
+                    }
+
+                    override fun onError(exception: ImageCaptureException) {
+                        fail(destination, "camera_write", exception.imageCaptureError, exception.cause)
+                    }
+                },
             )
+        } catch (exception: Exception) {
+            fail(destination, "capture_setup", null, exception)
+        }
+    }
+
+    Box(
+        modifier.size(presentation.diameterDp.dp)
+            .clip(CircleShape)
+            .clickable(enabled = enabled && !capturing, onClick = takePhoto)
+            .border(BorderStroke(4.dp, MaterialTheme.colorScheme.primary), CircleShape)
+            .padding(7.dp)
+            .background(MaterialTheme.colorScheme.primary, CircleShape)
+            .semantics {
+                contentDescription = presentation.contentDescription
+                stateDescription = presentation.stateDescription
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (presentation.showProgress) {
+            CircularProgressIndicator(
+                Modifier.size(32.dp),
+                color = MaterialTheme.colorScheme.onPrimary,
+                strokeWidth = 2.dp,
+            )
+        }
     }
 }
+
+private const val CAMERA_CAPTURE_TAG = "CameraCapture"
+private const val CAMERA_CAPTURE_ERROR_MESSAGE = "Could not capture a photo. Try again."
