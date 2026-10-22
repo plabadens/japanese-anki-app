@@ -42,7 +42,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -67,6 +66,9 @@ import dev.pierre.japaneseanki.ui.reviewAudioPlaybackFailureMessage
 import dev.pierre.japaneseanki.ui.reviewAudioSendBlocker
 import dev.pierre.japaneseanki.ui.FlowTheme
 import dev.pierre.japaneseanki.ui.FlowTopBar
+import dev.pierre.japaneseanki.ui.LocalTouchFeedbackDispatcher
+import dev.pierre.japaneseanki.ui.MotionAwareProgressIndicator
+import dev.pierre.japaneseanki.ui.TouchFeedbackEvent
 import dev.pierre.japaneseanki.ui.InputScreen
 import dev.pierre.japaneseanki.ui.SettingsScreen
 import dev.pierre.japaneseanki.ui.SettingsScreenState
@@ -365,6 +367,9 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             val coroutineScope = rememberCoroutineScope()
+            val touchFeedbackDispatcher = LocalTouchFeedbackDispatcher.current
+            var captureConfirmationMessage by remember { mutableStateOf<String?>(null) }
+            var verifiedDelivery by remember { mutableStateOf(false) }
             val apiPermissionLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.RequestPermission(),
             ) { granted -> apiPermissionGranted = granted }
@@ -979,6 +984,17 @@ class MainActivity : ComponentActivity() {
                 }
             }
             val clearDraft = {
+                val showDeliveryConfirmation = verifiedDelivery
+                captureConfirmationMessage = if (showDeliveryConfirmation) {
+                    this@MainActivity.getString(R.string.card_note_sent_to_ankidroid)
+                } else {
+                    null
+                }
+                if (showDeliveryConfirmation) {
+                    captureMode = "Photo"
+                    preferences.edit().putString("capture_mode", "Photo").apply()
+                }
+                verifiedDelivery = false
                 listOfNotNull(photoSourcePath, noteImagePath, processedImagePath).distinct().forEach { File(it).delete() }
                 editorInputRevision++
                 editor = TextFieldValue("")
@@ -1083,10 +1099,12 @@ class MainActivity : ComponentActivity() {
             }
 
             androidx.compose.runtime.LaunchedEffect(completedSubmission) {
-                if (completedSubmission != null) {
-                    kotlinx.coroutines.delay(900)
-                    if (completedSubmission != null) clearDraft()
-                }
+                if (completedSubmission != null) clearDraft()
+            }
+            androidx.compose.runtime.LaunchedEffect(captureConfirmationMessage) {
+                val message = captureConfirmationMessage ?: return@LaunchedEffect
+                kotlinx.coroutines.delay(1_400)
+                if (captureConfirmationMessage == message) captureConfirmationMessage = null
             }
 
             val selectTarget: (TargetSpan?) -> Unit = selectTarget@{ selected ->
@@ -2259,7 +2277,13 @@ class MainActivity : ComponentActivity() {
                                 )
                                 when {
                                     translationTestRunning -> Row(verticalAlignment = Alignment.CenterVertically) {
-                                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                        MotionAwareProgressIndicator(
+                                            modifier = Modifier.size(18.dp),
+                                            color = MaterialTheme.colorScheme.primary,
+                                            diameter = 18.dp,
+                                            strokeWidth = 2.dp,
+                                            stateDescription = stringResource(R.string.legacy_settings_testing_translation),
+                                        )
                                         Text(stringResource(R.string.legacy_settings_testing_translation))
                                     }
                                     translationTestResult is TranslationResult.Ready -> Text(
@@ -2432,7 +2456,13 @@ class MainActivity : ComponentActivity() {
                                 )
                                 if (settingsLoading) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                        MotionAwareProgressIndicator(
+                                            modifier = Modifier.size(18.dp),
+                                            color = MaterialTheme.colorScheme.primary,
+                                            diameter = 18.dp,
+                                            strokeWidth = 2.dp,
+                                            stateDescription = stringResource(R.string.legacy_settings_loading_saved_settings),
+                                        )
                                         Text(stringResource(R.string.legacy_settings_loading_saved_settings))
                                     }
                                 }
@@ -2466,7 +2496,13 @@ class MainActivity : ComponentActivity() {
                                 Text(stringResource(R.string.sentence_voice), style = MaterialTheme.typography.bodyMedium)
                                 when {
                                     cloudVoicesLoading -> Row(verticalAlignment = Alignment.CenterVertically) {
-                                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                        MotionAwareProgressIndicator(
+                                            modifier = Modifier.size(18.dp),
+                                            color = MaterialTheme.colorScheme.primary,
+                                            diameter = 18.dp,
+                                            strokeWidth = 2.dp,
+                                            stateDescription = stringResource(R.string.legacy_settings_listing_japanese_chirp_3_hd_voices),
+                                        )
                                         Text(stringResource(R.string.legacy_settings_listing_japanese_chirp_3_hd_voices))
                                     }
                                     cloudVoicesError != null -> Text(
@@ -2571,7 +2607,13 @@ class MainActivity : ComponentActivity() {
                                 val testedTranslation = translationTestResult
                                 when {
                                     translationTestRunning -> Row(verticalAlignment = Alignment.CenterVertically) {
-                                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                        MotionAwareProgressIndicator(
+                                            modifier = Modifier.size(18.dp),
+                                            color = MaterialTheme.colorScheme.primary,
+                                            diameter = 18.dp,
+                                            strokeWidth = 2.dp,
+                                            stateDescription = stringResource(R.string.legacy_settings_testing_translation),
+                                        )
                                         Text(stringResource(R.string.legacy_settings_testing_translation))
                                     }
                                     testedTranslation is TranslationResult.Ready -> Text(
@@ -2984,6 +3026,8 @@ class MainActivity : ComponentActivity() {
                                 recoveryRequired = false
                                 recoveryPhase = null
                                 frozenRetryReady = false
+                                verifiedDelivery = true
+                                touchFeedbackDispatcher.dispatch(TouchFeedbackEvent.DELIVERY_VERIFIED)
                                 completedSubmission = snapshot
                                 knownNoteId = null
                                 submitMessage = this@MainActivity.getString(R.string.card_note_1_d_recovered_in_the_selected_deck, noteId.toString())
@@ -3341,23 +3385,14 @@ class MainActivity : ComponentActivity() {
                     ) {
                         var submitAction: () -> Unit = {}
                         val reviewTarget = displayTarget?.takeIf { it.textIn(displaySentence) != null }
-                        FlowTopBar(
-                            title = when (visibleRoute) {
-                                AppRoute.Capture -> stringResource(R.string.legacy_capture_input_title)
-                                AppRoute.Card -> stringResource(R.string.card)
-                            },
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            onBack = if (navigationLocked) null else when (visibleRoute) {
-                                AppRoute.Card -> ({ route = AppRoute.Capture })
-                                AppRoute.Capture -> null
-                            },
-                            onSettings = if (!navigationLocked) ({ openSettings() }) else null,
-                            onClose = if (visibleRoute == AppRoute.Capture && !navigationLocked) {
-                                ({ showDiscardConfirm = true })
-                            } else {
-                                null
-                            },
-                        )
+                        if (visibleRoute == AppRoute.Card) {
+                            FlowTopBar(
+                                title = stringResource(R.string.card),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                onBack = if (!navigationLocked) ({ route = AppRoute.Capture }) else null,
+                                onSettings = if (!navigationLocked) ({ openSettings() }) else null,
+                            )
+                        }
                         if (visibleRoute == AppRoute.Capture &&
                             (analyzerLoading || analyzerError != null || dictionaryLoading || dictionaryError != null)
                         ) {
@@ -3552,7 +3587,6 @@ class MainActivity : ComponentActivity() {
                                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                                     )
                                 },
-                                imageAttached = imageAttached,
                                 imageStatus = when {
                                     imageProcessing -> stringResource(R.string.legacy_capture_preparing_photo_for_anki)
                                     imageError != null -> imageError
@@ -3567,6 +3601,8 @@ class MainActivity : ComponentActivity() {
                                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                                     )
                                 },
+                                confirmationMessage = captureConfirmationMessage,
+                                onSettings = { openSettings() },
                             )
                             AppRoute.Card -> {
                                 val sentenceAudioPresentation = sentenceAudio.presentation(
@@ -4115,6 +4151,8 @@ class MainActivity : ComponentActivity() {
                                             // any more, so release them (clearDraft then discards).
                                             audioController.releaseFreeze(retainFiles = false)
                                             audioSnapshot = audioController.snapshot()
+                                            verifiedDelivery = true
+                                            touchFeedbackDispatcher.dispatch(TouchFeedbackEvent.DELIVERY_VERIFIED)
                                             completedSubmission = publishedFrozenSnapshot ?: readFrozenSubmission(preferences)
                                             frozenRetryReady = false
                                             recoveryRequired = false
@@ -4209,6 +4247,8 @@ class MainActivity : ComponentActivity() {
                                     OutlinedButton(
                                     enabled = !submissionLocked,
                                     onClick = {
+                                        val meaningChanged = selectedDictionaryEntryId != entry.id ||
+                                            selectedSenseIndices != setOf(senseIndex)
                                         if (!definitionProvenanceKnown) {
                                             val savedSenseIndices = preferences.getStringSet("dictionary_sense_indices", null)
                                                 ?.mapNotNull(String::toIntOrNull)?.filter { it in entry.senses.indices }
@@ -4234,6 +4274,9 @@ class MainActivity : ComponentActivity() {
                                         }
                                         if (definitionManuallyEdited && definition.isNotBlank()) dependentFieldsStale = true
                                         selectedSenseIndices = setOf(senseIndex)
+                                        if (meaningChanged) {
+                                            touchFeedbackDispatcher.dispatch(TouchFeedbackEvent.MEANING_SELECTION)
+                                        }
                                         if (!definitionManuallyEdited) {
                                             definition = entry.senses.getOrNull(senseIndex)?.glosses?.joinToString("; ").orEmpty()
                                         }

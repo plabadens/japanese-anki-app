@@ -13,9 +13,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.text.TextLayoutResult
@@ -58,6 +61,64 @@ class SentenceSelectionLayoutTest {
         val fontScale: Float = 1f,
         val width: Int = 320,
     )
+
+    @Test
+    fun selectionTickIsCommittedOnceAndRetappingTheSameWordIsSilent() {
+        val scene = mutableStateOf(repeatedScene())
+        val events = mutableListOf<TouchFeedbackEvent>()
+        val dispatcher = TouchFeedbackDispatcher { event -> events += event }
+        composeRule.setContent {
+            val current = scene.value
+            CompositionLocalProvider(
+                LocalMotionEnabled provides false,
+                LocalTouchFeedbackDispatcher provides dispatcher,
+            ) {
+                MaterialTheme(colorScheme = lightColorScheme()) {
+                    sentencePane(current) { span -> scene.value = scene.value.copy(selected = span) }
+                }
+            }
+        }
+
+        composeRule.onNodeWithTag("sentence-word-text-0-1", useUnmergedTree = true)
+            .performTouchInput { click(Offset(center.x, center.y)) }
+        composeRule.waitForIdle()
+        assertEquals(listOf(TouchFeedbackEvent.WORD_SELECTION), events)
+        composeRule.onNodeWithTag("sentence-word-0-1").performClick()
+        assertEquals("Re-selecting the current target must not tick", listOf(TouchFeedbackEvent.WORD_SELECTION), events)
+        composeRule.onNodeWithTag("sentence-word-text-2-3", useUnmergedTree = true)
+            .performTouchInput { click(Offset(center.x, center.y)) }
+        composeRule.waitForIdle()
+        assertEquals(
+            listOf(TouchFeedbackEvent.WORD_SELECTION, TouchFeedbackEvent.WORD_SELECTION),
+            events,
+        )
+    }
+
+    @Test
+    fun reducedMotionProgressRemainsStaticAccessibleAndSilent() {
+        val events = mutableListOf<TouchFeedbackEvent>()
+        val dispatcher = TouchFeedbackDispatcher { event -> events += event }
+        composeRule.setContent {
+            CompositionLocalProvider(
+                LocalMotionEnabled provides false,
+                LocalTouchFeedbackDispatcher provides dispatcher,
+            ) {
+                Box {
+                    MotionAwareProgressIndicator(
+                        modifier = Modifier.testTag("reduced-motion-progress"),
+                        color = Color.Blue,
+                        diameter = 24.dp,
+                        stateDescription = "Working",
+                    )
+                }
+            }
+        }
+        val progress = composeRule.onNodeWithTag("reduced-motion-progress").fetchSemanticsNode().config
+        assertEquals(ProgressBarRangeInfo.Indeterminate, progress[SemanticsProperties.ProgressBarRangeInfo])
+        assertEquals("Working", progress[SemanticsProperties.StateDescription])
+        assertTrue("Progress must not dispatch haptics", events.isEmpty())
+        capture(motionEvidenceDirectory(), "reduced-motion-progress.png")
+    }
 
     @Test
     fun selectionIsOccurrenceSpecificAndDoesNotChangeAnyMeasuredBounds() {
@@ -288,6 +349,14 @@ class SentenceSelectionLayoutTest {
             lemmaReading = reading,
             partOfSpeech = pos,
         )
+
+    private fun motionEvidenceDirectory(): File {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        return File(context.getExternalFilesDir(null), "motion-feedback-evidence").apply {
+            deleteRecursively()
+            assertTrue("Could not create motion feedback evidence directory", mkdirs())
+        }
+    }
 
     private fun evidenceDirectory(): File {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

@@ -339,24 +339,21 @@
 
 
 
-    <string name="legacy_capture_add_photo_optional">Add photo (optional)</string>
-    <string name="legacy_capture_camera_access_is_needed_to_take_a_photo_ty">Camera access is needed to take a photo. Typing and the gallery still work.</string>
-    <string name="legacy_capture_change_photo">Change photo</string>
+
     <string name="legacy_capture_choose_the_text_region">Choose the text region</string>
     <string name="legacy_capture_discard_draft">Discard draft</string>
     <string name="legacy_capture_discard_this_draft">Discard this draft?</string>
     <string name="legacy_capture_keep_working">Keep working</string>
-    <string name="legacy_capture_reading_the_photo_on_this_device">Reading the photo on this device…</string>
+
     <string name="legacy_capture_replace_current_draft">Replace current draft?</string>
-    <string name="legacy_capture_retry_ocr">Retry OCR</string>
-    <string name="legacy_capture_retry_photo">Retry photo</string>
+
     <string name="legacy_capture_review_choices">Review choices</string>
     <string name="legacy_capture_text_choices_are_ready">Text choices are ready.</string>
     <string name="legacy_capture_the_current_draft_will_be_replaced_by_text">The current draft will be replaced by text from this photo.</string>
     <string name="legacy_capture_the_current_draft_will_be_replaced_by_the">The current draft will be replaced by the shared text.</string>
     <string name="legacy_capture_the_sentence_target_photo_and_any_generate">The sentence, target, photo and any generated results will be deleted. This cannot be undone.</string>
     <string name="legacy_capture_this_draft_is_already_empty">This draft is already empty.</string>
-    <string name="legacy_capture_type_the_japanese_sentence">Type the Japanese sentence</string>
+
     <string name="card_already_in_ankidroid">Already in AnkiDroid</string>
     <string name="card_analyzing_the_sentence">Analyzing the sentence…</string>
     <string name="card_blocked">Blocked:</string>
@@ -503,15 +500,13 @@
     <string name="legacy_settings_reusable_audio_cache">Reusable sentence and word audio: %1$s.\ </string>
     <string name="legacy_settings_translation_test_passed">Test passed. Sample 「%1$s」 → %2$s</string>
 
-    <string name="legacy_capture_input_title">Input</string>
-    <string name="legacy_capture_flash">Flash</string>
+
     <string name="legacy_capture_choose_photo_from_device">Choose a photo from this device</string>
     <string name="legacy_capture_saving_photo">Saving photo</string>
     <string name="legacy_capture_capture_in_progress">Capture in progress</string>
     <string name="legacy_capture_capture_photo">Capture photo</string>
     <string name="legacy_capture_capture_failed">Capture failed</string>
-    <string name="legacy_capture_selected_state">Selected</string>
-    <string name="legacy_capture_not_selected_state">Not selected</string>
+
     <string name="legacy_capture_flash_on_state">On</string>
     <string name="legacy_capture_flash_off_state">Off</string>
     <string name="card_target_title">Target</string>
@@ -669,7 +664,7 @@
     <string name="card_send_recovery_media_preparation_interrupted">%1$s was interrupted before its receipt was saved. Inspect AnkiDroid before retrying.</string>
     <string name="card_media_preparation">Media preparation</string>
     <string name="card_media_label">media</string>
-    <string name="legacy_capture_continue_action">Continue</string>
+
     <string name="legacy_capture_preparing_photo_for_anki">Preparing the photo for Anki…</string>
     <string name="legacy_capture_photo_attached">Photo attached</string>
 

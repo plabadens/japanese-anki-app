@@ -9,8 +9,7 @@ These resources preserve shipped wording verbatim. Card-flow resource keys that 
 | `legacy_capture_capture_in_progress` | Capture camera or Type surface | Existing shutter accessibility state; this task only moves it to a resource. | `t_f6a4efe9` |
 | `legacy_capture_capture_photo` | Capture camera or Type surface | Existing shutter accessibility name; this task only moves it to a resource. | `t_f6a4efe9` |
 | `legacy_capture_choose_photo_from_device` | Capture camera or Type surface | Existing gallery accessibility name; this task only moves it to a resource. | `t_f6a4efe9` |
-| `legacy_capture_flash` | Capture camera or Type surface | Existing flash accessibility name; this task only moves it to a resource. | `t_f6a4efe9` |
-| `legacy_capture_input_title` | Capture camera or Type surface | Existing visible title; this task only moves it to a resource. | `t_f6a4efe9` |
+
 
 | `legacy_capture_saving_photo` | Capture camera or Type surface | Existing shutter accessibility name; this task only moves it to a resource. | `t_f6a4efe9` |
 | `former_card_audio_error_state` | Card surface or an associated sheet | Existing audio accessibility state; this task only moves it to a resource. | `t_fc85a8b2` |
@@ -63,24 +62,21 @@ These resources preserve shipped wording verbatim. Card-flow resource keys that 
 | `former_card_reading_label` | Card surface or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
 | `legacy_settings_reusable_audio_cache` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
 | `legacy_settings_translation_test_passed` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_capture_add_photo_optional` | Capture camera or Type surface | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
-| `legacy_capture_camera_access_is_needed_to_take_a_photo_ty` | Capture camera or Type surface | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
-| `legacy_capture_change_photo` | Capture camera or Type surface | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
+
 | `legacy_capture_choose_the_text_region` | Capture draft confirmation or OCR passage sheet | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
 | `legacy_capture_discard_draft` | Capture draft confirmation or OCR passage sheet | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
 | `legacy_capture_discard_this_draft` | Capture draft confirmation or OCR passage sheet | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
 | `legacy_capture_keep_working` | Capture draft confirmation or OCR passage sheet | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
-| `legacy_capture_reading_the_photo_on_this_device` | Capture camera or Type surface | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
+
 | `legacy_capture_replace_current_draft` | Capture draft confirmation or OCR passage sheet | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
-| `legacy_capture_retry_ocr` | Capture camera or Type surface | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
-| `legacy_capture_retry_photo` | Capture camera or Type surface | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
+
 | `legacy_capture_review_choices` | Capture camera or Type surface | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
 | `legacy_capture_text_choices_are_ready` | Capture camera or Type surface | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
 | `legacy_capture_the_current_draft_will_be_replaced_by_text` | Capture draft confirmation or OCR passage sheet | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
 | `legacy_capture_the_current_draft_will_be_replaced_by_the` | Capture draft confirmation or OCR passage sheet | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
 | `legacy_capture_the_sentence_target_photo_and_any_generate` | Capture draft confirmation or OCR passage sheet | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
 | `legacy_capture_this_draft_is_already_empty` | Capture draft confirmation or OCR passage sheet | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
-| `legacy_capture_type_the_japanese_sentence` | Capture camera or Type surface | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
+
 | `former_card_already_in_ankidroid` | Card surface or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
 | `former_card_analyzing_the_sentence` | Card surface or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
 | `former_card_blocked` | Card surface or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
@@ -328,7 +324,7 @@ These resources preserve shipped wording verbatim. Card-flow resource keys that 
 | `former_card_media_preparation` | Card surface or an associated sheet | Existing Send recovery fallback label; this task only moves it to a resource. | `t_fc85a8b2` |
 | `former_card_media_label` | Card surface or an associated sheet | Existing Send recovery fallback label; this task only moves it to a resource. | `t_fc85a8b2` |
 
-| `legacy_capture_continue_action` | Capture camera or Type surface | Existing Type action label; this task only moves it to a resource. | `t_f6a4efe9` |
+
 | `legacy_capture_preparing_photo_for_anki` | Capture camera or Type surface | Existing image status; this task only moves it to a resource. | `t_f6a4efe9` |
 | `legacy_capture_photo_attached` | Capture camera or Type surface | Existing image status; this task only moves it to a resource. | `t_f6a4efe9` |
 | `legacy_settings_jmdict_source_notice` | Settings, pickers, viewers and editors | Existing source attribution with runtime dictionary metadata; this task only moves the copy into a resource. | `t_307ced47` |
@@ -379,7 +375,6 @@ These resources preserve shipped wording verbatim. Card-flow resource keys that 
 | `former_card_target_selected_state` | Card surface or an associated sheet | Existing selected-target accessibility state; this task only moves it to a resource. | `t_fc85a8b2` |
 | `former_card_meaning_selected_state` | Card surface or an associated sheet | Existing selected-meaning accessibility state; this task only moves it to a resource. | `t_fc85a8b2` |
 | `former_card_not_selected_state` | Card surface or an associated sheet | Existing unselected accessibility state; this task only moves it to a resource. | `t_fc85a8b2` |
-| `legacy_capture_selected_state` | Capture camera or Type surface | Existing mode-selector accessibility state; this task only moves it to a resource. | `t_f6a4efe9` |
-| `legacy_capture_not_selected_state` | Capture camera or Type surface | Existing mode-selector accessibility state; this task only moves it to a resource. | `t_f6a4efe9` |
+
 | `legacy_capture_flash_on_state` | Capture camera or Type surface | Existing flash-toggle accessibility state; this task only moves it to a resource. | `t_f6a4efe9` |
 | `legacy_capture_flash_off_state` | Capture camera or Type surface | Existing flash-toggle accessibility state; this task only moves it to a resource. | `t_f6a4efe9` |

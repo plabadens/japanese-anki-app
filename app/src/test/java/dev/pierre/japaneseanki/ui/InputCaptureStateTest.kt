@@ -8,24 +8,28 @@ import org.junit.Test
 
 class InputCaptureStateTest {
     @Test
-    fun portraitPreviewUsesFullWidthAtTheUprightFourByThreeSensorRatio() {
-        val bounds = cameraPreviewSizeDp(400f)
+    fun fullHeightUsesFullWidthAndEqualWhitespaceAroundTheControlRow() {
+        // 844 dp device height less 24 dp status and navigation insets, then the fixed 56 dp bar.
+        val layout = cameraCaptureLayoutDp(390f, 740f)
 
-        assertEquals(CameraPreviewSizeDp(400f, 1600f / 3f), bounds)
+        assertEquals(CameraPreviewSizeDp(390f, 520f), layout.preview)
+        assertEquals(86f, layout.equalGap, 0.001f)
+        assertEquals(3f / 4f, layout.preview.width / layout.preview.height, 0.0001f)
     }
 
     @Test
-    fun shortPanesKeepTheFullViewportAndLeaveOverflowToScrolling() {
-        val bounds = cameraPreviewSizeDp(320f)
+    fun shortScreenShrinksGapsToTheirFloorThenNarrowsThePreview() {
+        // 620 dp device height less 24 dp system insets and the fixed 56 dp bar.
+        val layout = cameraCaptureLayoutDp(390f, 516f)
 
-        assertEquals(CameraPreviewSizeDp(320f, 1280f / 3f), bounds)
-        assertTrue(bounds.height > 400f)
-        assertEquals(3f / 4f, bounds.width / bounds.height, 0.0001f)
+        assertEquals(CameraPreviewSizeDp(333f, 444f), layout.preview)
+        assertEquals(CAMERA_CAPTURE_GAP_FLOOR_DP.toFloat(), layout.equalGap, 0.001f)
+        assertEquals(3f / 4f, layout.preview.width / layout.preview.height, 0.0001f)
     }
 
     @Test
-    fun busyAndErrorFeedbackKeepPreviewAndShutterBoundsStable() {
-        val expectedPreview = cameraPreviewSizeDp(393f)
+    fun compactRowKeepsShutterBoundsStableAcrossBusyAndErrorStates() {
+        val expectedPreview = cameraCaptureLayoutDp(393f, 740f).preview
         val presentations = listOf(
             captureShutterPresentation(captureInProgress = false, captureFailed = false),
             captureShutterPresentation(captureInProgress = true, captureFailed = false),
@@ -35,10 +39,13 @@ class InputCaptureStateTest {
         assertEquals(3, presentations.size)
         assertEquals(
             listOf(expectedPreview),
-            presentations.map { cameraPreviewSizeDp(393f) }.distinct(),
+            presentations.map { cameraCaptureLayoutDp(393f, 740f).preview }.distinct(),
         )
         assertEquals(listOf(CAMERA_SHUTTER_SIZE_DP), presentations.map { it.diameterDp }.distinct())
-        assertEquals(CAMERA_CONTROL_ROW_HEIGHT_DP, 96)
+        assertEquals(48, CAMERA_CONTROL_ROW_HEIGHT_DP)
+        assertEquals(48, CAMERA_SIDE_SLOT_SIZE_DP)
+        assertEquals(56, CAMERA_TOP_BAR_HEIGHT_DP)
+        assertEquals(38, CAMERA_MODE_SWITCH_HEIGHT_DP)
         assertFalse(presentations[0].showProgress)
         assertTrue(presentations[1].showProgress)
         assertFalse(presentations[2].showProgress)

@@ -16,7 +16,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -146,7 +145,13 @@ internal fun SettingsScreen(
             }
             if (state.loading) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CircularProgressIndicator(modifier = Modifier.padding(2.dp), strokeWidth = 2.dp)
+                    MotionAwareProgressIndicator(
+                        modifier = Modifier.padding(2.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        diameter = 40.dp,
+                        strokeWidth = 2.dp,
+                        stateDescription = stringResource(R.string.legacy_settings_loading_saved_settings),
+                    )
                     Text(stringResource(R.string.legacy_settings_loading_saved_settings))
                 }
             }
@@ -200,7 +205,13 @@ internal fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    CircularProgressIndicator(modifier = Modifier.padding(2.dp), strokeWidth = 2.dp)
+                    MotionAwareProgressIndicator(
+                        modifier = Modifier.padding(2.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        diameter = 40.dp,
+                        strokeWidth = 2.dp,
+                        stateDescription = stringResource(R.string.legacy_settings_listing_japanese_voices),
+                    )
                     Text(stringResource(R.string.legacy_settings_listing_japanese_voices))
                 }
                 state.voiceCatalog.error != null -> Text(
