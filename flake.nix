@@ -52,7 +52,6 @@
         ANDROID_SDK_ROOT = sdkRoot;
         ANDROID_NDK_HOME = "${sdkRoot}/ndk/27.2.12479018";
         MECAB_SOURCE_DIR = "${mecabSource}";
-        UNIDIC_RUNTIME_ARCHIVE = "${unidicRuntime}";
         GRADLE_OPTS = "-Dorg.gradle.native=false";
       };
 
@@ -176,6 +175,7 @@
         default = releaseApk;
         apk = releaseApk;
         debugApk = debugApk;
+        unidicRuntime = unidicRuntime;
         emulator-wrapper = emulatorWrapper;
       };
 

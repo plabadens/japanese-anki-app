@@ -20,7 +20,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -543,7 +542,8 @@ class MainActivity : ComponentActivity() {
             var dictionaryInfo by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
             var analyzerReady by remember { mutableStateOf(false) }
             var analyzerLoading by remember { mutableStateOf(false) }
-            var analyzerProgress by remember { mutableStateOf(0f) }
+            var analyzerStatus by remember { mutableStateOf("Checking UniDic runtime archive") }
+            var analyzerRetry by remember { mutableStateOf(0) }
             var analyzerError by remember { mutableStateOf<String?>(null) }
             var tokenizationLoading by remember { mutableStateOf(false) }
             var tokenizationError by remember { mutableStateOf<String?>(null) }
@@ -617,14 +617,12 @@ class MainActivity : ComponentActivity() {
                     credential = { GoogleCloudCredential.read(settings) },
                 )
             }
-            val nhkProgressFlow = remember { MutableStateFlow<NhkIndexProgress?>(null) }
-            val nhkProgress by nhkProgressFlow.collectAsState()
-            val nhkCancelRequested = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
             val recordedWordSource = remember {
                 Nhk2016PronunciationSource(
-                    dataDirectory = File(filesDir, "nhk-recordings"),
-                    onIndexProgress = { nhkProgressFlow.value = it },
-                    isIndexFetchCancelled = { nhkCancelRequested.get() },
+                    readIndexText = {
+                        applicationContext.assets.open(Nhk2016PronunciationSource.ASSET_NAME)
+                            .bufferedReader(Charsets.UTF_8).use { it.readText() }
+                    },
                 )
             }
             val reusableAudioCache = remember { ReusableAudioCache(File(cacheDir, "audio")) }
@@ -1334,17 +1332,19 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            androidx.compose.runtime.LaunchedEffect(dictionaryRetry, setupGeneration, submissionLocked) {
+            androidx.compose.runtime.LaunchedEffect(dictionaryRetry, analyzerRetry, setupGeneration, submissionLocked) {
                 if (currentSubmissionLocked.value) return@LaunchedEffect
                 val callbackGeneration = setupGeneration
                 analyzerLoading = true
                 analyzerError = null
-                analyzerProgress = 0f
+                analyzerStatus = "Checking UniDic runtime archive"
                 try {
                     withContext(Dispatchers.IO) {
-                        offlineAnalyzer.prepare { progress ->
-                            if (asyncSetupIsCurrent(callbackGeneration)) analyzerProgress = progress
-                        }
+                        offlineAnalyzer.prepare(
+                            onStatus = { status ->
+                                if (asyncSetupIsCurrent(callbackGeneration)) analyzerStatus = status
+                            },
+                        )
                     }
                     if (!asyncSetupIsCurrent(callbackGeneration)) return@LaunchedEffect
                     analyzerReady = true
@@ -1355,7 +1355,9 @@ class MainActivity : ComponentActivity() {
                     if (asyncSetupIsCurrent(callbackGeneration)) analyzerError = "MeCab native analysis could not load. You can still select a sentence span and search the dictionary."
                 } catch (error: Exception) {
                     Log.e("OfflineAnalyzer", "Could not prepare UniDic analysis", error)
-                    if (asyncSetupIsCurrent(callbackGeneration)) analyzerError = "UniDic could not be installed. Check available storage and retry."
+                    if (asyncSetupIsCurrent(callbackGeneration)) {
+                        analyzerError = "UniDic could not be downloaded, verified or installed. Check your connection and free storage, then retry."
+                    }
                 } finally {
                     analyzerLoading = false
                 }
@@ -3264,13 +3266,13 @@ class MainActivity : ComponentActivity() {
                             },
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                         )
-                        if (analyzerLoading || dictionaryLoading || dictionaryError != null) {
+                        if (analyzerLoading || analyzerError != null || dictionaryLoading || dictionaryError != null) {
                             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
                                 if (analyzerLoading) {
-                                    Text(
-                                        "Installing UniDic: ${(analyzerProgress * 100).toInt()}% (about 725 MB)…",
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
+                                    Text(analyzerStatus, style = MaterialTheme.typography.bodySmall)
+                                } else if (analyzerError != null) {
+                                    Text(analyzerError!!, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                                    TextButton(onClick = { analyzerRetry++ }) { Text("Retry UniDic setup") }
                                 } else if (dictionaryLoading) {
                                     Text("Preparing the offline dictionary for first use…", style = MaterialTheme.typography.bodySmall)
                                 } else if (dictionaryError != null) {
@@ -3758,7 +3760,6 @@ class MainActivity : ComponentActivity() {
                             tokenizationLoading = false
                             pitchLookupLoading = false
                             ocrLoading = false
-                            analyzerProgress = 0f
                             isSubmitting = true
                             knownNoteId = null
                             submitMessage = null

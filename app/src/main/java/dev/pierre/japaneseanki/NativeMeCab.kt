@@ -7,7 +7,7 @@ internal class NativeMeCab(dictionaryDirectory: File) : AutoCloseable {
     private var handle = nativeOpen(dictionaryDirectory.absolutePath)
 
     init {
-        check(handle != 0L) { "MeCab could not open the bundled UniDic data" }
+        check(handle != 0L) { "MeCab could not open the installed UniDic data" }
     }
 
     @Synchronized
