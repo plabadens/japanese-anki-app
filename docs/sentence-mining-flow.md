@@ -1,6 +1,20 @@
 # Sentence mining: user journey and screen contract
 
-**Status: approved design contract — 22 October 2026.** Pierre selected **progress A: action-centred, no step tracker**, and requested specification reconciliation and implementation-compliance verification. This file is the sole authority for screen composition, app-authored copy and interaction choreography. SPEC.md defines the retained technical/content/safety contract and its aligned acceptance criteria. Approval is not evidence that the running app implements this design.
+**Status: PARTIALLY SUPERSEDED — 22 October 2026.** The daily mining flow described below (Capture →
+Choose word → Review, the three-screen contract and its strings) was replaced by the approved
+[Capture → Card contract](card-flow-contract.md), which is now the sole authority for screen
+composition, app-authored copy and interaction choreography.
+
+**Still authoritative in this file:** first-run onboarding, Settings, Downloads, the send contract,
+the secondary surfaces it defines (photo viewer, sentence editor, meaning sheet, note/tag editors)
+and the failure-copy catalogue. Those sections are unchanged and remain in force.
+
+**Superseded here:** the daily-flow state table, the one user story, sections C/T/R, the progress
+sections describing the three-screen journey, and the strings listed as removed in
+`card-flow-contract.md` §10. Nothing below may be reintroduced as a screen or a control.
+
+`SPEC.md` defines the retained technical/content/safety contract and its aligned acceptance criteria.
+Approval is not evidence that the running app implements this design.
 
 ## Mission
 
@@ -99,6 +113,9 @@ The official progress guideline explicitly says to use one indicator for a group
 - Ready results stay readable while siblings finish. Pending speakers remain plainly unavailable with accessibility state, not red errors or their own spinners. Failures get one local message/recovery; the group indicator runs only while something is actually still running.
 - Expose busy/progress semantics and announce meaningful phase/completion changes to accessibility services, not every byte tick. Layout and touch targets stay stable. Long-running work permits navigation away, preserving task and draft state. [M3, M8]
 
+> **Superseded** — see [card-flow-contract.md](card-flow-contract.md). The story is now two
+> states, Capture and the card.
+
 ## One user story
 
 I open the app, photograph a sentence and tap the word I want to learn. If the photograph contains several possible passages, I choose the passage. If the word genuinely has competing interpretations, I choose the meaning. Otherwise the app resolves these steps without questioning me.
@@ -106,6 +123,9 @@ I open the app, photograph a sentence and tap the word I want to learn. If the p
 I select **Review card**. The app shows the learning content immediately while one quiet busy state in the bottom action area represents preparation of the remaining audio and translation. I can glance at completed content, optionally listen, optionally attach my own note or tags, then send it to AnkiDroid. A confirmed send returns me to Capture with a subtle confirmation, ready for another sentence.
 
 I do not edit a field inventory, choose a deck repeatedly, acknowledge duplicate instructions or repair the app's internal state.
+
+> **Superseded** — the surfaces below describe the retired three-screen flow. Current surfaces:
+> Capture, Card, Settings, Downloads.
 
 ## State and navigation
 
@@ -165,6 +185,9 @@ A compact checklist reports dictionary, camera/typing, audio and AnkiDroid readi
 
 ## Daily flow: exact screen composition
 
+> **Superseded in composition** by [card-flow-contract.md](card-flow-contract.md) §3–§4. Retained
+> here: the OCR/type/share behaviour and the replacement rules.
+
 ### C. Capture
 
 **App bar:** Capture as the sole title; Downloads icon only when relevant; Settings icon. No explanatory subtitle or daily-flow progress strip. With a retained draft, Resume draft takes the Downloads action's place; Downloads remains reachable through Settings.
@@ -178,6 +201,9 @@ After a capture/import, run OCR automatically. One viable sentence proceeds to T
 Photo/text sharing enters the corresponding flow and never selects a target or sends automatically. Replacing an existing nonempty draft requires the shared discard confirmation.
 
 When Capture is revisited with a retained draft, expose the quiet Resume draft action in its app bar. It returns to the retained Target state without recapturing, resetting selection or making network requests. A new shutter/gallery action does not overwrite the retained draft without the replacement confirmation. On process restoration, reopen the last stable working surface; interrupted generation stays available for explicit retry rather than restarting automatically.
+
+> **Removed.** There is no Target screen; its content is the upper half of the card. See
+> [card-flow-contract.md](card-flow-contract.md) §5.
 
 ### T. Target
 
@@ -193,6 +219,9 @@ Content, in order:
 No initial target. A tap immediately performs local lookup. No visible Extend/Trim controls, duplicate tap instructions, hero copy or preparation-corrections panel.
 
 Review card is the explicit authorization to prepare missing network results for the current selection. It is not followed by another Generate confirmation.
+
+> **Removed.** There is no Review screen; the card is inspected where it is built. See
+> [card-flow-contract.md](card-flow-contract.md) §5–§6.
 
 ### R. Review
 

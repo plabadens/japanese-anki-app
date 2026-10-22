@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Flow prototype — three screens vs one card</title>
+<style>
+  :root{
+    --paper:#FFF8F5; --ink:#2B1712; --vermilion:#9C3329; --tonal:#F1DDD2;
+    --ink2:#6B5148; --line:#E2CCC1; --pitch:#354B70; --tile:#F6E7DE;
+  }
+  @font-face{font-family:MockJP;src:url("../../../mockup/expressive-flow/assets/noto-jp-400.ttf");font-weight:400;}
+  @font-face{font-family:MockJP;src:url("../../../mockup/expressive-flow/assets/noto-jp-500.ttf");font-weight:500;}
+  @font-face{font-family:MockJP;src:url("../../../mockup/expressive-flow/assets/noto-jp-600.ttf");font-weight:600;}
+  @font-face{font-family:MockJP;src:url("../../../mockup/expressive-flow/assets/noto-jp-700.ttf");font-weight:700;}
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:#EFE7E3;}
+  body{font-family:MockJP,system-ui,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased;}
+  h2.flow{font-family:system-ui,sans-serif;font-size:14px;letter-spacing:.08em;
+          text-transform:uppercase;color:#8A6F63;margin:26px 0 10px 26px;font-weight:700;}
+  h2.flow span{text-transform:none;letter-spacing:0;color:#2B1712;font-size:16px;margin-left:8px;}
+  .row{display:flex;gap:18px;padding:0 26px 10px;align-items:flex-start;}
+  .frame{width:390px;height:844px;background:var(--paper);border-radius:26px;overflow:hidden;
+         box-shadow:0 6px 26px rgba(60,30,20,.16);display:flex;flex-direction:column;
+         position:relative;flex:0 0 auto;}
+  .label{font-family:system-ui,sans-serif;font-size:11px;letter-spacing:.06em;
+         text-transform:uppercase;color:#8A6F63;margin:8px 0 0 6px;width:390px;}
+  .status{height:26px;display:flex;justify-content:space-between;padding:6px 18px 0;
+          font-family:system-ui,sans-serif;font-size:11px;color:#5B4038;}
+  .bar{display:flex;align-items:center;gap:6px;padding:10px 12px 6px;}
+  .bar .ic{width:40px;height:40px;display:grid;place-items:center;font-size:18px;color:#3C2A24;}
+  .bar .t{flex:1;font-size:21px;font-weight:500;letter-spacing:.01em;font-family:system-ui,sans-serif;}
+  .body{flex:1;overflow:hidden;display:flex;flex-direction:column;padding:0 16px;}
+  .foot{padding:10px 16px 18px;background:var(--paper);}
+
+  .view{width:100%;aspect-ratio:3/4;border-radius:4px;overflow:hidden;position:relative;
+        background:linear-gradient(160deg,#4a4038,#6a5b4d 45%,#3b332c);}
+  .view .page{position:absolute;left:12%;right:12%;top:18%;bottom:14%;background:#F3EAD9;
+              box-shadow:0 4px 16px rgba(0,0,0,.35);padding:14px 12px;}
+  .view .page i{display:block;height:5px;background:#C9BCA6;margin:0 0 9px;border-radius:2px;}
+  .view .page i:nth-child(2){width:86%}
+  .view .page i:nth-child(3){width:70%}
+  .view .page i:nth-child(4){width:92%}
+  .view .page i:nth-child(5){width:52%}
+  .shutrow{display:flex;align-items:center;justify-content:space-between;padding:14px 6px 4px;}
+  .shutrow .slot{width:64px;display:flex;justify-content:center;}
+  .gb{width:46px;height:46px;border-radius:50%;background:var(--tile);display:grid;place-items:center;
+      font-size:18px;color:#5B4038;}
+  .shutter{width:68px;height:68px;border-radius:50%;background:#fff;
+           box-shadow:inset 0 0 0 3px #fff,inset 0 0 0 5px #D9C3B7,0 2px 8px rgba(0,0,0,.12);}
+  .mode{display:flex;background:var(--tile);border-radius:24px;padding:4px;margin:8px 0 0;}
+  .mode div{flex:1;text-align:center;padding:10px 0;font-size:14px;font-weight:500;color:#5B4038;
+            font-family:system-ui,sans-serif;}
+  .mode .on{background:#795247;color:#FFF8F5;border-radius:20px;}
+
+  .photo{height:104px;border-radius:10px;overflow:hidden;
+         background:linear-gradient(150deg,#6a5b4d,#463a31);position:relative;margin:6px 0 14px;}
+  .photo .pg{position:absolute;inset:14px 22px;background:#F3EAD9;}
+  .photo .pg i{display:block;height:4px;background:#C9BCA6;margin:0 0 7px;}
+  .photo .pg i:nth-child(2){width:80%}
+  .photo .pg i:nth-child(3){width:62%}
+
+  .sent{font-size:22px;line-height:2.25;letter-spacing:.005em;margin:0;}
+  .tok{display:inline-block;padding:6px 1px 8px;position:relative;}
+  .fill{background:rgba(156,51,41,.17);box-shadow:inset 0 -2.5px 0 0 var(--vermilion);
+        border-radius:3px;padding:0 1px;}
+  .tok.hit{outline:1px dashed rgba(156,51,41,.30);outline-offset:0;}
+  ruby rt{font-size:11px;color:#6B5148;letter-spacing:.02em;font-weight:400;}
+  .edit{font-size:13px;color:var(--vermilion);margin:4px 0 0;font-weight:600;
+        font-family:system-ui,sans-serif;}
+  .tr{font-size:16px;line-height:1.5;color:#432F28;}
+  .wordcard{background:var(--tonal);border-radius:14px;padding:12px 14px;margin-top:12px;}
+  .wtop{display:flex;align-items:flex-start;}
+  .hw{font-size:34px;font-weight:700;line-height:1.1;}
+  .hw small{font-size:12px;font-weight:400;color:#6B5148;margin-left:7px;}
+  .sp{width:48px;height:48px;border-radius:50%;border:1.5px solid rgba(156,51,41,.35);
+      display:grid;place-items:center;color:var(--vermilion);font-size:15px;margin-left:auto;flex:0 0 auto;}
+  .m{font-size:12px;color:var(--ink2);width:22px;text-align:center;}
+  .def{font-size:16px;line-height:1.45;margin-top:8px;}
+  .quiet{display:flex;gap:22px;font-size:13px;color:var(--vermilion);font-weight:600;margin-top:16px;
+         font-family:system-ui,sans-serif;}
+  .cta{height:56px;border-radius:28px;background:var(--vermilion);color:#fff;display:grid;
+       place-items:center;font-size:15px;font-weight:600;font-family:system-ui,sans-serif;
+       box-shadow:0 2px 10px rgba(156,51,41,.22);}
+  .cta.off{background:#EADFD8;color:#A8918A;box-shadow:none;}
+  .cta.busy{background:#7E3A31;color:#FFE9E4;}
+  .reason{font-size:13px;color:#6B5148;margin:0 0 10px 4px;font-family:system-ui,sans-serif;}
+  .spin{width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,255,255,.35);
+        border-top-color:#fff;display:inline-block;margin-right:9px;vertical-align:-3px;}
+  .ann{font-family:system-ui,sans-serif;font-size:12px;line-height:1.55;color:#7A5F53;
+       width:900px;margin:16px 0 30px 26px;}
+  .ann b{color:#2B1712;}
+</style>
+</head>
+<body>
+
+<h2 class="flow">Flow A<span>three screens — Capture → Choose word → Review</span></h2>
+<div class="row">
+
+  <div>
+    <div class="frame">
+      <div class="status"><span>9:41</span><span>◍ ▲ ▮</span></div>
+      <div class="bar"><div class="ic"></div><div class="t">Capture</div><div class="ic">⚙</div></div>
+      <div class="body">
+        <div class="view"><div class="page"><i></i><i></i><i></i><i></i><i></i></div></div>
+        <div class="shutrow">
+          <div class="slot"><div class="gb">▣</div></div>
+          <div class="shutter"></div>
+          <div class="slot"></div>
+        </div>
+        <div class="mode"><div class="on">Camera</div><div>Type</div></div>
+      </div>
+      <div class="foot" style="padding-top:0"></div>
+    </div>
+    <p class="label">A1 · Capture</p>
+  </div>
+
+  <div>
+    <div class="frame">
+      <div class="status"><span>9:41</span><span>◍ ▲ ▮</span></div>
+      <div class="bar"><div class="ic">‹</div><div class="t">Choose word</div><div class="ic">⚙</div></div>
+      <div class="body">
+        <div class="photo"><div class="pg"><i></i><i></i><i></i></div></div>
+        <p class="sent">
+          <span class="tok hit"><ruby>図書館<rt>としょかん</rt></ruby></span><span class="tok hit">で</span><span class="tok hit"><ruby>本<rt>ほん</rt></ruby></span><span class="tok hit">を</span><span class="tok hit"><ruby>読<rt>よ</rt></ruby>みました</span><span class="tok">。</span>
+        </p>
+        <p class="edit">Edit sentence</p>
+        <p class="tr" style="margin-top:22px">I read a book at the library.</p>
+      </div>
+      <div class="foot"><div class="cta off">Review card</div></div>
+    </div>
+    <p class="label">A2 · Choose word (no selection)</p>
+  </div>
+
+  <div>
+    <div class="frame">
+      <div class="status"><span>9:41</span><span>◍ ▲ ▮</span></div>
+      <div class="bar"><div class="ic">‹</div><div class="t">Choose word</div><div class="ic">⚙</div></div>
+      <div class="body">
+        <div class="photo" style="height:78px;margin-bottom:10px"><div class="pg"><i></i><i></i></div></div>
+        <p class="sent">
+          <span class="tok"><ruby>図書館<rt>としょかん</rt></ruby></span><span class="tok">で</span><span class="tok sel"><ruby><span class="fill">本</span><rt>ほん</rt></ruby></span><span class="tok">を</span><span class="tok"><ruby>読<rt>よ</rt></ruby>みました</span><span class="tok">。</span>
+        </p>
+        <p class="edit">Edit sentence</p>
+        <div class="wordcard" style="margin-top:16px">
+          <div class="wtop">
+            <div class="hw">本 <small>ほん</small></div>
+            <div class="sp">▶</div>
+          </div>
+          <div style="display:flex;align-items:flex-end;gap:3px;margin-top:4px">
+            <svg width="86" height="40" viewBox="0 0 86 40">
+              <circle cx="9" cy="9" r="3.8" fill="#354B70"/>
+              <path d="M9 9 L30 9" stroke="#354B70" stroke-width="2"/>
+              <circle cx="30" cy="9" r="3.8" fill="#354B70"/>
+              <path d="M30 9 L51 9" stroke="#354B70" stroke-width="2" opacity=".3"/>
+              <circle cx="51" cy="9" r="3.8" fill="none" stroke="#354B70" stroke-width="2" opacity=".3"/>
+              <text x="9" y="34" font-size="11" fill="#6B5148" text-anchor="middle" font-family="MockJP">ホ</text>
+              <text x="30" y="34" font-size="11" fill="#6B5148" text-anchor="middle" font-family="MockJP">ン</text>
+            </svg>
+          </div>
+          <div class="def">book; volume</div>
+          <p style="font-size:13px;color:var(--vermilion);font-weight:600;margin:10px 0 0;
+                    font-family:system-ui,sans-serif">Change meaning</p>
+        </div>
+        <div class="quiet"><span>Add note</span><span>Add tags</span></div>
+      </div>
+      <div class="foot"><div class="cta">Review card</div></div>
+    </div>
+    <p class="label">A3 · Choose word (resolved)</p>
+  </div>
+
+  <div>
+    <div class="frame">
+      <div class="status"><span>9:41</span><span>◍ ▲ ▮</span></div>
+      <div class="bar"><div class="ic">‹</div><div class="t">Review</div><div class="ic">⚙</div></div>
+      <div class="body">
+        <div class="photo" style="height:112px;margin-top:2px"><div class="pg"><i></i><i></i><i></i></div></div>
+        <div style="display:flex;align-items:flex-start;gap:6px">
+          <p class="sent" style="flex:1;font-size:20px;line-height:2.2">
+            <span class="tok"><ruby>図書館<rt>としょかん</rt></ruby></span><span class="tok">で</span><span class="tok sel"><ruby><span class="fill">本</span><rt>ほん</rt></ruby></span><span class="tok">を</span><span class="tok"><ruby>読<rt>よ</rt></ruby>みました</span><span class="tok">。</span>
+          </p>
+          <div class="sp" style="width:42px;height:42px;margin-top:14px">▶</div>
+        </div>
+        <p class="tr" style="margin-top:12px">I read a book at the library.</p>
+        <div class="wordcard">
+          <div class="wtop">
+            <div class="hw">本 <small>ほん</small></div>
+            <div class="sp">▶</div>
+          </div>
+          <div style="display:flex;align-items:flex-end;gap:3px;margin-top:4px">
+            <svg width="86" height="40" viewBox="0 0 86 40">
+              <circle cx="9" cy="9" r="3.8" fill="#354B70"/>
+              <path d="M9 9 L30 9" stroke="#354B70" stroke-width="2"/>
+              <circle cx="30" cy="9" r="3.8" fill="#354B70"/>
+              <path d="M30 9 L51 9" stroke="#354B70" stroke-width="2" opacity=".3"/>
+              <circle cx="51" cy="9" r="3.8" fill="none" stroke="#354B70" stroke-width="2" opacity=".3"/>
+              <text x="9" y="34" font-size="11" fill="#6B5148" text-anchor="middle" font-family="MockJP">ホ</text>
+              <text x="30" y="34" font-size="11" fill="#6B5148" text-anchor="middle" font-family="MockJP">ン</text>
+            </svg>
+          </div>
+          <div class="def">book; volume</div>
+        </div>
+        <div class="quiet"><span>Add note</span><span>Add tags</span></div>
+      </div>
+      <div class="foot"><div class="cta">Send to AnkiDroid</div></div>
+    </div>
+    <p class="label">A4 · Review</p>
+  </div>
+
+</div>
+
+<h2 class="flow">Flow B<span>one scroll — Capture → Card</span></h2>
+<div class="row">
+
+  <div>
+    <div class="frame">
+      <div class="status"><span>9:41</span><span>◍ ▲ ▮</span></div>
+      <div class="bar"><div class="ic"></div><div class="t">Capture</div><div class="ic">⚙</div></div>
+      <div class="body">
+        <div class="view"><div class="page"><i></i><i></i><i></i><i></i><i></i></div></div>
+        <div class="shutrow">
+          <div class="slot"><div class="gb">▣</div></div>
+          <div class="shutter"></div>
+          <div class="slot"></div>
+        </div>
+        <div class="mode"><div class="on">Camera</div><div>Type</div></div>
+      </div>
+      <div class="foot" style="padding-top:0"></div>
+    </div>
+    <p class="label">B1 · Capture</p>
+  </div>
+
+  <div>
+    <div class="frame">
+      <div class="status"><span>9:41</span><span>◍ ▲ ▮</span></div>
+      <div class="bar"><div class="ic">‹</div><div class="t">Card</div><div class="ic">⚙</div></div>
+      <div class="body">
+        <div class="photo"><div class="pg"><i></i><i></i><i></i></div></div>
+        <p class="sent">
+          <span class="tok hit"><ruby>図書館<rt>としょかん</rt></ruby></span><span class="tok hit">で</span><span class="tok hit"><ruby>本<rt>ほん</rt></ruby></span><span class="tok hit">を</span><span class="tok hit"><ruby>読<rt>よ</rt></ruby>みました</span><span class="tok">。</span>
+        </p>
+        <p class="edit">Edit sentence</p>
+        <p class="tr" style="margin-top:20px">I read a book at the library.</p>
+        <div style="flex:1"></div>
+        <p class="reason" style="margin:0 0 8px 2px">Choose a word to finish this card.</p>
+      </div>
+      <div class="foot"><div class="cta off">Send to AnkiDroid</div></div>
+    </div>
+    <p class="label">B2 · after the shutter</p>
+  </div>
+
+  <div>
+    <div class="frame">
+      <div class="status"><span>9:41</span><span>◍ ▲ ▮</span></div>
+      <div class="bar"><div class="ic">‹</div><div class="t">Card</div><div class="ic">⚙</div></div>
+      <div class="body">
+        <div class="photo" style="height:80px;margin-bottom:10px"><div class="pg"><i></i><i></i></div></div>
+        <p class="sent">
+          <span class="tok"><ruby>図書館<rt>としょかん</rt></ruby></span><span class="tok">で</span><span class="tok sel"><ruby><span class="fill">本</span><rt>ほん</rt></ruby></span><span class="tok">を</span><span class="tok"><ruby>読<rt>よ</rt></ruby>みました</span><span class="tok">。</span>
+        </p>
+        <p class="edit">Edit sentence</p>
+        <p class="tr" style="margin-top:14px">I read a book at the library.</p>
+        <div class="wordcard">
+          <div class="wtop">
+            <div class="hw">本 <small>ほん</small></div>
+            <div class="sp">▶</div>
+          </div>
+          <div style="display:flex;align-items:flex-end;gap:3px;margin-top:4px">
+            <svg width="86" height="40" viewBox="0 0 86 40">
+              <circle cx="9" cy="9" r="3.8" fill="#354B70"/>
+              <path d="M9 9 L30 9" stroke="#354B70" stroke-width="2"/>
+              <circle cx="30" cy="9" r="3.8" fill="#354B70"/>
+              <path d="M30 9 L51 9" stroke="#354B70" stroke-width="2" opacity=".3"/>
+              <circle cx="51" cy="9" r="3.8" fill="none" stroke="#354B70" stroke-width="2" opacity=".3"/>
+              <text x="9" y="34" font-size="11" fill="#6B5148" text-anchor="middle" font-family="MockJP">ホ</text>
+              <text x="30" y="34" font-size="11" fill="#6B5148" text-anchor="middle" font-family="MockJP">ン</text>
+            </svg>
+          </div>
+          <div class="def">book; volume</div>
+          <p style="font-size:13px;color:var(--vermilion);font-weight:600;margin:10px 0 0;
+                    font-family:system-ui,sans-serif">Change meaning</p>
+        </div>
+        <div class="quiet"><span>Add note</span><span>Add tags</span></div>
+        <div style="flex:1"></div>
+      </div>
+      <div class="foot"><div class="cta busy"><span class="spin"></span>Preparing card…</div></div>
+    </div>
+    <p class="label">B3 · word chosen</p>
+  </div>
+
+  <div>
+    <div class="frame">
+      <div class="status"><span>9:41</span><span>◍ ▲ ▮</span></div>
+      <div class="bar"><div class="ic">‹</div><div class="t">Card</div><div class="ic">⚙</div></div>
+      <div class="body">
+        <div class="photo" style="height:80px;margin-bottom:10px"><div class="pg"><i></i><i></i></div></div>
+        <p class="sent">
+          <span class="tok"><ruby>図書館<rt>としょかん</rt></ruby></span><span class="tok">で</span><span class="tok sel"><ruby><span class="fill">本</span><rt>ほん</rt></ruby></span><span class="tok">を</span><span class="tok"><ruby>読<rt>よ</rt></ruby>みました</span><span class="tok">。</span>
+        </p>
+        <p class="edit">Edit sentence</p>
+        <p class="tr" style="margin-top:14px">I read a book at the library.</p>
+        <div class="wordcard">
+          <div class="wtop">
+            <div class="hw">本 <small>ほん</small></div>
+            <div class="sp">▶</div>
+          </div>
+          <div style="display:flex;align-items:flex-end;gap:3px;margin-top:4px">
+            <svg width="86" height="40" viewBox="0 0 86 40">
+              <circle cx="9" cy="9" r="3.8" fill="#354B70"/>
+              <path d="M9 9 L30 9" stroke="#354B70" stroke-width="2"/>
+              <circle cx="30" cy="9" r="3.8" fill="#354B70"/>
+              <path d="M30 9 L51 9" stroke="#354B70" stroke-width="2" opacity=".3"/>
+              <circle cx="51" cy="9" r="3.8" fill="none" stroke="#354B70" stroke-width="2" opacity=".3"/>
+              <text x="9" y="34" font-size="11" fill="#6B5148" text-anchor="middle" font-family="MockJP">ホ</text>
+              <text x="30" y="34" font-size="11" fill="#6B5148" text-anchor="middle" font-family="MockJP">ン</text>
+            </svg>
+          </div>
+          <div class="def">book; volume</div>
+        </div>
+        <div class="quiet"><span>Add note</span><span>Add tags</span></div>
+        <div style="flex:1"></div>
+      </div>
+      <div class="foot"><div class="cta">Send to AnkiDroid</div></div>
+    </div>
+    <p class="label">B4 · ready</p>
+  </div>
+
+</div>
+
+<p class="ann">
+  Prototype note: the dashed outlines in A2 and B2 are <b>not</b> part of either design — they mark the
+  word-level touch targets, so you can see what is selectable and how much of the line each word owns.
+  Both flows use identical content, type scale and colour roles; only the structure differs.
+</p>
+
+</body>
+</html>

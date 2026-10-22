@@ -1,10 +1,9 @@
 # Design: what this app should feel like
 
 **Status:** AUTHORITATIVE for intent, tone, and visual direction. Two documents outrank it for their
-own subject: [sentence-mining-flow.md](sentence-mining-flow.md) (approved 22 October 2026, progress A)
-is the sole authority for screen composition and app-authored copy, and `SPEC.md` for required
-behavior and acceptance. Where this document disagrees with either, they win and this is the one to
-fix.
+own subject: [card-flow-contract.md](card-flow-contract.md) (approved 22 October 2026) is the sole
+authority for screen composition and app-authored copy, and `SPEC.md` for required behavior and
+acceptance. Where this document disagrees with either, they win and this is the one to fix.
 
 **Who should read it:** anyone building or reviewing a screen, writing user-facing copy, or judging
 whether a UI change "fits". Read the contract for what each screen says and contains, `SPEC.md` §4
@@ -65,8 +64,8 @@ between.
 7. **Failure is a state, not an error dialog.** Every failure keeps the work, says which thing
    failed, and offers the one action that can help — retry, choose another word, or check
    AnkiDroid.
-8. **Restraint is the style.** One accent colour, one primary action, one step indicator. Emphasis
-   is spent on the Japanese and on the word, not on chrome.
+8. **Restraint is the style.** One accent colour, one primary action. Emphasis is spent on the
+   Japanese and on the word, not on chrome.
 
 ## 4. Visual language
 
@@ -97,21 +96,22 @@ Rules that follow from it:
 - **Error is not the same red as action.** Action and error must stay distinguishable by more than
   their label.
 
-**Typography.** A short scale, used by role rather than by size: 22/500 for screen titles and the
-review sentence, 28/500 for a transition headline, 36/700 for the vocabulary word and nothing else,
-16/400 for body (definition, translation, typed text), 14 for supporting text and button labels.
-Japanese inside the flow may run larger than the Latin scale — the Review sentence sits at 22 and the
-Target word pills at 24 — because legibility of the script is the point. Ruby is a proportional
-annotation at about half the base size, never a separate line, never a smaller font squeezed into
-the baseline.
+**Typography.** A short scale, used by role rather than by size: 22/500 for the card's sentence and
+36/700 for the vocabulary word and nothing else, 16/400 for body (definition, translation, typed
+text), 14 for supporting text and button labels. The sentence sits at 22 rather than 16 because
+legibility of the Japanese is the point. Ruby is a proportional annotation at about half the base
+size, drawn in its own band above the base text rather than squeezed into the baseline — see
+[card-flow-contract.md](card-flow-contract.md) §7.
 
 **Shape and space.** A small scale (4/8/12/16/24/28) with generous gutters (16, or 24 while writing)
 and pills for anything you can touch. Primary actions are 56 dp high; anything tappable is at least
 48 dp and never overlaps its neighbour. The camera shutter is the one circular, oversized control,
 because it is a camera, not a card.
 
-**Composition.** One column, portrait, top bar, step indicator, content, one primary action at the
-bottom. Content that does not fit scrolls above the action rather than being cut. The layout is
+**Composition.** One column, portrait: top bar, content, one pinned primary action at the bottom.
+There is no stepper and no progress strip — the two states are Capture and the card, and the card's
+own assembly is the only progress the person sees. Content that does not fit scrolls behind the
+pinned action rather than being cut. The layout is
 centred and capped in width so a rotated or large window keeps the phone composition instead of
 stretching it.
 
@@ -121,13 +121,15 @@ Motion explains a change; it does not perform. The list is short and deliberate:
 
 - **Local, never global.** Tapping a word highlights the word. The screen does not fade, slide, or
   re-enter. A whole-screen transition on every render is the anti-pattern this design rejects.
-- **In place.** Pending values become small spinners where the value will appear. They never
-  replace the screen with a loading page and never leave a blank gap that later jumps.
+- **In place, and once.** A pending value keeps its reserved space and is described in the single
+  hint line above the primary action — one small Material loading indicator there, never a ring
+  inside the button and never a spinner per field. Nothing replaces the screen with a loading page
+  and nothing leaves a blank gap that later jumps.
 - **One global movement.** There is **no step tracker**. Navigation is title-only, and work is
-  reported by a single indicator inside the fixed bottom action area (progress A in
-  [sentence-mining-flow.md](sentence-mining-flow.md)): one grouped "Preparing" state while the
-  selected content is produced, becoming the Send action when everything required is ready. Missing
-  values keep stable quiet space; they do not get animated per-field skeletons, spinners, or
+  reported by a single indicator inside the pinned footer described in
+  [card-flow-contract.md](card-flow-contract.md) §6: the hint line names what is happening while the
+  selected content is produced, and empties when the Send action is ready to speak for itself.
+  Missing values keep stable quiet space; they do not get animated per-field skeletons, spinners, or
   redundant progress prose.
 - **Springs and state layers** come from the platform's Material motion; there are no bespoke
   curves invented for this app.
@@ -151,32 +153,31 @@ The app speaks like a competent assistant, not a system, and not a policy docume
 
 ## 7. The workflow, and what may not be traded away
 
-Input → Target → Review. Two transitions, one backward path, one primary action at each step.
+Capture → the card. One surface that becomes the note, one primary action at each moment, and no
+second screen between the person and the thing they are keeping.
 
-**Input.** A camera in a portrait frame, gallery to the left, Type to the right. The photograph is
-the default subject; typing is a first-class alternative that may carry its own photo. The preview
-does not move or resize while the app is capturing, processing, or failing. Landscape photographs
-are normal input; the interface stays portrait, and the draft survives rotating away to take the
-picture and back.
+**Capture.** A camera in the composition, with the mode switch as the only thing in the top bar.
+The photograph is the default subject; typing is a first-class alternative that may carry its own
+photo. The preview does not move or resize while the app is capturing, processing, or failing.
+Landscape photographs are normal input; the interface stays portrait, and the draft survives
+rotating away to take the picture and back.
 
-**Target.** The sentence as a row of word pills, one selected, its entry and reading beneath it,
-and the meanings listed as explicit choices. The meaning is visible before Continue is possible —
-never let someone continue without having seen which meaning they are exporting. Editing the
-sentence re-tokenizes it; it never leaves an unusable selection or a whole sentence pretending to
-be one word.
+**The card.** The moment a sentence is committed, the same surface becomes the note: the photograph
+at the top as a 16:9 band that shrinks as content arrives, the sentence in continuous text with its
+readings above and the chosen word highlighted inside it, **the translation directly beneath it**,
+then the word with its part of speech, pitch contour, definition and recording. Notes and tags are
+separate, optional editors. The only correction offered on the content is the left-aligned **Edit
+sentence** action; there is no repair workbench, no per-field edit list and no raw markup.
 
-**Preparing.** A short transition, not a screen: the app fetches what it needs for the revision you
-confirmed, shows per-item progress in place, and does not repeat paid work because you came back or
-the process was restored.
+**Choosing a word is the decision.** Selecting a word inserts its card beneath the translation, so
+nothing above it moves. Meanings are resolved silently unless two are genuinely viable, in which case
+one sheet asks once. Nothing about dictionary entries, senses or readings is ever a form on the
+card.
 
-**Review.** A composed artifact, in reading order: the photograph, the sentence with its target
-highlighted and furigana inline, **the translation directly beneath the sentence**, then the word
-with its reading, pitch contour and definition. Notes and tags are separate, optional editors; they
-are not a field menu over the content. The only correction offered on the content itself is the
-left-aligned **Edit sentence** action in Target, which re-tokenizes and keeps the draft; there is no
-repair workbench, no per-field edit list and no raw markup. The card fills its fixed-height photo
-slot with a focal crop that keeps the selected line visible, while the full-image viewer always
-shows the whole frame.
+**Preparing.** Not a screen and not a checklist: the sentence's translation and speech start when
+the sentence is committed, the word's recording starts when the word is chosen, and one hint line
+above the button names whatever is still arriving. Paid work is never repeated because of a return,
+a rotation or a process death.
 
 **Send.** One action, one state at a time: idle → sending → sent, or blocked, or status unknown.
 While sending, the note stays visible and frozen; nothing can be edited under the finger that just
@@ -193,7 +194,7 @@ Non-negotiables of the flow:
 - **Distinct failures.** Network failure, missing source data, and unknown submission are three
   different conditions with three different icons, roles, and recoveries. They are not one pink
   box.
-- **The word is the hero of Review**, not the photo and not the chrome. The photo carries the
+- **The word is the hero of the card**, not the photo and not the chrome. The photo carries the
   memory; the word and its pronunciation carry the learning.
 - **Nothing incomplete leaves.** Blocked with an explanation beats sent with a hole in it.
 
@@ -201,9 +202,10 @@ Non-negotiables of the flow:
 
 A reviewer should be able to answer yes to all of these without reading code:
 
-- In five seconds on the Review screen, can you tell which sentence, which word, which meaning, and
-  which translation you are about to keep?
-- Can you send without scrolling, with the primary action visible and unambiguous?
+- In five seconds on the card, can you tell which sentence, which word, which meaning, and which
+  translation you are about to keep?
+- Is the primary action always visible without scrolling, and unambiguous in every state? (Content
+  may scroll behind it; the action may not.)
 - With one required value missing, is it obvious *what* is missing and *where* to fix it?
 - In dark mode, at 200 % text, with one hand: is anything clipped, overlapping, or reachable only
   by guessing?
@@ -211,21 +213,21 @@ A reviewer should be able to answer yes to all of these without reading code:
 
 ## 9. What this document is not
 
-- Not a widget checklist. The inventory of screens, controls, strings and acceptance criteria is
-  [sentence-mining-flow.md](sentence-mining-flow.md) and `SPEC.md` §14.
+- Not a widget checklist. The inventory of screens, controls and strings is
+  [card-flow-contract.md](card-flow-contract.md); the acceptance criteria are `SPEC.md` §14.
 - Not a pixel contract. The approved contract is the reference for composition and hierarchy; native
   Material components supply the actual behaviour. Pixel parity is explicitly not required — the
   composition and the rules above are.
 - Not a claim that the app already looks like this. See the screenshots in
   `docs/archive/evidence/v0.4/` for the last accepted build, and treat the gaps as work, not as
   design decisions.
-- Not derived from the HTML study any more. `mockup/expressive-flow/` is decision history: its flow,
-  three-segment tracker, preparation page and extra headings are explicitly superseded, and elements
-  from it must not be reintroduced.
+- Not derived from the HTML study. `mockup/expressive-flow/` is decision history: its flow, three-
+  segment tracker, preparation page and extra headings are superseded, and elements from it must not
+  be reintroduced.
 
 ## 10. Where the intent came from
 
-- [sentence-mining-flow.md](sentence-mining-flow.md) — the approved contract: progress A, screen
+- [card-flow-contract.md](card-flow-contract.md) — the approved contract for Capture and the card:
   composition, the static-copy catalogue and the import-verification arrangement. This document
   interprets it; where they differ, the contract governs.
 - `docs/redesign-interview.md` — the user's own statement of the workflow and its quality boundary.

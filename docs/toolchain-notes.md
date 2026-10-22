@@ -47,7 +47,7 @@ avoid taking a busy shared device lane.
 **Verification command in the pinned Nix development shell:**
 
 ```sh
-nix develop --command gradle --no-daemon --max-workers=1 -Dorg.gradle.jvmargs='-Xmx2g -Dfile.encoding=UTF-8' --console=plain testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
+nix develop --command gradle --no-daemon --max-workers=1 -Dorg.gradle.jvmargs='-Xmx2g -Dfile.encoding=UTF-8' --console=plain -Pandroid.aapt2FromMavenOverride=/nix/store/w218spk15022c7c726krzfjb0b52r3w2-androidsdk/libexec/android-sdk/build-tools/36.0.0/aapt2 testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
 ```
 
 This dev-shell command passed. The report at
@@ -114,12 +114,15 @@ verification section above.
 
 The APK derivation explicitly sets
 `-Pandroid.aapt2FromMavenOverride=$ANDROID_HOME/build-tools/36.0.0/aapt2`.
-The same SDK-provided binary succeeded in a sandboxed direct Gradle debug build
-and release build, including resource processing; there is no evidence that an
-AGP/AAPT2 compatibility change is needed. Keep this override rather than
-letting AGP resolve its Maven-hosted AAPT2 binary, which is incompatible with
-the NixOS sandbox. This does not address the separate Gradle dependency-cache
-coverage above.
+The same SDK-provided binary succeeded in sandboxed debug and release builds,
+including resource processing; there is no evidence that an AGP/AAPT2 compatibility
+change is needed. Keep this override rather than letting AGP resolve its
+Maven-hosted AAPT2 binary, which NixOS cannot execute because it is dynamically
+linked for generic Linux. A direct dev-shell Gradle invocation must pass the same
+property explicitly (for example,
+`-Pandroid.aapt2FromMavenOverride="$ANDROID_HOME/build-tools/36.0.0/aapt2"`);
+without it `processDebugResources` fails at AAPT2 daemon startup. This is a toolchain
+launcher issue, not an app compile defect or a dependency-cache problem.
 
 ## Filtered Nix source inputs
 

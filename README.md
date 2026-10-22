@@ -13,7 +13,7 @@ Mission: **get everything right the first time, without unnecessary choices.**
 
 | Document | What it gives you |
 |---|---|
-| [docs/sentence-mining-flow.md](docs/sentence-mining-flow.md) | **AUTHORITATIVE for the UI** — the approved screen-and-copy contract: every view, string, state and choreography (progress A) |
+| [docs/card-flow-contract.md](docs/card-flow-contract.md) | **AUTHORITATIVE for the UI** — the approved Capture → Card contract: every view, string, state and choreography |
 | [SPEC.md](SPEC.md) | **AUTHORITATIVE** — what the app must do: behaviour, contracts, acceptance criteria R01–R39 |
 | [docs/DESIGN.md](docs/DESIGN.md) | **AUTHORITATIVE** — what it should feel like: intent, tone, visual language |
 | [docs/BEST-PRACTICES.md](docs/BEST-PRACTICES.md) | **AUTHORITATIVE** — how work is done: modules, conventions, gates, commits, evidence |
@@ -24,17 +24,17 @@ Mission: **get everything right the first time, without unnecessary choices.**
 Feature work lands on [`dev`](docs/branching.md), not directly on `main`. Breaking `dev` is a
 nuisance; breaking `main` is a delivery failure.
 
-**Design approved; implementation compliance pending.** The 22 October contract selects progress A:
-title-only navigation and one grouped Review busy state in the stable action area, one selectable
-sentence, no duplicate hero, no generated-field repair workbench, separate optional notes/tags, and a
-backgroundable setup wizard. Native Material 3 Expressive motion and haptics support the task without
-gamification. Approval is not native acceptance, and older mockups, matrices and dated status reports
-neither control the UI nor establish compliance.
+**Design approved; implementation compliance pending.** The 22 October contract defines two states —
+Capture and the card — with the mode switch as Capture's only chrome, a single selectable sentence,
+one hint line above a pinned footer, a 16:9 photograph band, no step tracker, no generated-field
+repair workbench, and separate optional notes/tags. Native Material 3 Expressive motion and haptics
+carry the feel without gamification. Approval is not native acceptance, and older mockups, matrices
+and dated status reports neither control the UI nor establish compliance.
 
 ## Quick start
 
 ```sh
-nix develop                     # JDK 17, Gradle 8.14.4, SDK 37.0, build-tools 36.0.0, NDK, CMake, emulator, adb
+nix develop                     # JDK 17, Gradle 9.7.1, SDK 37.0, build-tools 36.0.0, NDK, CMake, emulator, adb
 ./scripts/test-core.sh          # fast lane: platform-independent core tests
 gradle -Pandroid.aapt2FromMavenOverride="$ANDROID_HOME/build-tools/36.0.0/aapt2" \
   testDebugUnitTest assembleDebug
