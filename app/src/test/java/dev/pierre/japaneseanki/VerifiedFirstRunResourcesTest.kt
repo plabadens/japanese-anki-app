@@ -182,8 +182,8 @@ class VerifiedFirstRunResourcesTest {
         assertEquals(0, transport.opens)
     }
 
-    @Test fun storageFailureDuringStreamingKeepsExistingVersionAndCleansPartial() {
-        val root = temporaryFolder.newFolder("mid-transfer-storage")
+    @Test fun networkErrorWithDiskLikeMessageIsNotMisclassifiedAsStorage() {
+        val root = temporaryFolder.newFolder("network-error")
         val oldBytes = "old version".toByteArray()
         val old = File(root, "dictionary-v1.bin").apply { writeBytes(oldBytes) }
         val newBytes = "new version that cannot fit".toByteArray()
@@ -200,7 +200,7 @@ class VerifiedFirstRunResourcesTest {
         val spec = resource(newBytes, version = "2", target = "dictionary-v2.bin")
         val installer = VerifiedFirstRunResourceInstaller(root, QueueTransport(response(newBytes, body = body)))
 
-        assertThrows(ResourceStorageException::class.java) { installer.install(spec) }
+        assertThrows(ResourceTransferException::class.java) { installer.install(spec) }
 
         assertEquals(oldBytes.toList(), old.readBytes().toList())
         assertFalse(File(root, spec.targetFileName).exists())
@@ -220,6 +220,16 @@ class VerifiedFirstRunResourcesTest {
         val valid = installer(QueueTransport(response(validZip))).install(validSpec, onProgress = { progress += it })
         assertEquals(ResourceDisposition.DOWNLOADED, valid.disposition)
         assertTrue(progress.any { it.phase == ResourceProgressPhase.VALIDATING_ARCHIVE })
+
+        val badCrcZip = corruptCentralDirectoryCrc(validZip)
+        val badCrcSpec = resource(
+            badCrcZip,
+            id = "unidic",
+            version = "crc",
+            target = "unidic-runtime-crc.zip",
+            archiveEntries = listOf(ResourceArchiveEntry("unidic/sys.dic", content.size.toLong())),
+        )
+        assertThrows(ResourceArchiveException::class.java) { installer(QueueTransport(response(badCrcZip))).install(badCrcSpec) }
 
         val traversalZip = zipOf("../escape" to content)
         val traversalSpec = resource(
@@ -255,16 +265,18 @@ class VerifiedFirstRunResourcesTest {
         assertThrows(ResourceArchiveException::class.java) { installer(QueueTransport(response(unexpectedZip))).install(unexpectedSpec) }
     }
 
-    @Test fun manifestLimitRejectsOversizedPayloadBeforeAllocationOrTransport() {
-        assertThrows(IllegalArgumentException::class.java) {
-            FirstRunResource(
-                id = "dictionary",
-                version = "1",
-                uri = URI("https://example.invalid/dictionary.bin"),
-                sha256 = "0".repeat(64),
-                expectedBytes = 2L * 1024 * 1024 * 1024 + 1,
-                targetFileName = "dictionary.bin",
-            )
+    @Test fun manifestLimitRejectsAtOrAboveTheReleaseAssetBound() {
+        listOf(2L * 1024 * 1024 * 1024, 2L * 1024 * 1024 * 1024 + 1).forEach { size ->
+            assertThrows(IllegalArgumentException::class.java) {
+                FirstRunResource(
+                    id = "dictionary",
+                    version = "1",
+                    uri = URI("https://example.invalid/dictionary.bin"),
+                    sha256 = "0".repeat(64),
+                    expectedBytes = size,
+                    targetFileName = "dictionary.bin",
+                )
+            }
         }
     }
 
@@ -331,5 +343,15 @@ class VerifiedFirstRunResourcesTest {
             }
         }
         return output.toByteArray()
+    }
+
+    private fun corruptCentralDirectoryCrc(original: ByteArray): ByteArray {
+        val corrupt = original.copyOf()
+        val centralDirectoryOffset = (0..corrupt.size - 4).firstOrNull { index ->
+            corrupt[index] == 0x50.toByte() && corrupt[index + 1] == 0x4b.toByte() &&
+                corrupt[index + 2] == 0x01.toByte() && corrupt[index + 3] == 0x02.toByte()
+        } ?: throw AssertionError("ZIP central directory was not found")
+        corrupt[centralDirectoryOffset + 16] = (corrupt[centralDirectoryOffset + 16].toInt() xor 1).toByte()
+        return corrupt
     }
 }

@@ -15,6 +15,7 @@ import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
+import java.util.zip.CRC32
 import java.util.zip.ZipFile
 
 private const val MAX_RESOURCE_BYTES = 2L * 1024 * 1024 * 1024 - 1
@@ -55,7 +56,7 @@ class FirstRunResource(
         require(version.matches(Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,63}"))) { "Invalid resource version" }
         require(uri.isAbsolute && uri.scheme.equals("https", ignoreCase = true) &&
             !uri.host.isNullOrBlank() && uri.userInfo == null && uri.rawQuery == null && uri.fragment == null
-        ) { "Resource URL must be an immutable HTTPS URL without credentials or query parameters" }
+        ) { "Resource URL must be HTTPS and must not contain credentials, query parameters, or a fragment" }
         require(sha256.matches(Regex("[0-9a-f]{64}"))) { "Resource SHA-256 must be 64 lowercase hexadecimal characters" }
         require(expectedBytes in 1..MAX_RESOURCE_BYTES) { "Invalid resource byte limit" }
         require(targetFileName.matches(Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")) &&
@@ -132,7 +133,11 @@ class HttpsResourceTransport(
                     val location = connection.getHeaderField("Location")
                         ?: throw IOException("Resource server returned a redirect without a location")
                     if (redirectCount == maxRedirects) throw IOException("Resource server exceeded redirect limit")
-                    val next = current.resolve(location)
+                    val next = try {
+                        current.resolve(location)
+                    } catch (_: IllegalArgumentException) {
+                        throw IOException("Resource server returned an invalid redirect")
+                    }
                     if (!next.scheme.equals("https", ignoreCase = true) || next.host.isNullOrBlank() ||
                         next.userInfo != null || next.fragment != null
                     ) throw IOException("Resource redirect is not a stable HTTPS URL")
@@ -247,19 +252,31 @@ class VerifiedFirstRunResourceInstaller(
                 }
             }
 
-            if (availableBytes(rootPath.toFile()) < resource.expectedBytes) {
-                throw ResourceStorageException("Not enough free storage for ${resource.id}")
-            }
             val part = rootPath.resolve(".${resource.id}-${resource.version}.part").toFile()
             try {
-                Files.deleteIfExists(part.toPath())
+                try {
+                    Files.deleteIfExists(part.toPath())
+                } catch (failure: IOException) {
+                    throw ResourceStorageException("Could not clear stale resource state", failure)
+                }
+                if (availableBytes(rootPath.toFile()) < resource.expectedBytes) {
+                    throw ResourceStorageException("Not enough free storage for ${resource.id}")
+                }
                 download(resource, part, cancellation, onProgress)
                 if (resource.archiveEntries.isNotEmpty()) {
-                    onProgress(ResourceProgress(resource.id, ResourceProgressPhase.VALIDATING_ARCHIVE, 0, resource.archiveEntries.sumOf { it.sizeBytes }))
+                    val archiveBytes = resource.archiveEntries.sumOf { it.sizeBytes }
+                    onProgress(ResourceProgress(resource.id, ResourceProgressPhase.VALIDATING_ARCHIVE, 0, archiveBytes))
                     validateArchive(part, resource, cancellation, onProgress)
                 }
                 checkCancelled(cancellation)
-                onProgress(ResourceProgress(resource.id, ResourceProgressPhase.ACTIVATING, resource.expectedBytes, resource.expectedBytes))
+                onProgress(
+                    ResourceProgress(
+                        resource.id,
+                        ResourceProgressPhase.ACTIVATING,
+                        resource.expectedBytes,
+                        resource.expectedBytes,
+                    ),
+                )
                 try {
                     Files.move(
                         part.toPath(),
@@ -334,22 +351,40 @@ class VerifiedFirstRunResourceInstaller(
             val digest = MessageDigest.getInstance("SHA-256")
             var received = 0L
             onProgress(ResourceProgress(resource.id, ResourceProgressPhase.DOWNLOADING, 0, resource.expectedBytes))
-            FileOutputStream(part, false).use { output ->
-                val buffer = ByteArray(64 * 1024)
-                while (true) {
-                    checkCancelled(cancellation)
-                    val count = opened.body.read(buffer)
-                    if (count < 0) break
-                    if (count == 0) continue
-                    if (received > resource.expectedBytes - count) {
-                        throw ResourceIntegrityException("Resource exceeded its manifest byte limit")
+            try {
+                FileOutputStream(part, false).use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        checkCancelled(cancellation)
+                        val count = try {
+                            opened.body.read(buffer)
+                        } catch (failure: IOException) {
+                            if (Thread.currentThread().isInterrupted) throw ResourceCancelledException()
+                            throw ResourceTransferException("Could not read the resource response", failure)
+                        }
+                        if (count < 0) break
+                        if (count == 0) continue
+                        if (received > resource.expectedBytes - count) {
+                            throw ResourceIntegrityException("Resource exceeded its manifest byte limit")
+                        }
+                        output.write(buffer, 0, count)
+                        digest.update(buffer, 0, count)
+                        received += count
+                        onProgress(
+                            ResourceProgress(
+                                resource.id,
+                                ResourceProgressPhase.DOWNLOADING,
+                                received,
+                                resource.expectedBytes,
+                            ),
+                        )
                     }
-                    output.write(buffer, 0, count)
-                    digest.update(buffer, 0, count)
-                    received += count
-                    onProgress(ResourceProgress(resource.id, ResourceProgressPhase.DOWNLOADING, received, resource.expectedBytes))
+                    output.fd.sync()
                 }
-                output.fd.sync()
+            } catch (failure: ResourceInstallException) {
+                throw failure
+            } catch (failure: IOException) {
+                throw ResourceStorageException("Could not persist resource data", failure)
             }
             if (received != resource.expectedBytes) throw ResourceIntegrityException("Resource ended before its manifest length")
             onProgress(ResourceProgress(resource.id, ResourceProgressPhase.VERIFYING, received, resource.expectedBytes))
@@ -394,6 +429,7 @@ class VerifiedFirstRunResourceInstaller(
         onProgress: (ResourceProgress) -> Unit = {},
     ) {
         val expected = resource.archiveEntriesByPath
+        val totalExpandedBytes = expected.values.sumOf { it.sizeBytes }
         val seen = HashSet<String>()
         var expanded = 0L
         try {
@@ -410,6 +446,7 @@ class VerifiedFirstRunResourceInstaller(
                     if (!seen.add(entry.name) || entry.size != specification.sizeBytes) {
                         throw ResourceArchiveException("Resource archive entry did not match its manifest")
                     }
+                    val crc = CRC32()
                     var entryBytes = 0L
                     zip.getInputStream(entry).use { input ->
                         val buffer = ByteArray(64 * 1024)
@@ -421,13 +458,24 @@ class VerifiedFirstRunResourceInstaller(
                             if (entryBytes > specification.sizeBytes - count) {
                                 throw ResourceArchiveException("Resource archive entry exceeded its size limit")
                             }
+                            crc.update(buffer, 0, count)
                             entryBytes += count
                             expanded += count
-                            onProgress(ResourceProgress(resource.id, ResourceProgressPhase.VALIDATING_ARCHIVE, expanded, expected.values.sumOf { it.sizeBytes }))
+                            onProgress(
+                                ResourceProgress(
+                                    resource.id,
+                                    ResourceProgressPhase.VALIDATING_ARCHIVE,
+                                    expanded,
+                                    totalExpandedBytes,
+                                ),
+                            )
                         }
                     }
                     if (entryBytes != specification.sizeBytes) {
                         throw ResourceArchiveException("Resource archive entry ended early")
+                    }
+                    if (entry.crc < 0 || crc.value != entry.crc) {
+                        throw ResourceArchiveException("Resource archive entry CRC did not match its directory")
                     }
                 }
             }
