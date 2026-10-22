@@ -58,7 +58,10 @@ internal fun rememberCameraController(): LifecycleCameraController {
     }
     DisposableEffect(lifecycleOwner) {
         controller.bindToLifecycle(lifecycleOwner)
-        onDispose { controller.unbind() }
+        onDispose {
+            controller.cameraControl?.enableTorch(false)
+            controller.unbind()
+        }
     }
     return controller
 }

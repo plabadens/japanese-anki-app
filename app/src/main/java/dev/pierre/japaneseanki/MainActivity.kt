@@ -3064,24 +3064,23 @@ class MainActivity : ComponentActivity() {
                     ) {
                         var submitAction: () -> Unit = {}
                         val reviewTarget = displayTarget?.takeIf { it.textIn(displaySentence) != null }
-                        FlowTopBar(
-                            title = when (visibleRoute) {
-                                AppRoute.Capture -> stringResource(R.string.legacy_capture_input_title)
-                                AppRoute.Card -> stringResource(R.string.card)
-                            },
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            onBack = if (navigationLocked) null else when (visibleRoute) {
-                                AppRoute.Card -> ({ route = AppRoute.Capture })
-                                AppRoute.Capture -> null
-                            },
-                            onSettings = if (!navigationLocked) ({ openSettings() }) else null,
-                            onClose = if (visibleRoute == AppRoute.Capture && !navigationLocked) {
-                                ({ showDiscardConfirm = true })
-                            } else {
-                                null
-                            },
-                        )
-                        if (visibleRoute == AppRoute.Capture &&
+                        if (visibleRoute != AppRoute.Capture) {
+                            FlowTopBar(
+                                title = when (visibleRoute) {
+                                    AppRoute.Capture -> ""
+                                    AppRoute.Target -> "Target"
+                                    AppRoute.Review -> "Review"
+                                },
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                onBack = if (navigationLocked) null else when (visibleRoute) {
+                                    AppRoute.Review -> ({ generationStarted = false; route = AppRoute.Target })
+                                    AppRoute.Target -> ({ route = AppRoute.Capture })
+                                    AppRoute.Capture -> null
+                                },
+                                onSettings = if (!navigationLocked) ({ openSettings() }) else null,
+                            )
+                        }
+                        if (visibleRoute != AppRoute.Capture &&
                             (analyzerLoading || analyzerError != null || dictionaryLoading || dictionaryError != null)
                         ) {
                             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
@@ -3275,7 +3274,6 @@ class MainActivity : ComponentActivity() {
                                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                                     )
                                 },
-                                imageAttached = imageAttached,
                                 imageStatus = when {
                                     imageProcessing -> stringResource(R.string.legacy_capture_preparing_photo_for_anki)
                                     imageError != null -> imageError
@@ -3285,8 +3283,124 @@ class MainActivity : ComponentActivity() {
                                 imageFailed = !imageProcessing && imageError != null,
                                 onRetryImage = {
                                     val source = photoSourcePath?.let(::File)?.takeIf(File::isFile)
-                                    if (source != null) processImage(source, true)
-                                    else photoPicker.launch(
+                                    if (source != null) {
+                                        processImage(source, true)
+                                    } else {
+                                        photoPicker.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                        )
+                                    }
+                                },
+                                onSettings = { openSettings() },
+                            )
+                            AppRoute.Target -> TargetScreen(
+                                sentence = editor.text,
+                                tokens = japaneseTokens,
+                                selectedSpan = target,
+                                onSelectSpan = { span ->
+                                    selectTarget(span)
+                                    editor = editor.copy(selection = TextRange(span.start, span.end))
+                                },
+                                onEditSentence = { showSentenceEditor = true },
+                                entryLabel = selectedDictionaryEntry?.expression ?: vocabulary.takeIf { it.isNotBlank() },
+                                entryDetail = selectedDictionaryEntry?.reading,
+                                entryCount = dictionaryEntries.size,
+                                onChooseEntry = { showDictionarySheet = true },
+                                senses = selectedDictionaryEntry?.senses
+                                    ?.map { sense -> sense.glosses.joinToString("; ") }
+                                    ?: emptyList(),
+                                selectedSenses = selectedSenseIndices,
+                                onToggleSense = { index, checked ->
+                                    if (!submissionLocked) {
+                                        val newSelection = if (checked) {
+                                            selectedSenseIndices + index
+                                        } else {
+                                            selectedSenseIndices - index
+                                        }
+                                        selectedSenseIndices = newSelection
+                                        selectedDictionaryEntry?.let { entry ->
+                                            definition = newSelection.sorted().mapNotNull { selected ->
+                                                entry.senses.getOrNull(selected)?.glosses?.joinToString("; ")
+                                            }.joinToString("\n")
+                                        }
+                                        definitionManuallyEdited = false
+                                        definitionProvenanceKnown = true
+                                    }
+                                },
+                                meaningStatus = when {
+                                    ocrError != null -> ocrError
+                                    preparationAuthorizationError != null -> preparationAuthorizationError
+                                    target == null -> "Tap a word to choose the target."
+                                    dictionarySearchLoading -> "Searching JMdict…"
+                                    selectedDictionaryEntry == null && dictionaryLoading -> "Preparing the offline dictionary…"
+                                    selectedDictionaryEntry == null && dictionaryEntries.size > 1 -> "Choose the intended dictionary entry."
+                                    selectedDictionaryEntry == null && dictionaryReady -> "No dictionary match for this selection."
+                                    vocabularyReadingError != null -> vocabularyReadingError
+                                    pitchIndexError != null -> pitchIndexError
+                                    else -> null
+                                },
+                                canContinue = !submissionLocked && target != null && selectedDictionaryEntry != null &&
+                                    definition.isNotBlank() && pitch != null,
+                                continueHint = when {
+                                    target == null -> "Tap a word to continue."
+                                    selectedDictionaryEntry == null -> "Choose a dictionary entry to continue."
+                                    definition.isBlank() -> "Choose a meaning to continue."
+                                    pitch == null -> "A source-listed pitch pattern is required to continue."
+                                    else -> null
+                                },
+                                onContinue = { continueToReview() },
+                                modifier = Modifier.weight(1f).fillMaxWidth(),
+                                locked = submissionLocked,
+                                tokensLoading = tokenizationLoading,
+                                hasMoreEntries = dictionaryHasMore && !dictionarySearchLoading,
+                                onLoadMoreEntries = loadMoreMatches,
+                                ocrChoicesAvailable = ocrChoices.size > 1,
+                                onReopenOcrChooser = { showOcrSheet = ocrChoices.size > 1 },
+                                vocabularyReading = vocabularyReading,
+                                onVocabularyReadingChange = { applyVocabularyReading(it) },
+                                vocabularyReadingError = vocabularyReadingError,
+                                correctableReadings = correctableReadings,
+                                onReadingCorrection = { span, reading -> applyReadingCorrection(span, reading) },
+                                readingCorrectionError = readingCorrectionError,
+                                definition = definition,
+                                definitionStale = dependentFieldsStale && definitionManuallyEdited,
+                                onDefinitionChange = { text ->
+                                    if (!submissionLocked) {
+                                        definition = text
+                                        definitionManuallyEdited = true
+                                        definitionProvenanceKnown = true
+                                        selectedSenseIndices = emptySet()
+                                        dependentFieldsStale = false
+                                    }
+                                },
+                                onAcknowledgeDefinition = { dependentFieldsStale = false },
+                                translation = translation,
+                                translationPending = activeTranslationResult() is TranslationResult.Pending,
+                                translationError = (activeTranslationResult() as? TranslationResult.Failed)?.message,
+                                translationStale = translationDraft.manuallyEdited && translationDraft.stale,
+                                onTranslationChange = { text ->
+                                    if (!submissionLocked) {
+                                        translationRequestRevision++
+                                        translationDraft = translationDraft.saveManualEdit(text)
+                                    }
+                                },
+                                onRetryTranslation = {
+                                    translationAutoAllowed = true
+                                    translationRetry++
+                                },
+                                pitchAlternatives = pitchCandidates.map(AjtPitchRecord::accent),
+                                selectedPitchAccent = pitchAccentText.toIntOrNull(),
+                                onSelectPitch = { accent ->
+                                    pitchCandidates.firstOrNull { it.accent == accent }?.let { record ->
+                                        pitchAccentText = record.accent.toString()
+                                        pitchHtmlText = record.html
+                                    }
+                                },
+                                imageAttached = imageAttached,
+                                imageProcessing = imageProcessing,
+                                imageError = imageError,
+                                onChoosePhoto = {
+                                    if (!submissionLocked) noteImagePicker.launch(
                                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                                     )
                                 },

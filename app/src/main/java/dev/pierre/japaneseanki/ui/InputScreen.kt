@@ -1,8 +1,10 @@
 package dev.pierre.japaneseanki.ui
 
-import androidx.compose.ui.res.stringResource
-
-import androidx.compose.foundation.layout.Arrangement
+import androidx.camera.view.LifecycleCameraController
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -16,22 +18,16 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.background
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,23 +37,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.pierre.japaneseanki.R
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.io.File
 
-/**
- * Input view of the portrait composition: an uncropped 4:3-sensor preview shown upright in a 3:4
- * viewport, with a Gallery/shutter row and a connected Camera/Type selector below it. Landscape
- * photographs remain inside this portrait composition; the app never becomes a landscape layout.
- */
+/** The camera and type modes share one fixed top bar and keep their primary action pinned. */
 @Composable
 internal fun InputScreen(
     captureMode: String,
@@ -81,13 +79,11 @@ internal fun InputScreen(
     onRetryOcr: () -> Unit = {},
     ocrChoicesAvailable: Boolean = false,
     onReopenOcrChooser: () -> Unit = {},
-    imageAttached: Boolean = false,
     imageStatus: String? = null,
     imageFailed: Boolean = false,
     onRetryImage: () -> Unit = {},
+    onSettings: () -> Unit = {},
 ) {
-    // One controller drives both the preview and shutter. Recomposition for status/capture state
-    // does not recreate it or change the measured preview bounds.
     val cameraController = if (captureMode == "Photo" && cameraPermissionGranted) {
         rememberCameraController()
     } else {
@@ -96,174 +92,196 @@ internal fun InputScreen(
     var captureInProgress by remember { mutableStateOf(false) }
     val captureOperationGate = remember { CaptureOperationGate() }
     val actionsEnabled = captureActionsEnabled(enabled, captureInProgress || captureOperationGate.isActive)
+    val context = LocalContext.current
+    val hasTorch = if (cameraController != null) rememberTorchAvailability(cameraController) else false
+    var torchOn by remember(cameraController) { mutableStateOf(false) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(cameraController, lifecycleOwner) {
+        val observer = if (cameraController == null) null else LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                cameraController.cameraControl?.enableTorch(false)
+                torchOn = false
+            }
+        }
+        observer?.let(lifecycleOwner.lifecycle::addObserver)
+        onDispose {
+            cameraController?.cameraControl?.enableTorch(false)
+            observer?.let(lifecycleOwner.lifecycle::removeObserver)
+            torchOn = false
+        }
+    }
 
     if (captureMode == "Photo") {
-        Column(modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            // A full-width upright 3:4 viewport is a design constraint, not something to shrink
-            // when a short screen or large text leaves less room for chrome. The page scrolls.
-            BoxWithConstraints(Modifier.fillMaxWidth()) {
-                val previewSize = cameraPreviewSizeDp(maxWidth.value)
-                Box(
-                    modifier = Modifier
-                        .width(previewSize.width.dp)
-                        .height(previewSize.height.dp)
-                        .align(Alignment.TopCenter)
-                        .testTag("camera-preview-viewport"),
-                ) {
-                    PhotoPane(
-                        modifier = Modifier.fillMaxSize(),
-                        enabled = actionsEnabled,
-                        controller = cameraController,
-                        operationGate = captureOperationGate,
-                    )
-                    InputStatusPanel(
+        Column(modifier.fillMaxSize()) {
+            CaptureTopBar(
+                captureMode = captureMode,
+                enabled = actionsEnabled && !captureOperationGate.isActive,
+                onCaptureModeChange = onCaptureModeChange,
+                onSettings = onSettings,
+            )
+            BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+                val layout = cameraCaptureLayoutDp(maxWidth.value, maxHeight.value)
+                Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(
                         modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                            .width(layout.preview.width.dp)
+                            .height(layout.preview.height.dp)
+                            .testTag("camera-preview-viewport"),
+                    ) {
+                        PhotoPane(
+                            modifier = Modifier.fillMaxSize(),
+                            controller = cameraController,
+                        )
+                    }
+                    Box(
+                        modifier = Modifier.fillMaxWidth().height(layout.equalGap.dp)
+                            .testTag("camera-gap-above-controls"),
+                        contentAlignment = Alignment.BottomCenter,
+                    ) {
+                        InputStatusPanel(
+                            enabled = actionsEnabled,
+                            operationGate = captureOperationGate,
+                            cameraError = cameraError,
+                            ocrLoading = ocrLoading,
+                            ocrError = ocrError,
+                            onRetryOcr = onRetryOcr,
+                            ocrChoicesAvailable = ocrChoicesAvailable,
+                            onReopenOcrChooser = onReopenOcrChooser,
+                            imageStatus = imageStatus,
+                            imageFailed = imageFailed,
+                            onRetryImage = onRetryImage,
+                        )
+                    }
+                    CaptureRow(
                         enabled = actionsEnabled,
                         operationGate = captureOperationGate,
-                        cameraError = cameraError,
-                        ocrLoading = ocrLoading,
-                        ocrError = ocrError,
-                        onRetryOcr = onRetryOcr,
-                        ocrChoicesAvailable = ocrChoicesAvailable,
-                        onReopenOcrChooser = onReopenOcrChooser,
-                        imageStatus = imageStatus,
-                        imageFailed = imageFailed,
-                        onRetryImage = onRetryImage,
+                        controller = cameraController,
+                        hasTorch = hasTorch,
+                        torchOn = torchOn,
+                        onToggleTorch = {
+                            val next = !torchOn
+                            val future = cameraController?.cameraControl?.enableTorch(next)
+                            if (future != null) {
+                                torchOn = next
+                                future.addListener(
+                                    {
+                                        if (runCatching { future.get() }.isFailure && torchOn == next) {
+                                            torchOn = !next
+                                        }
+                                    },
+                                    ContextCompat.getMainExecutor(context),
+                                )
+                            }
+                        },
+                        onRequestCamera = onRequestCamera,
+                        onOpenGallery = onOpenGallery,
+                        onCaptured = onCaptured,
+                        onCameraError = onCameraError,
+                        onCaptureStateChanged = { inProgress ->
+                            captureInProgress = inProgress
+                            onCaptureInProgressChanged(inProgress)
+                        },
+                        captureFailed = cameraError != null,
+                        outputDirectory = outputDirectory,
+                        modifier = Modifier.fillMaxWidth().height(CAMERA_CONTROL_ROW_HEIGHT_DP.dp),
+                    )
+                    Spacer(
+                        Modifier.fillMaxWidth().height(layout.equalGap.dp)
+                            .testTag("camera-gap-below-controls"),
                     )
                 }
             }
-            CaptureRow(
-                enabled = actionsEnabled,
-                operationGate = captureOperationGate,
-                controller = cameraController,
-                onRequestCamera = onRequestCamera,
-                onOpenGallery = onOpenGallery,
-                onCaptured = onCaptured,
-                onCameraError = onCameraError,
-                onCaptureStateChanged = { inProgress ->
-                    captureInProgress = inProgress
-                    onCaptureInProgressChanged(inProgress)
-                },
-                captureFailed = cameraError != null,
-                outputDirectory = outputDirectory,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(CAMERA_CONTROL_ROW_HEIGHT_DP.dp),
-            )
-            CaptureModeSelector(
-                captureMode = captureMode,
-                onCaptureModeChange = onCaptureModeChange,
-                enabled = actionsEnabled && !captureOperationGate.isActive,
-                modifier = Modifier.padding(vertical = 8.dp),
-            )
-            Spacer(Modifier.height(8.dp))
         }
     } else {
-        BoxWithConstraints(modifier.fillMaxSize()) {
-            val writingHeight = (maxHeight - 280.dp).coerceAtLeast(220.dp)
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                WritingPane(
-                    modifier = Modifier.fillMaxWidth().height(writingHeight).padding(horizontal = 16.dp).padding(top = 8.dp),
-                    editor = editor,
-                    onEditorChange = onEditorChange,
-                    enabled = actionsEnabled,
-                )
-                // Keep the attachment/OCR message slot stable; longer content scrolls within it.
-                Box(Modifier.fillMaxWidth().height(INPUT_STATUS_SLOT_HEIGHT_DP.dp)) {
-                    InputStatusPanel(
-                        modifier = Modifier.align(Alignment.Center).padding(horizontal = 16.dp),
-                        enabled = actionsEnabled,
-                        operationGate = captureOperationGate,
-                        cameraError = null,
-                        ocrLoading = false,
-                        ocrError = null,
-                        onRetryOcr = onRetryOcr,
-                        ocrChoicesAvailable = false,
-                        onReopenOcrChooser = onReopenOcrChooser,
-                        imageStatus = imageStatus,
-                        imageFailed = imageFailed,
-                        onRetryImage = when (photoRetryPath(captureMode)) {
-                            PhotoRetryPath.REOPEN_TYPED_ATTACHMENT_PICKER -> onChoosePhoto
-                            PhotoRetryPath.RETRY_SOURCE -> onRetryImage
-                        },
-                    )
-                }
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(
-                            enabled = actionsEnabled && !captureOperationGate.isActive,
-                            onClick = { if (!captureOperationGate.isActive) onChoosePhoto() },
-                        ) {
-                            Text(if (imageAttached) stringResource(R.string.legacy_capture_change_photo) else stringResource(R.string.legacy_capture_add_photo_optional))
+        Column(modifier.fillMaxSize()) {
+            CaptureTopBar(
+                captureMode = captureMode,
+                enabled = actionsEnabled && !captureOperationGate.isActive,
+                onCaptureModeChange = onCaptureModeChange,
+                onSettings = onSettings,
+            )
+            WritingPane(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                editor = editor,
+                onEditorChange = onEditorChange,
+                enabled = actionsEnabled,
+            )
+            TextButton(
+                enabled = actionsEnabled && !captureOperationGate.isActive,
+                onClick = {
+                    if (!captureOperationGate.isActive) {
+                        when (photoRetryPath(captureMode)) {
+                            PhotoRetryPath.REOPEN_TYPED_ATTACHMENT_PICKER -> onChoosePhoto()
+                            PhotoRetryPath.RETRY_SOURCE -> onRetryImage()
                         }
-                        Spacer(Modifier.weight(1f))
                     }
-                    FlowPrimaryButton(
-                        text = stringResource(R.string.legacy_capture_continue_action),
-                        onClick = { if (!captureOperationGate.isActive) onContinue() },
-                        enabled = actionsEnabled && !captureOperationGate.isActive && editor.text.isNotBlank(),
-                    )
-                }
-                CaptureModeSelector(
-                    captureMode = captureMode,
-                    onCaptureModeChange = onCaptureModeChange,
-                    enabled = actionsEnabled && !captureOperationGate.isActive,
-                    modifier = Modifier.padding(vertical = 8.dp),
-                )
-                Spacer(Modifier.height(8.dp))
+                },
+                modifier = Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 16.dp)
+                    .testTag("capture-attach-photo"),
+            ) {
+                Text("Attach photo")
             }
+            FlowPrimaryButton(
+                text = "Choose word",
+                onClick = { if (!captureOperationGate.isActive) onContinue() },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 12.dp)
+                    .testTag("capture-choose-word"),
+                enabled = actionsEnabled && !captureOperationGate.isActive && editor.text.isNotBlank(),
+                showArrow = false,
+            )
         }
     }
 }
 
 @Composable
-private fun CaptureModeSelector(
+private fun CaptureTopBar(
     captureMode: String,
-    onCaptureModeChange: (String) -> Unit,
     enabled: Boolean,
-    modifier: Modifier = Modifier,
+    onCaptureModeChange: (String) -> Unit,
+    onSettings: () -> Unit,
 ) {
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .heightIn(min = INPUT_MODE_SELECTOR_MIN_HEIGHT_DP.dp)
-            .testTag("input-mode-selector"),
-        shape = RoundedCornerShape(28.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    Box(
+        Modifier.fillMaxWidth().height(CAMERA_TOP_BAR_HEIGHT_DP.dp).testTag("capture-top-bar"),
     ) {
-        Row(
-            modifier = Modifier.selectableGroup().heightIn(min = INPUT_MODE_SELECTOR_MIN_HEIGHT_DP.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Surface(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .width(176.dp)
+                .height(CAMERA_MODE_SWITCH_HEIGHT_DP.dp)
+                .testTag("capture-mode-switch"),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         ) {
-            ModeSelectorOption(
-                label = stringResource(R.string.camera),
-                tag = "input-mode-camera",
-                selected = captureMode == "Photo",
-                enabled = enabled,
-                modifier = Modifier.weight(1f),
-                onClick = { onCaptureModeChange("Photo") },
-            )
-            Box(
-                Modifier
-                    .width(1.dp)
-                    .heightIn(min = INPUT_MODE_SELECTOR_MIN_HEIGHT_DP.dp)
-                    .background(MaterialTheme.colorScheme.outlineVariant),
-            )
-            ModeSelectorOption(
-                label = stringResource(R.string.type),
-                tag = "input-mode-type",
-                selected = captureMode == "Type",
-                enabled = enabled,
-                modifier = Modifier.weight(1f),
-                onClick = { onCaptureModeChange("Type") },
+            Row(Modifier.fillMaxSize().selectableGroup()) {
+                ModeSelectorOption(
+                    label = "Camera",
+                    tag = "capture-mode-camera",
+                    selected = captureMode == "Photo",
+                    enabled = enabled,
+                    modifier = Modifier.weight(1f),
+                    onClick = { onCaptureModeChange("Photo") },
+                )
+                ModeSelectorOption(
+                    label = "Type",
+                    tag = "capture-mode-type",
+                    selected = captureMode == "Type",
+                    enabled = enabled,
+                    modifier = Modifier.weight(1f),
+                    onClick = { onCaptureModeChange("Type") },
+                )
+            }
+        }
+        androidx.compose.material3.IconButton(
+            onClick = onSettings,
+            enabled = enabled,
+            modifier = Modifier.align(Alignment.CenterEnd).size(48.dp).testTag("capture-settings"),
+        ) {
+            androidx.compose.material3.Icon(
+                MaterialSymbols.Settings,
+                contentDescription = "Settings",
+                modifier = Modifier.size(24.dp),
             )
         }
     }
@@ -283,26 +301,34 @@ private fun ModeSelectorOption(
     )
     Box(
         modifier = modifier
-            .heightIn(min = INPUT_MODE_SELECTOR_MIN_HEIGHT_DP.dp)
-            .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
+            .fillMaxHeight()
+            .padding(1.dp)
+            .clip(CircleShape)
+            .background(
+                if (selected) MaterialTheme.colorScheme.secondaryContainer
+                else MaterialTheme.colorScheme.surface,
+            )
+            .then(
+                if (selected) Modifier.border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                else Modifier,
+            )
             .selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onClick)
-            .semantics { stateDescription = selectionState }
-            .testTag(tag)
-            .padding(horizontal = 8.dp, vertical = 8.dp),
+            .semantics { stateDescription = if (selected) "Selected" else "Not selected" }
+            .testTag(tag),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             label,
             maxLines = 1,
             style = MaterialTheme.typography.labelLarge,
-            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+            color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
+            else MaterialTheme.colorScheme.onSurface,
         )
     }
 }
 
 @Composable
 private fun InputStatusPanel(
-    modifier: Modifier = Modifier,
     enabled: Boolean,
     operationGate: CaptureOperationGate,
     cameraError: String?,
@@ -321,83 +347,53 @@ private fun InputStatusPanel(
         hasOcrChoices = ocrChoicesAvailable,
         imageFailed = imageFailed,
     )
-    if (cameraError == null && ocrError == null && !ocrLoading &&
-        !ocrChoicesAvailable && imageStatus == null
-    ) return
+    val message = when {
+        ocrLoading -> "Reading text…"
+        ocrError?.startsWith("No text was found") == true -> "No text found."
+        ocrError != null -> ocrError
+        cameraError != null -> cameraError
+        imageStatus != null -> imageStatus
+        recoveryActions.reopenOcrChoices -> "Text choices are ready."
+        else -> null
+    } ?: return
 
-    Surface(
-        modifier = modifier.fillMaxWidth().heightIn(max = INPUT_STATUS_OVERLAY_MAX_HEIGHT_DP.dp),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-        contentColor = MaterialTheme.colorScheme.onSurface,
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(max = 48.dp)
+            .testTag("capture-status-line"),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            cameraError?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-            }
-            ocrError?.let { message ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        message,
-                        modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                    if (recoveryActions.retryOcr) {
-                        TextButton(
-                            enabled = enabled && !operationGate.isActive,
-                            onClick = { if (!operationGate.isActive) onRetryOcr() },
-                        ) { Text(stringResource(R.string.legacy_capture_retry_ocr)) }
-                    }
-                }
-            }
-            if (ocrLoading) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                    Text(stringResource(R.string.legacy_capture_reading_the_photo_on_this_device), style = MaterialTheme.typography.bodySmall)
-                }
-            }
-            if (recoveryActions.reopenOcrChoices) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.legacy_capture_text_choices_are_ready), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-                    TextButton(
-                        enabled = enabled && !operationGate.isActive,
-                        onClick = { if (!operationGate.isActive) onReopenOcrChooser() },
-                    ) { Text(stringResource(R.string.legacy_capture_review_choices)) }
-                }
-            }
-            imageStatus?.let { status ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        status,
-                        modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (imageFailed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    if (recoveryActions.retryImage) {
-                        TextButton(
-                            enabled = enabled && !operationGate.isActive,
-                            onClick = { if (!operationGate.isActive) onRetryImage() },
-                        ) { Text(stringResource(R.string.legacy_capture_retry_photo)) }
-                    }
-                }
-            }
+        Text(
+            message,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.bodySmall,
+            color = if (ocrError != null || cameraError != null || imageFailed) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
+        when {
+            recoveryActions.retryOcr -> TextButton(
+                enabled = enabled && !operationGate.isActive,
+                onClick = { if (!operationGate.isActive) onRetryOcr() },
+            ) { Text("Retry") }
+            recoveryActions.reopenOcrChoices -> TextButton(
+                enabled = enabled && !operationGate.isActive,
+                onClick = { if (!operationGate.isActive) onReopenOcrChooser() },
+            ) { Text("Review") }
+            recoveryActions.retryImage -> TextButton(
+                enabled = enabled && !operationGate.isActive,
+                onClick = { if (!operationGate.isActive) onRetryImage() },
+            ) { Text("Retry") }
         }
     }
 }
 
-/**
- * CameraX fills cameraInfo asynchronously after binding, so flash availability is checked away
- * from composition. Reading cameraInfo while CameraX is initialising can block the UI thread.
- */
+/** CameraX fills cameraInfo asynchronously after binding; do not block the composition thread. */
 @Composable
-private fun rememberFlashAvailability(controller: androidx.camera.view.LifecycleCameraController): Boolean {
+private fun rememberTorchAvailability(controller: androidx.camera.view.LifecycleCameraController): Boolean {
     var available by remember(controller) { mutableStateOf(false) }
     LaunchedEffect(controller) {
         available = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
@@ -413,70 +409,24 @@ private fun rememberFlashAvailability(controller: androidx.camera.view.Lifecycle
 @Composable
 private fun PhotoPane(
     modifier: Modifier = Modifier,
-    enabled: Boolean,
     controller: androidx.camera.view.LifecycleCameraController?,
-    operationGate: CaptureOperationGate,
 ) {
     if (controller == null) {
-        Column(
-            modifier = modifier.padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                stringResource(R.string.legacy_capture_camera_access_is_needed_to_take_a_photo_ty),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-        return
-    }
-    val hasFlash = rememberFlashAvailability(controller)
-    var flashOn by remember(controller) { mutableStateOf(false) }
-    val flashLabel = stringResource(R.string.legacy_capture_flash)
-    val flashStateDescription = stringResource(
-        if (flashOn) R.string.legacy_capture_flash_on_state else R.string.legacy_capture_flash_off_state,
-    )
-    Box(modifier, contentAlignment = Alignment.Center) {
-        CameraViewfinder(controller = controller, modifier = Modifier.fillMaxSize())
-        if (hasFlash) {
-            Surface(
-                onClick = {
-                    if (enabled && !operationGate.isActive) {
-                        flashOn = !flashOn
-                        controller.imageCaptureFlashMode = if (flashOn) {
-                            androidx.camera.core.ImageCapture.FLASH_MODE_ON
-                        } else {
-                            androidx.camera.core.ImageCapture.FLASH_MODE_OFF
-                        }
-                    }
-                },
-                enabled = enabled && !operationGate.isActive,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(12.dp)
-                    .size(48.dp)
-                    .semantics {
-                        contentDescription = flashLabel
-                        stateDescription = flashStateDescription
-                    },
-                shape = CircleShape,
-                color = Color.Black.copy(alpha = 0.55f),
-                contentColor = Color.White,
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    FlowIcons.Flash(Modifier.size(24.dp))
-                }
-            }
-        }
+        Box(modifier.background(Color.Black).testTag("camera-live-preview"))
+    } else {
+        CameraViewfinder(controller = controller, modifier = modifier)
     }
 }
 
-/** Gallery / shutter / Type row: every sibling action is disabled during the camera write. */
+/** Gallery / shutter / torch controls share one fixed 48 dp row. */
 @Composable
 private fun CaptureRow(
     enabled: Boolean,
     operationGate: CaptureOperationGate,
     controller: androidx.camera.view.LifecycleCameraController?,
+    hasTorch: Boolean,
+    torchOn: Boolean,
+    onToggleTorch: () -> Unit,
     onRequestCamera: () -> Unit,
     onOpenGallery: () -> Unit,
     onCaptured: (File) -> Unit,
@@ -487,7 +437,7 @@ private fun CaptureRow(
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier.testTag("camera-controls-row").padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = modifier.testTag("camera-controls-row").padding(horizontal = 24.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -503,7 +453,7 @@ private fun CaptureRow(
             ) { FlowIcons.Gallery(Modifier.size(24.dp)) }
         }
 
-        Box(Modifier.testTag("camera-shutter-slot"), contentAlignment = Alignment.Center) {
+        Box(Modifier.width(CAMERA_SHUTTER_SIZE_DP.dp).fillMaxHeight().testTag("camera-shutter-slot"), contentAlignment = Alignment.Center) {
             if (controller != null) {
                 CameraShutterButton(
                     controller = controller,
@@ -517,21 +467,58 @@ private fun CaptureRow(
                     modifier = Modifier.testTag("camera-shutter"),
                 )
             } else {
-                FlowPrimaryButton(
-                    text = stringResource(R.string.camera),
-                    onClick = { if (enabled && !operationGate.isActive) onRequestCamera() },
-                    modifier = Modifier.size(width = 120.dp, height = 48.dp).testTag("camera-permission-action"),
+                CameraPermissionShutter(
                     enabled = enabled && !operationGate.isActive,
-                    showArrow = false,
+                    onRequestCamera = onRequestCamera,
                 )
             }
         }
 
         Box(
-            modifier = Modifier.weight(1f).fillMaxHeight().testTag("camera-type-slot"),
+            modifier = Modifier.weight(1f).fillMaxHeight().testTag("camera-torch-slot"),
             contentAlignment = Alignment.CenterEnd,
-        ) {}
+        ) {
+            if (hasTorch) {
+                Surface(
+                    onClick = { if (enabled && !operationGate.isActive) onToggleTorch() },
+                    enabled = enabled && !operationGate.isActive,
+                    modifier = Modifier.size(CAMERA_SIDE_SLOT_SIZE_DP.dp)
+                        .semantics {
+                            contentDescription = "Torch"
+                            stateDescription = if (torchOn) "On" else "Off"
+                        }
+                        .testTag("camera-torch-toggle"),
+                    shape = CircleShape,
+                    color = if (torchOn) MaterialTheme.colorScheme.secondaryContainer
+                    else MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (torchOn) MaterialTheme.colorScheme.onSecondaryContainer
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    border = if (torchOn) BorderStroke(1.dp, MaterialTheme.colorScheme.outline) else null,
+                ) {
+                    Box(contentAlignment = Alignment.Center) { FlowIcons.Torch(Modifier.size(24.dp)) }
+                }
+            }
+        }
     }
+}
+
+@Composable
+private fun CameraPermissionShutter(
+    enabled: Boolean,
+    onRequestCamera: () -> Unit,
+) {
+    Box(
+        modifier = Modifier.size(CAMERA_SHUTTER_SIZE_DP.dp)
+            .clip(CircleShape)
+            .clickable(enabled = enabled, onClick = onRequestCamera)
+            .border(BorderStroke(3.dp, MaterialTheme.colorScheme.outline), CircleShape)
+            .padding(6.dp)
+            .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
+            .semantics {
+                contentDescription = "Enable camera"
+                role = Role.Button
+            },
+    )
 }
 
 @Composable
@@ -548,8 +535,8 @@ private fun CaptureActionButton(
         enabled = enabled && !operationGate.isActive,
         modifier = modifier.size(CAMERA_SIDE_SLOT_SIZE_DP.dp).semantics { this.contentDescription = contentDescription },
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.primaryContainer,
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
     ) {
         Box(contentAlignment = Alignment.Center) { content() }
     }
@@ -562,29 +549,21 @@ private fun WritingPane(
     onEditorChange: (TextFieldValue) -> Unit,
     enabled: Boolean,
 ) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-    ) {
-        val sentenceContentDescription = stringResource(R.string.sentence)
-        OutlinedTextField(
-            value = editor,
-            onValueChange = onEditorChange,
-            enabled = enabled,
-            modifier = Modifier.fillMaxSize().padding(8.dp).semantics {
-                contentDescription = sentenceContentDescription
-            },
-            placeholder = { Text(stringResource(R.string.legacy_capture_type_the_japanese_sentence), style = MaterialTheme.typography.bodyLarge) },
-            textStyle = TextStyle(fontSize = 24.sp, lineHeight = 36.sp, color = MaterialTheme.colorScheme.onSurface),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Color.Transparent,
-                unfocusedContainerColor = Color.Transparent,
-                disabledContainerColor = Color.Transparent,
-                focusedBorderColor = Color.Transparent,
-                unfocusedBorderColor = Color.Transparent,
-                disabledBorderColor = Color.Transparent,
-            ),
-        )
-    }
+    BasicTextField(
+        value = editor,
+        onValueChange = onEditorChange,
+        enabled = enabled,
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.secondaryContainer)
+            .padding(16.dp)
+            .semantics { contentDescription = "Japanese sentence" }
+            .testTag("capture-sentence-field"),
+        textStyle = TextStyle(
+            fontSize = 24.sp,
+            lineHeight = 36.sp,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+        ),
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+    )
 }

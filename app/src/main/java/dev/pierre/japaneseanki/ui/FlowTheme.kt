@@ -1,7 +1,6 @@
 package dev.pierre.japaneseanki.ui
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,15 +24,12 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
-
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -145,12 +141,8 @@ internal fun FlowTheme(darkTheme: Boolean, content: @Composable () -> Unit) {
     )
 }
 
-/**
- * Widest the portrait composition may become. A rotated or tablet window keeps the study's
- * single-column composition centred instead of stretching its photo slot and sentence.
- */
-internal val AppContentMaxWidth = 520.dp
 
+internal val AppContentMaxWidth = 520.dp
 
 @Composable
 internal fun FlowTopBar(
@@ -389,22 +381,25 @@ internal object FlowIcons {
         )
     }
 
-    /** Filled bolt used by the camera flash control in the study's Input view. */
+    /** Simple lamp glyph for the continuous torch toggle. */
     @Composable
-    fun Flash(modifier: Modifier = Modifier, tint: Color = Color.White) = Canvas(modifier) {
-        val points = listOf(
-            Offset(size.width * 0.58f, size.height * 0.06f),
-            Offset(size.width * 0.24f, size.height * 0.55f),
-            Offset(size.width * 0.46f, size.height * 0.55f),
-            Offset(size.width * 0.40f, size.height * 0.94f),
-            Offset(size.width * 0.76f, size.height * 0.44f),
-            Offset(size.width * 0.53f, size.height * 0.44f),
+    fun Torch(modifier: Modifier = Modifier, tint: Color = LocalContentColor.current) = Canvas(modifier) {
+        val stroke = 1.8.dp.toPx()
+        val cx = size.width * 0.5f
+        val headY = size.height * 0.36f
+        drawCircle(tint, radius = size.width * 0.17f, center = Offset(cx, headY))
+        drawRoundRect(
+            tint,
+            topLeft = Offset(size.width * 0.43f, size.height * 0.48f),
+            size = androidx.compose.ui.geometry.Size(size.width * 0.14f, size.height * 0.22f),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.width * 0.04f),
         )
-        val path = androidx.compose.ui.graphics.Path().apply {
-            moveTo(points.first().x, points.first().y)
-            points.drop(1).forEach { lineTo(it.x, it.y) }
-            close()
-        }
-        drawPath(path, tint)
+        drawLine(tint, Offset(cx, size.height * 0.06f), Offset(cx, size.height * 0.12f), stroke, StrokeCap.Round)
+        drawLine(tint, Offset(size.width * 0.12f, headY), Offset(size.width * 0.2f, headY), stroke, StrokeCap.Round)
+        drawLine(tint, Offset(size.width * 0.8f, headY), Offset(size.width * 0.88f, headY), stroke, StrokeCap.Round)
+        drawLine(tint, Offset(size.width * 0.23f, size.height * 0.12f), Offset(size.width * 0.29f, size.height * 0.18f), stroke, StrokeCap.Round)
+        drawLine(tint, Offset(size.width * 0.71f, size.height * 0.18f), Offset(size.width * 0.77f, size.height * 0.12f), stroke, StrokeCap.Round)
+        drawLine(tint, Offset(size.width * 0.43f, size.height * 0.77f), Offset(size.width * 0.57f, size.height * 0.77f), stroke, StrokeCap.Round)
+        drawLine(tint, Offset(size.width * 0.45f, size.height * 0.87f), Offset(size.width * 0.55f, size.height * 0.87f), stroke, StrokeCap.Round)
     }
 }
