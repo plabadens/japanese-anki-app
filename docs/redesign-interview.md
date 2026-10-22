@@ -2,7 +2,7 @@
 
 **How to use it:** REFERENCE. The user's own rationale, recorded before the SPEC rewrite; the
 source for `DESIGN.md` and the workflow rules in `SPEC.md` §4. It is not a second specification: the
-approved [screen-and-copy contract](sentence-mining-flow.md), progress A and `SPEC.md` R01–R39
+approved [screen-and-copy contract](card-flow-contract.md) and `SPEC.md` R01–R39
 govern where this disagrees. Do not implement the historical proposals below as extra requirements.
 
 Baseline checkpoint: `cd1c27a` (main checkout only; worktrees excluded).

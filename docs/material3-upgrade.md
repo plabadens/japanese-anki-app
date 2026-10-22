@@ -49,7 +49,7 @@ Evidence:
 **How to use it:** EVIDENCE. Why `material3` is pinned to 1.4.0 and which Expressive APIs
 actually exist in it. A successful dependency build is not native UI acceptance.
 
-**Current implementation rule:** the approved [screen/copy contract](sentence-mining-flow.md) controls native component/motion requirements. This older inventory/build report is not standing permission for substitutes. The later resolved-artifact inspection records Expressive classes; neither class names nor historical token-only matches prove a callable signature compiles. Compile the required native components/opt-ins and verify the theme on the actual dependency graph; propose any dependency/contract adjustment before substituting behavior. Existing build evidence above remains historical evidence only.
+**Current implementation rule:** the approved [screen/copy contract](card-flow-contract.md) controls native component/motion requirements. This older inventory/build report is not standing permission for substitutes. The later resolved-artifact inspection records Expressive classes; neither class names nor historical token-only matches prove a callable signature compiles. Compile the required native components/opt-ins and verify the theme on the actual dependency graph; propose any dependency/contract adjustment before substituting behavior. Existing build evidence above remains historical evidence only.
 
 The inspected 1.4.0 Android AAR contains `ExperimentalMaterial3ExpressiveApi`, `MotionScheme`, expressive motion tokens, and button/icon-button classes. The inventory is recorded, with its exact AAR hash, in `archive/evidence/material3-upgrade/material3-1.4.0-api-inventory.json`.
 

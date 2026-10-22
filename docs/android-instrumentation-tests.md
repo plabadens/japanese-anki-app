@@ -2,13 +2,13 @@
 
 **How to use it:** REFERENCE. The runbook for `app/src/androidTest` on a dedicated API-37
 x86_64 AVD. Part of the gate set in `BEST-PRACTICES.md` §5; the criteria it serves are `SPEC.md`
-§14 (R01–R39) and the approved [screen/copy contract](sentence-mining-flow.md).
+§14 (R01–R39) and the approved [screen/copy contract](card-flow-contract.md).
 
 ## Approved-flow compliance scope
 
-Tooling below is a harness, not acceptance of the approved [screen/copy contract](sentence-mining-flow.md). SPEC.md R01–R39 controls the current gate. Coordinate a single API-37 x86_64 emulator lane; do not boot a competing AVD or launch unrestricted heavy builds while another owner uses it.
+Tooling below is a harness, not acceptance of the approved [screen/copy contract](card-flow-contract.md). SPEC.md R01–R39 controls the current gate. Coordinate a single API-37 x86_64 emulator lane; do not boot a competing AVD or launch unrestricted heavy builds while another owner uses it.
 
-For design compliance, exercise the connected Capture/Target/Review/Send journey and each catalogued exception: one heading, one selectable sentence, left-aligned Edit sentence, separate metadata editors, progress A's one stable-footer indicator, dismissal/reopen, durable setup/background/recreation and no paid work on revisit. Inventory visible/accessibility/notification copy against catalogue IDs; assert both absence of removed UI and presence of necessary recovery. Capture both themes and narrow/200% text, check semantics/contrast and reduced-motion/touch-feedback settings. Emulator haptic dispatch is not proof of physical sensation.
+For design compliance, exercise the connected Capture → Card → Send journey and each catalogued exception: no Capture title, one selectable sentence that never reflows, one hint line in the pinned footer, separate metadata actions, dismissal/reopen, durable setup/background/recreation and no paid work on revisit. Inventory visible/accessibility/notification copy against catalogue IDs; assert both absence of removed UI and presence of necessary recovery. Capture both themes and narrow/200% text, check semantics/contrast and reduced-motion/touch-feedback settings. Emulator haptic dispatch is not proof of physical sensation.
 
 Import acceptance additionally requires a separate test-only dummy AnkiDroid APK with a pinned package/provider/permission contract, actual cross-UID URI grants and persisted decodable WebP/MP3/Ogg bytes, note fields/tags/deck and durable receipts. Inject failures/lost responses, repeated Send and recreation; no blind reinsert after an uncertain write. Keep its control channel out of production. Run the same happy-path assertions against supported real AnkiDroid in a separate disposable emulator collection before claiming compatibility. Never replace a personal installation/collection. Controlled generation does not establish live cloud quality; no credential access or paid calls without separate authorization.
 

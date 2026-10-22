@@ -24,12 +24,12 @@ Mission: **get everything right the first time, without unnecessary choices.**
 Feature work lands on [`dev`](docs/branching.md), not directly on `main`. Breaking `dev` is a
 nuisance; breaking `main` is a delivery failure.
 
-**Design approved; implementation compliance pending.** The 22 October contract selects progress A:
-title-only navigation and one grouped Review busy state in the stable action area, one selectable
-sentence, no duplicate hero, no generated-field repair workbench, separate optional notes/tags, and a
-backgroundable setup wizard. Native Material 3 Expressive motion and haptics support the task without
-gamification. Approval is not native acceptance, and older mockups, matrices and dated status reports
-neither control the UI nor establish compliance.
+**Design approved; implementation compliance pending.** The 22 October contract defines two states —
+Capture and the card — with the mode switch as Capture's only chrome, a single selectable sentence,
+one hint line above a pinned footer, a 16:9 photograph band, no step tracker, no generated-field
+repair workbench, and separate optional notes/tags. Native Material 3 Expressive motion and haptics
+carry the feel without gamification. Approval is not native acceptance, and older mockups, matrices
+and dated status reports neither control the UI nor establish compliance.
 
 ## Quick start
 
