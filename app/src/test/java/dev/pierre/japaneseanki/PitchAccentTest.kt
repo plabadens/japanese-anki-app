@@ -9,6 +9,8 @@ import org.junit.Test
 class PitchAccentTest {
     private val akugyakuHtml = "<span class=\"low_rise\">ア</span><span class=\"high\">ク" +
         "<span class=\"nasal\">キ<span class=\"handakuten\">&#176;</span></span>ャク</span>"
+    private val uketsukeHtml = "<span class=\"low_rise\">ウ</span><span class=\"high\">ケ" +
+        "<span class=\"devoiced\">ツ</span>ケ</span>"
 
     @Test fun sourceHtmlIsExportedVerbatimWithPitchNumber() {
         val pitch = PitchAccent.create("アクギャク", 0, akugyakuHtml)!!
@@ -31,6 +33,15 @@ class PitchAccentTest {
         val html = "<span class=\"high_drop\">オ</span><span class=\"low\"><span class=\"devoiced\">ク</span>セ</span>"
         val pitch = PitchAccent.create("オクセ", 1, html)!!
         assertEquals(setOf(1), pitch.marks.devoicedMorae)
+    }
+
+    @Test fun user受付FixturePreservesDevoicedTsAndExactHtml() {
+        val pitch = PitchAccent.create("うけつけ", 0, uketsukeHtml)!!
+
+        assertEquals("$uketsukeHtml <span class=\"pitch_number\">0</span>", pitch.fieldMarkup)
+        assertEquals(setOf(2), pitch.marks.devoicedMorae)
+        assertTrue(pitch.marks.nasalMorae.isEmpty())
+        assertEquals("ウケツケ", katakana("うけつけ"))
     }
 
     @Test fun htmlForADifferentReadingIsRejected() {
