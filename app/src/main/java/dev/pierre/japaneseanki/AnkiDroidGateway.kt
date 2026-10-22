@@ -14,42 +14,82 @@ class AnkiDroidGateway(
     private val context: Context? = null,
 ) {
     /** Imports a completed durable WebP through AnkiDroid's v2.24.0 media provider. */
-    fun importProcessedImage(file: File): String = importMedia(file, ::sanitizeImageName)
+    fun importProcessedImage(file: File): String = importMedia(file, MediaImportOperation.IMAGE)
 
     /** Imports a completed draft MP3/Ogg recording through the same media provider. */
-    fun importAudio(file: File): String = importMedia(file, ::sanitizeAudioName)
+    fun importAudio(file: File): String = importMedia(file, MediaImportOperation.AUDIO)
 
-    private fun sanitizeImageName(name: String): String? = AnkiMediaImporter.sanitizeFilename(name)
-
-    private fun sanitizeAudioName(name: String): String? = AnkiMediaImporter.sanitizeAudioFilename(name)
-
-    private fun importMedia(file: File, sanitize: (String) -> String?): String {
-        val appContext = requireNotNull(context) {
-            "A Context is required to grant AnkiDroid temporary access to media."
-        }.applicationContext
-        require(file.isFile) { "Media file does not exist." }
-        val approvedDirectory = File(appContext.filesDir, MEDIA_DIRECTORY).canonicalFile
-        val canonicalFile = file.canonicalFile
-        require(canonicalFile.parentFile == approvedDirectory) {
-            "Media must be stored in the durable draft media directory."
+    /** Operation-aware overload lets Send errors identify sentence vs. vocabulary audio. */
+    internal fun importAudio(file: File, operation: MediaImportOperation): String {
+        if (operation.kind != AnkiMediaKind.AUDIO) {
+            throw MediaImportException(operation, MediaImportFailureStage.SOURCE_VALIDATION)
         }
-        val preferredName = sanitize(canonicalFile.name)
-        require(canonicalFile.name == preferredName) { "Media filename is unsafe." }
+        return importMedia(file, operation)
+    }
 
-        val fileUri = FileProvider.getUriForFile(appContext, MEDIA_FILE_PROVIDER_AUTHORITY, canonicalFile)
-        appContext.grantUriPermission(ANKI_PACKAGE, fileUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        val importedUri = try {
+    private fun importMedia(file: File, operation: MediaImportOperation): String {
+        val kind = operation.kind
+        val (appContext, canonicalFile, preferredName) = try {
+            val appContext = requireNotNull(context) {
+                "A Context is required to grant AnkiDroid temporary access to media."
+            }.applicationContext
+            require(file.isFile) { "Media file does not exist." }
+            val approvedDirectory = File(appContext.filesDir, MEDIA_DIRECTORY).canonicalFile
+            val canonicalFile = file.canonicalFile
+            require(canonicalFile.parentFile == approvedDirectory) {
+                "Media must be stored in the durable draft media directory."
+            }
+            val preferredName = when (kind) {
+                AnkiMediaKind.IMAGE -> AnkiMediaImporter.sanitizeFilename(canonicalFile.name)
+                AnkiMediaKind.AUDIO -> AnkiMediaImporter.sanitizeAudioFilename(canonicalFile.name)
+            }
+            require(canonicalFile.name == preferredName) { "Media filename is unsafe." }
+            Triple(appContext, canonicalFile, preferredName)
+        } catch (cancelled: java.util.concurrent.CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            throw MediaImportException(operation, MediaImportFailureStage.SOURCE_VALIDATION, error)
+        }
+
+        val fileUri = try {
+            FileProvider.getUriForFile(appContext, MEDIA_FILE_PROVIDER_AUTHORITY, canonicalFile)
+        } catch (cancelled: java.util.concurrent.CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            throw MediaImportException(operation, MediaImportFailureStage.SOURCE_VALIDATION, error)
+        }
+        var granted = false
+        var importedUri: Uri? = null
+        var providerFailure: Exception? = null
+        try {
+            appContext.grantUriPermission(ANKI_PACKAGE, fileUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            granted = true
             val values = ContentValues().apply {
                 put(MEDIA_FILE_URI, fileUri.toString())
                 put(MEDIA_PREFERRED_NAME, preferredName)
             }
-            resolver.insert(MEDIA_URI, values)
-                ?: error("AnkiDroid did not return an imported media URI.")
+            importedUri = resolver.insert(MEDIA_URI, values)
+        } catch (cancelled: java.util.concurrent.CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            providerFailure = error
         } finally {
-            appContext.revokeUriPermission(fileUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            if (granted) {
+                try {
+                    appContext.revokeUriPermission(fileUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                } catch (cancelled: java.util.concurrent.CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    if (providerFailure == null) providerFailure = error
+                    else providerFailure?.addSuppressed(error)
+                }
+            }
         }
-        return AnkiMediaImporter.importedFilename(importedUri.toString())
-            ?: error("AnkiDroid returned an unsafe media URI.")
+        providerFailure?.let { throw MediaImportException(operation, MediaImportFailureStage.PROVIDER_IMPORT, it) }
+        val returnedUri = importedUri?.toString()
+            ?: throw MediaImportException(operation, MediaImportFailureStage.PROVIDER_IMPORT)
+        return AnkiMediaImporter.importedFilename(returnedUri, kind)
+            ?: throw MediaImportException(operation, MediaImportFailureStage.RETURNED_MEDIA_VALIDATION)
     }
     fun noteTypes(): List<AnkiNoteType> = try {
         resolver.query(

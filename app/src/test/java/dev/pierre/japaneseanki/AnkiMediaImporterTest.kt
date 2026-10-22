@@ -31,6 +31,31 @@ class AnkiMediaImporterTest {
         assertNull(AnkiMediaImporter.importedAudioFilename("file://remote/data/voice.wav"))
     }
 
+    @Test fun providerReturnValidationUsesTheImportedMediaType() {
+        listOf("voice.mp3", "voice.ogg", "voice.wav").forEach { filename ->
+            val uri = "file:///data/collection.media/$filename"
+            assertEquals(filename, AnkiMediaImporter.importedFilename(uri, AnkiMediaKind.AUDIO))
+            assertNull(AnkiMediaImporter.importedFilename(uri, AnkiMediaKind.IMAGE))
+        }
+        assertEquals(
+            "image.webp",
+            AnkiMediaImporter.importedFilename("file:///data/collection.media/image.webp", AnkiMediaKind.IMAGE),
+        )
+        assertNull(
+            AnkiMediaImporter.importedFilename("file:///data/collection.media/image.webp", AnkiMediaKind.AUDIO),
+        )
+        listOf(
+            "file://remote/data/collection.media/voice.mp3",
+            "file:///data/collection.media/voice.mp3?download=1",
+            "file:///data/collection.media/voice.mp3#fragment",
+            "file:///data/collection.media/../voice.mp3",
+            "file:///data/collection.media/%2e%2e/voice.mp3",
+            "content://provider/voice.mp3",
+        ).forEach { uri ->
+            assertNull(AnkiMediaImporter.importedFilename(uri, AnkiMediaKind.AUDIO))
+        }
+    }
+
     @Test fun extractsActualFilenameOnlyFromFileUris() {
         assertEquals(
             "actual-name.webp",

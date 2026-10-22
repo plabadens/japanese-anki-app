@@ -100,9 +100,9 @@ class SubmissionRecoveryTest {
     }
 
     @Test
-    fun noteInsertedRecoveryChoosesMoveCompleteResolveOrFail() {
+    fun noteInsertedRecoveryIsReadOnlyAndNeverClaimsAnotherDeckIsComplete() {
         assertEquals(
-            NoteInsertedRecoveryDecision.MOVE,
+            NoteInsertedRecoveryDecision.NEEDS_REVIEW,
             noteInsertedRecoveryDecision(123L, listOf(AnkiCardLocation(0, 1L)), 2L),
         )
         assertEquals(
@@ -110,12 +110,16 @@ class SubmissionRecoveryTest {
             noteInsertedRecoveryDecision(123L, listOf(AnkiCardLocation(0, 2L)), 2L),
         )
         assertEquals(
-            NoteInsertedRecoveryDecision.RESOLVE,
+            NoteInsertedRecoveryDecision.INDETERMINATE,
             noteInsertedRecoveryDecision(123L, emptyList(), 2L),
         )
         assertEquals(
             NoteInsertedRecoveryDecision.FAIL,
             noteInsertedRecoveryDecision(123L, listOf(AnkiCardLocation(0, 1L)), 0L),
+        )
+        assertEquals(
+            NoteInsertedRecoveryDecision.INDETERMINATE,
+            noteInsertedRecoveryDecision(null, listOf(AnkiCardLocation(0, 2L)), 2L),
         )
     }
 

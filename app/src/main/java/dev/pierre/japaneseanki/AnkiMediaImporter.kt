@@ -2,6 +2,8 @@ package dev.pierre.japaneseanki
 
 import java.net.URI
 
+internal enum class AnkiMediaKind { IMAGE, AUDIO }
+
 /** Validation for the pinned AnkiDroid media-provider filename contract. */
 internal object AnkiMediaImporter {
     fun sanitizeFilename(filename: String): String? {
@@ -16,9 +18,15 @@ internal object AnkiMediaImporter {
         return filename
     }
 
-    fun importedFilename(uriString: String): String? = filenameFromFileUri(uriString, ::sanitizeFilename)
+    /** Legacy image-only parser. Audio imports must pass their media kind explicitly. */
+    fun importedFilename(uriString: String): String? = importedFilename(uriString, AnkiMediaKind.IMAGE)
 
-    fun importedAudioFilename(uriString: String): String? = filenameFromFileUri(uriString, ::sanitizeAudioFilename)
+    fun importedFilename(uriString: String, kind: AnkiMediaKind): String? = when (kind) {
+        AnkiMediaKind.IMAGE -> filenameFromFileUri(uriString, ::sanitizeFilename)
+        AnkiMediaKind.AUDIO -> filenameFromFileUri(uriString, ::sanitizeAudioFilename)
+    }
+
+    fun importedAudioFilename(uriString: String): String? = importedFilename(uriString, AnkiMediaKind.AUDIO)
 
     private fun filenameFromFileUri(uriString: String, sanitize: (String) -> String?): String? {
         val uri = runCatching { URI(uriString) }.getOrNull() ?: return null
