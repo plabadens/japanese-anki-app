@@ -6,34 +6,60 @@ safe to delete, and the removal plan. The repeatable tool is
 
 ## Status
 
-Audit, tooling and removal: **complete**. The prune ran with interactive approval;
-every number below is measured, not projected. Re-running the tool now reports
-"Nothing to remove", which is the idempotence check.
+Audit, tooling and removal: **complete**, in two passes. Every number below is
+measured, not projected. Re-running the tool now reports "Nothing to remove": that
+is the idempotence check.
 
 ```bash
-./scripts/prune-worktrees.sh          # dry run, prints the plan and changes nothing
-./scripts/prune-worktrees.sh --apply  # removes it
+./scripts/prune-worktrees.sh                          # dry run against main
+./scripts/prune-worktrees.sh --base dev                # what merged into dev
+./scripts/prune-worktrees.sh --apply --base dev \
+  --keep 'japanese-anki-app/t_3264cf90*' \
+  --keep 'japanese-anki-app/t_132e540a*'               # aliases are labels, not work
 ```
+
+A second pass ran after `main` was merged into `dev`, which is what makes
+"merged into the integration branch" a different set from "merged into main":
+a branch that landed on `dev` only becomes removable once `--base dev` asks the
+question. That pass also cleared the five merged worktrees that the first pass
+refused as dirty, after archiving their untracked content outside the repository.
 
 ## Before / after
 
-| Measure | Before | After | Note |
-| --- | --- | --- | --- |
-| Registered worktrees | 91 | **55** | 38 removed (37 branches + 1 detached) |
-| — under `.worktrees/` | 88 | 54 | |
-| — stale detached (`.tmp-nix/prep-baseline`) | 1 | 0 | HEAD was already on main |
-| Local branches | 96 | **61** | 7 merged into main, 52 carrying work, 2 aliases |
-| `du -sh .worktrees` | 226G | **132G** | 94G reclaimed |
-| Filesystem used | 293G | **196G** | 97G reclaimed on the whole volume |
-| `du -sh .git` | 190M | 184M | refs only; no `gc`, no history rewrite |
+Pass 1 = before → after the first prune (base `main`). Pass 2 = after the
+`main → dev` merge, the five dirty worktrees and a live worker excluded.
 
-The remaining 132G is 55 live worktrees, each with its own Gradle/CMake build
-tree. They are kept because their branches carry work that is not on main (see
+| Measure | Before | After pass 1 | After pass 2 | Note |
+| --- | --- | --- | --- | --- |
+| Registered worktrees | 91 | 55 | **50** | 41 removed in total |
+| Local branches | 96 | 61 | **54** | 42 removed in total |
+| `du -sh .worktrees` | 226G | 132G | **127G** | 99G reclaimed |
+| Filesystem used | 293G | 196G | **196G** | 97G reclaimed on the volume |
+| `du -sh .git` | 190M | 184M | 184M | refs only; no `gc`, no history rewrite |
+
+The remaining 127G is 50 live worktrees, each with its own Gradle/CMake build
+tree. Their branches carry work that is not on the integration branch (see
 below); their build directories are regenerable and can be removed separately
 without touching a branch.
 
 `.git` barely shrinks because deleting a branch only drops a ref; the objects stay
 until a prune/gc, which is deliberate — this cleanup does not touch history.
+
+### Concurrency: a worker ran during pass 2
+
+Pass 2 overlapped a live Kanban worker (`t_d0cde8b0`, toolchain upgrade), and three
+other worktrees appeared while it ran (`t_65e006b3`, `t_08553820`, `t_e5dff0ed`).
+The tool only refuses worktrees that are *dirty*, and a worker that has just
+committed has a clean tree — so a clean-but-live worktree is indistinguishable
+from an abandoned one. Pass 2 therefore used `--keep` for the running task:
+
+```bash
+--keep 'japanese-anki-app/t_d0cde8b0*'
+```
+
+Before any future `--apply`, check `pgrep -af 'work kanban task'` and pass every
+running task id to `--keep`. `t_08553820` and `t_e5dff0ed` were left alone because
+their trees are dirty, which is the only reliable signal the tool has.
 
 ### What went wrong, and what changed because of it
 
@@ -101,21 +127,24 @@ already has.
 After the worktree is gone the branch is deleted with `git branch -D`; every one
 of these tips is reachable from `main`, so the commits survive.
 
-## Refused — kept because the worktree is not clean
+## The five dirty worktrees — archived, then removed in pass 2
 
-| Worktree | Branch | Local state |
+The first pass refused all five because their trees were not clean. They were
+merged into `main`, so the branches were redundant, but each held untracked
+output that existed only on disk. Before removal that content was copied out of
+the repository to `/srv/hermes/archive/japanese-anki-pruned-20261022/` (1.5 MB):
+
+| Worktree | Local state | Disposition |
 | --- | --- | --- |
-| `t_5fc88e60` | `…/t_5fc88e60-design-three-app-icon-proposals-for-appr` | untracked `icon-proposals/` |
-| `t_83a89a4f` | `…/t_83a89a4f-implement-approved-play-services-japanes` | modified `app/build.gradle.kts` |
-| `t_858f4a85` | `…/t_858f4a85-icon-round-3-design-flair-pass-on-a-c-an` | untracked `icon-proposals-round3/` + zip |
-| `t_8c55e074` | `…/t_8c55e074-implement-spec.md-and-deliver-v0.2` | untracked `dist/` |
-| `t_a7f67b81` | `…/t_a7f67b81-icon-round-2-refine-a-real-mincho-outlin` | untracked `icon-proposals-round2/` + zip |
+| `t_5fc88e60` | untracked `icon-proposals/` | round-1 proposals archived (24 files), worktree removed |
+| `t_83a89a4f` | modified `app/build.gradle.kts` | uncommitted ML Kit swap archived as a patch, worktree removed |
+| `t_858f4a85` | untracked `icon-proposals-round3/` + zip | archived; the same files are tracked on `dev` as `design/icon-sources/round3/` |
+| `t_8c55e074` | untracked `dist/` | 506 MB of superseded v0.2 APKs discarded as build output |
+| `t_a7f67b81` | untracked `icon-proposals-round2/` + zip | round-2 proposals archived (38 files), worktree removed |
 
-All five are merged into main, so the *branches* are redundant, but each holds
-untracked proposal output that only exists on disk. They are almost certainly
-stale (the approved icon, `t_3331487e`, is already on `dev`), yet nothing here is
-worth guessing about: inspect the directories, then delete the worktrees by hand
-or re-run the script once they are empty. The script refuses them automatically.
+The ML Kit patch is kept as evidence, not as a proposal: it switches from the
+bundled `com.google.mlkit:text-recognition-japanese` to the Google-managed
+`play-services-mlkit-text-recognition-japanese`, which `SPEC.md` R35 forbids.
 
 ## Protected — never candidates
 
@@ -126,9 +155,12 @@ cleanup — and are kept by `--keep`, not by the on-main-tip rule (see above). T
 script treats *any* branch whose commit equals main's tip as an alias, so a future
 merge train is protected without editing the script, but only until `main` moves.
 
-## Branches carrying work absent from main (kept — 48)
+## Branches carrying work absent from the integration branch (kept — 45)
 
-None of these are provably merged or provably superseded, so all 48 stay.
+None of these are provably merged into `dev` or provably superseded, so all 45 stay.
+Most are the v0.2 checklist plan that the v0.3/v0.4 redesign replaced; keeping them
+costs a ref and a branch label, and deleting one would cost a fix if the judgement
+is ever wrong. The ones worth a human decision are listed at the end of this section.
 "Conflicts" is the conflict count from `git merge-tree --write-tree main <branch>`
 — a high count means the branch no longer applies to the current tree.
 
