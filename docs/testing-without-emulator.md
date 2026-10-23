@@ -43,12 +43,12 @@ Post-migration verification on this tree:
 
 | Current lane | Tests | Result | Measured time |
 |---|---:|---|---:|
-| `verifyFast` / `testDebugUnitTest` | 381 | 0 failures, 0 errors, 0 skipped | 46.319 s test-suite duration; 49 s full Gradle command including golden verification |
+| `verifyFast` / `testDebugUnitTest` | 381 | 0 failures, 0 errors, 0 skipped | 68.45 s suite; 49 s normal cached run; 2m24s clean-HEAD run with all tasks rerun and build cache disabled |
 | `connectedDebugAndroidTest` / camera + decoder smoke | 3 | 0 failures, 0 errors, 0 skipped | 9.770 s instrumentation; 22 s for this incremental Gradle run |
 
 The current device run used the existing API-37 x86_64 `emulator-5554`; its XML is `app/build/outputs/androidTest-results/connected/debug/TEST-emulator-5554 - 17.xml`. It reports two camera/OCR tests and one real Android decoder test, all passing. The JVM report lists 381 tests with zero failures/skips. These counts are intentionally different: 381 portable checks now run without a device, while camera/ML Kit and Android decoder behavior remain in the device lane. The 9.770-second instrumentation time is from an incremental build and is not directly comparable to the earlier cold run. The spike's 338/45 comparison is historical, not a post-migration performance claim.
 
-The post-migration `verifyFast` execution completed successfully. It required no emulator. The device run completed the two camera/OCR tests and the decoder smoke on the attached emulator. System-inset, AnkiDroid, and actual signed-release installation checks were not run. The emulator decoder result is not a physical hardware-codec guarantee.
+The post-migration `verifyFast` execution completed successfully without an emulator. The clean-HEAD run used `--rerun-tasks --no-build-cache` to force execution (30 tasks executed); the normal configured command with the Gradle build cache also passed. The device run completed the two camera/OCR tests and decoder smoke on the attached emulator. System-inset, AnkiDroid, and actual signed-release installation checks were not run. The emulator decoder result is not a physical hardware-codec guarantee.
 
 ## 4. Why these tools
 
