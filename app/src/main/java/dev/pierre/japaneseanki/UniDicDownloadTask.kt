@@ -248,7 +248,7 @@ internal class UniDicTaskStore(context: Context) {
             .putString(KEY_PHASE, phase)
             .putLong(KEY_DOWNLOADED, downloaded.coerceAtLeast(0L))
             .putLong(KEY_TOTAL, total.coerceAtLeast(0L))
-        if (downloaded > 0) editor.putBoolean(KEY_HAD_PARTIAL, true)
+        if (phase == PHASE_DOWNLOADING && downloaded > 0) editor.putBoolean(KEY_HAD_PARTIAL, true)
         editor.commit()
     }
 
@@ -340,10 +340,41 @@ internal fun currentNetworkState(context: Context): UniDicNetworkState {
     )
 }
 
+/** Worker boundary kept injectable for controlled WorkManager instrumentation tests. */
+internal fun interface UniDicDownloadProvisioner {
+    fun prepare(
+        context: Context,
+        onStatus: (OfflineAnalyzerProgress) -> Unit,
+        cancellation: ResourceCancellation,
+    )
+}
+
+private object ProductionUniDicDownloadProvisioner : UniDicDownloadProvisioner {
+    override fun prepare(
+        context: Context,
+        onStatus: (OfflineAnalyzerProgress) -> Unit,
+        cancellation: ResourceCancellation,
+    ) {
+        OfflineJapaneseAnalyzer.shared(context).prepare(onStatus, cancellation)
+    }
+}
+
 internal class UniDicDownloadWorker(
     context: Context,
     parameters: WorkerParameters,
+    private val provisioner: UniDicDownloadProvisioner,
+    private val networkStateProvider: (Context) -> UniDicNetworkState,
 ) : CoroutineWorker(context, parameters) {
+    /** The exact production constructor used by WorkManager's default WorkerFactory. */
+    constructor(context: Context, parameters: WorkerParameters) :
+        this(context, parameters, ProductionUniDicDownloadProvisioner, ::currentNetworkState)
+
+    internal constructor(
+        context: Context,
+        parameters: WorkerParameters,
+        provisioner: UniDicDownloadProvisioner,
+    ) : this(context, parameters, provisioner, ::currentNetworkState)
+
     private val taskStore = UniDicTaskStore(applicationContext)
     private val approvedNetwork = inputData.getLong(
         UniDicTaskStore.KEY_APPROVED_NETWORK,
@@ -356,15 +387,16 @@ internal class UniDicDownloadWorker(
         publishProgress(UniDicTaskStore.PHASE_VERIFYING, 0L, UniDicResourceCatalog.ARCHIVE_BYTES)
 
         fun mobileConsentMissing(): Boolean {
-            val state = currentNetworkState(applicationContext)
+            val state = networkStateProvider(applicationContext)
             return state.available && state.metered && state.networkHandle != approvedNetwork
         }
 
-        fun noNetwork(): Boolean = !currentNetworkState(applicationContext).available
+        fun noNetwork(): Boolean = !networkStateProvider(applicationContext).available
         var downloadedBytes = 0L
 
         try {
-            OfflineJapaneseAnalyzer.shared(applicationContext).prepare(
+            provisioner.prepare(
+                applicationContext,
                 onStatus = { progress ->
                     val phase = when (progress.phase) {
                         OfflineAnalyzerPhase.DOWNLOADING -> UniDicTaskStore.PHASE_DOWNLOADING

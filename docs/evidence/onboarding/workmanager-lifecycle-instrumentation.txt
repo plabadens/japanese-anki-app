@@ -1,0 +1,6 @@
+
+dev.pierre.japaneseanki.UniDicWorkManagerLifecycleTest:.
+
+Time: 12.796
+
+OK (1 test)

@@ -102,10 +102,20 @@ fun interface ResourceTransport {
     fun open(uri: URI): ResourceResponse
 }
 
+/** Optional byte-range support used only to resume an interrupted, already-pinned transfer. */
+interface ResumableResourceTransport : ResourceTransport {
+    @Throws(IOException::class)
+    fun open(uri: URI, rangeStart: Long): ResourceResponse
+
+    override fun open(uri: URI): ResourceResponse = open(uri, 0L)
+}
+
 interface ResourceResponse : Closeable {
     val statusCode: Int
     /** Null means the server did not send Content-Length. */
     val contentLength: Long?
+    /** Null means the server did not send Content-Range. */
+    val contentRange: String? get() = null
     val body: java.io.InputStream
 }
 
@@ -114,12 +124,13 @@ class HttpsResourceTransport(
     private val connectTimeoutMillis: Int = 15_000,
     private val readTimeoutMillis: Int = 30_000,
     private val maxRedirects: Int = 4,
-) : ResourceTransport {
+) : ResumableResourceTransport {
     init {
         require(connectTimeoutMillis > 0 && readTimeoutMillis > 0 && maxRedirects in 0..10)
     }
 
-    override fun open(uri: URI): ResourceResponse {
+    override fun open(uri: URI, rangeStart: Long): ResourceResponse {
+        require(rangeStart >= 0) { "Resource byte range must not be negative" }
         require(uri.scheme.equals("https", ignoreCase = true)) { "Only HTTPS resources are allowed" }
         var current = uri
         repeat(maxRedirects + 1) { redirectCount ->
@@ -127,6 +138,7 @@ class HttpsResourceTransport(
             connection.connectTimeout = connectTimeoutMillis
             connection.readTimeout = readTimeoutMillis
             connection.instanceFollowRedirects = false
+            if (rangeStart > 0L) connection.setRequestProperty("Range", "bytes=$rangeStart-")
             try {
                 val status = connection.responseCode
                 if (status in REDIRECT_CODES) {
@@ -144,12 +156,18 @@ class HttpsResourceTransport(
                     connection.disconnect()
                     current = next
                 } else {
-                    val stream = if (status == HttpURLConnection.HTTP_OK) {
+                    val stream = if (status == HttpURLConnection.HTTP_OK || status == HttpURLConnection.HTTP_PARTIAL) {
                         connection.inputStream
                     } else {
                         connection.errorStream ?: ByteArrayInputStream(ByteArray(0))
                     }
-                    return HttpResponse(connection, status, connection.contentLengthLong.takeIf { it >= 0 }, stream)
+                    return HttpResponse(
+                        connection,
+                        status,
+                        connection.contentLengthLong.takeIf { it >= 0 },
+                        connection.getHeaderField("Content-Range"),
+                        stream,
+                    )
                 }
             } catch (failure: Exception) {
                 connection.disconnect()
@@ -164,6 +182,7 @@ class HttpsResourceTransport(
         private val connection: HttpURLConnection,
         override val statusCode: Int,
         override val contentLength: Long?,
+        override val contentRange: String?,
         override val body: java.io.InputStream,
     ) : ResourceResponse {
         override fun close() {
@@ -253,12 +272,8 @@ class VerifiedFirstRunResourceInstaller(
             }
 
             val part = rootPath.resolve(".${resource.id}-${resource.version}.part").toFile()
+            var preserveInterruptedPart = false
             try {
-                try {
-                    Files.deleteIfExists(part.toPath())
-                } catch (failure: IOException) {
-                    throw ResourceStorageException("Could not clear stale resource state", failure)
-                }
                 if (availableBytes(rootPath.toFile()) < resource.expectedBytes) {
                     throw ResourceStorageException("Not enough free storage for ${resource.id}")
                 }
@@ -290,6 +305,10 @@ class VerifiedFirstRunResourceInstaller(
                     throw ResourceActivationException("Could not activate verified resource ${resource.id}", failure)
                 }
                 ReadyResource(resource, target, ResourceDisposition.DOWNLOADED)
+            } catch (failure: ResourceTransferException) {
+                preserveInterruptedPart = transport is ResumableResourceTransport &&
+                    part.isFile && part.length() in 1 until resource.expectedBytes
+                throw failure
             } catch (failure: ResourceInstallException) {
                 throw failure
             } catch (failure: IOException) {
@@ -299,8 +318,11 @@ class VerifiedFirstRunResourceInstaller(
                 }
                 throw ResourceTransferException("Could not download resource ${resource.id}; retry is safe", failure)
             } finally {
-                // A killed process may leave this file behind; the next attempt discards it first.
-                try { Files.deleteIfExists(part.toPath()) } catch (_: IOException) { }
+                // A killed process or transient transfer failure may leave a resumable prefix.
+                // User cancellation and integrity/activation failures still remove it.
+                if (!preserveInterruptedPart) {
+                    try { Files.deleteIfExists(part.toPath()) } catch (_: IOException) { }
+                }
             }
         }
     }
@@ -338,21 +360,78 @@ class VerifiedFirstRunResourceInstaller(
         onProgress: (ResourceProgress) -> Unit,
     ) {
         checkCancelled(cancellation)
+        val rangeTransport = transport as? ResumableResourceTransport
+        var offset = if (
+            Files.isRegularFile(part.toPath(), LinkOption.NOFOLLOW_LINKS) && !Files.isSymbolicLink(part.toPath())
+        ) {
+            part.length()
+        } else {
+            0L
+        }
+        if (offset <= 0L || offset > resource.expectedBytes || rangeTransport == null) {
+            if (Files.exists(part.toPath(), LinkOption.NOFOLLOW_LINKS)) {
+                try {
+                    Files.deleteIfExists(part.toPath())
+                } catch (failure: IOException) {
+                    throw ResourceStorageException("Could not clear invalid partial resource state", failure)
+                }
+            }
+            offset = 0L
+        }
+
+        val digest = MessageDigest.getInstance("SHA-256")
+        if (offset > 0L) {
+            var prefixBytes = 0L
+            try {
+                part.inputStream().buffered().use { input ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        checkCancelled(cancellation)
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        digest.update(buffer, 0, count)
+                        prefixBytes += count
+                    }
+                }
+            } catch (failure: IOException) {
+                throw ResourceStorageException("Could not validate partial resource state", failure)
+            }
+            if (prefixBytes != offset) throw ResourceStorageException("Partial resource changed while resuming")
+            onProgress(ResourceProgress(resource.id, ResourceProgressPhase.DOWNLOADING, offset, resource.expectedBytes))
+        }
+        if (offset == resource.expectedBytes) {
+            onProgress(ResourceProgress(resource.id, ResourceProgressPhase.VERIFYING, offset, resource.expectedBytes))
+            validateDigest(part, resource, cancellation)
+            return
+        }
+
         val response = try {
-            transport.open(resource.uri)
+            if (rangeTransport != null) rangeTransport.open(resource.uri, offset)
+            else transport.open(resource.uri)
         } catch (failure: IOException) {
             throw ResourceTransferException("Could not connect to the resource server", failure)
         }
         response.use { opened ->
-            if (opened.statusCode != HttpURLConnection.HTTP_OK) throw ResourceHttpException(opened.statusCode)
-            opened.contentLength?.let { length ->
-                if (length != resource.expectedBytes) throw ResourceIntegrityException("Resource length did not match the manifest")
+            if (offset == 0L) {
+                if (opened.statusCode != HttpURLConnection.HTTP_OK) throw ResourceHttpException(opened.statusCode)
+            } else {
+                if (opened.statusCode != HttpURLConnection.HTTP_PARTIAL) {
+                    throw ResourceTransferException("Resource server did not honor the requested byte range")
+                }
+                val expectedRange = "bytes $offset-${resource.expectedBytes - 1}/${resource.expectedBytes}"
+                if (opened.contentRange != expectedRange) {
+                    throw ResourceIntegrityException("Resource byte range did not match the manifest")
+                }
             }
-            val digest = MessageDigest.getInstance("SHA-256")
-            var received = 0L
-            onProgress(ResourceProgress(resource.id, ResourceProgressPhase.DOWNLOADING, 0, resource.expectedBytes))
+            opened.contentLength?.let { length ->
+                if (length != resource.expectedBytes - offset) {
+                    throw ResourceIntegrityException("Resource length did not match the manifest")
+                }
+            }
+            var received = offset
+            onProgress(ResourceProgress(resource.id, ResourceProgressPhase.DOWNLOADING, received, resource.expectedBytes))
             try {
-                FileOutputStream(part, false).use { output ->
+                FileOutputStream(part, offset > 0L).use { output ->
                     val buffer = ByteArray(64 * 1024)
                     while (true) {
                         checkCancelled(cancellation)
@@ -386,7 +465,9 @@ class VerifiedFirstRunResourceInstaller(
             } catch (failure: IOException) {
                 throw ResourceStorageException("Could not persist resource data", failure)
             }
-            if (received != resource.expectedBytes) throw ResourceIntegrityException("Resource ended before its manifest length")
+            if (received != resource.expectedBytes) {
+                throw ResourceTransferException("Resource response ended before its manifest length")
+            }
             onProgress(ResourceProgress(resource.id, ResourceProgressPhase.VERIFYING, received, resource.expectedBytes))
             // Keep the digest from the bounded streaming pass; no second network read is possible.
             val actual = digest.digest().toHex()

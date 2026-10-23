@@ -127,6 +127,61 @@ class VerifiedFirstRunResourcesTest {
         assertEquals(2, transport.opens)
     }
 
+    @Test fun interruptedPinnedTransferResumesAtPersistedByteOffsetAndVerifiesBeforeActivation() {
+        val bytes = "controlled resumable resource payload".toByteArray()
+        val spec = resource(bytes)
+        val root = temporaryFolder.newFolder("resume")
+        val part = File(root, ".${spec.id}-${spec.version}.part")
+        val prefixBytes = 9
+        part.writeBytes(bytes.copyOfRange(0, prefixBytes))
+        var requestedOffset: Long? = null
+        val transport = object : ResumableResourceTransport {
+            override fun open(uri: URI, rangeStart: Long): ResourceResponse {
+                requestedOffset = rangeStart
+                val suffix = bytes.copyOfRange(rangeStart.toInt(), bytes.size)
+                return response(
+                    suffix,
+                    status = 206,
+                    contentRange = "bytes $rangeStart-${bytes.size - 1}/${bytes.size}",
+                )
+            }
+        }
+        val phases = mutableListOf<ResourceProgress>()
+
+        val ready = VerifiedFirstRunResourceInstaller(root, transport).install(spec, onProgress = phases::add)
+
+        assertEquals(prefixBytes.toLong(), requestedOffset)
+        assertEquals(ResourceDisposition.DOWNLOADED, ready.disposition)
+        assertEquals(bytes.toList(), ready.location.readBytes().toList())
+        assertEquals(prefixBytes.toLong(), phases.first().completedBytes)
+        assertTrue(phases.any { it.phase == ResourceProgressPhase.VERIFYING })
+        assertFalse(part.exists())
+    }
+
+    @Test fun completeInterruptedPartIsHashedBeforeItCanBeActivated() {
+        val bytes = "already transferred, not yet verified".toByteArray()
+        val spec = resource(bytes)
+        val root = temporaryFolder.newFolder("complete-part")
+        File(root, ".${spec.id}-${spec.version}.part").writeBytes(bytes)
+        val transport = object : ResumableResourceTransport {
+            override fun open(uri: URI, rangeStart: Long): ResourceResponse =
+                throw AssertionError("complete part must be verified locally, not downloaded again")
+        }
+
+        val ready = VerifiedFirstRunResourceInstaller(root, transport).install(spec)
+
+        assertEquals(ResourceDisposition.DOWNLOADED, ready.disposition)
+        assertEquals(bytes.toList(), ready.location.readBytes().toList())
+
+        val wrongRoot = temporaryFolder.newFolder("wrong-complete-part")
+        val wrongSpec = resource(bytes, hash = "0".repeat(64))
+        File(wrongRoot, ".${wrongSpec.id}-${wrongSpec.version}.part").writeBytes(bytes)
+        assertThrows(ResourceIntegrityException::class.java) {
+            VerifiedFirstRunResourceInstaller(wrongRoot, transport).install(wrongSpec)
+        }
+        assertFalse(File(wrongRoot, wrongSpec.targetFileName).exists())
+    }
+
     @Test fun cancellationDiscardsPartialAndNeverActivatesIt() {
         val bytes = "complete payload".toByteArray()
         val cancelled = AtomicBoolean(false)
@@ -163,7 +218,7 @@ class VerifiedFirstRunResourcesTest {
         assertFalse(File(wrongRoot, spec.targetFileName).exists())
 
         val short = installer(QueueTransport(response(expected.copyOf(expected.size - 1), contentLength = null)))
-        assertThrows(ResourceIntegrityException::class.java) { short.install(spec) }
+        assertThrows(ResourceTransferException::class.java) { short.install(spec) }
 
         val wrongLength = installer(QueueTransport(response(expected, contentLength = expected.size.toLong() + 1)))
         assertThrows(ResourceIntegrityException::class.java) { wrongLength.install(spec) }
@@ -309,10 +364,12 @@ class VerifiedFirstRunResourcesTest {
         expectedBytes: ByteArray,
         status: Int = 200,
         contentLength: Long? = expectedBytes.size.toLong(),
+        contentRange: String? = null,
         body: InputStream = ByteArrayInputStream(expectedBytes),
     ) = object : ResourceResponse {
         override val statusCode: Int = status
         override val contentLength: Long? = contentLength
+        override val contentRange: String? = contentRange
         override val body: InputStream = body
         override fun close() = body.close()
     }
