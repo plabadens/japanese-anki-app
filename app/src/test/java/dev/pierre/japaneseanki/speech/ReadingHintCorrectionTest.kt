@@ -1,12 +1,16 @@
 package dev.pierre.japaneseanki.speech
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
+
 import dev.pierre.japaneseanki.FuriganaSpan
 import dev.pierre.japaneseanki.TargetSpan
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
 
 /** The Chirp hint payload must be rebuilt from the corrected readings (SPEC §4.5, §6.2). */
+@RunWith(AndroidJUnit4::class)
 class ReadingHintCorrectionTest {
     private val voice = CloudVoice("ja-JP-Chirp3-HD-Achernar", "Achernar", listOf("ja-JP"), 24_000)
     private val sentence = "昨日は新しい喫茶店に行った。"

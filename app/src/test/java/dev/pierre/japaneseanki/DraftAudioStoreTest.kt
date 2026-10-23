@@ -1,14 +1,18 @@
 package dev.pierre.japaneseanki
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
 
 /** Item 4: private staging, canonical finals, ownership-aware retirement and sweep. */
+@RunWith(AndroidJUnit4::class)
 class DraftAudioStoreTest {
     private class Paths {
         val root: File = kotlin.io.path.createTempDirectory("draft-audio-store").toFile()

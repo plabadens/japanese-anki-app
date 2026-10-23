@@ -1,5 +1,7 @@
 package dev.pierre.japaneseanki
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -7,12 +9,14 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
+import org.junit.runner.RunWith
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 /** Item 1: shared format lookup, cache independence, atomic draft materialization. */
+@RunWith(AndroidJUnit4::class)
 class AudioReliabilityTest {
     private fun root(): File = kotlin.io.path.createTempDirectory("audio-reliability").toFile()
 

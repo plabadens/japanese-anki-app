@@ -1,5 +1,7 @@
 package dev.pierre.japaneseanki
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
+
 import dev.pierre.japaneseanki.speech.GoogleChirpSpeechProvider
 import dev.pierre.japaneseanki.speech.HttpGoogleSpeechTransport
 import org.junit.Assert.assertArrayEquals
@@ -8,6 +10,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
@@ -16,6 +19,7 @@ import java.io.OutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
+@RunWith(AndroidJUnit4::class)
 class GoogleHttpTest {
     private class TrackingInputStream(bytes: ByteArray) : ByteArrayInputStream(bytes) {
         var closed = false

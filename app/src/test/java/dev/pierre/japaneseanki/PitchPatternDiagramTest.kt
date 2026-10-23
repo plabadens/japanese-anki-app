@@ -1,11 +1,15 @@
 package dev.pierre.japaneseanki
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
 import kotlin.math.hypot
 
+@RunWith(AndroidJUnit4::class)
 class PitchPatternDiagramTest {
     @Test fun dotsStayFilledWithoutSourceBackedNasalization() {
         assertFalse(pitchDotIsHollow(isSourceBackedNasalMora = false))

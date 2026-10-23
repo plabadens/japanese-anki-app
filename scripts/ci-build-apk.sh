@@ -3,8 +3,6 @@
 # `nix develop --command ./scripts/ci-build-apk.sh`.
 set -euo pipefail
 
-./scripts/test-core.sh
-
 # Not --offline: the actions/cache key includes gradle/libs.versions.toml, so the first run after
 # any dependency change always starts with a cold cache and would fail to resolve the new artifact.
 # The runner has network; reproducible offline builds are the Nix derivation's job, not this script's.

@@ -1,16 +1,20 @@
 package dev.pierre.japaneseanki
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
 
 /**
  * Vocabulary-reading correction re-resolves the dictionary entry, pitch and recording identity
  * (SPEC §4.5, §5.3) and the ambiguity reset that stops a previous word's data from being shown
  * (ACCEPTANCE v0.3 known defect 1).
  */
+@RunWith(AndroidJUnit4::class)
 class VocabularyReadingsTest {
     private val candidates = listOf(
         ReadingCandidate(1, "喫茶", "きっさ"),

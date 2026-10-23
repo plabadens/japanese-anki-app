@@ -1,14 +1,18 @@
 package dev.pierre.japaneseanki
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
 
 /**
  * Targeted reading correction (SPEC §4.5, §5.2, §10): a user-corrected reading belongs to one
  * kanji span and must not touch the sentence text, the target selection, or other spans.
  */
+@RunWith(AndroidJUnit4::class)
 class SentenceReadingsTest {
     private val sentence = "昨日は新しい喫茶店に行った。"
     private val target = TargetSpan(6, 9) // 喫茶店

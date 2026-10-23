@@ -1,5 +1,7 @@
 package dev.pierre.japaneseanki
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
+
 import java.util.Collections
 import java.util.concurrent.CancellationException
 import java.util.concurrent.CountDownLatch
@@ -8,7 +10,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
 
+@RunWith(AndroidJUnit4::class)
 class AjtPitchRepositoryTest {
     @Test fun repeatedPrepareOpensOnceAndReusesOneHandle() {
         var opens = 0

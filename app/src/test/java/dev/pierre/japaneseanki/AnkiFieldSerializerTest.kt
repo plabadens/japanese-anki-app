@@ -1,9 +1,13 @@
 package dev.pierre.japaneseanki
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import org.junit.runner.RunWith
 
+@RunWith(AndroidJUnit4::class)
 class AnkiFieldSerializerTest {
     @Test fun highlightsOnlySelectedOccurrenceAndEscapesInput() {
         val sentence = "<img src=x>猫と猫"

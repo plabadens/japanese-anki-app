@@ -1,11 +1,15 @@
 package dev.pierre.japaneseanki
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
 
+@RunWith(AndroidJUnit4::class)
 class PitchAccentTest {
     private val akugyakuHtml = "<span class=\"low_rise\">ア</span><span class=\"high\">ク" +
         "<span class=\"nasal\">キ<span class=\"handakuten\">&#176;</span></span>ャク</span>"

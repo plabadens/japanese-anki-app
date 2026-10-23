@@ -1,5 +1,7 @@
 package dev.pierre.japaneseanki.speech
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
+
 import dev.pierre.japaneseanki.JapaneseToken
 import dev.pierre.japaneseanki.ReadingCorrection
 import dev.pierre.japaneseanki.TargetSpan
@@ -9,10 +11,12 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
 import java.io.File
 import java.net.SocketTimeoutException
 import java.util.Base64
 
+@RunWith(AndroidJUnit4::class)
 class SpeechHintBuilderTest {
     @Test
     fun kanjiSpansBecomePhraseHintsAndKanaNeedsNone() {
@@ -84,6 +88,7 @@ class SpeechHintBuilderTest {
     }
 }
 
+@RunWith(AndroidJUnit4::class)
 class GoogleSpeechProviderTest {
     private class FakeTransport(
         private val status: Int = 200,
@@ -303,6 +308,7 @@ class GoogleSpeechProviderTest {
     }
 }
 
+@RunWith(AndroidJUnit4::class)
 class SentenceHintSpansTest {
     private fun token(start: Int, end: Int, surface: String, reading: String) = JapaneseToken(
         span = TargetSpan(start, end),

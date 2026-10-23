@@ -1,9 +1,13 @@
 package dev.pierre.japaneseanki
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
 import org.junit.Test
+import org.junit.runner.RunWith
 
+@RunWith(AndroidJUnit4::class)
 class FrozenMediaReceiptTest {
     private val modelFields = AnkiFieldContract.requiredFields + AnkiFieldContract.optionalFields
 

@@ -1,5 +1,7 @@
 package dev.pierre.japaneseanki
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
+
 import dev.pierre.japaneseanki.speech.CloudVoice
 import dev.pierre.japaneseanki.speech.GoogleChirpSpeechProvider
 import dev.pierre.japaneseanki.speech.GoogleSpeechTransport
@@ -14,10 +16,12 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.util.concurrent.CancellationException
 
+@RunWith(AndroidJUnit4::class)
 class TranslationServiceTest {
     private class FakeTranslationTransport(
         private val status: Int = 200,

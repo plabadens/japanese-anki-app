@@ -1,11 +1,15 @@
 package dev.pierre.japaneseanki.ui
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
+
 import dev.pierre.japaneseanki.JapaneseToken
 import dev.pierre.japaneseanki.TargetSpan
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import org.junit.runner.RunWith
 
+@RunWith(AndroidJUnit4::class)
 class TargetSelectionTest {
     // 図書館 | で | 本 | を | 読みました | 。   (UTF-16 indices 0..12)
     private val sentence = "図書館で本を読みました。"

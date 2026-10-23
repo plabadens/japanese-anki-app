@@ -1,10 +1,14 @@
 package dev.pierre.japaneseanki.ui
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
+
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import org.junit.runner.RunWith
 
+@RunWith(AndroidJUnit4::class)
 class CardSurfacePresentationTest {
     @Test fun photoBandKeepsItsSixteenByNineCeilingAndShrinksOnShortScreens() {
         assertEquals(219.dp, cardPhotoBandHeight(width = 390.dp, availableHeight = 700.dp, fontScale = 1f))

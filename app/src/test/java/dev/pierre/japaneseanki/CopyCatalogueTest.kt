@@ -1,5 +1,7 @@
 package dev.pierre.japaneseanki
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
+
 import java.io.File
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
@@ -9,7 +11,9 @@ import javax.xml.parsers.DocumentBuilderFactory
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
 
+@RunWith(AndroidJUnit4::class)
 class CopyCatalogueTest {
 
     @Test

@@ -97,8 +97,6 @@
         fileset = pkgs.lib.fileset.unions [
           ./app/src/main/assets/pitch_ajt.sqlite.gz
           ./app/src/main/assets/dictionary.sqlite.gz
-          ./app/src/main/java
-          ./app/src/test/java
           ./datasets/jmdict/JMdict_e.gz
           ./datasets/kanjium/accents.txt
           ./scripts/build_dictionary.py
@@ -106,7 +104,6 @@
           ./scripts/test-build-dictionary.py
           ./scripts/test-build-ajt-pitch.py
           ./scripts/test-ajt-pitch-asset.py
-          ./scripts/test-core.sh
           ./scripts/test-dictionary-asset.py
         ];
       };
@@ -160,8 +157,8 @@
         apkPath = "app/build/outputs/apk/debug/app-x86_64-debug.apk";
         outputName = "japanese-anki-0.4-x86_64-debug.apk";
       };
-      coreTests = pkgs.runCommand "japanese-anki-core-tests" {
-        nativeBuildInputs = [ jdk gradle pkgs.python3 ];
+      coreTests = pkgs.runCommand "japanese-anki-core-data-checks" {
+        nativeBuildInputs = [ pkgs.python3 ];
       } ''
         cp -r ${coreCheckSource} source
         chmod -R u+w source
@@ -170,9 +167,8 @@
         python3 scripts/test-build-ajt-pitch.py
         python3 scripts/test-ajt-pitch-asset.py
         python3 scripts/test-dictionary-asset.py
-        bash scripts/test-core.sh
         mkdir -p "$out"
-        printf 'Core tests passed.\n' > "$out/result"
+        printf 'Core data checks passed.\n' > "$out/result"
       '';
     in {
       packages.${system} = {

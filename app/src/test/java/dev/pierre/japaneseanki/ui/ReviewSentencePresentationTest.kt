@@ -1,5 +1,7 @@
 package dev.pierre.japaneseanki.ui
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
+
 import dev.pierre.japaneseanki.FuriganaSpan
 import dev.pierre.japaneseanki.JapaneseToken
 import dev.pierre.japaneseanki.TargetSpan
@@ -7,7 +9,9 @@ import dev.pierre.japaneseanki.sentenceFuriganaSpans
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
 
+@RunWith(AndroidJUnit4::class)
 class ReviewSentencePresentationTest {
     @Test fun highlightsExactTargetAndUsesItsReadingAsRuby() {
         val parts = reviewSentenceParts("猫と猫", TargetSpan(2, 3), "ねこ", emptyList())

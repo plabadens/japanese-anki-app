@@ -1,13 +1,17 @@
 package dev.pierre.japaneseanki
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Test
+import org.junit.runner.RunWith
 
 /**
  * A sentence-reading correction invalidates the sentence recording and nothing else; a vocabulary
  * reading correction re-resolves the word recording (SPEC §10 rebuild table).
  */
+@RunWith(AndroidJUnit4::class)
 class DraftAudioIdentityTest {
     private val sentence = "昨日は新しい喫茶店に行った。"
     private val target = TargetSpan(6, 9)

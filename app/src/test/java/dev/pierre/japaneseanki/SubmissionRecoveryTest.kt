@@ -1,15 +1,19 @@
 package dev.pierre.japaneseanki
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.Assert.assertThrows
+import org.junit.runner.RunWith
 import android.content.SharedPreferences
 import java.io.File
 import java.nio.file.Files
 
+@RunWith(AndroidJUnit4::class)
 class SubmissionRecoveryTest {
     @Test
     fun restoredDraftTagsPreferLastSentTagsBeforeSettingsDefaults() {

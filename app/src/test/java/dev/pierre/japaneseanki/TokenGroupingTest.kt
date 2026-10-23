@@ -1,14 +1,18 @@
 package dev.pierre.japaneseanki
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
+
 import dev.pierre.japaneseanki.ui.spanSurface
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import org.junit.runner.RunWith
 
 /**
  * The analyzer returns UniDic morphemes; the target sheet must expose the units a learner mines.
  * These tests use the exact raw segmentation observed on the API-37 device for
  * 図書館で本を読みました。.
  */
+@RunWith(AndroidJUnit4::class)
 class TokenGroupingTest {
     private val sentence = "図書館で本を読みました。"
 
