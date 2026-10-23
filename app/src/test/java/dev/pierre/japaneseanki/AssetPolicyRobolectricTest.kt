@@ -2,16 +2,16 @@ package dev.pierre.japaneseanki
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
-import java.io.File
 import java.security.DigestInputStream
 import java.security.MessageDigest
+import org.robolectric.annotation.Config
 
 @RunWith(AndroidJUnit4::class)
+@Config(sdk = [37], qualifiers = "w390dp-h844dp-xxhdpi")
 class AssetPolicyAndroidTest {
     @Test fun bundledNhkIndexResolvesHeadwordWithoutNetwork() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -42,20 +42,5 @@ class AssetPolicyAndroidTest {
         )
         assertEquals("20170726141547.ogg", source.findRecording("猫"))
         assertEquals("20170712154846.ogg", source.findRecording("新しい"))
-    }
-
-    @Test fun bundledJapaneseOcrRecognizesLocalFixtureWithoutNetwork() = runBlocking {
-        val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val context = instrumentation.targetContext
-        val image = File.createTempFile("offline-japanese-ocr-", ".jpg", context.cacheDir)
-        try {
-            instrumentation.context.assets.open("textbook-specimen.jpg").use { input ->
-                image.outputStream().use { output -> input.copyTo(output) }
-            }
-            val result = JapaneseOcr().recognize(image)
-            assertTrue("Bundled model failed on Japanese fixture: ${result.text}", result.text.contains("図書館で本を読みました"))
-        } finally {
-            image.delete()
-        }
     }
 }

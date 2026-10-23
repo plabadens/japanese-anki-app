@@ -2,7 +2,7 @@
 # CI entry point for the release-signed arm64-v8a APK. Run from the repository root via
 # `nix develop --command ./.github/scripts/ci-build-release-apk.sh`.
 #
-# Mirrors scripts/ci-build-apk.sh (same gradle flags, same unit-test gate) but assembles the
+# Mirrors scripts/ci-build-apk.sh (same gradle flags, same verifyFast gate) but assembles the
 # release variant. app/build.gradle.kts reads the signing material from the environment and
 # falls back to an unsigned build when it is absent, so the guards below are what keep CI from
 # publishing an unsigned APK by accident.
@@ -19,6 +19,6 @@ fi
 
 ./scripts/test-core.sh
 
-gradle --no-daemon --max-workers=2 --console=plain \
+gradle --no-daemon --offline --configuration-cache --build-cache --max-workers=2 --console=plain \
   -Pandroid.aapt2FromMavenOverride="$ANDROID_HOME/build-tools/36.0.0/aapt2" \
-  testDebugUnitTest assembleRelease
+  verifyFast assembleRelease

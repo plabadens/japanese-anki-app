@@ -12,9 +12,11 @@ import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 
 /** The repository against the real bundled index, real SQLite and a real asset install. */
 @RunWith(AndroidJUnit4::class)
+@Config(sdk = [37], qualifiers = "w390dp-h844dp-xxhdpi")
 class AjtPitchRepositoryAndroidTest {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private val temporaryFiles = mutableListOf<File>()

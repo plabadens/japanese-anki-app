@@ -35,14 +35,16 @@ and dated status reports neither control the UI nor establish compliance.
 
 ```sh
 nix develop                     # JDK 17, Gradle 9.7.1, SDK 37.0, build-tools 36.0.0, NDK, CMake, emulator, adb
-./scripts/test-core.sh          # fast lane: platform-independent core tests
-gradle -Pandroid.aapt2FromMavenOverride="$ANDROID_HOME/build-tools/36.0.0/aapt2" \
-  testDebugUnitTest assembleDebug
+./scripts/test-core.sh          # core logic checks
+gradle --offline --configuration-cache --build-cache \
+  -Pandroid.aapt2FromMavenOverride="$ANDROID_HOME/build-tools/36.0.0/aapt2" \
+  verifyFast assembleDebug
 ```
 
 The aapt2 override is required — the Maven-hosted aapt2 does not work in the NixOS sandbox. There is
-no Gradle wrapper; nothing is expected from a globally installed Android SDK. The first Gradle run
-needs network access to fill the Maven cache.
+no Gradle wrapper; `nix develop` supplies the pinned toolchain and dependency lock for offline
+verification. After changing Gradle dependencies, refresh the lock with
+`./scripts/update-gradle-deps.sh`.
 
 Output is split by ABI under `app/build/outputs/apk/debug/`: `app-arm64-v8a-debug.apk` for a phone,
 `app-x86_64-debug.apk` for the emulator. There is no universal APK. To install on a device:
@@ -56,6 +58,11 @@ For an update-compatible build, point `JAPANESE_ANKI_DEBUG_KEYSTORE` at the exis
 existing install.
 
 ## Emulator
+
+`verifyFast` is the normal Compose/UI check and needs no emulator. Use the emulator wrapper only
+for the device-only boundaries documented in [docs/android-instrumentation-tests.md](docs/android-instrumentation-tests.md)
+or a manual end-to-end check; its screenshots are device evidence, not a substitute for the JVM
+semantics and Roborazzi tests.
 
 ```sh
 nix run .#emulator-wrapper -- session app/build/outputs/apk/debug/app-x86_64-debug.apk .tmp-nix/screenshots/smoke
