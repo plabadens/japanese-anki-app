@@ -1,0 +1,144 @@
+# Testing Compose without the emulator
+
+**Status: PROPOSAL — not authority.** Nothing here overrides `SPEC.md`, `BEST-PRACTICES.md` or
+`android-instrumentation-tests.md`. It answers one question: can the UI half of this app's
+verification move off the emulator, and what would that do to the agent loop?
+
+---
+
+## 1. The short answer
+
+Yes. A Compose UI test is ordinary Kotlin that drives a semantics tree; the same
+`createComposeRule()` / `runComposeUiTest { }` source runs on a device **and** on the JVM. On the
+JVM, Robolectric supplies the Android framework. Google states it plainly: most UI tests do not
+interact with the framework in ways that need a device, and a Compose test that asserts the UI
+changed after a tap is explicitly called out as a case where Robolectric's fidelity is "more than
+enough" (`developer.android.com/training/testing/local-tests/robolectric`, updated 2026-03-05).
+
+The parts that must stay on a device are narrow and can be named in one list (§4).
+
+## 2. The three techniques, and what each really runs
+
+| Technique | Runs | Interaction | Visual golden | Good for |
+|---|---|---|---|---|
+| **Robolectric + `ui-test-junit4`** | JVM, real framework classes, shadows for services | yes | no (needs a companion lib) | behaviour, semantics, geometry, state transitions |
+| **Roborazzi** | JVM, Robolectric + native graphics | yes, multi-frame | yes (`captureRoboImage`, compare) | the visual contract, multi-step screenshots |
+| **Paparazzi** | JVM, layoutlib — no Android runtime | no | yes | single-frame layout from a `@Composable` call |
+| **Compose Preview Screenshot Testing** | JVM, AGP plugin, renders `@Preview` | limited | yes (HTML report) | teams already living in `@Preview` |
+
+Two facts worth knowing before choosing:
+
+- **Robolectric is not a niche hack.** It is Google-maintained, supports every API since 21, and
+  Google's own guidance says most Google apps rely on it heavily. AndroidX itself ships
+  Robolectric-based local-testing artifacts for Compose, WorkManager, Navigation and Glance — the
+  pattern of "one binary, two runtimes" is the platform's own approach
+  (`robolectric.org/blog/2026/07/03/designing-local-testing-libraries`).
+- **Compose Preview Screenshot Testing is still alpha** (`com.android.compose.screenshot`
+  `0.0.1-alpha16`, paired with AGP 9.0.0-rc03 per `developer.android.com/studio/preview/compose-screenshot-testing`,
+  updated 2026-09-25). Roborazzi and Paparazzi are the mature options today.
+
+## 3. What it means for *this* app
+
+The four measurements the 23 October acceptance asked for are all JVM-testable, and none of them
+needs a device:
+
+| Acceptance check | JVM test |
+|---|---|
+| 56 dp top bar, 48 dp gear, segmented control height | `onNodeWithTag(...).assertHeightIsEqualTo(56.dp)` |
+| shutter `x₁ = x₂` above and below at 390×844 | `@Config(qualifiers = "w390dp-h844dp-xxhdpi")` + `getBoundsInRoot()` arithmetic |
+| sentence bounds unchanged when a word is selected | measure before/after selection; assert equality |
+| hint line is the only instruction in each state | assert exactly one node in the hint slot; assert absence of the retired surfaces |
+| 200% text and dark/light | `@Config(fontScale = 2.0f)` and `qualifiers = "night"` |
+| exactly one translation and one synthesis on commit | fake provider, assert call counts — **this is where the injectable boundary pays off** |
+
+The card-surface behaviour tests that tonight ran as `androidTest` (`CardSurfaceBehaviorTest`,
+`DraftAudioPlaybackTest`, parts of `ImageExportInstrumentedTest`) are candidates to move to `test`
+with `@RunWith(AndroidJUnit4::class)` — the same file, a different source set.
+
+**The UniDic transfer card is a special case worth calling out.** `androidx.work:work-testing` runs
+the WorkManager engine and its database on the JVM under Robolectric. The resume-from-persisted-offset
+state machine — enqueue, progress, process death, retry, verify→install — is therefore provable
+without an emulator *and* without the 426 MiB download, by injecting a fake transfer at the seam.
+Only "real bytes from the real host over a real network" stays unprovable, which is exactly the
+line we already drew.
+
+## 4. The line that stays on a device
+
+Keep a thin `androidTest` lane, and only for:
+
+1. **Camera / ML Kit OCR** — needs a real camera pipeline. Unless the OCR boundary is separated
+   and fed synthetic bitmaps, in which case the *contract* moves to JVM and only the sensor stays.
+2. **System insets, edge-to-edge, gesture pill** — Robolectric does not model system UI; the
+   window-inset positioning of the shutter row genuinely needs a device.
+3. **AnkiDroid round-trip** — a real third-party app receiving an intent and confirming import.
+4. **Release smoke** — install the signed APK, launch, one happy path. Once, before publication.
+
+That is a handful of tests, not 45.
+
+## 5. The agent loop — where the time actually goes
+
+Emulator verification costs four things per run, and only the first is obvious: **boot** (a cold
+AVD start is the dominant fixed cost of every run), **install** (build + `adb install` +
+`am start`), **execution** (each test round-trips over adb with a UI automation connection), and
+**flake** (a wedged emulator or a stale `adb` server turns a red test into an infrastructure
+question, which is how an agent burns an hour on the wrong hypothesis — see the `ANDROID_SDK_ROOT`
+incident on 23 October, where a wrapper exiting 2 was read as "no emulator exists").
+
+A JVM lane removes boot and install entirely and collapses execution into one Gradle test task.
+To make that loop fast *for an agent*, in order of payoff:
+
+1. **Seed Robolectric's runtime jars.** Robolectric downloads `android-all` jars on first use; set
+   `robolectric.offline=true` and `robolectric.dependency.dir` to a pre-seeded directory (the Nix
+   store is the natural home) so no run depends on Maven Central. This is the single biggest
+   recurring failure mode for hermetic agent loops.
+2. **Gradle configuration cache + build cache**, `--offline` for dependency resolution, and one
+   aggregate task (`verifyFast`) that runs the unit + Robolectric + golden lane and fails fast.
+3. **Determinism knobs**: fixed clock, `GraphicsMode.NATIVE`, `@Config(qualifiers=…)` instead of
+   device resolution, animations disabled, no real network in the fast lane.
+4. **Machine-readable verdicts.** JUnit XML plus Roborazzi's diff report — an agent should read a
+   pass/fail table and a list of differing pixels, not decode a screenshot.
+5. **Retire the `scripts/test-core.sh` kotlinc hack** once the JVM lane works. It exists to dodge
+   AGP start-up cost, and it has already cost us a blocked card on a Kotlin-version mismatch with
+   Gradle 9.7.1. A real Gradle test task with caching is both faster in steady state and far less
+   fragile.
+
+Honest caveat: **no numbers are claimed here.** The size of the win should be measured in the spike
+below — cold and warm wall-clock for the current 45-test device suite versus the same assertions on
+JVM — before any of this becomes policy.
+
+## 6. Risks and costs specific to this app
+
+- **CJK font determinism is the big one.** Golden images are only meaningful if glyphs are
+  identical across runs and machines. The app currently bundles no font in `res/font`; a Japanese
+  app that renders ruby and pitch in system fonts will produce tofu or host-dependent shapes under
+  Robolectric and Paparazzi. Either bundle one Noto Sans JP weight (also improving device
+  consistency, at some APK cost) or accept that goldens verify layout, not glyphs. Decide this
+  explicitly, not by accident.
+- **Alpha dependency risk** for Compose Preview Screenshot Testing, coupled to AGP 9 RCs. Roborazzi
+  is the safer default; revisit when the Google tool leaves alpha.
+- **Fidelity gaps** are real: insets, `WebView`, and some `MediaPlayer` behaviour. Keep them on
+  device (§4) rather than discovering them as mysterious JVM-only failures.
+- **Golden-image maintenance**: every intentional design change requires updating references. That
+  is the point (it makes visual change reviewable), but it must be a deliberate, reviewed act, not
+  a mass `recordRoborazzi`.
+
+## 7. Proposed sequence
+
+1. **Spike (timeboxed, no production change).** Add Robolectric + `ui-test-junit4` + Roborazzi to
+   `test`, port *one* existing `CardSurfaceBehaviorTest` case and capture *one* golden of the card.
+   Measure cold/warm runtime and settle the font question. Report numbers; do not change policy.
+2. **Migrate the surface tests.** Card surface, capture screen, motion/haptics presentation logic →
+   JVM. Keep the device lane for §4 only.
+3. **WorkManager on JVM.** Move the UniDic lifecycle proof to `work-testing` + the injected fake;
+   close `t_4d2eef32` on that evidence.
+4. **Two-tier CI.** Fast lane on every commit (`verifyFast`); device lane nightly and before a
+   release.
+5. **Then, and only then,** decide whether the emulator remains in the per-card agent loop at all.
+
+## 8. What this does *not* fix
+
+It does not remove the need for provider credentials, and it does not make the app's provider
+integration verified. A fake provider proves the wiring, the state machine and the layout; it
+cannot prove that Google returns a correct translation or that ML Kit reads a sign. Those stay a
+human, on-device pass — with a real key — and should be scheduled as such rather than expected from
+acceptance cards.
