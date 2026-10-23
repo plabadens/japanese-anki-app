@@ -1,8 +1,41 @@
 # Testing Compose without the emulator
 
-**Status: PROPOSAL — not authority.** Nothing here overrides `SPEC.md`, `BEST-PRACTICES.md` or
-`android-instrumentation-tests.md`. It answers one question: can the UI half of this app's
-verification move off the emulator, and what would that do to the agent loop?
+**Status: DECISION — adopted 23 October 2026.** The tool choice is settled; §7 is the work. Nothing
+here overrides `SPEC.md`, `BEST-PRACTICES.md` or `android-instrumentation-tests.md`: it changes where
+tests run, not what they must prove.
+
+## 0. The decision
+
+**Robolectric + `ui-test-junit4` for behaviour, Roborazzi for pixels, one source set, one Gradle
+task.** Not Paparazzi, not Compose Preview Screenshot Testing, not two parallel test trees.
+
+- **Robolectric** answers "is it 56 dp, do the bounds move when a word is selected, does commit fire
+  exactly one synthesis". Numbers, not pictures.
+- **Roborazzi** renders the same composables and compares against committed references. Same JVM,
+  same task as the assertions, so one command proves both and a failure says which.
+- The same test file still runs on a device under `@RunWith(AndroidJUnit4::class)`. Moving a check
+  back to the device lane, if fidelity ever demands it, is a source-set move — not a rewrite.
+
+**Rejected.** *Paparazzi* renders one frame from a `@Composable` call and cannot interact, so it
+cannot prove selection, sheets or transitions — which is what this contract is about. *Compose
+Preview Screenshot Testing* has the nicest diff report of the three but is `0.0.1-alpha16` pinned to
+AGP 9 RCs; making an alpha renderer the backbone of verification in the same month as a toolchain
+upgrade is how a suite becomes the next incident. Revisit when it leaves alpha.
+
+## 0.1 Mockups stop being HTML
+
+`mockup/` and `docs/evidence/prototype/*.html` are hand-built reproductions, and they have already
+drifted: they still draw surfaces the contract retired, and judging the build against them produced
+contradictions twice. They are replaced by **`@Preview` composables that call the real screens**,
+rendered by Roborazzi into committed PNGs under `docs/design/states/`.
+
+That inverts the failure: a mockup can no longer disagree with the app, because it *is* the app. A
+design change and its picture land in the same commit, or the golden fails and names the pixels. The
+contract remains the authority for **which states exist**; the preview catalogue is the record of
+**what has been drawn** — one preview per contract state, and none for a state the contract does not
+have. The HTML files move to `docs/archive/` as decision history and stop being implementation
+reference.
+
 
 ---
 
