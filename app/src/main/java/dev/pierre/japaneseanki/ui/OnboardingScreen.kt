@@ -108,7 +108,6 @@ internal fun OnboardingScreen(
     onSelectDeck: (Long) -> Unit,
     onSetupAnkiLater: () -> Unit,
     onFinish: () -> Unit,
-    onUseApp: () -> Unit,
     onOpenDownloads: () -> Unit,
 ) {
     val title = when (step) {
@@ -204,11 +203,6 @@ internal fun OnboardingScreen(
                             Text(stringResource(R.string.downloads))
                         }
                     }
-                }
-            }
-            if (step != OnboardingStep.READY || !dictionaryReady || !audioReady) {
-                TextButton(onClick = onUseApp, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.use_app))
                 }
             }
         }

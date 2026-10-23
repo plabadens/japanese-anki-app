@@ -1,6 +1,6 @@
 # Compose contract-state goldens
 
-This directory contains 104 committed Roborazzi references: 13 real-screen states, each rendered in
+This directory contains 112 committed Roborazzi references: 14 real-screen states, each rendered in
 light and dark themes, at font scales 1.0 and 2.0, at 390×844 dp and 360×828 dp. The previews call
 `InputScreen`, `OnboardingScreen`, and `CardScreen`; they do not draw substitute screens.
 
@@ -20,6 +20,7 @@ States rendered:
 - `capture-camera-idle`
 - `capture-camera-permission-prompt`
 - `setup-dictionary-downloading`
+- `setup-dictionary-required`
 - `capture-torch-on`
 - `type-empty-field`
 - `type-filled-sentence`
@@ -31,8 +32,8 @@ States rendered:
 - `card-ready-to-send`
 - `card-sent`
 
-The setup-download state uses the real onboarding dictionary screen, the only production surface
-that presents download progress. The Capture preview uses the production `InputScreen` with a static
+The setup states use the real onboarding dictionary screen, the production surface that handles the
+local dictionary task. The Capture preview uses the production `InputScreen` with a static
 camera-capability fixture; it does not bind CameraX in a JVM renderer.
 
 ## Regenerate
@@ -50,7 +51,7 @@ ordinary `testDebugUnitTest` lane compares the committed references rather than 
 ## Review a change
 
 1. Check the changed names and count under `docs/design/states/`; a complete catalogue has exactly
-   104 PNGs. Confirm every changed image maps to an intentional state and qualifier.
+   112 PNGs. Confirm every changed image maps to an intentional state and qualifier.
 2. Open the changed image and its previous committed version at native pixel size, side by side or
    with an image-diff viewer. A binary Git diff is not visual review. Check Japanese glyphs, text
    wrapping, control placement, contrast, and the fixed Card footer at both font scales.
