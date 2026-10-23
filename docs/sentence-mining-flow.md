@@ -544,6 +544,7 @@ Official primary sources:
 Project context:
 
 - [Current product specification](../SPEC.md) — retained content, privacy, destination and media requirements, reconciled with this approved flow.
-- [Target implementation](../app/src/main/java/dev/pierre/japaneseanki/ui/TargetScreen.kt) — inspected current duplicated sentence, right-aligned edit action and correction form.
-- [Review implementation](../app/src/main/java/dev/pierre/japaneseanki/ui/ReviewCard.kt) — inspected current translation heading and combined metadata editor.
+- The Target implementation (`TargetScreen.kt`) and Review implementation (`ReviewCard.kt`) that this
+  document inspected were retired on 22 October 2026 by the Capture → Card contract; both files are
+  deleted and their behaviour now lives in the card surface. Git history holds them.
 - [AnkiDroid gateway](../app/src/main/java/dev/pierre/japaneseanki/AnkiDroidGateway.kt) — inspected the actual ContentResolver/FileProvider boundary that integration tests must exercise.
