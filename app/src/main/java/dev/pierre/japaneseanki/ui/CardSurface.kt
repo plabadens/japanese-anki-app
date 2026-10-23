@@ -5,6 +5,14 @@ import android.graphics.Matrix
 import android.net.Uri
 import android.widget.ImageView
 import androidx.annotation.StringRes
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -30,7 +38,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -57,8 +64,12 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.isTraversalGroup
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -246,6 +257,7 @@ internal fun CardScreen(
     }
     val fontScale = LocalConfiguration.current.fontScale
     val density = LocalDensity.current
+    val motionEnabled = LocalMotionEnabled.current
     val hintHeight = with(density) { MaterialTheme.typography.bodySmall.lineHeight.toDp().coerceAtLeast(24.dp) }
 
     BoxWithConstraints(modifier) {
@@ -307,8 +319,18 @@ internal fun CardScreen(
                     // The word card owns this slot. Reserving its minimum height prevents late
                     // dictionary/audio results from moving the sentence or translation.
                     Box(Modifier.fillMaxWidth().heightIn(min = 152.dp).padding(top = 8.dp)) {
-                        if (selectedSpan != null) {
-                            FlowCard {
+                        Column(Modifier.fillMaxWidth()) {
+                            AnimatedVisibility(
+                        visible = selectedSpan != null,
+                        modifier = Modifier.fillMaxWidth(),
+                        enter = if (motionEnabled) {
+                            fadeIn(tween(180)) + scaleIn(initialScale = 0.98f, animationSpec = tween(180))
+                        } else {
+                            EnterTransition.None
+                        },
+                        exit = ExitTransition.None,
+                    ) {
+                        FlowCard {
                                 Column(
                                     Modifier.fillMaxWidth().padding(16.dp),
                                     verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -368,6 +390,7 @@ internal fun CardScreen(
                                     }
                                 }
                             }
+                        }
                         }
                     }
 
@@ -452,6 +475,8 @@ internal fun SelectableSentence(
     val readingBySpan = furigana.associateBy { it.span }
     val selectedLabel = stringResource(R.string.card_word_selected_state)
     val unselectedLabel = stringResource(R.string.card_word_not_selected_state)
+    val feedback = LocalTouchFeedbackDispatcher.current
+    val motionEnabled = LocalMotionEnabled.current
     val readingBandHeight = with(LocalDensity.current) { 13.sp.toDp().coerceAtLeast(14.dp) }
     if (tokens.isEmpty() || sentence.isBlank()) {
         Text(sentence, modifier = modifier, style = MaterialTheme.typography.headlineMedium)
@@ -465,39 +490,59 @@ internal fun SelectableSentence(
         targetPills(tokens).forEachIndexed { index, pill ->
             val token = pill.token
             val isSelected = token.span == selectedSpan
+            var isPressed by remember(token.span) { mutableStateOf(false) }
             val selectedFill = MaterialTheme.colorScheme.secondaryContainer
+            val selectionFill by animateColorAsState(
+                targetValue = if (isSelected || isPressed) selectedFill else Color.Transparent,
+                animationSpec = if (motionEnabled) tween(durationMillis = 80) else snap(),
+                label = "word-selection-fill",
+            )
             val selectedText = MaterialTheme.colorScheme.onSecondaryContainer
+            val unselectedText = MaterialTheme.colorScheme.onSurface
             val selectedUnderline = MaterialTheme.colorScheme.primary
+            val wordLabel = stringResource(R.string.card_word_accessibility, token.surface)
             val reading = readingBySpan[token.span]?.reading
                 ?: token.surfaceReading.takeIf { containsKanjiForCard(token.surface) }
             val baseStart = pill.prefix.length
             val baseEnd = baseStart + token.surface.length
             val display = buildAnnotatedString {
                 append(pill.prefix)
-                if (isSelected) {
-                    pushStyle(SpanStyle(color = selectedText, background = selectedFill))
-                }
+                pushStyle(
+                    SpanStyle(
+                        color = if (isSelected || isPressed) selectedText else unselectedText,
+                        background = selectionFill,
+                    ),
+                )
                 append(token.surface)
-                if (isSelected) pop()
+                pop()
                 append(pill.suffix)
             }
             val layoutResult = remember(token.span, display.text) { mutableStateOf<TextLayoutResult?>(null) }
-            val interactionSource = remember(token.span) { MutableInteractionSource() }
+            val selectSpanIfChanged = {
+                if (selectionEnabled && token.span != selectedSpan) {
+                    feedback.dispatch(TouchFeedbackEvent.WORD_SELECTION)
+                    onSelectSpan(token.span)
+                }
+            }
             Column(
                 modifier = Modifier
                     .heightIn(min = 48.dp)
-                    .clickable(
-                        enabled = selectionEnabled,
-                        interactionSource = interactionSource,
-                        indication = null,
-                        onClick = { onSelectSpan(token.span) },
-                    )
                     .testTag("sentence-word-${token.span.start}-${token.span.end}")
                     .semantics(mergeDescendants = true) {
-                        contentDescription = token.surface
+                        contentDescription = wordLabel
                         stateDescription = if (isSelected) selectedLabel else unselectedLabel
                         selected = isSelected
+                        role = Role.Button
                         traversalIndex = index.toFloat()
+                        if (!selectionEnabled) disabled()
+                        onClick(label = wordLabel) {
+                            if (!selectionEnabled) {
+                                false
+                            } else {
+                                selectSpanIfChanged()
+                                true
+                            }
+                        }
                     },
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Bottom,
@@ -519,19 +564,28 @@ internal fun SelectableSentence(
                         .testTag("sentence-word-text-${token.span.start}-${token.span.end}")
                         .pointerInput(selectionEnabled, baseStart, baseEnd, layoutResult.value) {
                             if (selectionEnabled) {
-                                detectTapGestures { position ->
-                                    val textLayout = layoutResult.value ?: return@detectTapGestures
-                                    val minimumTouchHeight = 48.dp.toPx()
-                                    val hitBaseText = (baseStart until baseEnd).any { offset ->
-                                        val character = textLayout.getBoundingBox(offset)
-                                        val verticalExpansion = ((minimumTouchHeight - character.height) / 2f).coerceAtLeast(0f)
-                                        val top = (character.top - verticalExpansion).coerceAtLeast(0f)
-                                        val bottom = (character.bottom + verticalExpansion).coerceAtMost(size.height.toFloat())
-                                        position.x >= character.left && position.x <= character.right &&
-                                            position.y >= top && position.y <= bottom
-                                    }
-                                    if (hitBaseText) onSelectSpan(token.span)
-                                }
+                                detectTapGestures(
+                                    onPress = { position ->
+                                        isPressed = true
+                                        val released = try {
+                                            tryAwaitRelease()
+                                        } finally {
+                                            isPressed = false
+                                        }
+                                        if (!released) return@detectTapGestures
+                                        val textLayout = layoutResult.value ?: return@detectTapGestures
+                                        val minimumTouchHeight = 48.dp.toPx()
+                                        val hitBaseText = (baseStart until baseEnd).any { offset ->
+                                            val character = textLayout.getBoundingBox(offset)
+                                            val verticalExpansion = ((minimumTouchHeight - character.height) / 2f).coerceAtLeast(0f)
+                                            val top = (character.top - verticalExpansion).coerceAtLeast(0f)
+                                            val bottom = (character.bottom + verticalExpansion).coerceAtMost(size.height.toFloat())
+                                            position.x >= character.left && position.x <= character.right &&
+                                                position.y >= top && position.y <= bottom
+                                        }
+                                        if (hitBaseText) selectSpanIfChanged()
+                                    },
+                                )
                             }
                         }
                         .drawBehind {
@@ -709,6 +763,7 @@ private fun CardFooter(
     actionLoading: Boolean,
     onAction: () -> Unit,
 ) {
+    val progressLabel = hint?.takeIf(String::isNotBlank) ?: stringResource(R.string.card_hint_preparing)
     Column(
         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)
             .padding(horizontal = 16.dp, vertical = 8.dp),
@@ -718,7 +773,15 @@ private fun CardFooter(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (hintLoading) LoadingIndicator(Modifier.size(16.dp))
+            if (hintLoading) {
+                MotionAwareProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    diameter = 16.dp,
+                    strokeWidth = 2.dp,
+                    stateDescription = progressLabel,
+                )
+            }
             Text(
                 hint.orEmpty(),
                 modifier = Modifier.weight(1f),

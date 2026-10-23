@@ -2,6 +2,7 @@ package dev.pierre.japaneseanki.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.hardware.camera2.CameraManager
 import androidx.compose.foundation.layout.Box
@@ -15,8 +16,11 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -27,11 +31,13 @@ import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertWidthIsEqualTo
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.TextFieldValue
@@ -52,6 +58,167 @@ import java.util.concurrent.atomic.AtomicReference
 class InputScreenLayoutTest {
     @get:Rule
     val composeRule = createComposeRule()
+
+    @Test
+    fun ocrProgressAndFailureStateStayAccessibleAndSilent() {
+        val loading = mutableStateOf(true)
+        val error = mutableStateOf<String?>(null)
+        val events = mutableListOf<TouchFeedbackEvent>()
+        val dispatcher = TouchFeedbackDispatcher { event -> events += event }
+        composeRule.setContent {
+            CompositionLocalProvider(
+                LocalMotionEnabled provides false,
+                LocalTouchFeedbackDispatcher provides dispatcher,
+            ) {
+                MaterialTheme {
+                    Box(Modifier.width(390.dp).height(796.dp)) {
+                        InputScreen(
+                            captureMode = "Photo",
+                            onCaptureModeChange = {},
+                            editor = TextFieldValue(""),
+                            onEditorChange = {},
+                            onContinue = {},
+                            onOpenGallery = {},
+                            onChoosePhoto = {},
+                            onCaptured = {},
+                            onCameraError = {},
+                            outputDirectory = File("/unused-ocr-feedback-test"),
+                            modifier = Modifier.fillMaxSize(),
+                            cameraPermissionGranted = false,
+                            ocrLoading = loading.value,
+                            ocrError = error.value,
+                        )
+                    }
+                }
+            }
+        }
+
+        val busyStatus = composeRule.onNodeWithTag("capture-status-line").fetchSemanticsNode().config
+        assertEquals(ProgressBarRangeInfo.Indeterminate, busyStatus[SemanticsProperties.ProgressBarRangeInfo])
+        assertEquals("Reading text…", busyStatus[SemanticsProperties.StateDescription])
+        assertTrue("Background OCR must not dispatch haptics", events.isEmpty())
+        captureMotionEvidence("reduced-motion-ocr-progress.png")
+
+        loading.value = false
+        error.value = "OCR failed"
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("OCR failed").assertIsDisplayed()
+        assertTrue("OCR errors must not dispatch haptics", events.isEmpty())
+        captureMotionEvidence("reduced-motion-ocr-error.png")
+    }
+
+    @Test
+    fun systemReducedMotionKeepsCaptureProgressStaticAndOperable() {
+        val mode = mutableStateOf("Photo")
+        val resolvedMotionEnabled = AtomicReference<Boolean?>(null)
+        composeRule.setContent {
+            FlowTheme(darkTheme = false) {
+                val motionEnabled = LocalMotionEnabled.current
+                SideEffect { resolvedMotionEnabled.set(motionEnabled) }
+                Box(Modifier.width(390.dp).height(796.dp)) {
+                    InputScreen(
+                        captureMode = mode.value,
+                        onCaptureModeChange = { mode.value = it },
+                        editor = TextFieldValue(""),
+                        onEditorChange = {},
+                        onContinue = {},
+                        onOpenGallery = {},
+                        onChoosePhoto = {},
+                        onCaptured = {},
+                        onCameraError = {},
+                        outputDirectory = File("/unused-system-motion-test"),
+                        modifier = Modifier.fillMaxSize(),
+                        cameraPermissionGranted = false,
+                        ocrLoading = true,
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        assertEquals("Android's disabled animator setting must select reduced motion", false, resolvedMotionEnabled.get())
+        val busyStatus = composeRule.onNodeWithTag("capture-status-line").fetchSemanticsNode().config
+        assertEquals(ProgressBarRangeInfo.Indeterminate, busyStatus[SemanticsProperties.ProgressBarRangeInfo])
+        assertEquals("Reading text…", busyStatus[SemanticsProperties.StateDescription])
+        captureMotionEvidence("system-reduced-motion-capture-progress.png")
+
+        composeRule.onNodeWithTag("capture-mode-type").performClick()
+        assertEquals("Reduced motion must not block mode changes", "Type", mode.value)
+        composeRule.onNodeWithTag("capture-sentence-field").assertIsDisplayed()
+    }
+
+    @Test
+    fun systemTouchFeedbackDisabledKeepsCaptureModeOperable() {
+        val mode = mutableStateOf("Photo")
+        composeRule.setContent {
+            FlowTheme(darkTheme = false) {
+                Box(Modifier.width(390.dp).height(796.dp)) {
+                    InputScreen(
+                        captureMode = mode.value,
+                        onCaptureModeChange = { mode.value = it },
+                        editor = TextFieldValue(""),
+                        onEditorChange = {},
+                        onContinue = {},
+                        onOpenGallery = {},
+                        onChoosePhoto = {},
+                        onCaptured = {},
+                        onCameraError = {},
+                        outputDirectory = File("/unused-system-haptic-test"),
+                        modifier = Modifier.fillMaxSize(),
+                        cameraPermissionGranted = false,
+                    )
+                }
+            }
+        }
+
+        composeRule.onNodeWithTag("capture-mode-type").performClick()
+        assertEquals("Disabling system touch feedback must not block mode changes", "Type", mode.value)
+        composeRule.onNodeWithTag("capture-sentence-field").assertIsDisplayed()
+        captureMotionEvidence("system-touch-feedback-disabled-type-mode.png")
+    }
+
+    @Test
+    fun cameraTypeSelectionDispatchesOneTickOnlyWhenTheModeChanges() {
+        val mode = mutableStateOf("Photo")
+        val events = mutableListOf<TouchFeedbackEvent>()
+        val dispatcher = TouchFeedbackDispatcher { event -> events += event }
+        composeRule.setContent {
+            CompositionLocalProvider(
+                LocalMotionEnabled provides false,
+                LocalTouchFeedbackDispatcher provides dispatcher,
+            ) {
+                MaterialTheme {
+                    InputScreen(
+                        captureMode = mode.value,
+                        onCaptureModeChange = { mode.value = it },
+                        editor = TextFieldValue(""),
+                        onEditorChange = {},
+                        onContinue = {},
+                        onOpenGallery = {},
+                        onChoosePhoto = {},
+                        onCaptured = {},
+                        onCameraError = {},
+                        outputDirectory = File("/unused-mode-haptic-test"),
+                        modifier = Modifier.fillMaxSize(),
+                        cameraPermissionGranted = false,
+                    )
+                }
+            }
+        }
+
+        composeRule.onNodeWithTag("capture-mode-type").performClick()
+        assertEquals("Type", mode.value)
+        assertEquals(listOf(TouchFeedbackEvent.MODE_SELECTION), events)
+        composeRule.onNodeWithTag("capture-mode-type").performClick()
+        assertEquals("Re-tapping the selected mode must be silent", listOf(TouchFeedbackEvent.MODE_SELECTION), events)
+        composeRule.onNodeWithTag("capture-mode-camera").performClick()
+        assertEquals("Photo", mode.value)
+        assertEquals(
+            listOf(TouchFeedbackEvent.MODE_SELECTION, TouchFeedbackEvent.MODE_SELECTION),
+            events,
+        )
+        captureMotionEvidence("touch-feedback-disabled-type-mode.png")
+    }
 
     @Test
     fun cameraGeometryAndModeSwitchStayFixedAcrossStatusAndModeChanges() {
@@ -280,6 +447,21 @@ class InputScreenLayoutTest {
         } finally {
             outputDirectory.deleteRecursively()
         }
+    }
+
+    private fun captureMotionEvidence(name: String) {
+        composeRule.waitForIdle()
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val directory = File(requireNotNull(context.getExternalFilesDir(null)), "motion-feedback-evidence")
+        if (!directory.isDirectory) assertTrue("Could not create motion-feedback evidence directory", directory.mkdirs())
+        val bitmap = composeRule.onRoot().captureToImage().asAndroidBitmap()
+        val screenshot = File(directory, name)
+        screenshot.outputStream().use { output ->
+            assertTrue("Could not encode motion evidence $name", bitmap.compress(Bitmap.CompressFormat.PNG, 100, output))
+        }
+        bitmap.recycle()
+        assertTrue("Motion evidence was not written: $screenshot", screenshot.isFile && screenshot.length() > 0L)
     }
 
     private class ResumedTestLifecycleOwner : LifecycleOwner {

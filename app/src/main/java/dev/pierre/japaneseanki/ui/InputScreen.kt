@@ -1,6 +1,12 @@
 package dev.pierre.japaneseanki.ui
 
 import androidx.camera.view.LifecycleCameraController
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -18,11 +24,13 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SingleChoiceSegmentedButtonRowScope
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -42,9 +50,15 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import dev.pierre.japaneseanki.R
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
@@ -82,6 +96,7 @@ internal fun InputScreen(
     imageStatus: String? = null,
     imageFailed: Boolean = false,
     onRetryImage: () -> Unit = {},
+    confirmationMessage: String? = null,
     onSettings: () -> Unit = {},
 ) {
     val cameraController = if (captureMode == "Photo" && cameraPermissionGranted) {
@@ -151,6 +166,7 @@ internal fun InputScreen(
                             imageStatus = imageStatus,
                             imageFailed = imageFailed,
                             onRetryImage = onRetryImage,
+                            confirmationMessage = confirmationMessage,
                         )
                     }
                     CaptureRow(
@@ -220,10 +236,10 @@ internal fun InputScreen(
                 modifier = Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 16.dp)
                     .testTag("capture-attach-photo"),
             ) {
-                Text("Attach photo")
+                Text(stringResource(R.string.attach_photo))
             }
             FlowPrimaryButton(
-                text = "Choose word",
+                text = stringResource(R.string.choose_word),
                 onClick = { if (!captureOperationGate.isActive) onContinue() },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 12.dp)
                     .testTag("capture-choose-word"),
@@ -244,34 +260,32 @@ private fun CaptureTopBar(
     Box(
         Modifier.fillMaxWidth().height(CAMERA_TOP_BAR_HEIGHT_DP.dp).testTag("capture-top-bar"),
     ) {
-        Surface(
-            modifier = Modifier
-                .align(Alignment.Center)
+        SingleChoiceSegmentedButtonRow(
+            modifier = Modifier.align(Alignment.Center)
                 .width(176.dp)
                 .height(CAMERA_MODE_SWITCH_HEIGHT_DP.dp)
                 .testTag("capture-mode-switch"),
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         ) {
-            Row(Modifier.fillMaxSize().selectableGroup()) {
-                ModeSelectorOption(
-                    label = "Camera",
-                    tag = "capture-mode-camera",
-                    selected = captureMode == "Photo",
-                    enabled = enabled,
-                    modifier = Modifier.weight(1f),
-                    onClick = { onCaptureModeChange("Photo") },
-                )
-                ModeSelectorOption(
-                    label = "Type",
-                    tag = "capture-mode-type",
-                    selected = captureMode == "Type",
-                    enabled = enabled,
-                    modifier = Modifier.weight(1f),
-                    onClick = { onCaptureModeChange("Type") },
-                )
-            }
+            ModeSelectorOption(
+                label = stringResource(R.string.camera),
+                tag = "capture-mode-camera",
+                selected = captureMode == "Photo",
+                enabled = enabled,
+                index = 0,
+                count = 2,
+                modifier = Modifier.weight(1f),
+                onClick = { onCaptureModeChange("Photo") },
+            )
+            ModeSelectorOption(
+                label = stringResource(R.string.type),
+                tag = "capture-mode-type",
+                selected = captureMode == "Type",
+                enabled = enabled,
+                index = 1,
+                count = 2,
+                modifier = Modifier.weight(1f),
+                onClick = { onCaptureModeChange("Type") },
+            )
         }
         androidx.compose.material3.IconButton(
             onClick = onSettings,
@@ -280,7 +294,7 @@ private fun CaptureTopBar(
         ) {
             androidx.compose.material3.Icon(
                 MaterialSymbols.Settings,
-                contentDescription = "Settings",
+                contentDescription = stringResource(R.string.settings),
                 modifier = Modifier.size(24.dp),
             )
         }
@@ -288,43 +302,41 @@ private fun CaptureTopBar(
 }
 
 @Composable
-private fun ModeSelectorOption(
+private fun SingleChoiceSegmentedButtonRowScope.ModeSelectorOption(
     label: String,
     tag: String,
     selected: Boolean,
     enabled: Boolean,
+    index: Int,
+    count: Int,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    val selectionState = stringResource(
-        if (selected) R.string.legacy_capture_selected_state else R.string.legacy_capture_not_selected_state,
+    val feedback = LocalTouchFeedbackDispatcher.current
+    SegmentedButton(
+        selected = selected,
+        onClick = {
+            if (!selected) {
+                feedback.dispatch(TouchFeedbackEvent.MODE_SELECTION)
+                onClick()
+            }
+        },
+        shape = SegmentedButtonDefaults.itemShape(index, count),
+        modifier = modifier.fillMaxHeight().testTag(tag),
+        enabled = enabled,
+        colors = SegmentedButtonDefaults.colors(
+            activeContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+            activeContentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            activeBorderColor = MaterialTheme.colorScheme.outline,
+            inactiveContainerColor = MaterialTheme.colorScheme.surface,
+            inactiveContentColor = MaterialTheme.colorScheme.onSurface,
+            inactiveBorderColor = MaterialTheme.colorScheme.outlineVariant,
+        ),
+        icon = {},
+        label = {
+            Text(label, maxLines = 1, style = MaterialTheme.typography.labelLarge)
+        },
     )
-    Box(
-        modifier = modifier
-            .fillMaxHeight()
-            .padding(1.dp)
-            .clip(CircleShape)
-            .background(
-                if (selected) MaterialTheme.colorScheme.secondaryContainer
-                else MaterialTheme.colorScheme.surface,
-            )
-            .then(
-                if (selected) Modifier.border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
-                else Modifier,
-            )
-            .selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onClick)
-            .semantics { stateDescription = if (selected) "Selected" else "Not selected" }
-            .testTag(tag),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            label,
-            maxLines = 1,
-            style = MaterialTheme.typography.labelLarge,
-            color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
-            else MaterialTheme.colorScheme.onSurface,
-        )
-    }
 }
 
 @Composable
@@ -340,6 +352,7 @@ private fun InputStatusPanel(
     imageStatus: String?,
     imageFailed: Boolean,
     onRetryImage: () -> Unit,
+    confirmationMessage: String?,
 ) {
     val recoveryActions = inputRecoveryActions(
         ocrLoading = ocrLoading,
@@ -347,21 +360,42 @@ private fun InputStatusPanel(
         hasOcrChoices = ocrChoicesAvailable,
         imageFailed = imageFailed,
     )
+    val noTextError = stringResource(R.string.legacy_capture_no_text_was_found_type_or_edit_the_sentenc)
     val message = when {
-        ocrLoading -> "Reading text…"
-        ocrError?.startsWith("No text was found") == true -> "No text found."
+        ocrLoading -> stringResource(R.string.reading_photo)
+        ocrError == noTextError -> stringResource(R.string.ocr_empty)
         ocrError != null -> ocrError
         cameraError != null -> cameraError
+        confirmationMessage != null -> confirmationMessage
         imageStatus != null -> imageStatus
-        recoveryActions.reopenOcrChoices -> "Text choices are ready."
+        recoveryActions.reopenOcrChoices -> stringResource(R.string.legacy_capture_text_choices_are_ready)
         else -> null
     } ?: return
+    val motionEnabled = LocalMotionEnabled.current
 
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(max = 48.dp)
+            .semantics {
+                liveRegion = LiveRegionMode.Polite
+                if (ocrLoading) {
+                    progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
+                    stateDescription = message
+                }
+            }
             .testTag("capture-status-line"),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        AnimatedVisibility(
+            visible = confirmationMessage != null && message == confirmationMessage,
+            enter = if (motionEnabled) {
+                fadeIn(tween(140)) + scaleIn(initialScale = 0.88f, animationSpec = tween(140))
+            } else {
+                EnterTransition.None
+            },
+            exit = ExitTransition.None,
+        ) {
+            FlowIcons.Check(Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+        }
         Text(
             message,
             modifier = Modifier.weight(1f),
@@ -378,15 +412,15 @@ private fun InputStatusPanel(
             recoveryActions.retryOcr -> TextButton(
                 enabled = enabled && !operationGate.isActive,
                 onClick = { if (!operationGate.isActive) onRetryOcr() },
-            ) { Text("Retry") }
+            ) { Text(stringResource(R.string.retry)) }
             recoveryActions.reopenOcrChoices -> TextButton(
                 enabled = enabled && !operationGate.isActive,
                 onClick = { if (!operationGate.isActive) onReopenOcrChooser() },
-            ) { Text("Review") }
+            ) { Text(stringResource(R.string.legacy_capture_review_choices)) }
             recoveryActions.retryImage -> TextButton(
                 enabled = enabled && !operationGate.isActive,
                 onClick = { if (!operationGate.isActive) onRetryImage() },
-            ) { Text("Retry") }
+            ) { Text(stringResource(R.string.retry)) }
         }
     }
 }
@@ -436,6 +470,11 @@ private fun CaptureRow(
     outputDirectory: File,
     modifier: Modifier = Modifier,
 ) {
+    val torchLabel = stringResource(R.string.torch)
+    val torchState = stringResource(
+        if (torchOn) R.string.legacy_capture_flash_on_state
+        else R.string.legacy_capture_flash_off_state,
+    )
     Row(
         modifier = modifier.testTag("camera-controls-row").padding(horizontal = 24.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -484,8 +523,8 @@ private fun CaptureRow(
                     enabled = enabled && !operationGate.isActive,
                     modifier = Modifier.size(CAMERA_SIDE_SLOT_SIZE_DP.dp)
                         .semantics {
-                            contentDescription = "Torch"
-                            stateDescription = if (torchOn) "On" else "Off"
+                            contentDescription = torchLabel
+                            stateDescription = torchState
                         }
                         .testTag("camera-torch-toggle"),
                     shape = CircleShape,
@@ -507,6 +546,7 @@ private fun CameraPermissionShutter(
     enabled: Boolean,
     onRequestCamera: () -> Unit,
 ) {
+    val cameraLabel = stringResource(R.string.allow_camera)
     Box(
         modifier = Modifier.size(CAMERA_SHUTTER_SIZE_DP.dp)
             .clip(CircleShape)
@@ -515,7 +555,7 @@ private fun CameraPermissionShutter(
             .padding(6.dp)
             .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
             .semantics {
-                contentDescription = "Enable camera"
+                contentDescription = cameraLabel
                 role = Role.Button
             },
     )
@@ -549,6 +589,7 @@ private fun WritingPane(
     onEditorChange: (TextFieldValue) -> Unit,
     enabled: Boolean,
 ) {
+    val sentenceFieldLabel = stringResource(R.string.sentence)
     BasicTextField(
         value = editor,
         onValueChange = onEditorChange,
@@ -557,7 +598,7 @@ private fun WritingPane(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.secondaryContainer)
             .padding(16.dp)
-            .semantics { contentDescription = "Japanese sentence" }
+            .semantics { contentDescription = sentenceFieldLabel }
             .testTag("capture-sentence-field"),
         textStyle = TextStyle(
             fontSize = 24.sp,

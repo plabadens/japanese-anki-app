@@ -339,24 +339,17 @@
 
 
 
-    <string name="legacy_capture_add_photo_optional">Add photo (optional)</string>
-    <string name="legacy_capture_camera_access_is_needed_to_take_a_photo_ty">Camera access is needed to take a photo. Typing and the gallery still work.</string>
-    <string name="legacy_capture_change_photo">Change photo</string>
-    <string name="legacy_capture_choose_the_text_region">Choose the text region</string>
+
     <string name="legacy_capture_discard_draft">Discard draft</string>
     <string name="legacy_capture_discard_this_draft">Discard this draft?</string>
     <string name="legacy_capture_keep_working">Keep working</string>
-    <string name="legacy_capture_reading_the_photo_on_this_device">Reading the photo on this device…</string>
-    <string name="legacy_capture_replace_current_draft">Replace current draft?</string>
-    <string name="legacy_capture_retry_ocr">Retry OCR</string>
-    <string name="legacy_capture_retry_photo">Retry photo</string>
+
+
     <string name="legacy_capture_review_choices">Review choices</string>
     <string name="legacy_capture_text_choices_are_ready">Text choices are ready.</string>
-    <string name="legacy_capture_the_current_draft_will_be_replaced_by_text">The current draft will be replaced by text from this photo.</string>
-    <string name="legacy_capture_the_current_draft_will_be_replaced_by_the">The current draft will be replaced by the shared text.</string>
     <string name="legacy_capture_the_sentence_target_photo_and_any_generate">The sentence, target, photo and any generated results will be deleted. This cannot be undone.</string>
     <string name="legacy_capture_this_draft_is_already_empty">This draft is already empty.</string>
-    <string name="legacy_capture_type_the_japanese_sentence">Type the Japanese sentence</string>
+
     <string name="card_already_in_ankidroid">Already in AnkiDroid</string>
     <string name="card_analyzing_the_sentence">Analyzing the sentence…</string>
     <string name="card_blocked">Blocked:</string>
@@ -412,106 +405,22 @@
     <string name="card_treat_pending_send_as_complete">Treat pending Send as complete</string>
     <string name="card_vocabulary_reading">Vocabulary reading</string>
     <string name="card_why_is_pitch_missing">Why is pitch missing?</string>
-    <string name="legacy_settings_add_a_key_to_list_voices">Add a key to list voices.</string>
-    <string name="legacy_settings_android_keystore_stays_on_this_device_and">Android Keystore, stays on this device, and is sent only to Google Cloud\ </string>
-    <string name="legacy_settings_ankidroid_detected_grant_api_permission_to">AnkiDroid detected. Grant API permission to continue setup.</string>
-    <string name="legacy_settings_ankidroid_not_detected_install_it_before_s">AnkiDroid not detected. Install it before setting up export.</string>
-    <string name="legacy_settings_ankidroid_setup">AnkiDroid setup</string>
-    <string name="legacy_settings_applied_to_each_new_note_per_note_edits_do">Applied to each new note. Per-note edits do not change these defaults.</string>
-    <string name="legacy_settings_audio_cache">Audio cache</string>
-    <string name="legacy_settings_changing_the_voice_invalidates_sentence_au">Changing the voice invalidates sentence audio only. Voice listing does not\ </string>
-    <string name="legacy_settings_choose_destination_deck">Choose destination deck</string>
-    <string name="legacy_settings_choose_note_type">Choose note type</string>
-    <string name="legacy_settings_choose_sentence_voice">Choose sentence voice</string>
-    <string name="legacy_settings_clear_audio_cache">Clear audio cache</string>
-    <string name="legacy_settings_clearing">Clearing…</string>
-    <string name="legacy_settings_cloud_translation_api_and_restrict_this_ke">Cloud Translation API, and restrict this key to those two APIs. Entering or\ </string>
-    <string name="legacy_settings_current_draft_audio_is_kept_separately">Current draft audio is kept separately.</string>
-    <string name="legacy_settings_data_sources_and_licenses">Data sources and licenses</string>
     <string name="legacy_settings_destination_deck">Destination deck</string>
-    <string name="legacy_settings_empty_translation_blocks_send_retry_keeps">empty translation blocks Send; Retry keeps manual corrections. Voice listing\ </string>
-    <string name="legacy_settings_fixed_path_no_model_or_provider_choice">Fixed path: no model or provider choice.</string>
-    <string name="legacy_settings_google_cloud">Google Cloud</string>
-    <string name="legacy_settings_google_cloud_translation_basic_default_neu">Google Cloud Translation Basic — default neural (NMT), Japanese to English.\ </string>
-    <string name="legacy_settings_google_cloud_translation_basic_default_neu_2">Google Cloud Translation Basic — default neural (NMT), Japanese → English.\ </string>
-    <string name="legacy_settings_grant_ankidroid_api_permission">Grant AnkiDroid API permission</string>
-    <string name="legacy_settings_grant_the_ankidroid_api_permission_before">Grant the AnkiDroid API permission before choosing the note type or deck.</string>
-    <string name="legacy_settings_in_an_authentication_header_never_in_a_url">in an authentication header, never in a URL.</string>
-    <string name="legacy_settings_install_ankidroid_to_set_up_export">Install AnkiDroid to set up export.</string>
-    <string name="legacy_settings_jmdict_and_kanjium_attribution_is_availabl">JMdict and Kanjium attribution is available in Sources &amp; licenses.\ </string>
-    <string name="legacy_settings_key_saved_for_speech_and_translation">Key saved for speech and translation.</string>
-    <string name="legacy_settings_key_saved_securely">Key saved securely</string>
-    <string name="legacy_settings_listing_japanese_chirp_3_hd_voices">\ \ Listing Japanese Chirp 3 HD voices…</string>
-    <string name="legacy_settings_listing_japanese_voices">Listing Japanese voices…</string>
-    <string name="legacy_settings_loading_note_types_and_decks">Loading note types and decks…</string>
-    <string name="legacy_settings_loading_saved_settings">Loading saved settings…</string>
-    <string name="legacy_settings_local_license_copies_are_bundled_with_the">Local license copies are bundled with the app. JMdict data is updated through app releases.</string>
     <string name="legacy_settings_mecab_0_996_taku_kudo_and_nippon_telegraph">MeCab 0.996 © Taku Kudo and Nippon Telegraph and Telephone Corporation; BSD license.</string>
     <string name="legacy_settings_no_decks_are_available_check_ankidroid_set">No decks are available. Check AnkiDroid setup in Settings.</string>
-    <string name="legacy_settings_no_existing_decks_available_in_ankidroid">No existing decks available in AnkiDroid.</string>
-    <string name="legacy_settings_no_japanese_chirp_3_hd_voices_were_returne">No Japanese Chirp 3 HD voices were returned.</string>
-    <string name="legacy_settings_no_key_saved">No key saved</string>
-    <string name="legacy_settings_no_key_saved_local_preparation_works_speec">No key saved. Local preparation works; speech and translation need a key.</string>
-    <string name="legacy_settings_no_note_types_available_in_ankidroid">No note types available in AnkiDroid.</string>
-    <string name="legacy_settings_note_types_and_decks_are_loaded_from_ankid">Note types and decks are loaded from AnkiDroid.</string>
-    <string name="legacy_settings_one_api_key_for_sentence_speech_and_transl">One API key for sentence speech and translation. It is encrypted with Android Keystore, stays on this device, and is sent only to Google Cloud in an authentication header. Entering or saving it sends no request.</string>
-    <string name="legacy_settings_one_api_key_for_sentence_speech_and_transl_2">One API key for sentence speech and translation. It is encrypted with\ </string>
-    <string name="legacy_settings_open_cc_by_sa_4_0">Open CC BY-SA 4.0</string>
-    <string name="legacy_settings_open_edrdg_license">Open EDRDG license</string>
-    <string name="legacy_settings_previously_selected_deck_unavailable">Previously selected deck unavailable</string>
-    <string name="legacy_settings_previously_selected_note_type_unavailable">Previously selected note type unavailable</string>
-    <string name="legacy_settings_project_setup_enable_billing_enable_the_cl">Project setup: enable billing, enable the Cloud Text-to-Speech API and the\ </string>
-    <string name="legacy_settings_refresh_voices">Refresh voices</string>
-    <string name="legacy_settings_retry_ankidroid_setup">Retry AnkiDroid setup</string>
-    <string name="legacy_settings_save">Save</string>
-    <string name="legacy_settings_save_the_key_then_refresh_voices">Save the key, then refresh voices.</string>
-    <string name="legacy_settings_saved_voice_not_in_this_list">Saved voice not in this list</string>
-    <string name="legacy_settings_saving">Saving…</string>
-    <string name="legacy_settings_saving_the_key_sends_no_request">saving the key sends no request.</string>
     <string name="legacy_settings_select_part_of_the_sentence_then_use_it_as">Select part of the sentence, then use it as the target for a multi-word phrase.</string>
-    <string name="legacy_settings_sentence_voice_chirp_3_hd">Sentence voice · Chirp 3 HD</string>
-    <string name="legacy_settings_show_key">Show key</string>
-    <string name="legacy_settings_showing_a_cached_voice_list_it_has_not_bee">Showing a cached voice list. It has not been verified for the current key.</string>
-    <string name="legacy_settings_showing_the_cached_list_it_is_not_verified">\ Showing the cached list; it is not verified for the current key.</string>
-    <string name="legacy_settings_showing_the_cached_list_which_is_not_fresh">\ Showing the cached list, which is not fresh verification.</string>
-    <string name="legacy_settings_sources">Sources</string>
-    <string name="legacy_settings_sources_licenses">Sources &amp; licenses</string>
-    <string name="legacy_settings_speech_cloud_text_to_speech">Speech · Cloud Text-to-Speech</string>
-    <string name="legacy_settings_synthesize_or_bill_any_speech">synthesize or bill any speech.</string>
-    <string name="legacy_settings_test_translation">Test translation</string>
-    <string name="legacy_settings_testing">Testing…</string>
-    <string name="legacy_settings_testing_translation">\ \ Testing translation…</string>
-    <string name="legacy_settings_the_bundled_mixed_source_ajt_pitch_data_st">The bundled mixed-source AJT pitch data still needs a separate distribution-rights review.</string>
-    <string name="legacy_settings_the_current_draft_s_audio_is_kept_outside">The current draft\'s audio is kept outside this cache.</string>
-    <string name="legacy_settings_the_disclosed_sample_is_sent_only_when_you">The disclosed sample is sent only when you tap Test; that request may be billable.</string>
-    <string name="legacy_settings_the_saved_google_cloud_key_could_not_be_op">The saved Google Cloud key could not be opened. Enter it again.</string>
-    <string name="legacy_settings_the_saved_voice_is_no_longer_listed_choose">The saved voice is no longer listed. Choose another voice before generating sentence audio.</string>
-    <string name="legacy_settings_the_saved_voice_is_not_in_google_s_current">The saved voice is not in Google\'s current list. Select a listed voice before generating sentence audio.</string>
-    <string name="legacy_settings_the_test_sends_one_disclosed_sample_senten">The test sends one disclosed sample sentence and may be billable. A failed or\ </string>
-    <string name="legacy_settings_translation_cloud_translation_basic">Translation · Cloud Translation Basic</string>
-    <string name="legacy_settings_translation_has_not_been_tested_in_this_se">Translation has not been tested in this session.</string>
-    <string name="legacy_settings_translation_not_tested_in_this_session">Translation not tested in this session.</string>
-    <string name="legacy_settings_translation_test">Translation test</string>
     <string name="legacy_settings_unidic_cwj_3_1_1_the_unidic_consortium_and">UniDic CWJ 3.1.1 © the UniDic Consortium and Teruaki Oka; distributed under the included BSD license.</string>
     <string name="legacy_settings_use_selection_as_target">Use selection as target</string>
-    <string name="legacy_settings_validates_speech_access_only_not_translati">validates speech access only, not translation access or speech quality.</string>
-    <string name="legacy_settings_voice_list_not_checked_yet">Voice list not checked yet.</string>
-    <string name="legacy_settings_voice_listing_does_not_synthesize_audio_it">Voice listing does not synthesize audio. It makes no speech-generation request.</string>
-    <string name="legacy_settings_voice_listing_not_checked_yet_refresh_voic">Voice listing not checked yet. Refresh voices to validate speech access.</string>
     <string name="card_entry_count">%1$s entries</string>
     <string name="card_reading_label">%1$s reading</string>
-    <string name="legacy_settings_reusable_audio_cache">Reusable sentence and word audio: %1$s.\ </string>
-    <string name="legacy_settings_translation_test_passed">Test passed. Sample 「%1$s」 → %2$s</string>
 
-    <string name="legacy_capture_input_title">Input</string>
-    <string name="legacy_capture_flash">Flash</string>
+
     <string name="legacy_capture_choose_photo_from_device">Choose a photo from this device</string>
     <string name="legacy_capture_saving_photo">Saving photo</string>
     <string name="legacy_capture_capture_in_progress">Capture in progress</string>
     <string name="legacy_capture_capture_photo">Capture photo</string>
     <string name="legacy_capture_capture_failed">Capture failed</string>
-    <string name="legacy_capture_selected_state">Selected</string>
-    <string name="legacy_capture_not_selected_state">Not selected</string>
+
     <string name="legacy_capture_flash_on_state">On</string>
     <string name="legacy_capture_flash_off_state">Off</string>
     <string name="card_target_title">Target</string>
@@ -596,20 +505,9 @@
     <string name="card_translation_was_interrupted_tap_retry_to_c">Translation was interrupted. Tap Retry to continue.</string>
     <string name="card_translation_was_not_started_tap_retry_to_c">Translation was not started. Tap Retry to continue.</string>
     <string name="card_wait_for_or_retry_the_missing_audio_before">Wait for or retry the missing audio before sending.</string>
-    <string name="legacy_onboarding_checking_unidic_runtime_archive">Checking UniDic runtime archive</string>
-    <string name="legacy_onboarding_mecab_native_analysis_could_not_load_you_c">MeCab native analysis could not load. You can still select a sentence span and search the dictionary.</string>
     <string name="legacy_onboarding_offline_dictionary_could_not_be_prepared_a">Offline dictionary could not be prepared. A dictionary entry is required before Send.</string>
-    <string name="legacy_onboarding_unidic_could_not_be_downloaded_verified_or">UniDic could not be downloaded, verified or installed. Check your connection and free storage, then retry.</string>
-    <string name="legacy_settings_audio_cache_cleared_draft_audio_is_unaffec">Audio cache cleared. Draft audio is unaffected.</string>
     <string name="legacy_settings_could_not_load_saved_settings">Could not load saved settings.</string>
-    <string name="legacy_settings_save_the_current_key_successfully_before_r">Save the current key successfully before reloading voices.</string>
     <string name="legacy_settings_settings_are_still_loading_back_out_again">Settings are still loading. Back out again when loading has finished.</string>
-    <string name="legacy_settings_settings_could_not_be_saved_the_key_was_no">Settings could not be saved. The key was not stored in plain text.</string>
-    <string name="legacy_settings_setup_could_not_be_marked_complete_back_re">Setup could not be marked complete. Back remains here so you can retry.</string>
-    <string name="legacy_settings_the_audio_cache_could_not_be_cleared">The audio cache could not be cleared.</string>
-    <string name="legacy_settings_the_google_cloud_key_contains_whitespace">The Google Cloud key contains whitespace.</string>
-    <string name="legacy_settings_to_finish_setup_save_a_google_cloud_key_an">To finish setup, save a Google Cloud key and choose a voice verified by Google\'s current list.</string>
-    <string name="legacy_settings_translation_test_failed">Translation test failed.</string>
     <string name="card_full_photo">Full photo</string>
     <string name="card_close_photo">Close photo</string>
     <string name="card_sending_state">Sending</string>
@@ -669,7 +567,7 @@
     <string name="card_send_recovery_media_preparation_interrupted">%1$s was interrupted before its receipt was saved. Inspect AnkiDroid before retrying.</string>
     <string name="card_media_preparation">Media preparation</string>
     <string name="card_media_label">media</string>
-    <string name="legacy_capture_continue_action">Continue</string>
+
     <string name="legacy_capture_preparing_photo_for_anki">Preparing the photo for Anki…</string>
     <string name="legacy_capture_photo_attached">Photo attached</string>
 
@@ -677,9 +575,6 @@
     <string name="legacy_settings_kanjium_source_notice">The pitch accent notation, verb particle data, phonetics, homonyms, and other additions or modifications to EDICT, KANJIDIC, or KRADFILE were provided by Uros O. through his free database. Kanjium CC BY-SA 4.0. %1$s</string>
     <string name="card_send_recovery_media_import_uncertain">The %1$s import may have reached AnkiDroid. Inspect the collection before resuming; do not blindly retry.</string>
     <string name="card_send_recovery_media_import_stage_uncertain">The %1$s import failed during %2$s and may have reached AnkiDroid. Inspect the collection before resuming; do not blindly retry.</string>
-    <string name="legacy_settings_voice_list_safe_error">Could not list voices. Check the saved key and network, then reload.</string>
-    <string name="legacy_settings_settings_save_fallback">Settings could not be saved.</string>
-    <string name="legacy_settings_settings_persist_failed">Could not persist settings.</string>
     <string name="card_vocabulary_reading_kana_required">Enter the reading in kana.</string>
     <string name="card_no_dictionary_entry_loaded">No dictionary entry is loaded for this word yet.</string>
     <string name="card_reading_not_listed_for_word">No dictionary entry for %1$s is read %2$s. Pick a listed reading.</string>

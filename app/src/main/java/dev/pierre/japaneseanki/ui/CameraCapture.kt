@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -29,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -103,11 +103,14 @@ internal fun CameraShutterButton(
     val context = LocalContext.current
     var capturing by remember(controller) { mutableStateOf(false) }
     val presentation = captureShutterPresentation(capturing, captureFailed)
-    val shutterDescription = context.getString(presentation.contentDescription)
-    val shutterStateDescription = context.getString(presentation.stateDescription)
+    val shutterDescription = stringResource(presentation.contentDescription)
+    val shutterStateDescription = stringResource(presentation.stateDescription)
+    val captureFailureMessage = stringResource(R.string.legacy_capture_camera_capture_failed)
+    val currentCaptureFailureMessage by rememberUpdatedState(captureFailureMessage)
     val currentOnCaptured by rememberUpdatedState(onCaptured)
     val currentOnError by rememberUpdatedState(onError)
     val currentOnCaptureStateChanged by rememberUpdatedState(onCaptureStateChanged)
+    val feedback = LocalTouchFeedbackDispatcher.current
 
     val finish = {
         if (operationGate.finish()) {
@@ -123,7 +126,7 @@ internal fun CameraShutterButton(
             "Photo save failed: stage=$stage code=${errorCode ?: "none"} cause=$causeName partialRemoved=$partialRemoved",
         )
         finish()
-        currentOnError(context.getString(R.string.legacy_capture_camera_capture_failed))
+        currentOnError(currentCaptureFailureMessage)
     }
     val takePhoto = takePhoto@{
         if (!enabled || !operationGate.tryStart()) return@takePhoto
@@ -156,6 +159,7 @@ internal fun CameraShutterButton(
                     }
                 },
             )
+            feedback.dispatch(TouchFeedbackEvent.SHUTTER_ACCEPTED)
         } catch (exception: Exception) {
             fail(destination, "capture_setup", null, exception)
         }
@@ -175,10 +179,12 @@ internal fun CameraShutterButton(
         contentAlignment = Alignment.Center,
     ) {
         if (presentation.showProgress) {
-            CircularProgressIndicator(
-                Modifier.size(32.dp),
+            MotionAwareProgressIndicator(
+                modifier = Modifier.size(32.dp),
                 color = MaterialTheme.colorScheme.onPrimary,
+                diameter = 32.dp,
                 strokeWidth = 2.dp,
+                stateDescription = shutterStateDescription,
             )
         }
     }

@@ -48,7 +48,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -78,6 +77,9 @@ import dev.pierre.japaneseanki.ui.reviewAudioPlaybackFailureMessage
 import dev.pierre.japaneseanki.ui.reviewAudioSendBlocker
 import dev.pierre.japaneseanki.ui.FlowTheme
 import dev.pierre.japaneseanki.ui.FlowTopBar
+import dev.pierre.japaneseanki.ui.LocalTouchFeedbackDispatcher
+import dev.pierre.japaneseanki.ui.MotionAwareProgressIndicator
+import dev.pierre.japaneseanki.ui.TouchFeedbackEvent
 import dev.pierre.japaneseanki.ui.InputScreen
 import dev.pierre.japaneseanki.ui.SettingsScreen
 import dev.pierre.japaneseanki.ui.SettingsScreenState
@@ -398,6 +400,9 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             val coroutineScope = rememberCoroutineScope()
+            val touchFeedbackDispatcher = LocalTouchFeedbackDispatcher.current
+            var captureConfirmationMessage by remember { mutableStateOf<String?>(null) }
+            var verifiedDelivery by remember { mutableStateOf(false) }
             val apiPermissionLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.RequestPermission(),
             ) { granted -> apiPermissionGranted = granted }
@@ -538,13 +543,6 @@ class MainActivity : ComponentActivity() {
             var showReplace by remember { mutableStateOf(restoredPendingPhoto != null) }
             var showSources by remember { mutableStateOf(false) }
             var showDownloads by remember { mutableStateOf(false) }
-            var showNoteEditor by remember { mutableStateOf(false) }
-            var showTagsEditor by remember { mutableStateOf(false) }
-            var noteEditorDraft by remember(showNoteEditor) { mutableStateOf(notes) }
-            var tagEditorDraft by remember(showTagsEditor) {
-                mutableStateOf(tags.split(Regex("\\s+")).filter(String::isNotBlank))
-            }
-            var tagEntryDraft by remember(showTagsEditor) { mutableStateOf("") }
             val previouslyConfigured = settings.contains(GoogleCloudCredential.PREF) &&
                 settings.getString(SettingsPreferenceKeys.GOOGLE_VOICE, "").orEmpty().isNotBlank()
             var onboardingComplete by remember {
@@ -628,11 +626,6 @@ class MainActivity : ComponentActivity() {
             )
             val analyzedTarget = target?.let { resolveAnalyzedLemma(japaneseTokens, it) }
             var dictionaryEntries by remember { mutableStateOf<List<DictionaryEntry>>(emptyList()) }
-            val meaningChoices = dictionaryEntries.flatMap { entry ->
-                entry.senses.mapIndexed { index, sense ->
-                    Triple(entry, index, sense.glosses.joinToString("; "))
-                }
-            }
             var dictionarySearchLoading by remember { mutableStateOf(false) }
             var dictionaryHasMore by remember { mutableStateOf(false) }
             var selectedDictionaryEntry by remember { mutableStateOf<DictionaryEntry?>(null) }
@@ -1080,7 +1073,7 @@ class MainActivity : ComponentActivity() {
                 }
                 if (navigationLocked) return
                 preparationAuthorizationError = null
-                route = AppRoute.Review
+                route = AppRoute.Card
             }
 
             fun commitSentence(sentence: String = editor.text): Boolean {
@@ -1101,6 +1094,17 @@ class MainActivity : ComponentActivity() {
                 }
             }
             val clearDraft = {
+                val showDeliveryConfirmation = verifiedDelivery
+                captureConfirmationMessage = if (showDeliveryConfirmation) {
+                    this@MainActivity.getString(R.string.card_note_sent_to_ankidroid)
+                } else {
+                    null
+                }
+                if (showDeliveryConfirmation) {
+                    captureMode = "Photo"
+                    preferences.edit().putString("capture_mode", "Photo").apply()
+                }
+                verifiedDelivery = false
                 listOfNotNull(photoSourcePath, noteImagePath, processedImagePath).distinct().forEach { File(it).delete() }
                 editorInputRevision++
                 editor = TextFieldValue("")
@@ -1220,10 +1224,12 @@ class MainActivity : ComponentActivity() {
             }
 
             androidx.compose.runtime.LaunchedEffect(completedSubmission) {
-                if (completedSubmission != null) {
-                    kotlinx.coroutines.delay(900)
-                    if (completedSubmission != null) clearDraft()
-                }
+                if (completedSubmission != null) clearDraft()
+            }
+            androidx.compose.runtime.LaunchedEffect(captureConfirmationMessage) {
+                val message = captureConfirmationMessage ?: return@LaunchedEffect
+                kotlinx.coroutines.delay(1_400)
+                if (captureConfirmationMessage == message) captureConfirmationMessage = null
             }
 
             val selectTarget: (TargetSpan?) -> Unit = selectTarget@{ selected ->
@@ -1280,7 +1286,7 @@ class MainActivity : ComponentActivity() {
                 tokenizationError = null
                 tokenizationLoading = analyzerReady
                 ocrError = null
-                route = AppRoute.Target
+                route = AppRoute.Card
                 commitSentence(text.trim())
             }
             val setDraftOrigin: (String) -> Unit = { origin ->
@@ -1952,10 +1958,10 @@ class MainActivity : ComponentActivity() {
                     audioConfigErrors.containsKey(item) && audioSettingsRequired(item) -> openSettings()
                     audioConfigErrors.containsKey(item) -> {
                         audioConfigErrors = audioConfigErrors - item
-                        route = AppRoute.Target
+                        route = AppRoute.Card
                     }
                     (audioSnapshot.items[item] as? DraftAudioState.Failed)?.retryable == false -> {
-                        route = AppRoute.Target
+                        route = AppRoute.Card
                     }
                     else -> {
                         val attempt = audioController.confirm(item) ?: audioController.retry(item)
@@ -2430,7 +2436,7 @@ class MainActivity : ComponentActivity() {
                     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         Column(Modifier.fillMaxSize()) {
                             FlowTopBar(
-                                title = "Sources and licenses",
+                                title = stringResource(R.string.sources),
                                 onBack = { showSources = false },
                                 modifier = Modifier.statusBarsPadding().padding(horizontal = 8.dp, vertical = 4.dp),
                             )
@@ -2439,10 +2445,10 @@ class MainActivity : ComponentActivity() {
                                     .verticalScroll(rememberScrollState()).padding(20.dp),
                                 verticalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
-                                Text("JMdict © James William Breen and EDRDG; CC BY-SA 4.0. ${dictionaryInfo["jmdict_source"].orEmpty()}")
-                                Text("The pitch accent notation, verb particle data, phonetics, homonyms, and other additions or modifications to EDICT, KANJIDIC, or KRADFILE were provided by Uros O. through his free database. Kanjium CC BY-SA 4.0. ${dictionaryInfo["kanjium_commit"].orEmpty()}")
-                                Text("MeCab 0.996 © Taku Kudo and Nippon Telegraph and Telephone Corporation; BSD license.")
-                                Text("UniDic CWJ 3.1.1 © the UniDic Consortium and Teruaki Oka; distributed under the included BSD license.")
+                                Text(stringResource(R.string.legacy_settings_jmdict_source_notice, dictionaryInfo["jmdict_source"].orEmpty()))
+                                Text(stringResource(R.string.legacy_settings_kanjium_source_notice, dictionaryInfo["kanjium_commit"].orEmpty()))
+                                Text(stringResource(R.string.legacy_settings_mecab_0_996_taku_kudo_and_nippon_telegraph))
+                                Text(stringResource(R.string.legacy_settings_unidic_cwj_3_1_1_the_unidic_consortium_and))
                                 val licenseDocuments = remember {
                                     fun readAsset(path: String, charset: Charset = Charsets.UTF_8): String = runCatching {
                                         assets.open(path).bufferedReader(charset).use { it.readText() }
@@ -2475,7 +2481,7 @@ class MainActivity : ComponentActivity() {
                     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         Column(Modifier.fillMaxSize()) {
                             FlowTopBar(
-                                title = "Downloads",
+                                title = stringResource(R.string.downloads),
                                 onBack = { showDownloads = false },
                                 modifier = Modifier.statusBarsPadding().padding(horizontal = 8.dp, vertical = 4.dp),
                             )
@@ -2483,7 +2489,7 @@ class MainActivity : ComponentActivity() {
                                 Modifier.fillMaxWidth().weight(1f).navigationBarsPadding().padding(20.dp),
                                 verticalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
-                                Text("Dictionary", style = MaterialTheme.typography.bodyLarge)
+                                Text(stringResource(R.string.dictionary), style = MaterialTheme.typography.bodyLarge)
                                 Text(
                                     analyzerStatus,
                                     color = if (analyzerError != null) MaterialTheme.colorScheme.error
@@ -2502,11 +2508,11 @@ class MainActivity : ComponentActivity() {
                                     analyzerByteProgress?.let { Text(it) }
                                 }
                                 if (analyzerError != null) {
-                                    TextButton(onClick = { analyzerRetry++ }) { Text("Retry") }
+                                    TextButton(onClick = { analyzerRetry++ }) { Text(stringResource(R.string.retry)) }
                                 }
                                 if (!onboardingComplete) {
                                     TextButton(onClick = { showDownloads = false; closeSettings() }) {
-                                    Text("Finish setup")
+                                    Text(stringResource(R.string.finish_setup))
                                     }
                                 }
                             }
@@ -2527,8 +2533,8 @@ class MainActivity : ComponentActivity() {
                         preferences.edit().remove("pending_replacement_image_path").commit()
                         pendingSharedImageUri = null
                     },
-                    title = { Text("Replace this draft?") },
-                    text = { Text("Your current draft will be discarded.") },
+                    title = { Text(stringResource(R.string.replace_title)) },
+                    text = { Text(stringResource(R.string.replace_body)) },
                     confirmButton = {
                         TextButton(onClick = {
                             when {
@@ -2597,7 +2603,7 @@ class MainActivity : ComponentActivity() {
                             .padding(horizontal = 20.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text("Choose sentence", style = MaterialTheme.typography.titleLarge)
+                        Text(stringResource(R.string.choose_sentence), style = MaterialTheme.typography.titleLarge)
                         ocrChoices.forEach { block ->
                             OutlinedButton(
                                 enabled = !submissionLocked,
@@ -2612,7 +2618,7 @@ class MainActivity : ComponentActivity() {
                         TextButton(
                             onClick = { showOcrSheet = false },
                             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                        ) { Text("Cancel") }
+                        ) { Text(stringResource(R.string.cancel)) }
                     }
                     }
                 }
@@ -2873,6 +2879,8 @@ class MainActivity : ComponentActivity() {
                                 recoveryRequired = false
                                 recoveryPhase = null
                                 frozenRetryReady = false
+                                verifiedDelivery = true
+                                touchFeedbackDispatcher.dispatch(TouchFeedbackEvent.DELIVERY_VERIFIED)
                                 completedSubmission = snapshot
                                 knownNoteId = null
                                 submitMessage = this@MainActivity.getString(R.string.card_note_1_d_recovered_in_the_selected_deck, noteId.toString())
@@ -3203,10 +3211,7 @@ class MainActivity : ComponentActivity() {
                     showSettings -> closeSettings()
                     showDictionarySheet -> dismissDictionarySheet()
                     showOcrSheet -> showOcrSheet = false
-                    route == AppRoute.Review -> {
-                        route = AppRoute.Target
-                    }
-                    route == AppRoute.Target -> route = AppRoute.Capture
+                    route == AppRoute.Card -> route = AppRoute.Capture
                 }
             }
             val darkTheme = isSystemInDarkTheme()
@@ -3236,34 +3241,17 @@ class MainActivity : ComponentActivity() {
                     ) {
                         var submitAction: () -> Unit = {}
                         val reviewTarget = displayTarget?.takeIf { it.textIn(displaySentence) != null }
-                        FlowTopBar(
-                            title = when (visibleRoute) {
-                                AppRoute.Capture -> "Input"
-                                AppRoute.Target -> "Target"
-                                AppRoute.Review -> "Review"
-                            },
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            onBack = if (navigationLocked) null else when (visibleRoute) {
-                                AppRoute.Review -> ({ route = AppRoute.Target })
-                                AppRoute.Target -> ({ route = AppRoute.Capture })
-                                AppRoute.Capture -> null
-                            },
-                            onSettings = if (!navigationLocked) ({ openSettings() }) else null,
-                            onClose = if (visibleRoute == AppRoute.Capture && !navigationLocked) {
-                                ({ showDiscardConfirm = true })
-                            } else {
-                                null
-                            },
-                        )
-                        FlowProgress(
-                            current = when (visibleRoute) {
-                                AppRoute.Capture -> FlowStep.Input
-                                AppRoute.Target -> FlowStep.Target
-                                AppRoute.Review -> FlowStep.Review
-                            },
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                        )
-                        if (analyzerLoading || analyzerError != null || dictionaryLoading || dictionaryError != null) {
+                        if (visibleRoute == AppRoute.Card) {
+                            FlowTopBar(
+                                title = stringResource(R.string.card),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                onBack = if (!navigationLocked) ({ route = AppRoute.Capture }) else null,
+                                onSettings = if (!navigationLocked) ({ openSettings() }) else null,
+                            )
+                        }
+                        if (visibleRoute == AppRoute.Capture &&
+                            (analyzerLoading || analyzerError != null || dictionaryLoading || dictionaryError != null)
+                        ) {
                             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
                                 if (analyzerLoading) {
                                     Text(analyzerStatus, style = MaterialTheme.typography.bodySmall)
@@ -3386,7 +3374,7 @@ class MainActivity : ComponentActivity() {
                             !wordAudioReady -> ({ onAudioAction(AudioItem.VOCABULARY) })
                             !apiPermissionGranted || selectedModel == null || selectedDeck == null || setupError != null -> ({ openSettings() })
                             else -> ({
-                                route = AppRoute.Target
+                                route = AppRoute.Card
                             })
                         }
                         val loadMoreMatches: () -> Unit = {
@@ -3429,7 +3417,8 @@ class MainActivity : ComponentActivity() {
                                 editor = editor,
                                 onEditorChange = updateEditor,
                                 onContinue = {
-                                    if (commitSentence() && !submissionLocked) route = AppRoute.Target
+                                    if (!onboardingComplete) continueToCard()
+                                    else if (commitSentence()) continueToCard()
                                 },
                                 onOpenGallery = {
                                     photoPicker.launch(
@@ -3470,245 +3459,27 @@ class MainActivity : ComponentActivity() {
                                 imageFailed = !imageProcessing && imageError != null,
                                 onRetryImage = {
                                     val source = photoSourcePath?.let(::File)?.takeIf(File::isFile)
-                                    if (source != null) {
-                                        processImage(source, true)
-                                    } else {
-                                        photoPicker.launch(
-                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                                        )
-                                    }
-                                },
-                                onSettings = { openSettings() },
-                            )
-                            AppRoute.Target -> TargetScreen(
-                                sentence = editor.text,
-                                tokens = japaneseTokens,
-                                selectedSpan = target,
-                                onSelectSpan = { span ->
-                                    selectTarget(span)
-                                    editor = editor.copy(selection = TextRange(span.start, span.end))
-                                },
-                                onEditSentence = {
-                                    sentenceEditorDraft = editor
-                                    showSentenceEditor = true
-                                },
-                                entryLabel = selectedDictionaryEntry?.expression ?: vocabulary.takeIf { it.isNotBlank() },
-                                entryDetail = selectedDictionaryEntry?.reading,
-                                entryCount = dictionaryEntries.size,
-                                onChooseEntry = { showDictionarySheet = true },
-                                senses = selectedDictionaryEntry?.senses
-                                    ?.map { sense -> sense.glosses.joinToString("; ") }
-                                    ?: emptyList(),
-                                selectedSenses = selectedSenseIndices,
-                                onToggleSense = { index, checked ->
-                                if (!submissionLocked) {
-                                    cardInvalidated = true
-                                    val newSelection = if (checked) {
-                                            selectedSenseIndices + index
-                                        } else {
-                                            selectedSenseIndices - index
-                                        }
-                                        selectedSenseIndices = newSelection
-                                        selectedDictionaryEntry?.let { entry ->
-                                            definition = newSelection.sorted().mapNotNull { selected ->
-                                                entry.senses.getOrNull(selected)?.glosses?.joinToString("; ")
-                                            }.joinToString("\n")
-                                        }
-                                        definitionManuallyEdited = false
-                                        definitionProvenanceKnown = true
-                                    }
-                                },
-                                meaningStatus = when {
-                                    ocrError != null -> ocrError
-                                    preparationAuthorizationError != null -> preparationAuthorizationError
-                                    target == null -> "Tap a word to choose the target."
-                                    dictionarySearchLoading -> "Searching JMdict…"
-                                    selectedDictionaryEntry == null && dictionaryLoading -> "Preparing the offline dictionary…"
-                                    selectedDictionaryEntry == null && dictionaryEntries.size > 1 -> "Choose the intended dictionary entry."
-                                    selectedDictionaryEntry == null && dictionaryReady -> "No dictionary match for this selection."
-                                    vocabularyReadingError != null -> vocabularyReadingError
-                                    pitchIndexError != null -> pitchIndexError
-                                    else -> null
-                                },
-                                canContinue = !submissionLocked && target != null && selectedDictionaryEntry != null &&
-                                    definition.isNotBlank() && pitch != null,
-                                continueHint = when {
-                                    target == null -> "Tap a word to continue."
-                                    selectedDictionaryEntry == null -> "Choose a dictionary entry to continue."
-                                    definition.isBlank() -> "Choose a meaning to continue."
-                                    pitch == null -> "A source-listed pitch pattern is required to continue."
-                                    else -> null
-                                },
-                                onContinue = { continueToReview() },
-                                modifier = Modifier.weight(1f).fillMaxWidth(),
-                                locked = submissionLocked,
-                                tokensLoading = tokenizationLoading,
-                                hasMoreEntries = dictionaryHasMore && !dictionarySearchLoading,
-                                onLoadMoreEntries = loadMoreMatches,
-                                ocrChoicesAvailable = ocrChoices.size > 1,
-                                onReopenOcrChooser = { showOcrSheet = ocrChoices.size > 1 },
-                                vocabularyReading = vocabularyReading,
-                                onVocabularyReadingChange = { applyVocabularyReading(it) },
-                                vocabularyReadingError = vocabularyReadingError,
-                                correctableReadings = correctableReadings,
-                                onReadingCorrection = { span, reading -> applyReadingCorrection(span, reading) },
-                                readingCorrectionError = readingCorrectionError,
-                                definition = definition,
-                                definitionStale = dependentFieldsStale && definitionManuallyEdited,
-                                onDefinitionChange = { text ->
-                                    if (!submissionLocked) {
-                                        definition = text
-                                        definitionManuallyEdited = true
-                                        definitionProvenanceKnown = true
-                                        selectedSenseIndices = emptySet()
-                                        dependentFieldsStale = false
-                                    }
-                                },
-                                onAcknowledgeDefinition = { dependentFieldsStale = false },
-                                translation = translation,
-                                translationPending = activeTranslationResult() is TranslationResult.Pending,
-                                translationError = (activeTranslationResult() as? TranslationResult.Failed)?.message,
-                                translationStale = translationDraft.manuallyEdited && translationDraft.stale,
-                                onTranslationChange = { text ->
-                                    if (!submissionLocked) {
-                                        translationRequestRevision++
-                                        translationDraft = translationDraft.saveManualEdit(text)
-                                    }
-                                },
-                                onRetryTranslation = {
-                                    if (committedSentence == editor.text) {
-                                        generationStarted = true
-                                        translationAutoAllowed = true
-                                        translationRetry++
-                                    }
-                                },
-                                pitchAlternatives = pitchCandidates.map(AjtPitchRecord::accent),
-                                selectedPitchAccent = pitchAccentText.toIntOrNull(),
-                                onSelectPitch = { accent ->
-                                    pitchCandidates.firstOrNull { it.accent == accent }?.let { record ->
-                                        pitchAccentText = record.accent.toString()
-                                        pitchHtmlText = record.html
-                                    }
-                                },
-                                imageAttached = imageAttached,
-                                imageProcessing = imageProcessing,
-                                imageError = imageError,
-                                onChoosePhoto = {
-                                    if (!submissionLocked) noteImagePicker.launch(
+                                    if (source != null) processImage(source, true)
+                                    else photoPicker.launch(
                                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                                     )
                                 },
+                                confirmationMessage = captureConfirmationMessage,
+                                onSettings = { openSettings() },
                             )
-                            AppRoute.Review -> Box(Modifier.weight(1f).fillMaxWidth()) {
-                                if (reviewTarget != null) {
-                                    ReviewCard(
-                                        sentence = displaySentence,
-                                        target = reviewTarget,
-                                        sentenceReading = frozenForDisplay?.sentenceReading ?: sentenceReading,
-                                        furigana = if (frozenForDisplay == null) sentenceFurigana else emptyList(),
-                                        vocabulary = displayVocabulary,
-                                        vocabularyReading = displayVocabularyReading,
-                                        pitch = displayPitch,
-                                        definition = displayDefinition,
-                                        translation = displayTranslation,
-                                        translationPending = activeTranslationResult() is TranslationResult.Pending,
-                                        translationError = reviewTranslationError,
-                                        translationStale = translationDraft.manuallyEdited && translationDraft.stale,
-                                        editingEnabled = !submissionLocked && completedSubmission == null,
-                                        onRetryTranslation = {
-                                            if (committedSentence == editor.text) {
-                                                generationStarted = true
-                                                translationAutoAllowed = true
-                                                translationRetry++
-                                            }
-                                        },
-                                        onOpenSettings = { openSettings() },
-                                        sentenceAudio = sentenceAudio.presentation(audioActionLabel(AudioItem.SENTENCE)),
-                                        vocabularyAudio = wordAudio.presentation(audioActionLabel(AudioItem.VOCABULARY)),
-                                        sentenceAudioAction = audioActionLabel(AudioItem.SENTENCE),
-                                        vocabularyAudioAction = audioActionLabel(AudioItem.VOCABULARY),
-                                        onToggleSentenceAudio = {
-                                            if (playingAudio == AudioItem.SENTENCE) {
-                                                stopAudioPlayback()
-                                                playingAudio = null
-                                            } else {
-                                                audioReadyFile(AudioItem.SENTENCE)?.let { playAudio(AudioItem.SENTENCE, it) }
-                                            }
-                                        },
-                                        onRetrySentenceAudio = { onAudioAction(AudioItem.SENTENCE) },
-                                        onToggleVocabularyAudio = {
-                                            if (playingAudio == AudioItem.VOCABULARY) {
-                                                stopAudioPlayback()
-                                                playingAudio = null
-                                            } else {
-                                                audioReadyFile(AudioItem.VOCABULARY)?.let { playAudio(AudioItem.VOCABULARY, it) }
-                                            }
-                                        },
-                                        onRetryVocabularyAudio = { onAudioAction(AudioItem.VOCABULARY) },
-                                        notes = displayNotes,
-                                        tags = displayTags.split(Regex("\\s+")).filter(String::isNotBlank),
-                                        imagePath = frozenForDisplay?.media?.path ?: noteImagePath,
-                                        imageStatus = when {
-                                            imageProcessing -> "Preparing image…"
-                                            imageError != null -> imageError
-                                            imageAttached -> "Image is not available"
-                                            else -> null
-                                        },
-                                        ocrChoicesAvailable = ocrChoices.size > 1,
-                                        onReopenOcrChooser = { showOcrSheet = ocrChoices.size > 1 },
-                                        pitchHasAlternatives = pitchCandidates.size > 1,
-                                        pitchInfoExpanded = pitchInfoExpanded,
-                                        onTogglePitchInfo = { pitchInfoExpanded = !pitchInfoExpanded },
-                                        onEdit = {
-                                            if (!submissionLocked) {
-                                                route = AppRoute.Target
-                                            }
-                                        },
-                                        onTagsChange = { text -> if (!submissionLocked) tags = text },
-                                        onNotesChange = { text -> if (!submissionLocked) notes = text },
-                                        sendPresentation = when {
-                                            isSubmitting -> ReviewSendPresentation.Sending
-                                            completedSubmission != null -> ReviewSendPresentation.Status(
-                                                submitMessage ?: "Note sent to AnkiDroid.",
-                                            )
-                                            duplicateBlocked -> ReviewSendPresentation.Status(
-                                                submitMessage ?: "A matching note already exists in AnkiDroid.",
-                                            )
-                                            recoveryRequired -> ReviewSendPresentation.Status(
-                                                recoveryMessage ?: "Pending Send needs review.",
-                                            )
-                                            submitMessage?.startsWith("Blocked:") == true ->
-                                                ReviewSendPresentation.Status(submitMessage.orEmpty())
-                                            submitMessage != null -> ReviewSendPresentation.Status(
-                                                submitMessage!!,
-                                                "Retry Send",
-                                            )
-                                            else -> ReviewSendPresentation.Ready
-                                        },
-                                        primaryActionLabel = if (cardNeedsUpdate && !frozenRetryReady) "Update card" else "Send to AnkiDroid",
-                                        onSend = if (cardNeedsUpdate && !frozenRetryReady && committedSentence == editor.text &&
-                                            completedSubmission == null && !duplicateBlocked
-                                        ) {
-                                            ({ updateCard() })
-                                        } else if (canSend && completedSubmission == null && !duplicateBlocked &&
-                                            submitMessage?.startsWith("Blocked:") != true
-                                        ) {
-                                            ({ submitAction() })
-                                        } else {
-                                            null
-                                        },
-                                        onSendStatusAction = if (canSend && completedSubmission == null && !duplicateBlocked) {
-                                            ({ submitAction() })
-                                        } else {
-                                            null
-                                        },
-                                        sendStatusContent = sendRecoveryContent,
-                                        imageFocalY = photoFocusY,
-                                        sendHint = submitHint,
-                                        sendHintActionLabel = submitHintActionLabel,
-                                        sendHintRole = submitHintRole,
-                                        onSendHintAction = submitHintAction,
-                                    )
+                            AppRoute.Card -> {
+                                val sentenceAudioPresentation = sentenceAudio.presentation(
+                                    this@MainActivity.getString(audioActionLabel(AudioItem.SENTENCE)),
+                                )
+                                val wordAudioPresentation = wordAudio.presentation(
+                                    this@MainActivity.getString(audioActionLabel(AudioItem.VOCABULARY)),
+                                )
+                                val cardAnalyzerError = tokenizationError ?: analyzerError
+                                val cardAnalyzing = analyzerLoading || tokenizationLoading
+                                val cardUpdating = reviewTarget != null && cardNeedsUpdate
+                                val sendBlockedStatus = submitMessage?.startsWith(blockedStatusPrefix) == true
+                                val recoveryActionLabel = submitHintActionLabel.takeIf {
+                                    submitHint != null && it != this@MainActivity.getString(R.string.card_edit_preparation)
                                 }
                                 val cardStatus = when {
                                     completedSubmission != null -> submitMessage ?: stringResource(R.string.card_note_sent_to_ankidroid)
@@ -3751,7 +3522,7 @@ class MainActivity : ComponentActivity() {
                                     cardNoWordAction -> false
                                     isSubmitting || cardAnalyzing || completedSubmission != null || duplicateBlocked || recoveryRequired -> false
                                     cardAnalyzerError != null -> !submissionLocked
-                                    cardUpdating -> !submissionLocked
+                                    cardUpdating -> !submissionLocked && committedSentence == editor.text
                                     submitMessage != null && !sendBlockedStatus -> canSend
                                     recoveryActionLabel != null -> !submissionLocked
                                     else -> canSend && reviewTarget != null
@@ -3759,7 +3530,7 @@ class MainActivity : ComponentActivity() {
                                 val cardAction: () -> Unit = when {
                                     cardNoWordAction -> ({})
                                     cardAnalyzerError != null -> ({ analyzerRetry++ })
-                                    cardUpdating -> ({ continueToCard() })
+                                    cardUpdating -> ({ updateCard() })
                                     submitMessage != null && !sendBlockedStatus -> ({ submitAction() })
                                     recoveryActionLabel != null -> submitHintAction
                                     else -> submitAction
@@ -3888,33 +3659,9 @@ class MainActivity : ComponentActivity() {
                                         label = { Text(stringResource(R.string.sentence)) },
                                         minLines = 3,
                                     )
-                                    TextButton(
-                                        enabled = sentenceEditorDraft.text.isNotBlank(),
-                                        onClick = {
-                                            updateEditor(sentenceEditorDraft)
-                                            showSentenceEditor = false
-                                        },
-                                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                                    ) { Text("Done") }
-                                }
-                            }
-                        }
-                        if (showNoteEditor) {
-                            ModalBottomSheet(onDismissRequest = { showNoteEditor = false }) {
-                                Column(
-                                    Modifier.fillMaxWidth().heightIn(max = 620.dp).verticalScroll(rememberScrollState())
-                                        .padding(horizontal = 24.dp, vertical = 8.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                                ) {
-                                    Text("Note", style = MaterialTheme.typography.titleLarge)
-                                    OutlinedTextField(
-                                        value = noteEditorDraft,
-                                        onValueChange = { noteEditorDraft = it },
-                                        modifier = Modifier.fillMaxWidth().semantics {
-                                            contentDescription = "Note"
-                                        },
-                                        minLines = 4,
-                                        maxLines = 8,
+                                    Text(
+                                        stringResource(R.string.legacy_settings_select_part_of_the_sentence_then_use_it_as),
+                                        style = MaterialTheme.typography.bodySmall,
                                     )
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         OutlinedButton(
@@ -3938,7 +3685,7 @@ class MainActivity : ComponentActivity() {
                                                 }
                                             },
                                             modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                                        ) { Text("Use selection as target") }
+                                        ) { Text(stringResource(R.string.legacy_settings_use_selection_as_target)) }
                                         Button(
                                             onClick = {
                                                 val edited = sentenceEditorDraft ?: editor
@@ -3949,25 +3696,8 @@ class MainActivity : ComponentActivity() {
                                                 }
                                             },
                                             modifier = Modifier.heightIn(min = 48.dp),
-                                        ) { Text("Done") }
+                                        ) { Text(stringResource(R.string.done)) }
                                     }
-                                    OutlinedTextField(
-                                        value = tagEntryDraft,
-                                        onValueChange = { tagEntryDraft = it },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        label = { Text("Add a tag") },
-                                        singleLine = true,
-                                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                                        keyboardActions = KeyboardActions(onDone = { addTagEntry() }),
-                                    )
-                                    TextButton(
-                                        onClick = {
-                                            addTagEntry()
-                                            tags = tagEditorDraft.joinToString(" ")
-                                            showTagsEditor = false
-                                        },
-                                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                                    ) { Text("Done") }
                                 }
                             }
                         }
@@ -4330,6 +4060,8 @@ class MainActivity : ComponentActivity() {
                                             // any more, so release them (clearDraft then discards).
                                             audioController.releaseFreeze(retainFiles = false)
                                             audioSnapshot = audioController.snapshot()
+                                            verifiedDelivery = true
+                                            touchFeedbackDispatcher.dispatch(TouchFeedbackEvent.DELIVERY_VERIFIED)
                                             completedSubmission = publishedFrozenSnapshot ?: readFrozenSubmission(preferences)
                                             frozenRetryReady = false
                                             recoveryRequired = false
@@ -4415,7 +4147,13 @@ class MainActivity : ComponentActivity() {
                         choices = meaningChoices,
                         enabled = !submissionLocked,
                         onDismissRequest = { dismissDictionarySheet() },
-                        onSelect = { choice -> commitDictionaryChoice(choice) },
+                        onSelect = { choice ->
+                            val meaningChanged = selectedDictionaryEntryId != choice.entry.id ||
+                                vocabulary != choice.entry.expression || vocabularyReading != choice.entry.reading ||
+                                selectedSenseIndices != setOf(choice.senseIndex)
+                            if (meaningChanged) touchFeedbackDispatcher.dispatch(TouchFeedbackEvent.MEANING_SELECTION)
+                            commitDictionaryChoice(choice)
+                        },
                     )
                 }
                 if (definitionSheetText != null) {
@@ -4430,15 +4168,6 @@ class MainActivity : ComponentActivity() {
                                 .padding(horizontal = 24.dp, vertical = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            Text("Definition", style = MaterialTheme.typography.titleLarge)
-                            Text(definitionSheetText.orEmpty())
-                            TextButton(
-                                onClick = {
-                                    definitionSheetText = null
-                                    showDictionarySheet = true
-                                },
-                                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                            ) { Text("Close") }
                         }
                     }
                 }

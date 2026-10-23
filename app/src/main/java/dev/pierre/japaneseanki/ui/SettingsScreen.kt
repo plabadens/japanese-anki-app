@@ -30,6 +30,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -41,6 +42,7 @@ import dev.pierre.japaneseanki.AnkiNoteType
 import dev.pierre.japaneseanki.SettingsValues
 import dev.pierre.japaneseanki.VoiceCatalogProvenance
 import dev.pierre.japaneseanki.VoiceCatalogState
+import dev.pierre.japaneseanki.R
 import dev.pierre.japaneseanki.speech.CloudVoice
 
 /** Secret is deliberately held outside the settings data class to avoid accidental data-class logs. */
@@ -84,6 +86,8 @@ internal fun SettingsScreen(
     var deckPickerOpen by remember { mutableStateOf(false) }
     var voicePickerOpen by remember { mutableStateOf(false) }
     var showKey by remember { mutableStateOf(false) }
+    val showKeyLabel = stringResource(R.string.show_key)
+    val hideKeyLabel = stringResource(R.string.hide_key)
     var clearCacheConfirm by remember { mutableStateOf(false) }
 
     val compatibleNoteTypes = remember(noteTypes) {
@@ -108,7 +112,7 @@ internal fun SettingsScreen(
         ) {
             if (state.onboardingIncomplete) {
                 TextButton(onClick = onFinishSetup, modifier = Modifier.fillMaxWidth()) {
-                    Text("Finish setup")
+                    Text(stringResource(R.string.finish_setup))
                 }
             }
 
@@ -116,11 +120,11 @@ internal fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Text("AnkiDroid", style = MaterialTheme.typography.bodyLarge)
-                Text(if (state.ankiConnected) "Connected" else "Not connected")
+                Text(stringResource(R.string.anki), style = MaterialTheme.typography.bodyLarge)
+                Text(if (state.ankiConnected) stringResource(R.string.connected) else stringResource(R.string.not_connected))
                 if (!state.ankiConnected) {
                     TextButton(onClick = onConnectAnki) {
-                        Text(if (state.ankiInstalled) "Connect AnkiDroid" else "Install AnkiDroid")
+                        Text(if (state.ankiInstalled) stringResource(R.string.connect_anki) else stringResource(R.string.install_anki))
                     }
                 }
             }
@@ -128,7 +132,7 @@ internal fun SettingsScreen(
                 value = selectedModel?.name.orEmpty(),
                 onValueChange = {},
                 modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { modelPickerOpen = true },
-                label = { Text("Note type") },
+                label = { Text(stringResource(R.string.note_type)) },
                 readOnly = true,
                 enabled = !state.loading && compatibleNoteTypes.isNotEmpty(),
                 singleLine = true,
@@ -137,7 +141,7 @@ internal fun SettingsScreen(
                 value = selectedDeck?.name.orEmpty(),
                 onValueChange = {},
                 modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { deckPickerOpen = true },
-                label = { Text("Deck") },
+                label = { Text(stringResource(R.string.deck)) },
                 readOnly = true,
                 enabled = !state.loading && decks.isNotEmpty(),
                 singleLine = true,
@@ -158,15 +162,15 @@ internal fun SettingsScreen(
                     onClick = { showKey = !showKey },
                     enabled = !state.loading,
                     modifier = Modifier.semantics {
-                        contentDescription = if (showKey) "Hide API key" else "Show API key"
+                        contentDescription = if (showKey) hideKeyLabel else showKeyLabel
                     },
-                ) { Text(if (showKey) "Hide API key" else "Show API key") }
+                ) { Text(if (showKey) hideKeyLabel else showKeyLabel) }
             }
             OutlinedTextField(
                 value = selectedVoice?.displayName ?: state.values.voiceName,
                 onValueChange = {},
                 modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { voicePickerOpen = true },
-                label = { Text("Sentence voice") },
+                label = { Text(stringResource(R.string.sentence_voice)) },
                 readOnly = true,
                 enabled = !state.loading,
                 singleLine = true,
@@ -175,14 +179,27 @@ internal fun SettingsScreen(
                 enabled = !state.loading && !state.voiceCatalog.loading,
                 onClick = onReloadVoices,
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Reload voices") }
-            if (state.voiceCatalog.loading) Text("Loading voices…")
+            ) { Text(stringResource(R.string.reload_voices)) }
+            if (state.voiceCatalog.loading) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    MotionAwareProgressIndicator(
+                        modifier = Modifier.padding(2.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        diameter = 40.dp,
+                        stateDescription = stringResource(R.string.loading_voices),
+                    )
+                    Text(stringResource(R.string.loading_voices))
+                }
+            }
 
             OutlinedTextField(
                 value = state.values.defaultTags,
                 onValueChange = onDefaultTagsChange,
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Default tags") },
+                label = { Text(stringResource(R.string.default_tags)) },
                 minLines = 1,
                 maxLines = 3,
                 enabled = !state.loading,
@@ -190,7 +207,7 @@ internal fun SettingsScreen(
 
             TextButton(onClick = onOpenDownloads, modifier = Modifier.fillMaxWidth()) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Dictionary", modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.dictionary), modifier = Modifier.weight(1f))
                     Text(state.dictionaryStatus)
                 }
             }
@@ -198,20 +215,20 @@ internal fun SettingsScreen(
                 enabled = !state.cacheBusy,
                 onClick = { clearCacheConfirm = true },
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Clear cache") }
+            ) { Text(stringResource(R.string.clear_cache)) }
             state.cacheMessage?.let { message ->
                 Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (message == "Could not clear the cache.") {
-                    TextButton(onClick = onClearCache) { Text("Retry") }
+                    TextButton(onClick = onClearCache) { Text(stringResource(R.string.retry)) }
                 }
             }
             TextButton(onClick = onOpenSources, modifier = Modifier.fillMaxWidth()) {
-                Text("Sources and licenses")
+                Text(stringResource(R.string.sources))
             }
             state.error?.let { message ->
                 Text(message, color = MaterialTheme.colorScheme.error)
                 if (message == "Could not save your changes.") {
-                    TextButton(onClick = onBack) { Text("Retry") }
+                    TextButton(onClick = onBack) { Text(stringResource(R.string.retry)) }
                 }
             }
         }
@@ -219,7 +236,7 @@ internal fun SettingsScreen(
 
     if (modelPickerOpen) {
         PickerDialog(
-            title = "Note type",
+            title = stringResource(R.string.note_type),
             selectedId = state.values.modelId,
             rows = compatibleNoteTypes.map { PickerRow(it.id, it.name) },
             onSelect = { id -> modelPickerOpen = false; onModelChange(id) },
@@ -228,7 +245,7 @@ internal fun SettingsScreen(
     }
     if (deckPickerOpen) {
         PickerDialog(
-            title = "Deck",
+            title = stringResource(R.string.deck),
             selectedId = state.values.deckId,
             rows = decks.map { PickerRow(it.id, it.name) },
             onSelect = { id -> deckPickerOpen = false; onDeckChange(id) },
@@ -240,7 +257,7 @@ internal fun SettingsScreen(
             PickerRow(index.toLong(), "${voice.displayName} · ${voice.name}")
         }
         PickerDialog(
-            title = "Sentence voice",
+            title = stringResource(R.string.sentence_voice),
             selectedId = state.voiceCatalog.voices.indexOfFirst { it.name == state.values.voiceName }
                 .takeIf { it >= 0 }?.toLong(),
             rows = voiceRows,
@@ -253,7 +270,7 @@ internal fun SettingsScreen(
             cachedMessage = if (state.voiceCatalog.provenance == VoiceCatalogProvenance.CACHED) {
                 "Saved voices · offline"
             } else null,
-            loadingMessage = if (state.voiceCatalog.loading) "Loading voices…" else null,
+            loadingMessage = if (state.voiceCatalog.loading) stringResource(R.string.loading_voices) else null,
             onSelect = { index ->
                 state.voiceCatalog.voices.getOrNull(index.toInt())?.let { onVoiceChange(it.name) }
                 voicePickerOpen = false
@@ -264,15 +281,15 @@ internal fun SettingsScreen(
     if (clearCacheConfirm) {
         AlertDialog(
             onDismissRequest = { clearCacheConfirm = false },
-            title = { Text("Clear cache?") },
-            text = { Text("Your current draft and saved notes will be kept.") },
+            title = { Text(stringResource(R.string.clear_cache_title)) },
+            text = { Text(stringResource(R.string.clear_cache_body)) },
             confirmButton = {
                 TextButton(onClick = { clearCacheConfirm = false; onClearCache() }) {
-                    Text("Clear cache")
+                    Text(stringResource(R.string.clear_cache))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { clearCacheConfirm = false }) { Text("Cancel") }
+                TextButton(onClick = { clearCacheConfirm = false }) { Text(stringResource(R.string.cancel)) }
             },
         )
     }
@@ -314,7 +331,7 @@ private fun PickerDialog(
         },
         confirmButton = {},
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         },
     )
 }

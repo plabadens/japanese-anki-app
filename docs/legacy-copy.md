@@ -9,8 +9,7 @@ These resources preserve shipped wording verbatim. Card-flow resource keys that 
 | `legacy_capture_capture_in_progress` | Capture camera or Type surface | Existing shutter accessibility state; this task only moves it to a resource. | `t_f6a4efe9` |
 | `legacy_capture_capture_photo` | Capture camera or Type surface | Existing shutter accessibility name; this task only moves it to a resource. | `t_f6a4efe9` |
 | `legacy_capture_choose_photo_from_device` | Capture camera or Type surface | Existing gallery accessibility name; this task only moves it to a resource. | `t_f6a4efe9` |
-| `legacy_capture_flash` | Capture camera or Type surface | Existing flash accessibility name; this task only moves it to a resource. | `t_f6a4efe9` |
-| `legacy_capture_input_title` | Capture camera or Type surface | Existing visible title; this task only moves it to a resource. | `t_f6a4efe9` |
+
 
 | `legacy_capture_saving_photo` | Capture camera or Type surface | Existing shutter accessibility name; this task only moves it to a resource. | `t_f6a4efe9` |
 | `former_card_audio_error_state` | Card surface or an associated sheet | Existing audio accessibility state; this task only moves it to a resource. | `t_fc85a8b2` |
@@ -61,26 +60,17 @@ These resources preserve shipped wording verbatim. Card-flow resource keys that 
 | `former_card_preparing_image_status` | Card surface or an associated sheet | Existing image status message; this task only moves it to a resource. | `t_fc85a8b2` |
 | `former_card_image_unavailable_status` | Card surface or an associated sheet | Existing image status message; this task only moves it to a resource. | `t_fc85a8b2` |
 | `former_card_reading_label` | Card surface or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
-| `legacy_settings_reusable_audio_cache` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_translation_test_passed` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_capture_add_photo_optional` | Capture camera or Type surface | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
-| `legacy_capture_camera_access_is_needed_to_take_a_photo_ty` | Capture camera or Type surface | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
-| `legacy_capture_change_photo` | Capture camera or Type surface | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
-| `legacy_capture_choose_the_text_region` | Capture draft confirmation or OCR passage sheet | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
+
 | `legacy_capture_discard_draft` | Capture draft confirmation or OCR passage sheet | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
 | `legacy_capture_discard_this_draft` | Capture draft confirmation or OCR passage sheet | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
 | `legacy_capture_keep_working` | Capture draft confirmation or OCR passage sheet | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
-| `legacy_capture_reading_the_photo_on_this_device` | Capture camera or Type surface | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
-| `legacy_capture_replace_current_draft` | Capture draft confirmation or OCR passage sheet | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
-| `legacy_capture_retry_ocr` | Capture camera or Type surface | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
-| `legacy_capture_retry_photo` | Capture camera or Type surface | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
+
+
 | `legacy_capture_review_choices` | Capture camera or Type surface | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
 | `legacy_capture_text_choices_are_ready` | Capture camera or Type surface | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
-| `legacy_capture_the_current_draft_will_be_replaced_by_text` | Capture draft confirmation or OCR passage sheet | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
-| `legacy_capture_the_current_draft_will_be_replaced_by_the` | Capture draft confirmation or OCR passage sheet | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
 | `legacy_capture_the_sentence_target_photo_and_any_generate` | Capture draft confirmation or OCR passage sheet | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
 | `legacy_capture_this_draft_is_already_empty` | Capture draft confirmation or OCR passage sheet | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
-| `legacy_capture_type_the_japanese_sentence` | Capture camera or Type surface | Existing shipped copy; this task only moves it to a resource. | `t_f6a4efe9` |
+
 | `former_card_already_in_ankidroid` | Card surface or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
 | `former_card_analyzing_the_sentence` | Card surface or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
 | `former_card_blocked` | Card surface or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
@@ -136,92 +126,12 @@ These resources preserve shipped wording verbatim. Card-flow resource keys that 
 | `former_card_treat_pending_send_as_complete` | Card surface or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
 | `former_card_vocabulary_reading` | Card surface or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
 | `former_card_why_is_pitch_missing` | Card surface or an associated sheet | Existing shipped copy; this task only moves it to a resource. | `t_fc85a8b2` |
-| `legacy_settings_add_a_key_to_list_voices` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_android_keystore_stays_on_this_device_and` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_ankidroid_detected_grant_api_permission_to` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_ankidroid_not_detected_install_it_before_s` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_ankidroid_setup` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_applied_to_each_new_note_per_note_edits_do` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_audio_cache` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_changing_the_voice_invalidates_sentence_au` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_choose_destination_deck` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_choose_note_type` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_choose_sentence_voice` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_clear_audio_cache` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_clearing` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_cloud_translation_api_and_restrict_this_ke` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_current_draft_audio_is_kept_separately` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_data_sources_and_licenses` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
 | `legacy_settings_destination_deck` | Settings picker or editor | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_empty_translation_blocks_send_retry_keeps` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_fixed_path_no_model_or_provider_choice` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_google_cloud` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_google_cloud_translation_basic_default_neu` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_google_cloud_translation_basic_default_neu_2` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_grant_ankidroid_api_permission` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_grant_the_ankidroid_api_permission_before` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_in_an_authentication_header_never_in_a_url` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_install_ankidroid_to_set_up_export` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_jmdict_and_kanjium_attribution_is_availabl` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_key_saved_for_speech_and_translation` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_key_saved_securely` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_listing_japanese_chirp_3_hd_voices` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_listing_japanese_voices` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_loading_note_types_and_decks` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_loading_saved_settings` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_local_license_copies_are_bundled_with_the` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
 | `legacy_settings_mecab_0_996_taku_kudo_and_nippon_telegraph` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
 | `legacy_settings_no_decks_are_available_check_ankidroid_set` | Settings picker or editor | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_no_existing_decks_available_in_ankidroid` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_no_japanese_chirp_3_hd_voices_were_returne` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_no_key_saved` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_no_key_saved_local_preparation_works_speec` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_no_note_types_available_in_ankidroid` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_note_types_and_decks_are_loaded_from_ankid` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_one_api_key_for_sentence_speech_and_transl` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_one_api_key_for_sentence_speech_and_transl_2` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_open_cc_by_sa_4_0` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_open_edrdg_license` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_previously_selected_deck_unavailable` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_previously_selected_note_type_unavailable` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_project_setup_enable_billing_enable_the_cl` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_refresh_voices` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_retry_ankidroid_setup` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_save` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_save_the_key_then_refresh_voices` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_saved_voice_not_in_this_list` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_saving` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_saving_the_key_sends_no_request` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
 | `legacy_settings_select_part_of_the_sentence_then_use_it_as` | Settings picker or editor | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_sentence_voice_chirp_3_hd` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_show_key` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_showing_a_cached_voice_list_it_has_not_bee` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_showing_the_cached_list_it_is_not_verified` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_showing_the_cached_list_which_is_not_fresh` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_sources` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_sources_licenses` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_speech_cloud_text_to_speech` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_synthesize_or_bill_any_speech` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_test_translation` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_testing` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_testing_translation` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_the_bundled_mixed_source_ajt_pitch_data_st` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_the_current_draft_s_audio_is_kept_outside` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_the_disclosed_sample_is_sent_only_when_you` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_the_saved_google_cloud_key_could_not_be_op` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_the_saved_voice_is_no_longer_listed_choose` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_the_saved_voice_is_not_in_google_s_current` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_the_test_sends_one_disclosed_sample_senten` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_translation_cloud_translation_basic` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_translation_has_not_been_tested_in_this_se` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_translation_not_tested_in_this_session` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_translation_test` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
 | `legacy_settings_unidic_cwj_3_1_1_the_unidic_consortium_and` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
 | `legacy_settings_use_selection_as_target` | Settings picker or editor | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_validates_speech_access_only_not_translati` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_voice_list_not_checked_yet` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_voice_listing_does_not_synthesize_audio_it` | Settings, pickers, viewers and editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_voice_listing_not_checked_yet_refresh_voic` | Settings, pickers, viewers or editors | Existing shipped copy; this task only moves it to a resource. | `t_307ced47` |
 | `legacy_capture_could_not_open_that_photo_choose_another_i` | Capture camera or Type surface | Existing visible error/status copy; this task only moves it to a resource. | `t_f6a4efe9` |
 | `legacy_capture_could_not_open_that_photo_choose_another_i_2` | Capture camera or Type surface | Existing visible error/status copy; this task only moves it to a resource. | `t_f6a4efe9` |
 | `legacy_capture_could_not_read_this_photo_type_or_edit_the` | Capture camera or Type surface | Existing visible error/status copy; this task only moves it to a resource. | `t_f6a4efe9` |
@@ -289,20 +199,9 @@ These resources preserve shipped wording verbatim. Card-flow resource keys that 
 | `former_card_translation_was_interrupted_tap_retry_to_c` | Card surface or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
 | `former_card_translation_was_not_started_tap_retry_to_c` | Card surface or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
 | `former_card_wait_for_or_retry_the_missing_audio_before` | Card surface or an associated sheet | Existing visible error/status copy; this task only moves it to a resource. | `t_fc85a8b2` |
-| `legacy_onboarding_checking_unidic_runtime_archive` | Onboarding wizard steps | Existing visible error/status copy; this task only moves it to a resource. | `t_cf3dee18` |
-| `legacy_onboarding_mecab_native_analysis_could_not_load_you_c` | Onboarding wizard steps | Existing visible error/status copy; this task only moves it to a resource. | `t_cf3dee18` |
 | `legacy_onboarding_offline_dictionary_could_not_be_prepared_a` | Onboarding wizard steps | Existing visible error/status copy; this task only moves it to a resource. | `t_cf3dee18` |
-| `legacy_onboarding_unidic_could_not_be_downloaded_verified_or` | Onboarding wizard steps | Existing visible error/status copy; this task only moves it to a resource. | `t_cf3dee18` |
-| `legacy_settings_audio_cache_cleared_draft_audio_is_unaffec` | Settings, pickers, viewers and editors | Existing visible error/status copy; this task only moves it to a resource. | `t_307ced47` |
 | `legacy_settings_could_not_load_saved_settings` | Settings, pickers, viewers and editors | Existing visible error/status copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_save_the_current_key_successfully_before_r` | Settings, pickers, viewers and editors | Existing visible error/status copy; this task only moves it to a resource. | `t_307ced47` |
 | `legacy_settings_settings_are_still_loading_back_out_again` | Settings, pickers, viewers and editors | Existing visible error/status copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_settings_could_not_be_saved_the_key_was_no` | Settings, pickers, viewers and editors | Existing visible error/status copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_setup_could_not_be_marked_complete_back_re` | Settings, pickers, viewers and editors | Existing visible error/status copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_the_audio_cache_could_not_be_cleared` | Settings, pickers, viewers and editors | Existing visible error/status copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_the_google_cloud_key_contains_whitespace` | Settings, pickers, viewers and editors | Existing visible error/status copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_to_finish_setup_save_a_google_cloud_key_an` | Settings, pickers, viewers and editors | Existing visible error/status copy; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_translation_test_failed` | Settings, pickers, viewers and editors | Existing visible error/status copy; this task only moves it to a resource. | `t_307ced47` |
 | `former_card_continue_action` | Card surface or an associated sheet | Existing Target action label; this task only moves it to a resource. | `t_fc85a8b2` |
 | `former_card_ankidroid_field_mapping` | Card surface or an associated sheet | Existing Send validation prefix; this task only moves it to a resource. | `t_fc85a8b2` |
 | `former_card_note_fields_do_not_match_note_type` | Card surface or an associated sheet | Existing Send validation message; this task only moves it to a resource. | `t_fc85a8b2` |
@@ -328,16 +227,13 @@ These resources preserve shipped wording verbatim. Card-flow resource keys that 
 | `former_card_media_preparation` | Card surface or an associated sheet | Existing Send recovery fallback label; this task only moves it to a resource. | `t_fc85a8b2` |
 | `former_card_media_label` | Card surface or an associated sheet | Existing Send recovery fallback label; this task only moves it to a resource. | `t_fc85a8b2` |
 
-| `legacy_capture_continue_action` | Capture camera or Type surface | Existing Type action label; this task only moves it to a resource. | `t_f6a4efe9` |
+
 | `legacy_capture_preparing_photo_for_anki` | Capture camera or Type surface | Existing image status; this task only moves it to a resource. | `t_f6a4efe9` |
 | `legacy_capture_photo_attached` | Capture camera or Type surface | Existing image status; this task only moves it to a resource. | `t_f6a4efe9` |
 | `legacy_settings_jmdict_source_notice` | Settings, pickers, viewers and editors | Existing source attribution with runtime dictionary metadata; this task only moves the copy into a resource. | `t_307ced47` |
 | `legacy_settings_kanjium_source_notice` | Settings, pickers, viewers and editors | Existing source attribution with runtime dictionary metadata; this task only moves the copy into a resource. | `t_307ced47` |
 | `former_card_send_recovery_media_import_uncertain` | Card surface or an associated sheet | Existing Send recovery message; this task only moves it to a resource. | `t_fc85a8b2` |
 | `former_card_send_recovery_media_import_stage_uncertain` | Card surface or an associated sheet | Existing Send recovery message; this task only moves it to a resource. | `t_fc85a8b2` |
-| `legacy_settings_voice_list_safe_error` | Settings, pickers, viewers and editors | Existing voice-list failure message; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_settings_save_fallback` | Settings, pickers, viewers and editors | Existing settings-save fallback; this task only moves it to a resource. | `t_307ced47` |
-| `legacy_settings_settings_persist_failed` | Settings, pickers, viewers and editors | Existing settings-save error; this task only moves it to a resource. | `t_307ced47` |
 | `former_card_vocabulary_reading_kana_required` | Card surface or an associated sheet | Existing reading-validation message; this task only moves it to a resource. | `t_fc85a8b2` |
 | `former_card_no_dictionary_entry_loaded` | Card surface or an associated sheet | Existing reading-validation message; this task only moves it to a resource. | `t_fc85a8b2` |
 | `former_card_reading_not_listed_for_word` | Card surface or an associated sheet | Existing reading-validation message; this task only moves it to a resource. | `t_fc85a8b2` |
@@ -379,7 +275,6 @@ These resources preserve shipped wording verbatim. Card-flow resource keys that 
 | `former_card_target_selected_state` | Card surface or an associated sheet | Existing selected-target accessibility state; this task only moves it to a resource. | `t_fc85a8b2` |
 | `former_card_meaning_selected_state` | Card surface or an associated sheet | Existing selected-meaning accessibility state; this task only moves it to a resource. | `t_fc85a8b2` |
 | `former_card_not_selected_state` | Card surface or an associated sheet | Existing unselected accessibility state; this task only moves it to a resource. | `t_fc85a8b2` |
-| `legacy_capture_selected_state` | Capture camera or Type surface | Existing mode-selector accessibility state; this task only moves it to a resource. | `t_f6a4efe9` |
-| `legacy_capture_not_selected_state` | Capture camera or Type surface | Existing mode-selector accessibility state; this task only moves it to a resource. | `t_f6a4efe9` |
+
 | `legacy_capture_flash_on_state` | Capture camera or Type surface | Existing flash-toggle accessibility state; this task only moves it to a resource. | `t_f6a4efe9` |
 | `legacy_capture_flash_off_state` | Capture camera or Type surface | Existing flash-toggle accessibility state; this task only moves it to a resource. | `t_f6a4efe9` |
