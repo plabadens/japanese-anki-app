@@ -4,7 +4,7 @@ These are pinned linguistic data sources for offline processing. Do not replace 
 
 ## MeCab and UniDic
 
-See [`mecab/README.md`](mecab/README.md) and [`unidic/README.md`](unidic/README.md) for the pinned morphology engine, official UniDic CWJ 3.1.1 source archive, licenses, attribution, and deterministic runtime-asset packaging.
+See [`mecab/README.md`](mecab/README.md) and [`unidic/README.md`](unidic/README.md) for the pinned morphology engine, the bundled UniDic 2.1.2 data (`unidic-lite`), licenses and attribution.
 
 ## JMdict
 

@@ -1,5 +1,7 @@
 package dev.pierre.japaneseanki.ui
 
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalConfiguration
@@ -10,17 +12,27 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.fillMaxSize
+import dev.pierre.japaneseanki.AnkiDeck
+import dev.pierre.japaneseanki.AnkiFieldContract
+import dev.pierre.japaneseanki.AnkiNoteType
 import dev.pierre.japaneseanki.JapaneseToken
 import dev.pierre.japaneseanki.R
 import dev.pierre.japaneseanki.TargetSpan
+import dev.pierre.japaneseanki.speech.CloudVoice
 import java.io.File
 
-/** Contract states rendered by the production Capture, onboarding and Card composables. */
+/**
+ * Contract states rendered by the production Capture, setup and Card composables.
+ *
+ * The two setup states replace the retired dictionary-download states: the dictionary is bundled
+ * and has no UI, so setup now only shows the required audio and AnkiDroid work plus the optional
+ * camera.
+ */
 internal enum class CardFlowPreviewState(val fileName: String) {
     CAPTURE_CAMERA_IDLE("capture-camera-idle"),
     CAPTURE_PERMISSION_PROMPT("capture-camera-permission-prompt"),
-    SETUP_DICTIONARY_REQUIRED("setup-dictionary-required"),
-    SETUP_DICTIONARY_DOWNLOADING("setup-dictionary-downloading"),
+    SETUP_READY("setup-ready"),
+    SETUP_AUDIO_REQUIRED("setup-audio-required"),
     CAPTURE_TORCH_ON("capture-torch-on"),
     TYPE_EMPTY_FIELD("type-empty-field"),
     TYPE_FILLED_SENTENCE("type-filled-sentence"),
@@ -67,8 +79,8 @@ internal fun CardFlowPreviewContent(
                 CardFlowPreviewState.CAPTURE_PERMISSION_PROMPT -> CapturePreview(
                     cameraPermissionGranted = false,
                 )
-                CardFlowPreviewState.SETUP_DICTIONARY_REQUIRED -> DictionarySetupPreview(downloading = false)
-                CardFlowPreviewState.SETUP_DICTIONARY_DOWNLOADING -> DictionarySetupPreview()
+                CardFlowPreviewState.SETUP_READY -> SetupPreview(ready = true)
+                CardFlowPreviewState.SETUP_AUDIO_REQUIRED -> SetupPreview(ready = false)
                 CardFlowPreviewState.CAPTURE_TORCH_ON -> CapturePreview(
                     cameraPermissionGranted = true,
                     cameraPreviewState = CaptureCameraPreviewState(hasTorch = true, torchOn = true),
@@ -109,54 +121,66 @@ private fun CapturePreview(
     )
 }
 
+private val setupPreviewVoices = listOf(
+    CloudVoice(
+        name = "ja-JP-Chirp3-HD-Aoede",
+        displayName = "Aoede",
+        languageCodes = listOf("ja-JP"),
+        naturalSampleRateHz = 24_000,
+    ),
+    CloudVoice(
+        name = "ja-JP-Chirp3-HD-Kore",
+        displayName = "Kore",
+        languageCodes = listOf("ja-JP"),
+        naturalSampleRateHz = 24_000,
+    ),
+)
+
 @Composable
-private fun DictionarySetupPreview(downloading: Boolean = true) {
-    OnboardingScreen(
-        step = OnboardingStep.DICTIONARY,
-        dictionary = DictionaryTaskUi(
-            phase = if (downloading) DictionaryTaskPhase.DOWNLOADING else DictionaryTaskPhase.IDLE,
-            downloadedBytes = if (downloading) stringResource(R.string.byte_progress, "32 MiB", "426 MiB") else null,
-            progressFraction = if (downloading) 0.075f else null,
-            hasStarted = downloading,
-            canPause = downloading,
-            canCancel = downloading,
+private fun SetupPreview(ready: Boolean) {
+    val state = SetupUi(
+        audio = AudioSetupUi(
+            key = if (ready) "synthetic-design-fixture" else "",
+            credentialStored = ready,
+            selectedVoice = if (ready) setupPreviewVoices.first().name else "",
+            voices = if (ready) setupPreviewVoices else emptyList(),
+            loading = false,
+            loadingVoices = false,
         ),
-        dictionarySize = "426 MiB",
+        anki = AnkiSetupUi(
+            installed = true,
+            connected = true,
+            loading = false,
+            noteTypes = listOf(AnkiNoteType(1, "Japanese Sentence", AnkiFieldContract.requiredFields)),
+            decks = listOf(AnkiDeck(10, "Japanese")),
+            selectedNoteTypeId = 1,
+            selectedDeckId = 10,
+        ),
         cameraPermissionGranted = false,
         cameraDenied = false,
-        audio = AudioSetupUi("", false, "", emptyList(), loading = false, loadingVoices = false),
-        anki = AnkiSetupUi(
-            installed = false,
-            connected = false,
-            loading = false,
-            noteTypes = emptyList(),
-            decks = emptyList(),
-            selectedNoteTypeId = null,
-            selectedDeckId = null,
-        ),
-        dictionaryReady = false,
-        audioReady = false,
-        cameraReady = false,
-        ankiReady = false,
-        onBack = {},
-        onDownload = {},
-        onPauseDownload = {},
-        onResumeDownload = {},
-        onCancelDownload = {},
-        onRetryDownload = {},
-        onNext = {},
-        onRequestCamera = {},
-        onUseTyping = {},
-        onKeyChange = {},
-        onVoiceChange = {},
-        onReloadVoices = {},
-        onConnectAnki = {},
-        onSelectNoteType = {},
-        onSelectDeck = {},
-        onSetupAnkiLater = {},
-        onFinish = {},
-        onOpenDownloads = {},
+        dictionaryPreparing = false,
+        dictionaryErrorResource = null,
+        audioReady = ready,
+        ankiReady = true,
     )
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background,
+    ) {
+        SetupScreen(
+            state = state,
+            onBack = null,
+            onKeyChange = {},
+            onVoiceChange = {},
+            onLoadVoices = {},
+            onRequestCamera = {},
+            onConnectAnki = {},
+            onSelectNoteType = {},
+            onSelectDeck = {},
+            onRetryDictionary = {},
+            onFinish = {},
+        )
+    }
 }
 
 @Composable
@@ -247,13 +271,13 @@ internal fun CaptureCameraIdlePreview() = CardFlowPreviewContent(CardFlowPreview
 @Composable
 internal fun CapturePermissionPromptPreview() = CardFlowPreviewContent(CardFlowPreviewState.CAPTURE_PERMISSION_PROMPT)
 
-@Preview(name = "Setup / dictionary downloading", widthDp = 390, heightDp = 844)
+@Preview(name = "Setup / audio required", widthDp = 390, heightDp = 844)
 @Composable
-internal fun SetupDictionaryDownloadingPreview() = CardFlowPreviewContent(CardFlowPreviewState.SETUP_DICTIONARY_DOWNLOADING)
+internal fun SetupAudioRequiredPreview() = CardFlowPreviewContent(CardFlowPreviewState.SETUP_AUDIO_REQUIRED)
 
-@Preview(name = "Setup / dictionary required", widthDp = 390, heightDp = 844)
+@Preview(name = "Setup / ready", widthDp = 390, heightDp = 844)
 @Composable
-internal fun SetupDictionaryRequiredPreview() = CardFlowPreviewContent(CardFlowPreviewState.SETUP_DICTIONARY_REQUIRED)
+internal fun SetupReadyPreview() = CardFlowPreviewContent(CardFlowPreviewState.SETUP_READY)
 
 @Preview(name = "Capture / torch on", widthDp = 390, heightDp = 844)
 @Composable

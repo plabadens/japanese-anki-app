@@ -20,7 +20,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.pierre.japaneseanki.AppRoute
 import dev.pierre.japaneseanki.SettingsValues
-import dev.pierre.japaneseanki.shouldShowSetupWizard
+import dev.pierre.japaneseanki.shouldShowSetup
 import dev.pierre.japaneseanki.visibleRouteForAnalyzer
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -90,48 +90,6 @@ class SettingsScreenBehaviorTest {
     }
 
     @Test
-    fun setupGateHasNoUseAppExitAndCannotAdvanceBeforeDownloadStarts() {
-        composeRule.setContent {
-            FlowTheme(darkTheme = false) {
-                OnboardingScreen(
-                    step = OnboardingStep.DICTIONARY,
-                    dictionary = DictionaryTaskUi(phase = DictionaryTaskPhase.IDLE),
-                    dictionarySize = "426 MiB",
-                    cameraPermissionGranted = false,
-                    cameraDenied = false,
-                    audio = AudioSetupUi("", false, "", emptyList(), false, false),
-                    anki = AnkiSetupUi(false, false, false, emptyList(), emptyList(), null, null),
-                    dictionaryReady = false,
-                    audioReady = false,
-                    cameraReady = false,
-                    ankiReady = false,
-                    onBack = {},
-                    onDownload = {},
-                    onPauseDownload = {},
-                    onResumeDownload = {},
-                    onCancelDownload = {},
-                    onRetryDownload = {},
-                    onNext = {},
-                    onRequestCamera = {},
-                    onUseTyping = {},
-                    onKeyChange = {},
-                    onVoiceChange = {},
-                    onReloadVoices = {},
-                    onConnectAnki = {},
-                    onSelectNoteType = {},
-                    onSelectDeck = {},
-                    onSetupAnkiLater = {},
-                    onFinish = {},
-                    onOpenDownloads = {},
-                )
-            }
-        }
-
-        composeRule.onNodeWithText("Next").assertIsNotEnabled()
-        composeRule.onAllNodesWithText("Use app while setup runs").assertCountEquals(0)
-    }
-
-    @Test
     fun restoredCardAndIncompleteSetupStayBehindTheAnalyzerGate() {
         assertEquals(
             AppRoute.Capture,
@@ -152,31 +110,37 @@ class SettingsScreenBehaviorTest {
 
         assertEquals(
             true,
-            shouldShowSetupWizard(
-                showWizard = false,
+            shouldShowSetup(
+                showSetup = false,
                 onboardingComplete = false,
                 analyzerReady = true,
-                showDownloads = false,
                 showSettings = false,
             ),
         )
         assertEquals(
             true,
-            shouldShowSetupWizard(
-                showWizard = false,
+            shouldShowSetup(
+                showSetup = false,
                 onboardingComplete = true,
                 analyzerReady = false,
-                showDownloads = false,
                 showSettings = false,
             ),
         )
         assertEquals(
             false,
-            shouldShowSetupWizard(
-                showWizard = false,
+            shouldShowSetup(
+                showSetup = false,
                 onboardingComplete = false,
                 analyzerReady = false,
-                showDownloads = true,
+                showSettings = true,
+            ),
+        )
+        assertEquals(
+            false,
+            shouldShowSetup(
+                showSetup = false,
+                onboardingComplete = true,
+                analyzerReady = true,
                 showSettings = false,
             ),
         )
@@ -207,8 +171,7 @@ class SettingsScreenBehaviorTest {
                             onGoogleKeyChange = { value -> state.value = state.value.updated(googleKey = value, credentialStored = value.isNotBlank()) },
                             onVoiceChange = { value -> state.value = state.value.updated(values = state.value.values.copy(voiceName = value)) },
                             onReloadVoices = {},
-                            onOpenDownloads = {},
-                            onClearCache = {},
+                                        onClearCache = {},
                             onOpenSources = {},
                         )
                     }
@@ -234,7 +197,6 @@ private fun SettingsScreenState.updated(
     ankiConnected = ankiConnected,
     ankiInstalled = ankiInstalled,
     onboardingIncomplete = onboardingIncomplete,
-    dictionaryStatus = dictionaryStatus,
     cacheBusy = cacheBusy,
     cacheMessage = cacheMessage,
 )

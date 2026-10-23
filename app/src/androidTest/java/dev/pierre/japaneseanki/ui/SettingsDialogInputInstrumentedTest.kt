@@ -70,8 +70,7 @@ class SettingsDialogInputInstrumentedTest {
                             },
                             onVoiceChange = {},
                             onReloadVoices = {},
-                            onOpenDownloads = {},
-                            onClearCache = {},
+                                        onClearCache = {},
                             onOpenSources = {},
                         )
                     }
@@ -107,7 +106,6 @@ private fun SettingsScreenState.updated(
     ankiConnected = ankiConnected,
     ankiInstalled = ankiInstalled,
     onboardingIncomplete = onboardingIncomplete,
-    dictionaryStatus = dictionaryStatus,
     cacheBusy = cacheBusy,
     cacheMessage = cacheMessage,
 )

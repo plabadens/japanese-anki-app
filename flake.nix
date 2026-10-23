@@ -17,15 +17,6 @@
         hash = "sha256-elB0Zr8DDkw3IZvvqVG+OBspZxFLPnvUSM9SRSILYWs=";
         rootDir = "mecab";
       };
-      unidicArchive = pkgs.fetchurl {
-        url = "https://clrd.ninjal.ac.jp/unidic_archive/cwj/3.1.1/unidic-cwj-3.1.1.zip";
-        hash = "sha256-b1R6PnFWOaPgF4oi35QiOhR9lazrESpZDy1oTGRK0xA=";
-      };
-      unidicRuntime = pkgs.runCommand "unidic-cwj-3.1.1-runtime.zip" {
-        nativeBuildInputs = [ pkgs.python3 ];
-      } ''
-        python3 ${./scripts/package_unidic.py} --archive ${unidicArchive} --output "$out"
-      '';
       robolectricAndroidAll = pkgs.fetchurl {
         url = "https://repo.maven.apache.org/maven2/org/robolectric/android-all-instrumented/17-robolectric-15733970-i7/android-all-instrumented-17-robolectric-15733970-i7.jar";
         hash = "sha256-MKFSQ7qaagFjYYdvrMdUMvTsXbD54n1JhKSmsWe0Mr0=";
@@ -112,13 +103,11 @@
           ./datasets/kanjium/accents.txt
           ./scripts/build_dictionary.py
           ./scripts/build_ajt_pitch.py
-          ./scripts/package_unidic.py
           ./scripts/test-build-dictionary.py
           ./scripts/test-build-ajt-pitch.py
           ./scripts/test-ajt-pitch-asset.py
           ./scripts/test-core.sh
           ./scripts/test-dictionary-asset.py
-          ./scripts/test-package-unidic.py
         ];
       };
 
@@ -181,7 +170,6 @@
         python3 scripts/test-build-ajt-pitch.py
         python3 scripts/test-ajt-pitch-asset.py
         python3 scripts/test-dictionary-asset.py
-        python3 scripts/test-package-unidic.py
         bash scripts/test-core.sh
         mkdir -p "$out"
         printf 'Core tests passed.\n' > "$out/result"
@@ -191,7 +179,6 @@
         default = releaseApk;
         apk = releaseApk;
         debugApk = debugApk;
-        unidicRuntime = unidicRuntime;
         emulator-wrapper = emulatorWrapper;
       };
 

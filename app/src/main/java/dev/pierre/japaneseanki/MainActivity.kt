@@ -1,7 +1,6 @@
 package dev.pierre.japaneseanki
 
 import androidx.compose.ui.res.stringResource
-import androidx.work.WorkInfo
 
 import android.Manifest
 import android.content.Context
@@ -13,8 +12,6 @@ import android.os.Bundle
 import android.text.Html
 import android.util.Log
 import android.media.MediaPlayer
-import android.net.ConnectivityManager
-import android.net.Network
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -88,11 +85,8 @@ import dev.pierre.japaneseanki.ui.SettingsScreen
 import dev.pierre.japaneseanki.ui.SettingsScreenState
 import dev.pierre.japaneseanki.ui.AudioSetupUi
 import dev.pierre.japaneseanki.ui.AnkiSetupUi
-import dev.pierre.japaneseanki.ui.DictionaryTaskPhase
-import dev.pierre.japaneseanki.ui.DictionaryTaskUi
-import dev.pierre.japaneseanki.ui.DownloadsContent
-import dev.pierre.japaneseanki.ui.OnboardingScreen
-import dev.pierre.japaneseanki.ui.OnboardingStep
+import dev.pierre.japaneseanki.ui.SetupScreen
+import dev.pierre.japaneseanki.ui.SetupUi
 import dev.pierre.japaneseanki.ui.ocrFocusFraction
 import dev.pierre.japaneseanki.speech.CloudVoice
 import dev.pierre.japaneseanki.speech.GoogleChirpSpeechProvider
@@ -353,14 +347,12 @@ internal fun visibleRouteForAnalyzer(
     else -> requestedRoute
 }
 
-internal fun shouldShowSetupWizard(
-    showWizard: Boolean,
+internal fun shouldShowSetup(
+    showSetup: Boolean,
     onboardingComplete: Boolean,
     analyzerReady: Boolean,
-    showDownloads: Boolean,
     showSettings: Boolean,
-): Boolean = !showDownloads && !showSettings &&
-    (showWizard || !onboardingComplete || !analyzerReady)
+): Boolean = !showSettings && (showSetup || !onboardingComplete || !analyzerReady)
 
 private data class SentenceAudioAuthorization(
     val revision: Long,
@@ -450,39 +442,6 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             val coroutineScope = rememberCoroutineScope()
-            val firstRunTask = remember { UniDicDownloadTask(applicationContext) }
-            var downloadSnapshot by remember {
-                mutableStateOf(
-                    UniDicTaskSnapshot(
-                        workInfo = null,
-                        userState = UniDicTaskStore.USER_NONE,
-                        phase = null,
-                        downloadedBytes = 0L,
-                        totalBytes = UniDicResourceCatalog.ARCHIVE_BYTES,
-                        failureCode = null,
-                        hadPartialTransfer = false,
-                        hasTask = false,
-                    ),
-                )
-            }
-            var networkState by remember { mutableStateOf(firstRunTask.networkState()) }
-            androidx.compose.runtime.LaunchedEffect(firstRunTask) {
-                firstRunTask.observe().collect { downloadSnapshot = it }
-            }
-            androidx.compose.runtime.DisposableEffect(firstRunTask) {
-                val connectivity = getSystemService(ConnectivityManager::class.java)
-                val callback = object : ConnectivityManager.NetworkCallback() {
-                    private fun update() { networkState = firstRunTask.networkState() }
-                    override fun onAvailable(network: Network) = update()
-                    override fun onLost(network: Network) = update()
-                    override fun onCapabilitiesChanged(network: Network, networkCapabilities: android.net.NetworkCapabilities) = update()
-                }
-                runCatching { connectivity?.registerDefaultNetworkCallback(callback) }
-                onDispose {
-                    runCatching { connectivity?.unregisterNetworkCallback(callback) }
-                    firstRunTask.close()
-                }
-            }
             val touchFeedbackDispatcher = LocalTouchFeedbackDispatcher.current
             var captureConfirmationMessage by remember { mutableStateOf<String?>(null) }
             var verifiedDelivery by remember { mutableStateOf(false) }
@@ -625,26 +584,13 @@ class MainActivity : ComponentActivity() {
                 ?.let(::File)?.takeIf(File::isFile)
             var showReplace by remember { mutableStateOf(restoredPendingPhoto != null) }
             var showSources by remember { mutableStateOf(false) }
-            var showDownloads by remember {
-                mutableStateOf(intent?.getBooleanExtra(UniDicTaskStore.EXTRA_OPEN_DOWNLOADS, false) == true)
-            }
             val previouslyConfigured = settings.contains(GoogleCloudCredential.PREF) &&
                 settings.getString(SettingsPreferenceKeys.GOOGLE_VOICE, "").orEmpty().isNotBlank()
             var onboardingComplete by remember {
                 mutableStateOf(settings.getBoolean("onboarding_complete", previouslyConfigured))
             }
-            var showWizard by remember { mutableStateOf(!onboardingComplete && !showDownloads) }
-            var onboardingStep by remember {
-                mutableStateOf(
-                    settings.getString("onboarding_step", null)?.let { stored ->
-                        runCatching { OnboardingStep.valueOf(stored) }.getOrNull()
-                    } ?: OnboardingStep.DICTIONARY,
-                )
-            }
+            var showSetup by remember { mutableStateOf(!onboardingComplete) }
             var cameraDenied by remember { mutableStateOf(settings.getBoolean("onboarding_camera_denied", false)) }
-            var downloadsNotice by remember { mutableStateOf<Int?>(null) }
-            var showMobileConsent by remember { mutableStateOf(false) }
-            var deferredMobileHandle by remember { mutableStateOf(firstRunTask.deferredMobileNetworkHandle()) }
             var showSettings by remember { mutableStateOf(false) }
             var showSentenceEditor by remember { mutableStateOf(false) }
             var sentenceEditorDraft by remember { mutableStateOf<TextFieldValue?>(null) }
@@ -671,7 +617,6 @@ class MainActivity : ComponentActivity() {
             var settingsSaving by remember { mutableStateOf(false) }
             var settingsError by remember { mutableStateOf<String?>(null) }
             var setupAudioErrorResource by remember { mutableStateOf<Int?>(null) }
-            var audioNextRequested by remember { mutableStateOf(false) }
             var audioSetupInvalidated by remember { mutableStateOf(false) }
             var settingsCoordinator by remember { mutableStateOf<SettingsCoordinator?>(null) }
             var settingsScreenState by remember {
@@ -701,12 +646,12 @@ class MainActivity : ComponentActivity() {
             var dictionaryInfo by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
             var analyzerReady by remember { mutableStateOf(false) }
             var analyzerLoading by remember { mutableStateOf(false) }
-            var analyzerError by remember { mutableStateOf<String?>(null) }
-            val setupWizardVisible = shouldShowSetupWizard(
-                showWizard = showWizard,
+            var analyzerFailure by remember { mutableStateOf<Int?>(null) }
+            var analyzerRetry by remember { mutableStateOf(0) }
+            val setupVisible = shouldShowSetup(
+                showSetup = showSetup,
                 onboardingComplete = onboardingComplete,
                 analyzerReady = analyzerReady,
-                showDownloads = showDownloads,
                 showSettings = showSettings,
             )
             var tokenizationLoading by remember { mutableStateOf(false) }
@@ -1013,9 +958,8 @@ class MainActivity : ComponentActivity() {
                 mutableStateOf(checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
             }
             fun setupAudioReady(): Boolean =
-                settings.getBoolean("onboarding_audio_validated", previouslyConfigured) &&
-                    settings.contains(GoogleCloudCredential.PREF) &&
-                    settings.getString(SettingsPreferenceKeys.GOOGLE_VOICE, "").orEmpty().isNotBlank()
+                (settingsScreenState.googleKey.isNotBlank() || settingsScreenState.credentialStored) &&
+                    settingsScreenState.values.voiceName.isNotBlank()
             fun compatibleSetupNoteTypes(): List<AnkiNoteType> = noteTypes.filter { model ->
                 AnkiFieldContract.mapToModelOrder(model.fields, emptyMap()).isValid
             }
@@ -1023,32 +967,6 @@ class MainActivity : ComponentActivity() {
                 ankiDroidInstalled && apiPermissionGranted && setupLoadedSuccessfully &&
                     compatibleSetupNoteTypes().any { it.id == selectedModelId } &&
                     decks.any { it.id == selectedDeckId }
-            fun setupCameraDone(): Boolean =
-                cameraPermissionGranted || settings.getBoolean("onboarding_camera_done", previouslyConfigured)
-            fun setupAnkiDone(): Boolean =
-                settings.getBoolean("onboarding_anki_done", previouslyConfigured)
-            fun nextSetupAfterAudio(): OnboardingStep =
-                if (setupAnkiDone()) OnboardingStep.READY else OnboardingStep.ANKIDROID
-            fun nextSetupAfterCamera(): OnboardingStep = when {
-                !setupAudioReady() -> OnboardingStep.AUDIO
-                else -> nextSetupAfterAudio()
-            }
-            fun nextSetupAfterDictionary(): OnboardingStep =
-                if (setupCameraDone()) nextSetupAfterCamera() else OnboardingStep.CAMERA
-            fun firstIncompleteSetupStep(): OnboardingStep = when {
-                !analyzerReady -> OnboardingStep.DICTIONARY
-                !setupCameraDone() -> OnboardingStep.CAMERA
-                !setupAudioReady() -> OnboardingStep.AUDIO
-                !setupAnkiDone() -> OnboardingStep.ANKIDROID
-                else -> OnboardingStep.READY
-            }
-            fun persistSetupStep(step: OnboardingStep) {
-                if (settings.edit().putString("onboarding_step", step.name).commit()) {
-                    onboardingStep = step
-                } else {
-                    settingsError = this@MainActivity.getString(R.string.save_failed)
-                }
-            }
             fun markCameraStepDone() {
                 settings.edit()
                     .putBoolean("onboarding_camera_done", true)
@@ -1056,21 +974,8 @@ class MainActivity : ComponentActivity() {
                     .commit()
                 cameraDenied = false
             }
-            fun enterSetup(step: OnboardingStep = firstIncompleteSetupStep()) {
-                showSettings = false
-                showDownloads = false
-                persistSetupStep(step)
-                showWizard = true
-            }
-            fun backSetupStep() {
-                val previous = when (onboardingStep) {
-                    OnboardingStep.DICTIONARY -> OnboardingStep.DICTIONARY
-                    OnboardingStep.CAMERA -> OnboardingStep.DICTIONARY
-                    OnboardingStep.AUDIO -> OnboardingStep.CAMERA
-                    OnboardingStep.ANKIDROID -> OnboardingStep.AUDIO
-                    OnboardingStep.READY -> OnboardingStep.ANKIDROID
-                }
-                persistSetupStep(previous)
+            fun enterSetup() {
+                showSetup = true
             }
             var cameraError by remember { mutableStateOf<String?>(null) }
             var captureInProgress by remember { mutableStateOf(false) }
@@ -1146,8 +1051,7 @@ class MainActivity : ComponentActivity() {
                     ankiConnected = ankiDroidInstalled && apiPermissionGranted,
                     ankiInstalled = ankiDroidInstalled,
                     onboardingIncomplete = !onboardingComplete,
-                    dictionaryStatus = "",
-                    cacheBusy = audioCacheBusy,
+                        cacheBusy = audioCacheBusy,
                     cacheMessage = audioCacheMessage,
                 )
                 selectedModelId = values.modelId
@@ -1228,9 +1132,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            fun requestAudioStepNext() {
+            fun finishSetup() {
+                if (settingsLoading || settingsSaving) return
+                if (!analyzerReady || !setupAudioReady() || !setupAnkiReady()) return
                 val coordinator = settingsCoordinator
-                if (coordinator == null || settingsLoading || settingsSaving) {
+                if (coordinator == null) {
                     setupAudioErrorResource = R.string.save_failed
                     return
                 }
@@ -1247,62 +1153,31 @@ class MainActivity : ComponentActivity() {
                         setupAudioErrorResource = R.string.key_required
                         return@launch
                     }
-                    val catalog = coordinator.currentVoiceCatalog()
-                    audioNextRequested = true
-                    if (!catalog.loading && catalog.provenance != VoiceCatalogProvenance.AUTHORITATIVE) {
-                        val request = coordinator.reloadVoices()
-                        if (request == null) {
-                            audioNextRequested = false
-                            setupAudioErrorResource = R.string.voices_failed
+                    if (!coordinator.canFinishOnboarding()) {
+                        val catalog = coordinator.currentVoiceCatalog()
+                        setupAudioErrorResource = if (catalog.voices.isEmpty()) {
+                            R.string.voices_failed
                         } else {
-                            syncSettingsScreen(coordinator)
-                            startVoiceList(coordinator, request)
+                            R.string.voice_unavailable
                         }
+                        return@launch
                     }
-                }
-            }
-
-            fun nextSetupStep() {
-                when (onboardingStep) {
-                    OnboardingStep.DICTIONARY -> {
-                        if (analyzerReady || downloadSnapshot.hasTask) {
-                            if (cameraPermissionGranted) markCameraStepDone()
-                            persistSetupStep(nextSetupAfterDictionary())
-                        }
+                    val persisted = settings.edit()
+                        .putBoolean("onboarding_anki_done", true)
+                        .putBoolean("onboarding_anki_deferred", false)
+                        .putBoolean("onboarding_complete", true)
+                        .commit()
+                    if (!persisted) {
+                        setupAudioErrorResource = R.string.save_failed
+                        return@launch
                     }
-                    OnboardingStep.CAMERA -> {
-                        if (setupCameraDone()) {
-                            if (cameraPermissionGranted) markCameraStepDone()
-                            persistSetupStep(nextSetupAfterCamera())
-                        }
-                    }
-                    OnboardingStep.AUDIO -> requestAudioStepNext()
-                    OnboardingStep.ANKIDROID -> {
-                        if (setupAnkiReady() && settings.edit()
-                                .putBoolean("onboarding_anki_done", true)
-                                .putBoolean("onboarding_anki_deferred", false)
-                                .commit()
-                        ) persistSetupStep(OnboardingStep.READY)
-                    }
-                    OnboardingStep.READY -> {
-                        if (analyzerReady && setupAudioReady() && settings.edit()
-                                .putBoolean("onboarding_complete", true)
-                                .putString("onboarding_step", OnboardingStep.READY.name)
-                                .commit()
-                        ) {
-                            onboardingComplete = true
-                            showWizard = false
-                        }
-                    }
+                    onboardingComplete = true
+                    showSetup = false
                 }
             }
 
             fun continueToCard() {
-                if (!analyzerReady) {
-                    downloadsNotice = R.string.dictionary_needed
-                    showDownloads = true
-                    return
-                }
+                if (!analyzerReady) return
                 if (navigationLocked) return
                 preparationAuthorizationError = null
                 route = AppRoute.Card
@@ -1684,9 +1559,6 @@ class MainActivity : ComponentActivity() {
                 cameraPermissionGranted = granted
                 if (granted) {
                     markCameraStepDone()
-                    if (showWizard && onboardingStep == OnboardingStep.CAMERA) {
-                        persistSetupStep(nextSetupAfterCamera())
-                    }
                 } else {
                     cameraDenied = true
                     settings.edit().putBoolean("onboarding_camera_denied", true).commit()
@@ -1771,98 +1643,42 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            androidx.compose.runtime.LaunchedEffect(Unit) {
+            // The dictionary ships in the APK. Opening it is local; the only cost is a one-time
+            // unpack into app storage, retried here whenever the user asks.
+            androidx.compose.runtime.LaunchedEffect(analyzerRetry) {
+                analyzerLoading = true
+                analyzerFailure = null
                 val installed = withContext(Dispatchers.IO) {
                     runCatching { offlineAnalyzer.loadInstalled() }.getOrDefault(false)
                 }
-                if (installed) {
-                    analyzerReady = true
-                    analyzerLoading = false
-                    analyzerError = null
-                } else {
-                    analyzerReady = false
-                    if (onboardingComplete) {
-                        onboardingComplete = false
-                        settings.edit().putBoolean("onboarding_complete", false).commit()
-                        persistSetupStep(OnboardingStep.DICTIONARY)
-                        showWizard = true
-                    }
-                    firstRunTask.ensureStartedIfNever()
-                }
-            }
-            androidx.compose.runtime.LaunchedEffect(downloadSnapshot) {
-                val state = downloadSnapshot.workInfo?.state
-                when {
-                    analyzerReady -> {
-                        analyzerLoading = false
-                        analyzerError = null
-                    }
-                    state == WorkInfo.State.RUNNING -> {
-                        analyzerLoading = true
-                        analyzerError = null
-                    }
-                    state == WorkInfo.State.ENQUEUED || state == WorkInfo.State.BLOCKED -> {
-                        analyzerLoading = true
-                        analyzerError = null
-                    }
-                    state == WorkInfo.State.FAILED -> {
-                        analyzerLoading = false
-                        val failure = when (downloadSnapshot.failureCode) {
-                            UniDicTaskStore.FAILURE_DICTIONARY_INVALID -> R.string.dictionary_invalid
-                            UniDicTaskStore.FAILURE_DICTIONARY_INSTALL_FAILED -> R.string.dictionary_install_failed
-                            UniDicTaskStore.FAILURE_STORAGE_FULL -> R.string.storage_full
-                            else -> R.string.dictionary_failed
+                if (!installed) {
+                    val prepared = withContext(Dispatchers.IO) {
+                        runCatching {
+                            offlineAnalyzer.prepare()
+                            offlineAnalyzer.loadInstalled()
                         }
-                        analyzerError = this@MainActivity.getString(failure)
                     }
-                    state == WorkInfo.State.CANCELLED -> {
-                        analyzerLoading = false
-                        analyzerError = null
-                    }
-                    else -> {
-                        analyzerLoading = false
-                        analyzerError = null
-                    }
-                }
-            }
-            androidx.compose.runtime.LaunchedEffect(downloadSnapshot.workInfo?.state) {
-                if (downloadSnapshot.workInfo?.state == WorkInfo.State.SUCCEEDED && !analyzerReady) {
-                    val installed = withContext(Dispatchers.IO) {
-                        runCatching { offlineAnalyzer.loadInstalled() }.getOrDefault(false)
-                    }
-                    if (installed) {
-                        analyzerReady = true
-                        analyzerError = null
-                    } else {
-                        analyzerError = this@MainActivity.getString(R.string.dictionary_install_failed)
+                    if (prepared.isFailure) {
+                        Log.e("OfflineDictionary", "Could not unpack the bundled dictionary", prepared.exceptionOrNull())
+                        analyzerFailure = if (prepared.exceptionOrNull() is BundledDictionaryStorageException) {
+                            R.string.storage_full
+                        } else {
+                            R.string.dictionary_install_failed
+                        }
                     }
                 }
-            }
-            androidx.compose.runtime.LaunchedEffect(audioNextRequested, settingsScreenState.voiceCatalog.loading, onboardingStep) {
-                if (!audioNextRequested || onboardingStep != OnboardingStep.AUDIO || settingsScreenState.voiceCatalog.loading) {
-                    return@LaunchedEffect
+                analyzerReady = runCatching { offlineAnalyzer.loadInstalled() }.getOrDefault(false)
+                if (analyzerReady) {
+                    analyzerFailure = null
+                } else if (analyzerFailure == null) {
+                    analyzerFailure = R.string.dictionary_install_failed
                 }
-                val coordinator = settingsCoordinator ?: run {
-                    audioNextRequested = false
-                    setupAudioErrorResource = R.string.save_failed
-                    return@LaunchedEffect
+                analyzerLoading = false
+                if (!analyzerReady && onboardingComplete) {
+                    onboardingComplete = false
+                    settings.edit().putBoolean("onboarding_complete", false).commit()
+                    showSetup = true
                 }
-                if (coordinator.canFinishOnboarding()) {
-                    if (settings.edit().putBoolean("onboarding_audio_validated", true).commit()) {
-                        setupAudioErrorResource = null
-                        persistSetupStep(nextSetupAfterAudio())
-                    } else {
-                        setupAudioErrorResource = R.string.save_failed
-                    }
-                } else {
-                    val catalog = coordinator.currentVoiceCatalog()
-                    setupAudioErrorResource = if (catalog.voices.isEmpty()) {
-                        R.string.voices_failed
-                    } else {
-                        R.string.voice_unavailable
-                    }
-                }
-                audioNextRequested = false
             }
             // Nothing from a previous word may survive an unresolved dictionary choice.
             fun clearUnresolvedVocabulary() {
@@ -2588,77 +2404,6 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            androidx.compose.runtime.LaunchedEffect(downloadSnapshot, networkState, deferredMobileHandle) {
-                if (deferredMobileHandle != null && deferredMobileHandle != networkState.networkHandle) {
-                    firstRunTask.deferMobileNetwork(null)
-                    deferredMobileHandle = null
-                }
-                val activeTask = downloadSnapshot.isRunningOrQueued || downloadSnapshot.phase == UniDicTaskStore.PHASE_WAITING_MOBILE
-                val handle = networkState.networkHandle
-                val needsConsent = activeTask && !downloadSnapshot.isPaused && !downloadSnapshot.isCancelled &&
-                    !analyzerReady && networkState.available && networkState.metered &&
-                    firstRunTask.approvedNetworkHandle() != handle && deferredMobileHandle != handle
-                showMobileConsent = needsConsent
-                if (
-                    downloadSnapshot.workInfo?.state == WorkInfo.State.FAILED &&
-                    downloadSnapshot.phase == UniDicTaskStore.PHASE_WAITING_MOBILE &&
-                    networkState.unmetered && !downloadSnapshot.isPaused && !downloadSnapshot.isCancelled
-                ) firstRunTask.start(forceReplace = true)
-            }
-            val downloadUi = remember(downloadSnapshot, networkState, analyzerReady, analyzerError) {
-                val workState = downloadSnapshot.workInfo?.state
-                val phase = when {
-                    analyzerReady -> DictionaryTaskPhase.READY
-                    downloadSnapshot.isPaused -> DictionaryTaskPhase.PAUSED
-                    downloadSnapshot.isCancelled || workState == WorkInfo.State.CANCELLED -> DictionaryTaskPhase.CANCELLED
-                    downloadSnapshot.phase == UniDicTaskStore.PHASE_WAITING_MOBILE -> DictionaryTaskPhase.WAITING_MOBILE
-                    downloadSnapshot.failureCode != null || workState == WorkInfo.State.FAILED || analyzerError != null ->
-                        DictionaryTaskPhase.FAILED
-                    downloadSnapshot.phase == UniDicTaskStore.PHASE_WAITING_WIFI ||
-                        (downloadSnapshot.isRunningOrQueued && !networkState.available) -> DictionaryTaskPhase.WAITING_WIFI
-                    downloadSnapshot.isRunningOrQueued && networkState.metered &&
-                        firstRunTask.approvedNetworkHandle() != networkState.networkHandle -> DictionaryTaskPhase.WAITING_MOBILE
-                    downloadSnapshot.phase == UniDicTaskStore.PHASE_DOWNLOADING -> DictionaryTaskPhase.DOWNLOADING
-                    downloadSnapshot.phase == UniDicTaskStore.PHASE_INSTALLING -> DictionaryTaskPhase.INSTALLING
-                    downloadSnapshot.phase == UniDicTaskStore.PHASE_VERIFYING || downloadSnapshot.isReady -> DictionaryTaskPhase.VERIFYING
-                    downloadSnapshot.isRunningOrQueued -> DictionaryTaskPhase.VERIFYING
-                    else -> DictionaryTaskPhase.IDLE
-                }
-                val failureResource = when (downloadSnapshot.failureCode) {
-                    UniDicTaskStore.FAILURE_DICTIONARY_INVALID -> R.string.dictionary_invalid
-                    UniDicTaskStore.FAILURE_DICTIONARY_INSTALL_FAILED -> R.string.dictionary_install_failed
-                    UniDicTaskStore.FAILURE_STORAGE_FULL -> R.string.storage_full
-                    UniDicTaskStore.FAILURE_DICTIONARY_FAILED -> R.string.dictionary_failed
-                    else -> if (analyzerError != null) R.string.dictionary_install_failed else null
-                }
-                val progress = if (phase == DictionaryTaskPhase.DOWNLOADING && downloadSnapshot.totalBytes > 0) {
-                    (downloadSnapshot.downloadedBytes.toDouble() / downloadSnapshot.totalBytes.toDouble())
-                        .coerceIn(0.0, 1.0).toFloat()
-                } else null
-                val bytes = if (downloadSnapshot.hasTask) {
-                    getString(
-                        R.string.byte_progress,
-                        formatIecByteCount(this@MainActivity, downloadSnapshot.downloadedBytes),
-                        formatIecByteCount(this@MainActivity, downloadSnapshot.totalBytes),
-                    )
-                } else null
-                DictionaryTaskUi(
-                    phase = phase,
-                    downloadedBytes = bytes,
-                    progressFraction = progress,
-                    hasStarted = downloadSnapshot.hasTask,
-                    ready = analyzerReady,
-                    canPause = downloadSnapshot.isRunningOrQueued,
-                    canResume = downloadSnapshot.isPaused,
-                    canCancel = downloadSnapshot.isRunningOrQueued || downloadSnapshot.isPaused || phase == DictionaryTaskPhase.WAITING_MOBILE,
-                    canRetry = downloadSnapshot.failureCode != null || analyzerError != null ||
-                        (workState == WorkInfo.State.FAILED && phase != DictionaryTaskPhase.WAITING_MOBILE),
-                    failureMessageResource = failureResource,
-                )
-            }
-            val dictionarySize = remember {
-                formatIecByteCount(this@MainActivity, UniDicResourceCatalog.ARCHIVE_BYTES)
-            }
             if (showSettings) {
                 FlowTheme(darkTheme = isSystemInDarkTheme()) {
                     Dialog(
@@ -2678,8 +2423,7 @@ class MainActivity : ComponentActivity() {
                                 ankiConnected = ankiDroidInstalled && apiPermissionGranted,
                                 ankiInstalled = ankiDroidInstalled,
                                 onboardingIncomplete = !onboardingComplete,
-                                dictionaryStatus = "",
-                                cacheBusy = audioCacheBusy,
+                                                cacheBusy = audioCacheBusy,
                                 cacheMessage = audioCacheMessage,
                             ),
                             noteTypes = noteTypes,
@@ -2763,7 +2507,6 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             },
-                            onOpenDownloads = { downloadsNotice = null; showDownloads = true },
                             onClearCache = {
                                 audioCacheBusy = true
                                 audioCacheMessage = null
@@ -2806,7 +2549,7 @@ class MainActivity : ComponentActivity() {
                                 Text(stringResource(R.string.legacy_settings_jmdict_source_notice, dictionaryInfo["jmdict_source"].orEmpty()))
                                 Text(stringResource(R.string.legacy_settings_kanjium_source_notice, dictionaryInfo["kanjium_commit"].orEmpty()))
                                 Text(stringResource(R.string.legacy_settings_mecab_0_996_taku_kudo_and_nippon_telegraph))
-                                Text(stringResource(R.string.legacy_settings_unidic_cwj_3_1_1_the_unidic_consortium_and))
+                                Text(stringResource(R.string.legacy_settings_unidic_2_1_2_the_unidic_consortium_and))
                                 val licenseDocuments = remember {
                                     fun readAsset(path: String, charset: Charset = Charsets.UTF_8): String = runCatching {
                                         assets.open(path).bufferedReader(charset).use { it.readText() }
@@ -2830,54 +2573,10 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            if (showDownloads) {
+            if (setupVisible) {
                 FlowTheme(darkTheme = isSystemInDarkTheme()) {
                     Dialog(
-                    onDismissRequest = { showDownloads = false; downloadsNotice = null },
-                    properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
-                ) {
-                    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                        Column(Modifier.fillMaxSize()) {
-                            FlowTopBar(
-                                title = stringResource(R.string.downloads),
-                                onBack = { showDownloads = false; downloadsNotice = null },
-                                modifier = Modifier.statusBarsPadding().padding(horizontal = 8.dp, vertical = 4.dp),
-                            )
-                            Column(
-                                Modifier.fillMaxWidth().weight(1f).navigationBarsPadding().padding(20.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                DownloadsContent(
-                                    state = downloadUi,
-                                    formattedSize = dictionarySize,
-                                    noticeResource = downloadsNotice,
-                                    setupIncomplete = !onboardingComplete,
-                                    onDownload = {
-                                        if (downloadUi.phase == DictionaryTaskPhase.CANCELLED) firstRunTask.retry()
-                                        else firstRunTask.start()
-                                    },
-                                    onPause = { firstRunTask.pause() },
-                                    onResume = { firstRunTask.resume() },
-                                    onCancel = { firstRunTask.cancel() },
-                                    onRetry = { firstRunTask.retry() },
-                                    onFinishSetup = {
-                                        showDownloads = false
-                                        downloadsNotice = null
-                                        if (showSettings) closeSettings(resumeSetup = true) else enterSetup()
-                                    },
-                                )
-                            }
-                        }
-                    }
-                    }
-                }
-            }
-            if (setupWizardVisible) {
-                FlowTheme(darkTheme = isSystemInDarkTheme()) {
-                    Dialog(
-                        onDismissRequest = {
-                            if (onboardingStep != OnboardingStep.DICTIONARY) backSetupStep()
-                        },
+                        onDismissRequest = { if (onboardingComplete && analyzerReady) showSetup = false },
                         properties = DialogProperties(
                             usePlatformDefaultWidth = false,
                             decorFitsSystemWindows = false,
@@ -2885,61 +2584,43 @@ class MainActivity : ComponentActivity() {
                         ),
                     ) {
                         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                            OnboardingScreen(
-                                step = onboardingStep,
-                                dictionary = downloadUi,
-                                dictionarySize = dictionarySize,
-                                cameraPermissionGranted = cameraPermissionGranted,
-                                cameraDenied = cameraDenied,
-                                audio = AudioSetupUi(
-                                    key = settingsScreenState.googleKey,
-                                    credentialStored = settingsScreenState.credentialStored,
-                                    selectedVoice = settingsScreenState.values.voiceName,
-                                    voices = settingsScreenState.voiceCatalog.voices,
-                                    loading = settingsLoading || settingsSaving,
-                                    loadingVoices = settingsScreenState.voiceCatalog.loading,
-                                    errorResource = setupAudioErrorResource,
+                            SetupScreen(
+                                state = SetupUi(
+                                    audio = AudioSetupUi(
+                                        key = settingsScreenState.googleKey,
+                                        credentialStored = settingsScreenState.credentialStored,
+                                        selectedVoice = settingsScreenState.values.voiceName,
+                                        voices = settingsScreenState.voiceCatalog.voices,
+                                        loading = settingsLoading || settingsSaving,
+                                        loadingVoices = settingsScreenState.voiceCatalog.loading,
+                                        errorResource = setupAudioErrorResource,
+                                    ),
+                                    anki = AnkiSetupUi(
+                                        installed = ankiDroidInstalled,
+                                        connected = ankiDroidInstalled && apiPermissionGranted &&
+                                            setupLoadedSuccessfully && setupError == null,
+                                        loading = setupLoading,
+                                        noteTypes = compatibleSetupNoteTypes(),
+                                        decks = decks,
+                                        selectedNoteTypeId = selectedModelId?.takeIf { id ->
+                                            compatibleSetupNoteTypes().any { model -> model.id == id }
+                                        },
+                                        selectedDeckId = selectedDeckId,
+                                    ),
+                                    cameraPermissionGranted = cameraPermissionGranted,
+                                    cameraDenied = cameraDenied,
+                                    dictionaryPreparing = !analyzerReady && analyzerFailure == null,
+                                    dictionaryErrorResource = analyzerFailure,
+                                    audioReady = setupAudioReady(),
+                                    ankiReady = setupAnkiReady(),
                                 ),
-                                anki = AnkiSetupUi(
-                                    installed = ankiDroidInstalled,
-                                    connected = ankiDroidInstalled && apiPermissionGranted &&
-                                        setupLoadedSuccessfully && setupError == null,
-                                    loading = setupLoading,
-                                    noteTypes = compatibleSetupNoteTypes(),
-                                    decks = decks,
-                                    selectedNoteTypeId = selectedModelId?.takeIf { id ->
-                                        compatibleSetupNoteTypes().any { model -> model.id == id }
-                                    },
-                                    selectedDeckId = selectedDeckId,
-                                ),
-                                dictionaryReady = analyzerReady,
-                                audioReady = setupAudioReady(),
-                                cameraReady = cameraPermissionGranted || settings.getBoolean("onboarding_camera_done", previouslyConfigured),
-                                ankiReady = setupAnkiReady(),
-                                onBack = { backSetupStep() },
-                                onDownload = {
-                                        if (downloadUi.phase == DictionaryTaskPhase.CANCELLED) firstRunTask.retry()
-                                        else firstRunTask.start()
-                                    },
-                                onPauseDownload = { firstRunTask.pause() },
-                                onResumeDownload = { firstRunTask.resume() },
-                                onCancelDownload = { firstRunTask.cancel() },
-                                onRetryDownload = { firstRunTask.retry() },
-                                onNext = { nextSetupStep() },
-                                onRequestCamera = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) },
-                                onUseTyping = {
-                                    markCameraStepDone()
-                                    persistSetupStep(nextSetupAfterCamera())
-                                },
+                                onBack = if (onboardingComplete && analyzerReady) ({ showSetup = false }) else null,
                                 onKeyChange = { value ->
                                     settingsCoordinator?.let { coordinator ->
                                         val changed = value != coordinator.currentGoogleKey()
                                         coordinator.updateGoogleKey(value)
                                         if (changed) {
-                                            settings.edit()
-                                                .putBoolean("onboarding_audio_validated", false)
-                                                .putBoolean("onboarding_complete", false)
-                                                .commit()
+                                            settings.edit().putBoolean("onboarding_complete", false).commit()
                                             onboardingComplete = false
                                             setupAudioErrorResource = null
                                         }
@@ -2951,17 +2632,14 @@ class MainActivity : ComponentActivity() {
                                         val changed = voice != coordinator.currentValues().voiceName
                                         coordinator.updateValues(coordinator.currentValues().copy(voiceName = voice))
                                         if (changed) {
-                                            settings.edit()
-                                                .putBoolean("onboarding_audio_validated", false)
-                                                .putBoolean("onboarding_complete", false)
-                                                .commit()
+                                            settings.edit().putBoolean("onboarding_complete", false).commit()
                                             onboardingComplete = false
                                             setupAudioErrorResource = null
                                         }
                                         syncSettingsScreen(coordinator)
                                     }
                                 },
-                                onReloadVoices = {
+                                onLoadVoices = {
                                     settingsCoordinator?.let { coordinator ->
                                         val request = coordinator.reloadVoices()
                                         if (request == null) setupAudioErrorResource = R.string.voices_failed
@@ -2971,6 +2649,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
                                 },
+                                onRequestCamera = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) },
                                 onConnectAnki = {
                                     if (ankiDroidInstalled && !apiPermissionGranted) {
                                         apiPermissionLauncher.launch(ANKIDROID_READ_WRITE_PERMISSION)
@@ -2995,59 +2674,11 @@ class MainActivity : ComponentActivity() {
                                         settingsError = this@MainActivity.getString(R.string.save_failed)
                                     }
                                 },
-                                onSetupAnkiLater = {
-                                    if (settings.edit()
-                                            .putBoolean("onboarding_anki_done", true)
-                                            .putBoolean("onboarding_anki_deferred", true)
-                                            .commit()
-                                    ) persistSetupStep(OnboardingStep.READY)
-                                },
-                                onFinish = { nextSetupStep() },
-                                onOpenDownloads = {
-                                    showWizard = false
-                                    showDownloads = true
-                                    downloadsNotice = null
-                                },
+                                onRetryDictionary = { analyzerRetry++ },
+                                onFinish = { finishSetup() },
                             )
                         }
                     }
-                }
-            }
-            if (showMobileConsent) {
-                FlowTheme(darkTheme = isSystemInDarkTheme()) {
-                    AlertDialog(
-                        onDismissRequest = {
-                            networkState.networkHandle?.let { handle ->
-                                firstRunTask.deferMobileNetwork(handle)
-                                deferredMobileHandle = handle
-                            }
-                            showMobileConsent = false
-                        },
-                        title = { Text(stringResource(R.string.use_mobile_title)) },
-                        text = {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(stringResource(R.string.download_size, dictionarySize))
-                                if (downloadSnapshot.hadPartialTransfer) Text(stringResource(R.string.restart_download))
-                            }
-                        },
-                        confirmButton = {
-                            TextButton(onClick = {
-                                networkState.networkHandle?.let(firstRunTask::useMobile)
-                                firstRunTask.deferMobileNetwork(null)
-                                deferredMobileHandle = null
-                                showMobileConsent = false
-                            }) { Text(stringResource(R.string.use_mobile)) }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = {
-                                networkState.networkHandle?.let { handle ->
-                                    firstRunTask.deferMobileNetwork(handle)
-                                    deferredMobileHandle = handle
-                                }
-                                showMobileConsent = false
-                            }) { Text(stringResource(R.string.wait_wifi)) }
-                        },
-                    )
                 }
             }
             if (!submissionLocked && showReplace && (incoming != null || pendingPhotoFile != null || pendingSharedImageUri != null)) {
@@ -3513,12 +3144,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            androidx.compose.runtime.LaunchedEffect(showSettings, setupWizardVisible, onboardingStep) {
-                val settingsActive = showSettings || (setupWizardVisible && onboardingStep == OnboardingStep.AUDIO)
+            androidx.compose.runtime.LaunchedEffect(showSettings, setupVisible) {
+                val settingsActive = showSettings || setupVisible
                 if (!settingsActive) {
                     settingsCoordinator = null
                     settingsLoading = false
-                    audioNextRequested = false
                     return@LaunchedEffect
                 }
                 if (settingsCoordinator != null) return@LaunchedEffect
@@ -3758,14 +3388,15 @@ class MainActivity : ComponentActivity() {
 
             androidx.activity.compose.BackHandler(
                 enabled = !navigationLocked && (
-                    showDownloads || showSettings || showSources || showDictionarySheet || showOcrSheet ||
+                    showSettings || showSources || showDictionarySheet || showOcrSheet ||
+                        (setupVisible && onboardingComplete && analyzerReady) ||
                         route != AppRoute.Capture
                     ),
             ) {
                 when {
-                    showDownloads -> showDownloads = false
                     showSources -> showSources = false
                     showSettings -> closeSettings()
+                    setupVisible && onboardingComplete && analyzerReady -> showSetup = false
                     showDictionarySheet -> dismissDictionarySheet()
                     showOcrSheet -> showOcrSheet = false
                     route == AppRoute.Card -> route = AppRoute.Capture
@@ -3908,7 +3539,7 @@ class MainActivity : ComponentActivity() {
 
                         val submitHintAction: (() -> Unit) = when {
                             translationNeedsSettings -> ({ openSettings() })
-                            !setupAudioReady() -> ({ enterSetup(OnboardingStep.AUDIO) })
+                            !setupAudioReady() -> ({ enterSetup() })
                             reviewTranslationError != null -> ({
                                 if (committedSentence == editor.text) {
                                     generationStarted = true
@@ -3963,10 +3594,7 @@ class MainActivity : ComponentActivity() {
                                 editor = editor,
                                 onEditorChange = updateEditor,
                                 onContinue = {
-                                    if (!analyzerReady) {
-                                        downloadsNotice = R.string.dictionary_needed
-                                        showDownloads = true
-                                    } else if (commitSentence()) {
+                                    if (analyzerReady && commitSentence()) {
                                         continueToCard()
                                     }
                                 },

@@ -59,7 +59,6 @@ internal class SettingsScreenState(
     val ankiConnected: Boolean = false,
     val ankiInstalled: Boolean = false,
     val onboardingIncomplete: Boolean = false,
-    val dictionaryStatus: String = "Verifying…",
     val cacheBusy: Boolean = false,
     val cacheMessage: String? = null,
 )
@@ -79,7 +78,6 @@ internal fun SettingsScreen(
     onGoogleKeyChange: (String) -> Unit,
     onVoiceChange: (String) -> Unit,
     onReloadVoices: () -> Unit,
-    onOpenDownloads: () -> Unit,
     onClearCache: () -> Unit,
     onOpenSources: () -> Unit,
     modifier: Modifier = Modifier,
@@ -204,12 +202,6 @@ internal fun SettingsScreen(
                 enabled = !state.loading,
             )
 
-            TextButton(onClick = onOpenDownloads, modifier = Modifier.fillMaxWidth()) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.dictionary), modifier = Modifier.weight(1f))
-                    Text(state.dictionaryStatus)
-                }
-            }
             TextButton(
                 enabled = !state.cacheBusy,
                 onClick = { clearCacheConfirm = true },

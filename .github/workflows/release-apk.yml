@@ -218,8 +218,6 @@ jobs:
             echo "\`INSTALL_FAILED_UPDATE_INCOMPATIBLE\` the installed copy was signed with a different"
             echo "key (a debug or locally built APK): uninstall once, then install this one."
             echo
-            echo "The 426 MiB UniDic runtime archive is not duplicated here: the app downloads it"
-            echo "from the pinned tag \`v0.4\` on first run. See docs/agent-flow.md."
           } > dist/RELEASE_NOTES.md
 
       - name: Publish the GitHub Release

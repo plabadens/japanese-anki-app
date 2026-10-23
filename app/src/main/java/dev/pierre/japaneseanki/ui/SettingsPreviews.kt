@@ -83,7 +83,6 @@ internal fun settingsPreviewScreenState(preview: SettingsPreviewState): Settings
         ankiConnected = true,
         ankiInstalled = true,
         onboardingIncomplete = false,
-        dictionaryStatus = "Ready",
     )
 }
 
@@ -115,7 +114,6 @@ internal fun SettingsPreviewContent(
                 onGoogleKeyChange = {},
                 onVoiceChange = {},
                 onReloadVoices = {},
-                onOpenDownloads = {},
                 onClearCache = {},
                 onOpenSources = {},
                 modifier = Modifier.fillMaxSize(),

@@ -22,15 +22,15 @@ Primary action: select a word; wait while preparation is active; use the one saf
 
 Forbidden: separate Target or Review screens, a preparation page, stacked hint lines, per-field progress, generated-field repair forms, or duplicate sentence displays.
 
-## Dictionary setup
+## Setup
 
-Purpose: make the local Japanese dictionary available for analysis.
+Purpose: complete the required sentence-audio and AnkiDroid configuration on one page, with the camera offered as an optional addition, and enter the app.
 
-States: not started, transferring, waiting, paused, verifying, installing, failed, ready.
+States: dictionary preparing, dictionary failed, audio incomplete (no key, no voice, voice list loading or failed), AnkiDroid disconnected or without a destination, camera not granted, ready.
 
-Primary action: start, pause/resume, retry, or continue according to the current task state.
+Primary action: enter the key, load and choose a voice, connect AnkiDroid and resolve the note type and deck, optionally allow the camera, then finish when both required parts are valid.
 
-Forbidden: claiming readiness from transferred bytes alone, fake progress, or a second competing transfer task.
+Forbidden: a dictionary download, transfer progress, pause/resume/cancel, mobile-data or Wi-Fi consent, or any Downloads surface; treating the camera as a blocker; opening the voice list from a control that cannot receive taps; claiming readiness before both required parts are valid.
 
 ## Camera setup
 
@@ -56,21 +56,11 @@ Forbidden: paid audition or synthesis on open, keystroke, or revisit; exposing t
 
 Purpose: connect the real AnkiDroid provider and choose a compatible destination.
 
-States: unavailable, disconnected, connected without a destination, configured, deferred.
+States: unavailable, disconnected, connected without a destination, configured.
 
-Primary action: connect and resolve the destination, continue when valid, or defer setup.
+Primary action: connect and resolve the destination; Setup cannot finish without one.
 
-Forbidden: a fake production provider, silently invented destination, or claiming a successful connection without verification.
-
-## Readiness
-
-Purpose: summarize which prerequisites are usable and let the learner enter the app.
-
-States: required setup incomplete, dictionary and audio ready, optional camera or AnkiDroid unavailable.
-
-Primary action: finish when required setup is valid; return to the incomplete prerequisite otherwise.
-
-Forbidden: treating optional camera or AnkiDroid setup as a blocker for local capture.
+Forbidden: a fake production provider, silently invented destination, claiming a successful connection without verification, or deferring a required destination.
 
 ## Settings
 
@@ -81,16 +71,6 @@ States: saved, editing, loading metadata, validation failure, persistence failur
 Primary action: change the relevant preference or retry a failed save.
 
 Forbidden: paid work on open or typing, duplicate credential surfaces, a global save workflow, or losing edits after a persistence failure.
-
-## Downloads
-
-Purpose: inspect and control the same durable dictionary task used during setup.
-
-States: idle, transferring, waiting, paused, verifying, installing, failed, ready, setup incomplete.
-
-Primary action: start, pause/resume, retry, cancel, or return to unfinished setup as the task permits.
-
-Forbidden: starting a duplicate task, hiding a required mobile-data decision, or discarding a local draft when the task changes.
 
 ## Passage choice
 
@@ -192,16 +172,6 @@ Primary action: choose one deck.
 
 Forbidden: silently inventing a destination.
 
-## Mobile-data consent
-
-Purpose: authorize or postpone a dictionary transfer over mobile data.
-
-States: consent granted, waiting for Wi-Fi, dismissed.
-
-Primary action: authorize the disclosed transfer or wait for Wi-Fi.
-
-Forbidden: starting mobile transfer before explicit consent or hiding a required restart disclosure.
-
 ## Draft-replacement confirmation
 
 Purpose: prevent accidental loss when a new shared or captured input would replace a nonempty draft.
@@ -224,7 +194,7 @@ Forbidden: deleting the active draft, saved notes, or AnkiDroid media.
 
 ## Sources and licenses
 
-Purpose: provide the notices required for bundled and downloaded materials.
+Purpose: provide the notices required for bundled materials.
 
 States: content available, returned to Settings.
 

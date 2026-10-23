@@ -21,6 +21,8 @@ releases/
 # belong on a release/issue instead of in the tree.
 dist/
 *.zip
+# The bundled UniDic data is a build input, not a downloadable archive.
+!app/src/main/assets/unidic-lite.zip
 *.tap
 **/boot-logcat.txt
 
