@@ -56,6 +56,7 @@ import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import dev.pierre.japaneseanki.R
@@ -68,6 +69,12 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.io.File
+
+/** Static camera capability for real-screen previews; production binds the live CameraX controller. */
+internal data class CaptureCameraPreviewState(
+    val hasTorch: Boolean,
+    val torchOn: Boolean = false,
+)
 
 /** The camera and type modes share one fixed top bar and keep their primary action pinned. */
 @Composable
@@ -98,8 +105,11 @@ internal fun InputScreen(
     onRetryImage: () -> Unit = {},
     confirmationMessage: String? = null,
     onSettings: () -> Unit = {},
+    cameraPreviewState: CaptureCameraPreviewState? = null,
 ) {
-    val cameraController = if (captureMode == "Photo" && cameraPermissionGranted) {
+    val cameraController = if (
+        captureMode == "Photo" && cameraPermissionGranted && cameraPreviewState == null && !LocalInspectionMode.current
+    ) {
         rememberCameraController()
     } else {
         null
@@ -108,22 +118,24 @@ internal fun InputScreen(
     val captureOperationGate = remember { CaptureOperationGate() }
     val actionsEnabled = captureActionsEnabled(enabled, captureInProgress || captureOperationGate.isActive)
     val context = LocalContext.current
-    val hasTorch = if (cameraController != null) rememberTorchAvailability(cameraController) else false
-    var torchOn by remember(cameraController) { mutableStateOf(false) }
+    val hasTorch = cameraPreviewState?.hasTorch
+        ?: if (cameraController != null) rememberTorchAvailability(cameraController) else false
+    var liveTorchOn by remember(cameraController) { mutableStateOf(false) }
+    val torchOn = cameraPreviewState?.torchOn ?: liveTorchOn
     val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(cameraController, lifecycleOwner) {
         val observer = if (cameraController == null) null else LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_STOP) {
                 cameraController.cameraControl?.enableTorch(false)
-                torchOn = false
+                liveTorchOn = false
             }
         }
         observer?.let(lifecycleOwner.lifecycle::addObserver)
         onDispose {
             cameraController?.cameraControl?.enableTorch(false)
             observer?.let(lifecycleOwner.lifecycle::removeObserver)
-            torchOn = false
+            liveTorchOn = false
         }
     }
 
@@ -173,21 +185,24 @@ internal fun InputScreen(
                         enabled = actionsEnabled,
                         operationGate = captureOperationGate,
                         controller = cameraController,
+                        cameraPermissionGranted = cameraPermissionGranted,
                         hasTorch = hasTorch,
                         torchOn = torchOn,
                         onToggleTorch = {
                             val next = !torchOn
-                            val future = cameraController?.cameraControl?.enableTorch(next)
-                            if (future != null) {
-                                torchOn = next
-                                future.addListener(
-                                    {
-                                        if (runCatching { future.get() }.isFailure && torchOn == next) {
-                                            torchOn = !next
-                                        }
-                                    },
-                                    ContextCompat.getMainExecutor(context),
-                                )
+                            if (cameraPreviewState == null) {
+                                val future = cameraController?.cameraControl?.enableTorch(next)
+                                if (future != null) {
+                                    liveTorchOn = next
+                                    future.addListener(
+                                        {
+                                            if (runCatching { future.get() }.isFailure && liveTorchOn == next) {
+                                                liveTorchOn = !next
+                                            }
+                                        },
+                                        ContextCompat.getMainExecutor(context),
+                                    )
+                                }
                             }
                         },
                         onRequestCamera = onRequestCamera,
@@ -458,6 +473,7 @@ private fun CaptureRow(
     enabled: Boolean,
     operationGate: CaptureOperationGate,
     controller: androidx.camera.view.LifecycleCameraController?,
+    cameraPermissionGranted: Boolean,
     hasTorch: Boolean,
     torchOn: Boolean,
     onToggleTorch: () -> Unit,
@@ -493,7 +509,7 @@ private fun CaptureRow(
         }
 
         Box(Modifier.width(CAMERA_SHUTTER_SIZE_DP.dp).fillMaxHeight().testTag("camera-shutter-slot"), contentAlignment = Alignment.Center) {
-            if (controller != null) {
+            if (cameraPermissionGranted) {
                 CameraShutterButton(
                     controller = controller,
                     enabled = enabled,
