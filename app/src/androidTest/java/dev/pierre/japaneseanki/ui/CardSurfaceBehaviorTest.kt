@@ -16,11 +16,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -47,12 +49,16 @@ class CardSurfaceBehaviorTest {
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
-    fun wordCardAndMeaningSheetKeepTheSelectedChoiceAcrossDismissal() {
+    fun meaningSheetPreservesChoiceAndAudioStatusKeepsCardGeometry() {
         val selected = mutableStateOf(choice(index = 0, definition = "garden lantern"))
         val choices = mutableStateOf(listOf(selected.value))
         val showMeaningSheet = mutableStateOf(false)
         val missMode = mutableStateOf(0)
         val fontScale = mutableStateOf(1f)
+        val sentenceAudio = mutableStateOf<ReviewAudioPresentation>(ReviewAudioPresentation.Ready)
+        val footerHint = mutableStateOf<String?>("")
+        val statusMessage = mutableStateOf<String?>(null)
+        val sentenceAudioRetries = mutableStateOf(0)
         val output = File(
             InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null),
             "card-surface-evidence",
@@ -112,23 +118,23 @@ class CardSurfaceBehaviorTest {
                             tags = "",
                             onNotesChange = {},
                             onTagsChange = {},
-                            sentenceAudio = ReviewAudioPresentation.Ready,
+                            sentenceAudio = sentenceAudio.value,
                             wordAudio = if (missMode.value == 0) {
                                 ReviewAudioPresentation.Ready
                             } else {
                                 ReviewAudioPresentation.SourceMissing
                             },
                             onToggleSentenceAudio = {},
-                            onRetrySentenceAudio = {},
+                            onRetrySentenceAudio = { sentenceAudioRetries.value++ },
                             onToggleWordAudio = {},
                             onRetryWordAudio = {},
-                            hint = "",
+                            hint = footerHint.value,
                             hintPreparing = false,
                             actionLabel = "Continue",
                             actionEnabled = true,
                             actionLoading = false,
                             onAction = {},
-                            statusMessage = null,
+                            statusMessage = statusMessage.value,
                             statusContent = {},
                         )
                         if (showMeaningSheet.value) {
@@ -152,7 +158,45 @@ class CardSurfaceBehaviorTest {
         composeRule.onAllNodesWithText("Change meaning").assertCountEquals(0)
         composeRule.onAllNodesWithText("Load more dictionary matches").assertCountEquals(0)
         composeRule.onAllNodesWithText("Other pitch patterns").assertCountEquals(0)
+        val sentenceBounds = composeRule.onNodeWithTag("sentence-layout").fetchSemanticsNode().boundsInRoot
+        val actionBounds = composeRule.onNodeWithText("Continue").fetchSemanticsNode().boundsInRoot
+        val sentenceField = composeRule.activity.getString(R.string.card_sentence_audio_field)
+        val playSentenceAudio = composeRule.activity.getString(R.string.card_audio_play_control, sentenceField)
+        val retrySentenceAudio = composeRule.activity.getString(R.string.card_audio_retry_control, sentenceField)
+        composeRule.onNodeWithContentDescription(playSentenceAudio).assertIsDisplayed()
         capture(output, "resolved-silent.png")
+
+        val audioFailure = "Sentence audio not generated: synthesis timed out"
+        val failureHint = "Sentence audio needs attention."
+        sentenceAudio.value = ReviewAudioPresentation.Failed(audioFailure)
+        footerHint.value = failureHint
+        statusMessage.value = audioFailure
+        composeRule.waitForIdle()
+        composeRule.onNodeWithContentDescription(retrySentenceAudio).assertIsEnabled().assertIsDisplayed().performClick()
+        composeRule.onNodeWithText(failureHint).assertIsDisplayed()
+        composeRule.onNodeWithText(audioFailure).assertExists()
+        assertEquals(1, sentenceAudioRetries.value)
+        assertEquals(sentenceBounds, composeRule.onNodeWithTag("sentence-layout").fetchSemanticsNode().boundsInRoot)
+        assertEquals(actionBounds, composeRule.onNodeWithText("Continue").fetchSemanticsNode().boundsInRoot)
+
+        sentenceAudio.value = ReviewAudioPresentation.SourceMissing
+        footerHint.value = "Sentence recording is unavailable."
+        statusMessage.value = "No sentence recording is available."
+        composeRule.waitForIdle()
+        composeRule.onNodeWithContentDescription(composeRule.activity.getString(R.string.no_recording))
+            .assertIsNotEnabled()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("Sentence recording is unavailable.").assertIsDisplayed()
+        assertEquals(sentenceBounds, composeRule.onNodeWithTag("sentence-layout").fetchSemanticsNode().boundsInRoot)
+        assertEquals(actionBounds, composeRule.onNodeWithText("Continue").fetchSemanticsNode().boundsInRoot)
+
+        sentenceAudio.value = ReviewAudioPresentation.Ready
+        footerHint.value = ""
+        statusMessage.value = null
+        composeRule.waitForIdle()
+        composeRule.onNodeWithContentDescription(playSentenceAudio).assertIsDisplayed()
+        assertEquals(sentenceBounds, composeRule.onNodeWithTag("sentence-layout").fetchSemanticsNode().boundsInRoot)
+        assertEquals(actionBounds, composeRule.onNodeWithText("Continue").fetchSemanticsNode().boundsInRoot)
 
         choices.value = listOf(
             selected.value,
