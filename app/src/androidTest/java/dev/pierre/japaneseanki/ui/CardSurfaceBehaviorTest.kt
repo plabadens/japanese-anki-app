@@ -14,6 +14,8 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -29,6 +31,7 @@ import androidx.compose.ui.test.performClick
 import androidx.test.espresso.Espresso.pressBack
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import dev.pierre.japaneseanki.DraftAudio
 import dev.pierre.japaneseanki.DictionaryEntry
 import dev.pierre.japaneseanki.DictionaryMeaningChoice
 import dev.pierre.japaneseanki.DictionarySense
@@ -195,6 +198,39 @@ class CardSurfaceBehaviorTest {
         statusMessage.value = null
         composeRule.waitForIdle()
         composeRule.onNodeWithContentDescription(playSentenceAudio).assertIsDisplayed()
+        assertEquals(sentenceBounds, composeRule.onNodeWithTag("sentence-layout").fetchSemanticsNode().boundsInRoot)
+        assertEquals(actionBounds, composeRule.onNodeWithText("Continue").fetchSemanticsNode().boundsInRoot)
+
+        val openSettings = composeRule.activity.getString(R.string.card_open_settings_action)
+        val advisoryHeadline = composeRule.activity.getString(R.string.card_audio_setup_needed_headline, sentenceField)
+        val advisoryMessage = "No verified sentence voice is configured."
+        val advisoryAudio = DraftAudio(
+            advisoryHeadline = advisoryHeadline,
+            advisoryMessage = advisoryMessage,
+        ).presentation(openSettings)
+        val advisoryHint = reviewAudioSendBlocker(sentenceField, advisoryAudio)!!.resolve(composeRule.activity)
+        sentenceAudio.value = advisoryAudio
+        footerHint.value = advisoryHint
+        statusMessage.value = null
+        composeRule.waitForIdle()
+
+        val advisoryControlDescription = composeRule.activity.getString(
+            R.string.card_audio_advisory_control,
+            openSettings,
+            sentenceField,
+        )
+        val advisoryControl = composeRule.onNodeWithContentDescription(advisoryControlDescription)
+        advisoryControl.assertIsEnabled().assertIsDisplayed()
+        assertEquals(
+            advisoryHeadline,
+            advisoryControl.fetchSemanticsNode().config[SemanticsProperties.StateDescription],
+        )
+        assertEquals(Role.Button, advisoryControl.fetchSemanticsNode().config[SemanticsProperties.Role])
+        advisoryControl.performClick()
+        assertEquals(2, sentenceAudioRetries.value)
+        composeRule.onNodeWithText(advisoryHint).assertIsDisplayed()
+        composeRule.onAllNodesWithText(advisoryHint).assertCountEquals(1)
+        composeRule.onAllNodesWithText(advisoryHeadline).assertCountEquals(0)
         assertEquals(sentenceBounds, composeRule.onNodeWithTag("sentence-layout").fetchSemanticsNode().boundsInRoot)
         assertEquals(actionBounds, composeRule.onNodeWithText("Continue").fetchSemanticsNode().boundsInRoot)
 
