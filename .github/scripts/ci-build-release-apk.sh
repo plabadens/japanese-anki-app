@@ -19,6 +19,8 @@ fi
 
 ./scripts/test-core.sh
 
-gradle --no-daemon --offline --configuration-cache --build-cache --max-workers=2 --console=plain \
+# Same reasoning as scripts/ci-build-apk.sh: a dependency change invalidates the cache key, and an
+# offline build cannot resolve the new artifact on that first cold run. The runner has network.
+gradle --no-daemon --configuration-cache --build-cache --max-workers=2 --console=plain \
   -Pandroid.aapt2FromMavenOverride="$ANDROID_HOME/build-tools/36.0.0/aapt2" \
   verifyFast assembleRelease

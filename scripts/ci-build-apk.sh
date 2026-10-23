@@ -5,12 +5,15 @@ set -euo pipefail
 
 ./scripts/test-core.sh
 
-gradle --no-daemon --offline --configuration-cache --build-cache --max-workers=2 --console=plain \
+# Not --offline: the actions/cache key includes gradle/libs.versions.toml, so the first run after
+# any dependency change always starts with a cold cache and would fail to resolve the new artifact.
+# The runner has network; reproducible offline builds are the Nix derivation's job, not this script's.
+gradle --no-daemon --configuration-cache --build-cache --max-workers=2 --console=plain \
   -Pandroid.aapt2FromMavenOverride="$ANDROID_HOME/build-tools/36.0.0/aapt2" \
   verifyFast
 
 # Roborazzi's record task owns the unit-test filter while rendering the catalogue, so keep it in
 # a separate Gradle invocation from verifyFast, which deliberately excludes those render tests.
-gradle --no-daemon --offline --configuration-cache --build-cache --max-workers=2 --console=plain \
+gradle --no-daemon --configuration-cache --build-cache --max-workers=2 --console=plain \
   -Pandroid.aapt2FromMavenOverride="$ANDROID_HOME/build-tools/36.0.0/aapt2" \
   :app:renderDesignStates assembleDebug
