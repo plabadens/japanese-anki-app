@@ -36,6 +36,48 @@ contract remains the authority for **which states exist**; the preview catalogue
 have. The HTML files move to `docs/archive/` as decision history and stop being implementation
 reference.
 
+## 0.2. Spike result — 23 October 2026
+
+The JVM lane is proven on this tree. `ComposeLaneSmokeTest` runs under `AndroidJUnit4` and Robolectric
+4.17 at API 37; its two cases cover the ported sentence-geometry/audio-state assertion and a Capture
+screen image at `w390dp-h844dp-xxhdpi`. `recordRoborazziDebug` recorded the golden, and a subsequent
+ordinary `testDebugUnitTest` run compared it successfully.
+
+| Lane | Cold | Warm |
+|---|---:|---:|
+| JVM `testDebugUnitTest` — 338 tests | 78 s, 338 passed | 19 s, 338 passed |
+| Device `connectedDebugAndroidTest` — `emulator-5554`, API 37 | 301 s, 45 passed | 90 s, 45 passed |
+
+Cold runs followed `gradle --stop` and `gradle clean` inside `nix develop`; the warm run immediately
+repeated the same task. Wall time was measured with Bash's `$SECONDS`. These are whole-task counts,
+not filtered samples. The two lanes were run on the same host and source tree; the JVM task required
+no emulator. From the repository root, compare a golden or re-record it with:
+
+```sh
+nix develop --command bash -lc 'gradle --no-daemon --max-workers=1 --console=plain -Pandroid.aapt2FromMavenOverride="$ANDROID_HOME/build-tools/36.0.0/aapt2" testDebugUnitTest'
+nix develop --command bash -lc 'gradle --no-daemon --max-workers=1 --console=plain -Pandroid.aapt2FromMavenOverride="$ANDROID_HOME/build-tools/36.0.0/aapt2" recordRoborazziDebug'
+```
+
+The device timing used the same command shape with `connectedDebugAndroidTest` instead of
+`testDebugUnitTest`. When changing Gradle dependencies, run `bash scripts/update-gradle-deps.sh` to
+refresh the Nix offline dependency lock.
+
+The font gate passes without an app font resource: the Nix shell uses
+`pkgs.makeFontsConf { fontDirectories = [ pkgs.noto-fonts-cjk-sans ]; }` and exports its result as
+`FONTCONFIG_FILE`. Verify the selected face with
+`nix develop --command bash -lc 'fc-match "Noto Sans CJK JP:lang=ja"'`; it returned
+`NotoSansCJK-VF.otf.ttc: "Noto Sans CJK JP" "Regular"`. The committed
+[`capture-screen-japanese.png`](../app/src/test/screenshots/capture-screen-japanese.png) visibly
+renders `古い本を読みました。` as Japanese, not tofu. The PNG is 1170×2532 pixels, corresponding to
+390×844 dp at xxhdpi. No TTF is stored in the app or repository.
+
+**Go for both dependent cards.** This is not an apples-to-apples speedup claim: the measured suites are
+338 JVM tests versus 45 device tests, and only two cases are new in this spike. The gate it clears is
+that a real Capture screen and numeric geometry assertion run at fixed qualifiers, with Japanese
+rendering and no emulator. Move the portable Compose tests and build the real-screen preview
+catalogue; measure the migrated suite again rather than extrapolating 301 s / 78 s. Keep the camera,
+system-inset, AnkiDroid and release checks on device.
+
 
 ---
 
@@ -135,18 +177,17 @@ To make that loop fast *for an agent*, in order of payoff:
    Gradle 9.7.1. A real Gradle test task with caching is both faster in steady state and far less
    fragile.
 
-Honest caveat: **no numbers are claimed here.** The size of the win should be measured in the spike
-below — cold and warm wall-clock for the current 45-test device suite versus the same assertions on
-JVM — before any of this becomes policy.
+The first cold/warm measurement is recorded in §0.2. It is evidence for moving the portable tests and
+starting the preview catalogue, not a claim that every UI interaction belongs on Robolectric; keep the
+device boundary in §4.
 
 ## 6. Risks and costs specific to this app
 
-- **CJK font determinism is the big one.** Golden images are only meaningful if glyphs are
-  identical across runs and machines. The app currently bundles no font in `res/font`; a Japanese
-  app that renders ruby and pitch in system fonts will produce tofu or host-dependent shapes under
-  Robolectric and Paparazzi. Either bundle one Noto Sans JP weight (also improving device
-  consistency, at some APK cost) or accept that goldens verify layout, not glyphs. Decide this
-  explicitly, not by accident.
+- **CJK font determinism is solved for the JVM golden lane.** The Nix development shell pins
+  `noto-fonts-cjk-sans` and supplies a `makeFontsConf` through `FONTCONFIG_FILE`; the spike rendered
+  kana and kanji with Noto Sans CJK JP and committed the verified image. Keep fonts out of `res/font`
+  and do not check TTFs into the repository. Device/system-font consistency remains a separate
+  product question; the golden lane no longer makes a host-font guess.
 - **Alpha dependency risk** for Compose Preview Screenshot Testing, coupled to AGP 9 RCs. Roborazzi
   is the safer default; revisit when the Google tool leaves alpha.
 - **Fidelity gaps** are real: insets, `WebView`, and some `MediaPlayer` behaviour. Keep them on
@@ -157,9 +198,10 @@ JVM — before any of this becomes policy.
 
 ## 7. Proposed sequence
 
-1. **Spike (timeboxed, no production change).** Add Robolectric + `ui-test-junit4` + Roborazzi to
-   `test`, port *one* existing `CardSurfaceBehaviorTest` case and capture *one* golden of the card.
-   Measure cold/warm runtime and settle the font question. Report numbers; do not change policy.
+1. **Spike (completed 23 October 2026, no production change).** Added Robolectric + `ui-test-junit4`
+   + Roborazzi to `test`, ported one sentence geometry/audio-stability assertion, captured the
+   Capture screen golden, measured cold/warm runtime, and settled the CJK font question. The result
+   and evidence are recorded in §0.2.
 2. **Migrate the surface tests.** Card surface, capture screen, motion/haptics presentation logic →
    JVM. Keep the device lane for §4 only.
 3. **WorkManager on JVM.** Move the UniDic lifecycle proof to `work-testing` + the injected fake;
