@@ -325,6 +325,12 @@ Every original catalogue entry was reviewed individually; its necessary use/disp
 | retry | Retry | Explicit safe retry |
 | dictionary | Dictionary | Download/setup/storage item |
 | download_size | Download size: {download_size} | Pre-transfer disclosure |
+| formatted_byte_count | {number} {unit} | Localized byte quantity |
+| bytes_unit | B | IEC byte unit |
+| kibibytes_unit | KiB | IEC byte unit |
+| mebibytes_unit | MiB | IEC byte unit |
+| gibibytes_unit | GiB | IEC byte unit |
+| tebibytes_unit | TiB | IEC byte unit |
 | download | Download | Start dictionary task |
 | downloading | Downloading… | Transfer phase |
 | byte_progress | {downloaded} of {total} | Transfer only; actual values include localized byte units, including accessibility output |
@@ -333,6 +339,7 @@ Every original catalogue entry was reviewed individually; its necessary use/disp
 | ready | Ready | Final title only when required setup is complete; accessibility readiness state may reuse it without a duplicate visible label |
 | waiting_wifi | Waiting for Wi-Fi | Download state |
 | paused | Paused | Download state |
+| cancelled | Cancelled | User-stopped download state |
 | pause | Pause | Download control |
 | resume | Resume | Resume task control |
 | use_app | Use app while setup runs | Leave setup without declaring it complete |
@@ -341,6 +348,7 @@ Every original catalogue entry was reviewed individually; its necessary use/disp
 | download_notification | Dictionary download | Background notification title |
 | dictionary_ready | Dictionary ready | Completion notification |
 | camera | Camera | Mode selector/setup item |
+| camera_typing | Camera / typing | Final readiness row for capture input |
 | camera_purpose | Capture Japanese text with your camera. | One permission-purpose sentence, not repeated beneath Android's dialog |
 | allow_camera | Allow camera | Trigger system permission request |
 | use_typing | Use typing | Continue without camera permission |

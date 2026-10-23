@@ -12,6 +12,12 @@
     <string name="retry">Retry</string>
     <string name="dictionary">Dictionary</string>
     <string name="download_size">Download size: %1$s</string>
+    <string name="formatted_byte_count">%1$s %2$s</string>
+    <string name="bytes_unit">B</string>
+    <string name="kibibytes_unit">KiB</string>
+    <string name="mebibytes_unit">MiB</string>
+    <string name="gibibytes_unit">GiB</string>
+    <string name="tebibytes_unit">TiB</string>
     <string name="download">Download</string>
     <string name="downloading">Downloading…</string>
     <string name="byte_progress">%1$s of %2$s</string>
@@ -20,6 +26,7 @@
     <string name="ready">Ready</string>
     <string name="waiting_wifi">Waiting for Wi-Fi</string>
     <string name="paused">Paused</string>
+    <string name="cancelled">Cancelled</string>
     <string name="pause">Pause</string>
     <string name="resume">Resume</string>
     <string name="use_app">Use app while setup runs</string>
@@ -28,6 +35,7 @@
     <string name="download_notification">Dictionary download</string>
     <string name="dictionary_ready">Dictionary ready</string>
     <string name="camera">Camera</string>
+    <string name="camera_typing">Camera / typing</string>
     <string name="camera_purpose">Capture Japanese text with your camera.</string>
     <string name="allow_camera">Allow camera</string>
     <string name="use_typing">Use typing</string>

@@ -5,8 +5,10 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.zip.ZipInputStream
 
+internal enum class OfflineAnalyzerPhase { DOWNLOADING, VERIFYING, INSTALLING, READY }
+
 internal data class OfflineAnalyzerProgress(
-    val label: String,
+    val phase: OfflineAnalyzerPhase,
     val downloadedBytes: Long? = null,
     val totalBytes: Long? = null,
 )
@@ -15,37 +17,61 @@ internal class OfflineJapaneseAnalyzer(context: Context) {
     private val appContext = context.applicationContext
     @Volatile private var tagger: NativeMeCab? = null
 
-    fun prepare(onStatus: (OfflineAnalyzerProgress) -> Unit = {}) {
+    fun loadInstalled(): Boolean {
+        if (tagger != null) return true
+        synchronized(installationLock) {
+            if (tagger != null) return true
+            val destination = File(appContext.filesDir, DIRECTORY)
+            if (!isInstalled(destination)) return false
+            tagger = NativeMeCab(destination)
+            return true
+        }
+    }
+
+    fun prepare(
+        onStatus: (OfflineAnalyzerProgress) -> Unit = {},
+        cancellation: ResourceCancellation = ResourceCancellation.NEVER,
+    ) {
         if (tagger != null) return
         synchronized(installationLock) {
             if (tagger != null) return
             val destination = File(appContext.filesDir, DIRECTORY)
             if (!isInstalled(destination)) {
-                onStatus(OfflineAnalyzerProgress("Verifying…"))
+                onStatus(OfflineAnalyzerProgress(OfflineAnalyzerPhase.VERIFYING))
                 val resource = UniDicResourceCatalog.manifest.resources.single()
                 val archive = VerifiedFirstRunResourceInstaller(
                     File(appContext.filesDir, RESOURCE_DIRECTORY),
-                ).install(resource) { progress ->
+                ).install(
+                    resource,
+                    cancellation = cancellation,
+                ) { progress ->
                     onStatus(
                         when (progress.phase) {
                             ResourceProgressPhase.DOWNLOADING -> OfflineAnalyzerProgress(
-                                "Downloading…",
+                                OfflineAnalyzerPhase.DOWNLOADING,
                                 progress.completedBytes,
                                 progress.totalBytes,
                             )
-                            ResourceProgressPhase.VERIFYING,
-                            ResourceProgressPhase.VALIDATING_ARCHIVE -> OfflineAnalyzerProgress("Verifying…")
-                            ResourceProgressPhase.ACTIVATING -> OfflineAnalyzerProgress("Installing…")
+                            ResourceProgressPhase.VERIFYING -> OfflineAnalyzerProgress(
+                                OfflineAnalyzerPhase.VERIFYING,
+                                progress.completedBytes,
+                                progress.totalBytes,
+                            )
+                            ResourceProgressPhase.VALIDATING_ARCHIVE -> OfflineAnalyzerProgress(OfflineAnalyzerPhase.VERIFYING)
+                            ResourceProgressPhase.ACTIVATING -> OfflineAnalyzerProgress(OfflineAnalyzerPhase.INSTALLING)
                         },
                     )
                 }.location
-                onStatus(OfflineAnalyzerProgress("Installing…"))
-                install(destination, archive) {}
+                onStatus(OfflineAnalyzerProgress(OfflineAnalyzerPhase.INSTALLING))
+                install(destination, archive, cancellation) {}
             } else {
-                onStatus(OfflineAnalyzerProgress("Ready"))
+                onStatus(OfflineAnalyzerProgress(OfflineAnalyzerPhase.VERIFYING))
+            }
+            if (Thread.currentThread().isInterrupted || cancellation.isCancelled()) {
+                throw ResourceCancelledException()
             }
             tagger = NativeMeCab(destination)
-            onStatus(OfflineAnalyzerProgress("Ready"))
+            onStatus(OfflineAnalyzerProgress(OfflineAnalyzerPhase.READY))
         }
     }
 
@@ -55,11 +81,15 @@ internal class OfflineJapaneseAnalyzer(context: Context) {
     private fun install(
         destination: File,
         archive: File,
+        cancellation: ResourceCancellation,
         onExtractionProgress: (Float) -> Unit,
     ) {
+        if (appContext.filesDir.usableSpace < TOTAL_BYTES) {
+            throw ResourceStorageException("Not enough free storage to extract UniDic")
+        }
         val temporary = File(appContext.filesDir, "$DIRECTORY.tmp")
         temporary.deleteRecursively()
-        check(temporary.mkdirs()) { "Could not create UniDic storage" }
+        if (!temporary.mkdirs()) throw ResourceActivationException("Could not create UniDic temporary storage")
         try {
             val completedFiles = mutableSetOf<String>()
             var extractedBytes = 0L
@@ -67,6 +97,9 @@ internal class OfflineJapaneseAnalyzer(context: Context) {
             archive.inputStream().buffered().use { source ->
                 ZipInputStream(source).use { zip ->
                     while (true) {
+                        if (Thread.currentThread().isInterrupted || cancellation.isCancelled()) {
+                            throw ResourceCancelledException()
+                        }
                         val entry = zip.nextEntry ?: break
                         val relative = entry.name.removePrefix("$DIRECTORY/")
                         val expectedSize = FILE_SIZES[relative]
@@ -77,6 +110,9 @@ internal class OfflineJapaneseAnalyzer(context: Context) {
                         FileOutputStream(target).use { output ->
                             val buffer = ByteArray(64 * 1024)
                             while (true) {
+                                if (Thread.currentThread().isInterrupted || cancellation.isCancelled()) {
+                                    throw ResourceCancelledException()
+                                }
                                 val count = zip.read(buffer)
                                 if (count < 0) break
                                 output.write(buffer, 0, count)
@@ -103,8 +139,25 @@ internal class OfflineJapaneseAnalyzer(context: Context) {
             onExtractionProgress(1f)
         } catch (error: Exception) {
             temporary.deleteRecursively()
+            if (error is ResourceStorageException) throw error
+            if (isStorageFailure(error)) {
+                throw ResourceStorageException("Not enough storage to install UniDic", error)
+            }
             throw error
         }
+    }
+
+    private fun isStorageFailure(error: Throwable): Boolean {
+        var cause: Throwable? = error
+        while (cause != null) {
+            if (cause is android.system.ErrnoException && cause.errno == android.system.OsConstants.ENOSPC) return true
+            val message = cause.message.orEmpty()
+            if (message.contains("ENOSPC", ignoreCase = true) ||
+                message.contains("No space left on device", ignoreCase = true)
+            ) return true
+            cause = cause.cause
+        }
+        return false
     }
 
     private fun isInstalled(directory: File): Boolean =

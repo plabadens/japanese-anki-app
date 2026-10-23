@@ -1,0 +1,5 @@
+Device notification state (emulator-5554)
+
+Command: `adb -s emulator-5554 shell dumpsys notification`
+
+The captured manager state contained the Android `Aggregate_SilentSection` system summary. Searching the captured output for the app package returned only app-settings / zen-rule records, not a live notification record. At capture time the task remained queued on a metered network with the unmetered constraint unmet (see `22-task-state-after-relaunch.xml`); therefore no UniDic worker foreground notification was expected or claimed. A notification during active transfer was NOT RUN.
