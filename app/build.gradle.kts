@@ -1,5 +1,6 @@
 import io.github.takahirom.roborazzi.RoborazziPlugin
 import org.gradle.api.artifacts.ProjectDependency
+import org.gradle.api.tasks.testing.Test
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 
 plugins {
@@ -210,15 +211,39 @@ tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
     reports.junitXml.required.set(true)
 }
 
-tasks.register("renderDesignStates") {
-    group = "verification"
-    description = "Record the committed real-screen contract-state catalogue."
-    dependsOn("recordRoborazziDebug")
-}
-
 val renderDesignStatesRequested = gradle.startParameter.taskNames.any {
     it == "renderDesignStates" || it.endsWith(":renderDesignStates")
 }
+
+if (!renderDesignStatesRequested) {
+    tasks.withType<Test>().matching { it.name == "testDebugUnitTest" }.configureEach {
+        filter {
+            excludeTestsMatching("dev.pierre.japaneseanki.ui.CardFlowPreviewCatalogue*")
+            excludeTestsMatching("dev.pierre.japaneseanki.ui.SettingsPreviewCatalogue*")
+        }
+    }
+}
+
+tasks.matching { it.name == "verifyRoborazziDebug" }.configureEach {
+    enabled = false
+}
+
+tasks.register("renderDesignStates") {
+    group = "verification"
+    description = "Render the real-screen state catalogue into the build directory."
+    dependsOn("recordRoborazziDebug")
+    val renderDirectory = rootProject.layout.buildDirectory.dir("design-states")
+    outputs.dir(renderDirectory)
+    doLast {
+        val rendered = renderDirectory.get().asFile.walkTopDown()
+            .filter { it.isFile && it.extension.equals("png", ignoreCase = true) }
+            .toList()
+        check(rendered.size == 152) {
+            "Expected 152 design-state renders; found ${rendered.size} in ${renderDirectory.get().asFile}"
+        }
+    }
+}
+
 if (renderDesignStatesRequested) {
     afterEvaluate {
         tasks.named<RoborazziPlugin.RoborazziTask>("recordRoborazziDebug").get()

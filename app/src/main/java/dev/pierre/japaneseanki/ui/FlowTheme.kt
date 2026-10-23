@@ -48,7 +48,7 @@ import androidx.compose.ui.unit.sp
 import dev.pierre.japaneseanki.R
 
 /**
- * Semantic roles from the portrait expressive-flow study (mockup/expressive-flow/README.md).
+ * Semantic roles shared across the app's Capture-to-Card flow.
  * Pitch keeps its own ink-blue role so theme tinting cannot change the contour colour.
  */
 internal object FlowPalette {

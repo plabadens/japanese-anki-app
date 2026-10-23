@@ -4,11 +4,7 @@ import dev.pierre.japaneseanki.JapaneseToken
 import dev.pierre.japaneseanki.TargetSpan
 import dev.pierre.japaneseanki.isPunctuationToken
 
-/**
- * Which boundary of a selected span to move. The study's Target view lets the user drag across
- * word pills; native pills use these two edges plus explicit Extend/Trim controls so the same
- * contiguous selection is reachable with touch and with TalkBack (SPEC.md §4.3.3).
- */
+/** Which boundary of a selected span to move. */
 internal enum class SpanEdge { Left, Right }
 
 /**

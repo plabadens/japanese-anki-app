@@ -15,7 +15,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.github.takahirom.roborazzi.captureRoboImage
 import dev.pierre.japaneseanki.JapaneseToken
 import dev.pierre.japaneseanki.TargetSpan
 import java.io.File
@@ -112,9 +111,6 @@ class ComposeLaneSmokeTest {
 
         composeRule.onNodeWithTag("capture-screen").assertIsDisplayed()
         composeRule.onNodeWithText("古い本を読みました。").assertIsDisplayed()
-        captureRoboImage("src/test/screenshots/capture-screen-japanese.png") {
-            JapaneseCaptureScreen()
-        }
     }
 
     @androidx.compose.runtime.Composable

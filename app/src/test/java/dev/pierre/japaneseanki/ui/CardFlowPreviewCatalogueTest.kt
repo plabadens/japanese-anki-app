@@ -50,15 +50,16 @@ abstract class CardFlowPreviewCatalogueTestBase(
         CardFlowPreviewState.values().forEach { state ->
             listOf(false, true).forEach { darkTheme ->
                 val themeQualifier = if (darkTheme) "dark" else "light"
-                val filePath = "../docs/design/states/" +
+                val filePath = "../build/design-states/" +
                     "${state.fileName}__${themeQualifier}__font-${scaleQualifier}__${widthDp}x${heightDp}.png"
                 composeRule.runOnIdle {
                     preview.value = CardFlowPreviewConfiguration(state, darkTheme, fontScale)
                 }
                 composeRule.waitForIdle()
                 val output = File(filePath)
+                output.parentFile?.mkdirs()
                 composeRule.onRoot().captureRoboImage(output)
-                assertTrue("Missing rendered golden: $filePath", output.isFile)
+                assertTrue("Missing rendered design state: $filePath", output.isFile)
             }
         }
     }

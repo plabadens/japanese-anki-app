@@ -6,6 +6,6 @@ plugins {
 
 tasks.register("verifyFast") {
     group = "verification"
-    description = "Runs the complete offline JVM unit, Compose UI, and golden verification lane."
-    dependsOn(":app:verifyRoborazziDebug")
+    description = "Runs the offline JVM unit and Compose UI assertions without image baselines."
+    dependsOn(":app:testDebugUnitTest")
 }

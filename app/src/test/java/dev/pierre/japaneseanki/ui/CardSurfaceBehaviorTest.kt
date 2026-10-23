@@ -14,7 +14,9 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
@@ -23,6 +25,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -172,11 +175,17 @@ class CardSurfaceBehaviorTest {
         capture(output, "resolved-silent.png")
 
         val audioFailure = "Sentence audio not generated: synthesis timed out"
-        val failureHint = "Sentence audio needs attention."
+        val failureHint = "The sentence-audio operation failed; retry only that item and keep the already prepared note content unchanged."
         sentenceAudio.value = ReviewAudioPresentation.Failed(audioFailure)
         footerHint.value = failureHint
         statusMessage.value = audioFailure
         composeRule.waitForIdle()
+        val hintNodes = composeRule.onAllNodesWithText(failureHint).fetchSemanticsNodes()
+        assertEquals("The footer owns one hint line", 1, hintNodes.size)
+        val hintLayouts = mutableListOf<TextLayoutResult>()
+        val hintLayoutAction = hintNodes.single().config[SemanticsActions.GetTextLayoutResult]
+        assertTrue("Could not inspect the footer hint layout", hintLayoutAction.action?.invoke(hintLayouts) == true)
+        assertEquals("The footer hint must remain a single line", 1, hintLayouts.single().lineCount)
         composeRule.onNodeWithContentDescription(retrySentenceAudio).assertIsEnabled().assertIsDisplayed().performClick()
         composeRule.onNodeWithText(failureHint).assertIsDisplayed()
         composeRule.onNodeWithText(audioFailure).assertExists()

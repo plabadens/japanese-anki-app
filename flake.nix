@@ -88,17 +88,13 @@
       };
 
       # Explicit APK/test inputs. `app/build` is deliberately excluded — only `app/src` is source,
-      # and a checkout carrying Gradle outputs must not feed them into the sandbox build. These
-      # three docs are test fixtures read by CopyCatalogueTest, so include them in the check source.
+      # and a checkout carrying Gradle outputs must not feed them into the sandbox build.
       apkSource = pkgs.lib.fileset.toSource {
         root = ./.;
         fileset = pkgs.lib.fileset.unions [
           ./app/build.gradle.kts
           ./app/src
           ./build.gradle.kts
-          ./docs/card-flow-contract.md
-          ./docs/legacy-copy.md
-          ./docs/sentence-mining-flow.md
           ./gradle
           ./gradle.properties
           ./settings.gradle.kts

@@ -16,18 +16,6 @@ __pycache__/
 releases/
 .worktrees/
 
-# Generated mockup renders. `mockup/expressive-flow/verify_flow.py` regenerates
-# these (382 checks, 81 PNGs); they are output, not source. Tracked design input
-# is the study source in mockup/expressive-flow/, one canonical render set in
-# final-screens/ and delivery/, and the red-baseline sources in
-# history/previous-study/ (flow.html, build_mockups.py, README.md).
-mockup/expressive-flow/history/final-screens-failed-fit/
-mockup/expressive-flow/history/final-screens-pass1/
-mockup/expressive-flow/history/superseded-root-evidence/
-mockup/expressive-flow/history/previous-study/screens/
-mockup/expressive-flow/history/integration-first-run/
-mockup/expressive-flow/history/landscape-removed/
-mockup/expressive-flow/evidence/*/screens/
 
 # Run artifacts and archives: duplicates of tracked content, or raw logs that
 # belong on a release/issue instead of in the tree.

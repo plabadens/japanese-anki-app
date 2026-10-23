@@ -43,7 +43,7 @@ import java.io.IOException
 import java.util.UUID
 
 /**
- * Binds a CameraX controller to the current lifecycle (SPEC.md §4.2). Shared by
+ * Binds a CameraX controller to the current lifecycle. Shared by
  * [CameraViewfinder] and [CameraShutterButton] so the preview and capture controls drive the
  * same camera session.
  */

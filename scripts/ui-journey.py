@@ -9,7 +9,7 @@ by step and its evidence captured:
 
     scripts/ui-journey.py theme dark
     scripts/ui-journey.py size 360x828
-    scripts/ui-journey.py shot docs/redesign-evidence/v0.4/input-dark.png
+    scripts/ui-journey.py shot .tmp-nix/screenshots/input-dark.png
     scripts/ui-journey.py tap "Continue"
     scripts/ui-journey.py dump --grep 本
 """

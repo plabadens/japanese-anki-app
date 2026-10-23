@@ -285,7 +285,13 @@ class InputScreenLayoutTest {
         assertEquals(48f * density, controlsBefore.height, 1f)
         assertEquals(gapAbove.height, gapBelow.height, 1f)
         assertEquals(86f * density, gapAbove.height, 1f)
-        assertEquals(controlsBefore.center.x, composeRule.onNodeWithTag("camera-shutter-slot").fetchSemanticsNode().boundsInRoot.center.x, 1f)
+        val galleryCenterX = composeRule.onNodeWithTag("camera-gallery-slot").fetchSemanticsNode().boundsInRoot.center.x
+        val shutterCenterX = composeRule.onNodeWithTag("camera-shutter-slot").fetchSemanticsNode().boundsInRoot.center.x
+        val torchCenterX = composeRule.onNodeWithTag("camera-torch-slot").fetchSemanticsNode().boundsInRoot.center.x
+        val x1 = shutterCenterX - galleryCenterX
+        val x2 = torchCenterX - shutterCenterX
+        assertEquals("Camera side controls must be symmetric around the shutter", x1, x2, 1f)
+        assertEquals(controlsBefore.center.x, shutterCenterX, 1f)
         composeRule.onNodeWithTag("capture-mode-camera").assertIsSelected()
         composeRule.onNodeWithTag("capture-mode-type").assertIsNotSelected()
         assertTrue(composeRule.onAllNodesWithTag("input-mode-selector").fetchSemanticsNodes().isEmpty())

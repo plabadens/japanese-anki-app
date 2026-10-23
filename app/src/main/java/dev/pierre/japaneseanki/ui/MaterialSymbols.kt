@@ -6,11 +6,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.unit.dp
 
-/**
- * Material Symbols (m3.material.io/styles/icons), outlined style, ported from the exact
- * path data used by the current mockup study so the set stays visually consistent without
- * fetching an icon font (SPEC.md §4.1).
- */
+/** Outlined Material Symbols path data, kept in code rather than fetching an icon font. */
 private fun symbol(name: String, path: String): ImageVector = ImageVector.Builder(
     name = name,
     defaultWidth = 24.dp,
