@@ -1,3 +1,4 @@
+import io.github.takahirom.roborazzi.RoborazziPlugin
 import org.gradle.api.artifacts.ProjectDependency
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 
@@ -193,6 +194,7 @@ dependencies {
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.androidx.test.ext.junit)
     testImplementation(libs.androidx.test.espresso)
+    testImplementation(libs.roborazzi)
     testImplementation(libs.roborazzi.compose)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
@@ -200,4 +202,22 @@ dependencies {
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.work.testing)
+}
+
+tasks.register("renderDesignStates") {
+    group = "verification"
+    description = "Record the committed real-screen contract-state catalogue."
+    dependsOn("recordRoborazziDebug")
+}
+
+val renderDesignStatesRequested = gradle.startParameter.taskNames.any {
+    it == "renderDesignStates" || it.endsWith(":renderDesignStates")
+}
+if (renderDesignStatesRequested) {
+    afterEvaluate {
+        tasks.named<RoborazziPlugin.RoborazziTask>("recordRoborazziDebug").get()
+            .setTestNameIncludePatterns(
+                listOf("dev.pierre.japaneseanki.ui.CardFlowPreviewCatalogue*"),
+            )
+    }
 }

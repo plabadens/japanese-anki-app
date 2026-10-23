@@ -37,6 +37,7 @@ If two documents disagree, the higher row wins and the lower one is a bug.
 | [redesign-interview.md](redesign-interview.md) | The user's own statement of the workflow, quality boundary and refused directions, recorded before the SPEC rewrite; explicitly **not** a second specification | REFERENCE | you want the reasoning and the user's words behind DESIGN.md and SPEC §4 |
 | [ui-review-20261022.md](ui-review-20261022.md) | The review behind the 22 October decisions: the build audited against the contract, the refined user story, the contradictions that let it drift, the rejected alternatives and the decision log | RECORD (adopted) | you need to know why the card flow, the inline selection, the torch or the 16:9 band are what they are |
 | [card-flow-contract.md](card-flow-contract.md) | **The screen-and-copy contract**: Capture → Card as one surface, with exact composition, the single hint line, selection/ruby rules, loading, collapse order, the string delta and the capture geometry | **AUTHORITATIVE** | you are building, reviewing, or writing copy for any screen in the daily flow |
+| [design/states/](design/states/README.md) | Committed Compose goldens for every contracted Capture, Type, setup and Card state | REFERENCE | you are reviewing the real-screen catalogue or changing its rendered states |
 | [agent-flow.md](agent-flow.md) | Operating document for the loop that turns a bug reported from the phone into a release-signed APK installed from the phone: triage, issue templates, release workflow, signing setup, failure modes | REFERENCE | you are working on issue triage, release signing, or the GitHub workflows |
 | [cleanup-worktrees.md](cleanup-worktrees.md) | Audit of the Kanban branch/worktree leftovers, the classification rule, the record of both applied prune passes (91 → 48 worktrees, 96 → 53 branches, ~100 GB reclaimed) and the concurrency hazard when a worker is live, with `scripts/prune-worktrees.sh` | REFERENCE | you are about to create, prune, or reuse a worktree |
 | [ui-plan.md](ui-plan.md) | Short pointer: the plan it used to hold is in `archive/ui-plan.md` | SUPERSEDED | you followed an old link here |
@@ -50,25 +51,22 @@ If two documents disagree, the higher row wins and the lower one is a bug.
 | File | What it is | Status |
 |---|---|---|
 | [../SPEC.md](../SPEC.md) | The product contract: §1 quality contract, §2 platform, §3 scope, §4 workflow/UI, §5 linguistics, §6 audio, §7 images/translation/notes, §8 Anki output, §9 submission safety, §10 invalidation, §11 privacy, §12 build constraints, §13 delivery priorities, §14 acceptance, §15 delivery policy, §16 references | AUTHORITATIVE |
-| [../AGENTS.md](../AGENTS.md) | Short root contract for agent sessions: commit identity, environment escalation, mockup comparison | AUTHORITATIVE |
+| [../AGENTS.md](../AGENTS.md) | Short root contract for agent sessions: commit identity, environment escalation, visual review | AUTHORITATIVE |
 | [../misc/Sentence (JA)/README.md](<../misc/Sentence (JA)/README.md>) | The reference Anki note type, field schema and presentation the app exports into | REFERENCE |
 | [../datasets/README.md](../datasets/README.md) | Pinned upstream data, transformations, hashes and licences for the bundled assets | REFERENCE |
-| [../mockup/expressive-flow/README.md](../mockup/expressive-flow/README.md) | The HTML design study: the origin of the palette, type scale and fixtures. Its flow, step tracker and preparation page are **superseded** by the approved contract; never shipped | HISTORICAL (palette still REFERENCE) | you need the visual origin or the decision history, not the current screen inventory |
-| `../mockup/expressive-flow/REVIEW-PASS-2.md`, `P0-P3-HANDOFF.md`, `REMEDIATION.md` | Review passes that produced the rules now in DESIGN.md and SPEC §4 | HISTORICAL |
 | [archive/evidence/v0.4/](archive/evidence/v0.4/README.md) | Install and acceptance record for the v0.4 build | HISTORICAL |
 
 ## Reading paths
 
 **New to the repository.** `README.md` → `SPEC.md` §1–§4 → `card-flow-contract.md` →
-`docs/evidence/prototype/capture.html` and `card.html` (what it looks like) → `DESIGN.md` →
-`BEST-PRACTICES.md` §2, §5.
+`design/states/README.md` (committed real-screen examples) → `DESIGN.md` → `BEST-PRACTICES.md` §2, §5.
 Then run `nix develop` and `./scripts/test-core.sh` before reading code.
 
 **Implementing or reviewing UI.** `card-flow-contract.md` in full — it is the authority for
 composition, states and copy IDs → `SPEC.md` §4 and the R20/R21 rows of §14 → `DESIGN.md` for the
 reasoning → `ui/FlowTheme.kt` for the tokens already in code. `sentence-mining-flow.md` still governs
-onboarding, Settings, Downloads, sending and every failure string. The HTML study in
-`mockup/expressive-flow/` is decision history; do not use it to restore removed elements.
+onboarding, Settings, Downloads, sending and every failure string. Use the committed Compose states
+for visual review; the approved contract remains the authority.
 
 **Changing data, assets, or the build.** `BEST-PRACTICES.md` §5–§6 → `toolchain-notes.md` →
 `first-run-resource-delivery.md` → `datasets/README.md`.
@@ -83,5 +81,5 @@ release supersedes it, move the directory to `archive/evidence/`; see
 
 The rules are in [BEST-PRACTICES.md §8](BEST-PRACTICES.md#8-documentation-rules). In short: one
 fact, one home; cite `SPEC.md` instead of restating it; give every archived file a status banner;
-and when a file moves, update every link to it in the same change — including from `mockup/`,
-`releases/` and code comments.
+and when a file moves, update every link to it in the same change — including in historical
+documents, release material and code comments.

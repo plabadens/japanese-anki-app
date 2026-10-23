@@ -24,11 +24,10 @@ upgrade is how a suite becomes the next incident. Revisit when it leaves alpha.
 
 ## 0.1 Prototype retirement
 
-At `origin/dev` (`da0d7df`), the standalone `mockup/` tree and `docs/evidence/prototype/*.html` are
-deleted; they are not archived or used as test inputs. Do not restore them or reuse their small font
-subsets. This spike's only visual artifact is the real Capture-screen golden under
-`app/src/test/screenshots/`; a broader real-screen preview catalogue remains follow-up work, not
-something this card claims to deliver.
+At `origin/dev` (`da0d7df`), the standalone visual prototype material was deleted, not archived.
+Do not restore it, use it as a test input, or reuse its font subsets. The approved contract and the
+real-screen catalogue under `docs/design/states/` are the visual authorities. The spike's initial
+Capture-screen smoke golden remains under `app/src/test/screenshots/`.
 
 ## 0.2. Spike result — 23 October 2026
 
@@ -72,12 +71,23 @@ renders `古い本を読みました。` as Japanese, not tofu. The PNG is 1170�
 the Nix-store font only.
 
 **Go for both dependent cards.** This is not an apples-to-apples speedup claim: the measured suites are
-338 JVM tests versus 45 device tests, and only two cases are new in this spike. The gate it clears is
+338 JVM tests versus 45 device tests, and only two cases were new in the spike. The gate it clears is
 that a real Capture screen and numeric geometry assertion run at fixed qualifiers, with Japanese
-rendering and no emulator. Move the portable Compose tests and build the real-screen preview
-catalogue; measure the migrated suite again rather than turning these different suites into a
-speedup ratio. Keep the camera,
+rendering and no emulator. The contract-state catalogue is now rendered by the same JVM lane; do not
+turn these different suites into a speedup ratio. Keep the camera,
 system-inset, AnkiDroid and release checks on device.
+
+The catalogue's single recording task is `:app:renderDesignStates`. It is runnable offline from the
+repository root inside `nix develop`:
+
+```sh
+nix develop --command bash -lc 'gradle --offline --no-daemon --max-workers=1 --console=plain -Pandroid.aapt2FromMavenOverride="$ANDROID_HOME/build-tools/36.0.0/aapt2" :app:renderDesignStates'
+```
+
+It writes the 13 contracted real-screen states at both themes, both font scales and both documented
+viewports to `docs/design/states/`. Naming and visual-review rules are in
+[`docs/design/states/README.md`](design/states/README.md). Normal `testDebugUnitTest` compares those
+references; recording is intentional and must not be used to bless unexplained visual changes.
 
 
 ---

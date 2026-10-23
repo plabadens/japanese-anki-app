@@ -13,8 +13,7 @@ onboarding, Settings, Downloads, secondary surfaces, failure copy, send semantic
 technical contract in `SPEC.md` — with the single exception of the authorization clause (A6 in
 [the review](ui-review-20261022.md)), which moves from *Review card* to *committing a sentence*.
 
-Prototypes: `docs/evidence/prototype/capture.html` (Capture) and
-`docs/evidence/prototype/card.html` (the card in four states).
+Visual review: [committed real-screen state goldens](design/states/README.md).
 
 ## 1. Why two states
 

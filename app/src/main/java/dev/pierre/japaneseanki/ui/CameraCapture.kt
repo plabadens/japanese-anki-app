@@ -90,7 +90,7 @@ internal fun CameraViewfinder(controller: LifecycleCameraController, modifier: M
 /** The fixed-size circular shutter; the capture row centers it between equal gallery-side slots. */
 @Composable
 internal fun CameraShutterButton(
-    controller: LifecycleCameraController,
+    controller: LifecycleCameraController?,
     enabled: Boolean,
     outputDirectory: File,
     onCaptured: (File) -> Unit,
@@ -129,6 +129,7 @@ internal fun CameraShutterButton(
         currentOnError(currentCaptureFailureMessage)
     }
     val takePhoto = takePhoto@{
+        val activeController = controller ?: return@takePhoto
         if (!enabled || !operationGate.tryStart()) return@takePhoto
         capturing = true
         currentOnCaptureStateChanged(true)
@@ -141,7 +142,7 @@ internal fun CameraShutterButton(
                 }
             }
             val options = ImageCapture.OutputFileOptions.Builder(destination).build()
-            controller.takePicture(
+            activeController.takePicture(
                 options,
                 ContextCompat.getMainExecutor(context),
                 object : ImageCapture.OnImageSavedCallback {
