@@ -45,8 +45,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
 @RunWith(AndroidJUnit4::class)
+@Config(sdk = [37], qualifiers = "w390dp-h844dp-xxhdpi")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 class CardSurfaceBehaviorTest {
     @get:Rule
     val composeRule = createAndroidComposeRule<ComponentActivity>()
@@ -62,10 +66,7 @@ class CardSurfaceBehaviorTest {
         val footerHint = mutableStateOf<String?>("")
         val statusMessage = mutableStateOf<String?>(null)
         val sentenceAudioRetries = mutableStateOf(0)
-        val output = File(
-            InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null),
-            "card-surface-evidence",
-        ).apply { mkdirs() }
+        val output = File("build/robolectric-evidence/card-surface").apply { mkdirs() }
 
         composeRule.setContent {
             val baseConfiguration = LocalConfiguration.current
@@ -79,6 +80,7 @@ class CardSurfaceBehaviorTest {
             CompositionLocalProvider(
                 LocalConfiguration provides scaledConfiguration,
                 LocalDensity provides scaledDensity,
+                LocalMotionEnabled provides false,
             ) {
                 MaterialTheme {
                     Box(Modifier.fillMaxSize()) {

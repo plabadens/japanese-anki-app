@@ -47,8 +47,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
 @RunWith(AndroidJUnit4::class)
+@Config(sdk = [37], qualifiers = "w390dp-h844dp-xxhdpi")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 class SentenceSelectionLayoutTest {
     @get:Rule
     val composeRule = createComposeRule()
@@ -352,7 +356,7 @@ class SentenceSelectionLayoutTest {
 
     private fun motionEvidenceDirectory(): File {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        return File(context.getExternalFilesDir(null), "motion-feedback-evidence").apply {
+        return File("build/robolectric-evidence/motion-feedback").apply {
             deleteRecursively()
             assertTrue("Could not create motion feedback evidence directory", mkdirs())
         }
@@ -360,7 +364,7 @@ class SentenceSelectionLayoutTest {
 
     private fun evidenceDirectory(): File {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        return File(context.getExternalFilesDir(null), "sentence-selection-evidence").apply {
+        return File("build/robolectric-evidence/sentence-selection").apply {
             deleteRecursively()
             assertTrue("Could not create sentence-selection evidence directory", mkdirs())
         }

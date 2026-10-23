@@ -146,10 +146,11 @@ Create the job once (§5, step 6). Per issue the agent must do, in order:
 
 1. Read the body. If the version, install channel or repro steps are missing and cannot be
    inferred → comment asking one specific question, add `state:needs-info`. Do not guess a fix.
-2. Try to reproduce on the emulator with the `x86_64` debug APK:
+2. For a Compose or logic defect, run `verifyFast` first; that is the normal UI test lane and needs
+   no emulator. Use the `x86_64` debug APK only when reproducing a device-only boundary:
    `nix run .#emulator-wrapper -- session app/build/outputs/apk/debug/app-x86_64-debug.apk .tmp-nix/screenshots/issue-N`.
-   Device-only or `arm64-v8a`-only defects cannot be reproduced there: say so in the thread and
-   work from the screenshot, the logcat and the code instead of claiming a repro.
+   Device-only or `arm64-v8a`-only defects that the available target cannot reproduce must be called
+   out in the thread; use screenshots, logcat and code without claiming a reproduction.
 3. Decide and record: fix, wontfix, or needs-info. A decision without a comment is a bug in the
    loop — the thread is the only audit trail, since the agent's identity is the owner's.
 
@@ -160,8 +161,9 @@ Create the job once (§5, step 6). Per issue the agent must do, in order:
 - The worker **must** bump `versionCode` by exactly 1 and bump `versionName` to `0.<n>` in the
   same commit series; the tag is derived from `versionName`. An unbumped `versionCode` is the
   single most common cause of a phone refusing the download.
-- Acceptance: `nix develop --command ./scripts/ci-build-apk.sh` (core tests + unit tests +
-  debug build) passes, and a smoke run in the emulator for UI changes.
+- Acceptance: `nix develop --command ./scripts/ci-build-apk.sh` (core checks + `verifyFast` +
+  debug build) passes. Run the emulator only when the changed behavior is one of the four device
+  boundaries in `docs/android-instrumentation-tests.md`.
 - PR → `build-apk.yml` runs the same gate → merge to `dev` ([branching.md](branching.md)). Breaking
   `dev` is a nuisance; breaking `main` is a delivery failure, so integration happens there first.
 - Promotion `dev` → `main` goes through the merge train: confirm `dev` is green, merge `dev` into a
@@ -425,7 +427,7 @@ so repo-level default token permissions do not affect it.
 
 ## 7. What is deliberately not automated
 
-- **Device acceptance.** `release-apk.yml` runs core tests, `testDebugUnitTest`, and static APK
+- **Device acceptance.** `release-apk.yml` runs core tests, `verifyFast`, and static APK
   assertions; it does not boot an emulator or touch the phone. `arm64-v8a`-only defects are
   therefore never caught by CI, only by Pierre installing.
 - **`testReleaseUnitTest` / release lint.** The release job runs the debug unit tests, matching

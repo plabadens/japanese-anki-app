@@ -7,16 +7,16 @@
 #
 # Usage:
 #   scripts/rebuild.sh           # assembleDebug, then install x86_64 + relaunch
-#   scripts/rebuild.sh test       # testDebugUnitTest assembleDebug, then install x86_64 + relaunch
+#   scripts/rebuild.sh test       # verifyFast assembleDebug, then install x86_64 + relaunch
 #   scripts/rebuild.sh build-only
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 TASKS="assembleDebug"
-[[ "${1:-}" == "test" ]] && TASKS="testDebugUnitTest assembleDebug"
+[[ "${1:-}" == "test" ]] && TASKS="verifyFast assembleDebug"
 
 echo "== gradle $TASKS =="
-nix develop --command bash -c "gradle -Pandroid.aapt2FromMavenOverride=\"\$ANDROID_HOME/build-tools/36.0.0/aapt2\" $TASKS"
+nix develop --command bash -c "gradle --offline --configuration-cache --build-cache -Pandroid.aapt2FromMavenOverride=\"\$ANDROID_HOME/build-tools/36.0.0/aapt2\" $TASKS"
 
 if [[ "${1:-}" == "build-only" ]]; then
   exit 0

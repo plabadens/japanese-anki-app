@@ -49,15 +49,32 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.After
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.concurrent.atomic.AtomicReference
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowValueAnimator
 
 @RunWith(AndroidJUnit4::class)
+@Config(sdk = [37], qualifiers = "w390dp-h844dp-xxhdpi")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 class InputScreenLayoutTest {
     @get:Rule
     val composeRule = createComposeRule()
+
+    @Before
+    fun disablePlatformAnimations() {
+        setAnimatorDurationScale(0f)
+    }
+
+    @After
+    fun restorePlatformAnimations() {
+        setAnimatorDurationScale(1f)
+    }
 
     @Test
     fun ocrProgressAndFailureStateStayAccessibleAndSilent() {
@@ -361,99 +378,19 @@ class InputScreenLayoutTest {
         assertEquals(readyBounds, errorBounds)
     }
 
-    @Test
-    fun liveCameraPreviewMatchesItsViewportAndShutterSavesAnImage() {
-        val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val context = instrumentation.targetContext
-        instrumentation.uiAutomation.grantRuntimePermission(context.packageName, Manifest.permission.CAMERA)
-        assertEquals(
-            "Camera permission must be granted to the target app",
-            PackageManager.PERMISSION_GRANTED,
-            context.checkSelfPermission(Manifest.permission.CAMERA),
-        )
-        assertTrue(
-            "The API-37 camera provider exposes no cameras",
-            context.getSystemService(CameraManager::class.java).cameraIdList.isNotEmpty(),
-        )
-
-        val outputDirectory = File(context.cacheDir, "camera-capture-${System.nanoTime()}")
-        assertTrue("Could not create camera output directory", outputDirectory.mkdirs())
-        val capturedFile = AtomicReference<File?>(null)
-        val cameraError = AtomicReference<String?>(null)
-
-        val controllerRef = AtomicReference<LifecycleCameraController?>(null)
-        try {
-            composeRule.setContent {
-                val lifecycleOwner = remember { ResumedTestLifecycleOwner() }
-                CompositionLocalProvider(LocalLifecycleOwner provides lifecycleOwner) {
-                    val controller = rememberCameraController()
-                    SideEffect { controllerRef.set(controller) }
-                    MaterialTheme {
-                        Column {
-                            Box(
-                                Modifier.width(320.dp).height(427.dp)
-                                    .testTag("camera-preview-viewport"),
-                            ) {
-                                CameraViewfinder(controller, Modifier.fillMaxSize())
-                            }
-                            CameraShutterButton(
-                                controller = controller,
-                                enabled = true,
-                                outputDirectory = outputDirectory,
-                                onCaptured = { capturedFile.set(it) },
-                                onError = { cameraError.set(it) },
-                                onCaptureStateChanged = {},
-                                captureFailed = false,
-                                operationGate = remember { CaptureOperationGate() },
-                                modifier = Modifier.testTag("camera-shutter"),
-                            )
-                        }
-                    }
-                }
-            }
-
-            composeRule.waitUntil(20_000) {
-                controllerRef.get()?.initializationFuture?.isDone == true
-            }
-            val controller = controllerRef.get()
-            assertNotNull("Camera controller was not created", controller)
-            val initializationFailure = runCatching { controller!!.initializationFuture.get() }.exceptionOrNull()
-            assertNull("CameraX initialization failed: $initializationFailure", initializationFailure)
-            val hasCameraInfo = AtomicReference<Boolean?>(null)
-            composeRule.runOnIdle { hasCameraInfo.set(controller!!.cameraInfo != null) }
-            assertEquals("CameraX did not expose camera information", true, hasCameraInfo.get())
-
-            val viewportBounds = composeRule.onNodeWithTag("camera-preview-viewport")
-                .fetchSemanticsNode().boundsInRoot
-            val livePreviewBounds = composeRule.onNodeWithTag("camera-live-preview")
-                .fetchSemanticsNode().boundsInRoot
-            assertEquals("PreviewView must fill the fixed camera viewport", viewportBounds, livePreviewBounds)
-
-            composeRule.onNodeWithTag("camera-shutter").performClick()
-            composeRule.waitUntil(20_000) { capturedFile.get() != null || cameraError.get() != null }
-            assertNull("Camera capture failed: ${cameraError.get()}", cameraError.get())
-
-            val imageFile = capturedFile.get()
-            assertNotNull("Camera callback did not produce a file", imageFile)
-            assertTrue("Camera image is empty", imageFile!!.isFile && imageFile.length() > 0L)
-            val bitmap = BitmapFactory.decodeFile(imageFile.path)
-            assertNotNull("Captured camera image did not decode", bitmap)
-            try {
-                assertTrue("Captured image width is invalid", bitmap!!.width > 0)
-                assertTrue("Captured image height is invalid", bitmap.height > 0)
-            } finally {
-                bitmap?.recycle()
-            }
-        } finally {
-            outputDirectory.deleteRecursively()
-        }
+    private fun setAnimatorDurationScale(scale: Float) {
+        // Robolectric exposes the system animator scale through this protected shadow hook.
+        ShadowValueAnimator::class.java
+            .getDeclaredMethod("setDurationScale", Float::class.javaPrimitiveType)
+            .apply { isAccessible = true }
+            .invoke(null, scale)
     }
 
     private fun captureMotionEvidence(name: String) {
         composeRule.waitForIdle()
         InstrumentationRegistry.getInstrumentation().waitForIdleSync()
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val directory = File(requireNotNull(context.getExternalFilesDir(null)), "motion-feedback-evidence")
+        val directory = File("build/robolectric-evidence/motion-feedback")
         if (!directory.isDirectory) assertTrue("Could not create motion-feedback evidence directory", directory.mkdirs())
         val bitmap = composeRule.onRoot().captureToImage().asAndroidBitmap()
         val screenshot = File(directory, name)
@@ -464,9 +401,4 @@ class InputScreenLayoutTest {
         assertTrue("Motion evidence was not written: $screenshot", screenshot.isFile && screenshot.length() > 0L)
     }
 
-    private class ResumedTestLifecycleOwner : LifecycleOwner {
-        override val lifecycle: Lifecycle = LifecycleRegistry(this).apply {
-            currentState = Lifecycle.State.RESUMED
-        }
-    }
 }

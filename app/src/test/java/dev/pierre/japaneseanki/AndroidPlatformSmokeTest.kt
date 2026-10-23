@@ -4,6 +4,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaPlayer
+import android.os.Looper
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
@@ -11,6 +12,11 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Shadows
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowMediaPlayer
+import org.robolectric.shadows.util.DataSource
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -19,7 +25,10 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
+/** Robolectric local contract checks; these do not claim device-level platform acceptance. */
 @RunWith(AndroidJUnit4::class)
+@Config(sdk = [37], qualifiers = "w390dp-h844dp-xxhdpi")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 class AndroidPlatformSmokeTest {
     @Test
     fun androidSqliteCreatesAndQueriesRows() {
@@ -68,6 +77,11 @@ class AndroidPlatformSmokeTest {
 
         try {
             wav.writeBytes(silentPcmWav(durationMillis = 1_000))
+            // Robolectric models local completion callbacks; device codec output is outside this JVM test.
+            ShadowMediaPlayer.addMediaInfo(
+                DataSource.toDataSource(wav.absolutePath),
+                ShadowMediaPlayer.MediaInfo(1_000, 0),
+            )
             player.setDataSource(wav.absolutePath)
             player.setVolume(0f, 0f)
             player.setOnCompletionListener { completed.countDown() }
@@ -78,8 +92,9 @@ class AndroidPlatformSmokeTest {
             }
             player.prepare()
             player.start()
+            Shadows.shadowOf(Looper.getMainLooper()).idleFor(1_100, TimeUnit.MILLISECONDS)
 
-            assertTrue("Local MediaPlayer playback did not complete", completed.await(10, TimeUnit.SECONDS))
+            assertTrue("Local MediaPlayer playback did not complete", completed.await(0, TimeUnit.MILLISECONDS))
             assertNull(playbackError.get())
         } finally {
             player.release()

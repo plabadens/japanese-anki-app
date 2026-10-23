@@ -1,32 +1,30 @@
 package dev.pierre.japaneseanki
 
+import android.media.MediaPlayer
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import android.media.MediaPlayer
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Test
-import org.junit.runner.RunWith
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.UUID
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
 
 /**
- * Native acceptance for the audio route: files published by [DraftAudioFileStore] from a
- * fixture provider must be playable by the platform decoder for every supported container.
- *
- * No credentials, paid services, NHK download or real Google synthesis: the sentence provider
- * is replaced by a local fixture that writes the exact container under test.
+ * Device-only proof that Android's real decoder accepts the WAV, OGG, and MP3 files published
+ * by DraftAudioFileStore. ShadowMediaPlayer cannot prove codec support; run this as part of the
+ * signed-APK release smoke as well as the supplemental connected-device check.
  */
 @RunWith(AndroidJUnit4::class)
-class DraftAudioPlaybackTest {
+class ReleaseAudioCodecSmokeTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val context = instrumentation.targetContext
     private val fixtures = instrumentation.context.assets
 
     private fun root(): File {
-        val root = File(context.filesDir, "audio-playback-${UUID.randomUUID()}")
+        val root = File(context.filesDir, "audio-codec-smoke-${UUID.randomUUID()}")
         assertTrue(root.mkdirs())
         return root
     }
@@ -47,7 +45,7 @@ class DraftAudioPlaybackTest {
                 val controller = DraftAudioController(
                     store = store,
                     persistence = MapPersistence(),
-                    synthesize = { input, output ->
+                    synthesize = { _, output ->
                         when (format) {
                             AudioFormat.WAV -> writeSineWav(output)
                             AudioFormat.OGG -> copyAsset("tone.ogg", output)
@@ -80,50 +78,6 @@ class DraftAudioPlaybackTest {
                 )
                 controller.dispose()
             }
-        } finally {
-            root.deleteRecursively()
-        }
-    }
-
-    @Test
-    fun playbackLeaseOutlivesTheControllerAndBlocksRetirement() {
-        val root = root()
-        try {
-            val draftDirectory = File(root, "draft").apply { mkdirs() }
-            val store = DraftAudioFileStore(draftDirectory, File(root, "audio-staging"))
-            val controller = DraftAudioController(
-                store = store,
-                persistence = MapPersistence(),
-                synthesize = { _, output -> writeSineWav(output) },
-            )
-            controller.setInput(
-                DraftAudioInput(
-                    item = AudioItem.SENTENCE,
-                    identity = "identity-playback",
-                    text = "テスト",
-                    revision = 0,
-                    cacheKey = AudioCacheKey("instrumentation", "テスト", "voice", 1f),
-                    expectedFormat = AudioFormat.WAV,
-                ),
-            )
-            controller.runAttempt(controller.confirm(AudioItem.SENTENCE)!!)
-            val ready = controller.state(AudioItem.SENTENCE) as DraftAudioState.Ready
-
-            val player = MediaPlayer()
-            val lease = store.lease(ready.file, AudioFileOwner.PLAYBACK)
-            try {
-                player.setDataSource(ready.file.path)
-                player.prepare()
-                player.start()
-                assertEquals(DraftAudioRetirement.DELAYED_BY_OWNER, store.retire(ready.file))
-                assertTrue("playing file must not be deleted", ready.file.file().isFile)
-            } finally {
-                player.release()
-                lease.close()
-            }
-            assertEquals(DraftAudioRetirement.RETIRED, store.retire(ready.file))
-            assertTrue(!ready.file.file().exists())
-            controller.dispose()
         } finally {
             root.deleteRecursively()
         }
@@ -170,7 +124,9 @@ class DraftAudioPlaybackTest {
 
     private class MapPersistence : DraftAudioPersistence {
         private val values = HashMap<String, String>()
+
         override fun read(key: String): String? = values[key]
+
         override fun write(changes: Map<String, String?>): Boolean {
             for ((key, value) in changes) {
                 if (value == null) values.remove(key) else values[key] = value

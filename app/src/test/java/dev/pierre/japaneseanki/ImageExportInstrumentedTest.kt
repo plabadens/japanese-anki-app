@@ -12,6 +12,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -20,10 +22,12 @@ import java.io.OutputStream
 import java.nio.file.Files
 
 /**
- * Device-level proof for the WebP export path: real platform encoder, real ImageDecoder round
- * trip, real descriptor accounting, and a deterministic encoder-write failure.
+ * Robolectric/native-graphics contract for the WebP export path: encoder/decoder round trip,
+ * descriptor accounting, and a deterministic encoder-write failure. This is not device acceptance.
  */
 @RunWith(AndroidJUnit4::class)
+@Config(sdk = [37], qualifiers = "w390dp-h844dp-xxhdpi")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 class ImageExportInstrumentedTest {
     private lateinit var root: File
 

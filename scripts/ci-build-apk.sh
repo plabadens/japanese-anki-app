@@ -5,6 +5,6 @@ set -euo pipefail
 
 ./scripts/test-core.sh
 
-gradle --no-daemon --max-workers=2 --console=plain \
+gradle --no-daemon --offline --configuration-cache --build-cache --max-workers=2 --console=plain \
   -Pandroid.aapt2FromMavenOverride="$ANDROID_HOME/build-tools/36.0.0/aapt2" \
-  testDebugUnitTest assembleDebug
+  verifyFast assembleDebug

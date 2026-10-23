@@ -16,8 +16,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 
 @RunWith(AndroidJUnit4::class)
+@Config(sdk = [37], qualifiers = "w390dp-h844dp-xxhdpi")
 class UniDicDownloadWorkerInjectionTest {
     private val context: Context = InstrumentationRegistry.getInstrumentation().targetContext
     private lateinit var taskStore: UniDicTaskStore

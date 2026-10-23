@@ -1,80 +1,51 @@
-# Android instrumentation tests
+# Device-only tests
 
-**How to use it:** REFERENCE. The runbook for `app/src/androidTest` on a dedicated API-37
-x86_64 AVD. Part of the gate set in `BEST-PRACTICES.md` §5; the criteria it serves are `SPEC.md`
-§14 (R01–R39) and the approved [screen/copy contract](card-flow-contract.md).
+**Status: REFERENCE.** The regular Compose/UI gate is the offline JVM task `verifyFast`; it does not need an emulator. `app/src/androidTest` is reserved for four device-only categories. Keep local audio lifecycle, SQLite and WebP contracts in the JVM lane; the real WAV/OGG/MP3 decoder assertion is the narrow device-only exception because Robolectric cannot prove platform codec support. See [testing-without-emulator.md](testing-without-emulator.md) for the adopted JVM lane and its measured results.
 
-## Approved-flow compliance scope
+## Allowed device boundary
 
-Tooling below is a harness, not acceptance of the approved [screen/copy contract](card-flow-contract.md). SPEC.md R01–R39 controls the current gate. Coordinate a single API-37 x86_64 emulator lane; do not boot a competing AVD or launch unrestricted heavy builds while another owner uses it.
+1. **Camera / ML Kit OCR** — real CameraX sensor/preview/capture behavior. Current automated coverage is `app/src/androidTest/java/dev/pierre/japaneseanki/CameraOcrInstrumentedTest.kt`: its local Japanese OCR fixture and live preview/shutter tests.
+2. **System insets, edge-to-edge and gesture pill** — actual system UI/window behavior that Robolectric cannot model. No separate test for this category is currently in `androidTest`.
+3. **AnkiDroid round-trip** — real intent/provider/URI interaction with the third-party app. Use a disposable emulator and collection; never use a personal installation or collection. No such round-trip test is currently in `androidTest`.
+4. **Signed-APK release smoke** — install the actual signed release APK, launch it and exercise one happy path before publication. `ReleaseAudioCodecSmokeTest` preserves the real Android decoder assertion for WAV/OGG/MP3; a debug-emulator run is supplemental and does not prove the signed artifact. Keep signing material out of tests and logs.
 
-For design compliance, exercise the connected Capture → Card → Send journey and each catalogued exception: no Capture title, one selectable sentence that never reflows, one hint line in the pinned footer, separate metadata actions, dismissal/reopen, durable setup/background/recreation and no paid work on revisit. Inventory visible/accessibility/notification copy against catalogue IDs; assert both absence of removed UI and presence of necessary recovery. Capture both themes and narrow/200% text, check semantics/contrast and reduced-motion/touch-feedback settings. Emulator haptic dispatch is not proof of physical sensation.
+The camera/OCR checks and the supplemental Android decoder check run under `connectedDebugAndroidTest`. System insets, AnkiDroid round-trip, and installation/exercise of the signed release artifact remain separate device/release obligations. If a proposed test is outside this list, move it to the JVM lane or remove it.
 
-Import acceptance additionally requires a separate test-only dummy AnkiDroid APK with a pinned package/provider/permission contract, actual cross-UID URI grants and persisted decodable WebP/MP3/Ogg bytes, note fields/tags/deck and durable receipts. Inject failures/lost responses, repeated Send and recreation; no blind reinsert after an uncertain write. Keep its control channel out of production. Run the same happy-path assertions against supported real AnkiDroid in a separate disposable emulator collection before claiming compatibility. Never replace a personal installation/collection. Controlled generation does not establish live cloud quality; no credential access or paid calls without separate authorization.
+## Run the debug-device checks
 
-## Existing platform harness
-
-The project uses the AndroidX JUnit runner for `app/src/androidTest`. Its pinned
-test-only dependencies are declared in `gradle/libs.versions.toml` and covered by
-`nix/gradle/deps.json`; production dependencies and the Android toolchain are not
-changed for this harness.
-
-The smoke suite exercises Android's SQLite implementation, platform WebP
-encoding/decoding, and local `MediaPlayer` playback from a generated silent WAV.
-It uses no credentials, paid services, or network calls. Keep platform I/O tests
-under `app/src/androidTest`; JVM tests in `app/src/test` do not provide those
-Android framework guarantees.
-
-## Build and run on API 37 x86_64
-
-There is no Gradle wrapper in this repository. `nix develop` supplies the pinned
-Gradle 8.14.4, JDK 17, SDK platform 37.0, build-tools 36.0.0, emulator 37.1.11,
-and `google_apis` x86_64 system image. From a `nix develop` shell, build the test
-APKs with:
+Use a disposable API-37 x86_64 AVD, not an attached personal phone. `connectedDebugAndroidTest` targets every device visible to its ADB server, so first confirm there is exactly one intended target:
 
 ```sh
-gradle -Pandroid.aapt2FromMavenOverride="$ANDROID_HOME/build-tools/36.0.0/aapt2" \
-  assembleDebug assembleDebugAndroidTest
+adb devices -l
 ```
 
-Use an AVD and ADB port owned by this run. For example, from the repository root
-inside `nix develop` (choose unused ports if 5560/5043 are occupied):
+Build the debug and instrumentation APKs from the repository root in `nix develop`:
 
 ```sh
-export ANDROID_USER_HOME="$PWD/.tmp-nix/android-test/user-home"
-export ANDROID_AVD_HOME="$PWD/.tmp-nix/android-test/avd"
-export ANDROID_ADB_SERVER_PORT=5043
-mkdir -p "$ANDROID_USER_HOME" "$ANDROID_AVD_HOME"
-printf 'no\n' | "$ANDROID_HOME/cmdline-tools/22.0/bin/avdmanager" create avd --force \
-  --name japanese-anki-foundation-api37 \
-  --package 'system-images;android-37.0;google_apis;x86_64' --device pixel_7
-mkdir -p "$ANDROID_AVD_HOME/japanese-anki-foundation-api37.avd/data/misc/adb"
-adb start-server
-"$ANDROID_HOME/emulator/emulator" -avd japanese-anki-foundation-api37 -port 5560 -no-window -no-audio \
-  -no-boot-anim -gpu swiftshader_indirect -no-snapshot &
-EMU_PID=$!
-trap 'adb -s emulator-5560 emu kill >/dev/null 2>&1 || true; wait "$EMU_PID" 2>/dev/null || true; adb kill-server >/dev/null 2>&1 || true' EXIT
-adb -s emulator-5560 wait-for-device
-until [ "$(adb -s emulator-5560 shell getprop sys.boot_completed | tr -d '\r')" = 1 ]; do sleep 2; done
-adb -s emulator-5560 install -r app/build/outputs/apk/debug/app-x86_64-debug.apk
-adb -s emulator-5560 install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-adb -s emulator-5560 shell am instrument -w -r \
-  -e class dev.pierre.japaneseanki.AndroidPlatformSmokeTest \
-  dev.pierre.japaneseanki.test/androidx.test.runner.AndroidJUnitRunner
+gradle --offline --configuration-cache --build-cache \
+  -Pandroid.aapt2FromMavenOverride="$ANDROID_HOME/build-tools/36.0.0/aapt2" \
+  :app:assembleDebug :app:assembleDebugAndroidTest
 ```
 
-The explicit `adb -s` calls prevent an instrumentation run from drifting onto
-another device. `connectedDebugAndroidTest` targets every device attached to its
-ADB server; use it only when that server has exactly the AVDs you intend to test.
-Do not stop a device you did not start. The checked-in `scripts/emulator.sh` is
-for the app's own interactive AVD, not a general-purpose instrumentation runner.
+With the intended emulator as the only attached device, run:
 
-Refresh the Nix Gradle artifact lock after changing test dependencies with:
+```sh
+export ANDROID_SERIAL=emulator-5554
+gradle --offline --configuration-cache --build-cache --max-workers=1 --console=plain \
+  -Pandroid.aapt2FromMavenOverride="$ANDROID_HOME/build-tools/36.0.0/aapt2" \
+  :app:connectedDebugAndroidTest
+```
+
+Use the actual serial reported by `adb devices -l`; do not stop a device you did not start, and do not run competing Gradle builds or AVDs on a shared lane. The camera test grants permission to the target package, writes its capture under app-private cache, and removes that test output. The OCR and audio fixtures are local; the decoder test exercises Android `MediaPlayer` with WAV/OGG/MP3 and does not call paid services. A debug AVD result is not physical-hardware or signed-release acceptance.
+
+Connected-test XML is written under `app/build/outputs/androidTest-results/connected/debug/`. JVM unit/Robolectric/Compose XML is under `app/build/test-results/testDebugUnitTest/` and is the primary report for `verifyFast`.
+
+## Dependency lock
+
+If instrumentation dependencies change, refresh the Nix Gradle dependency lock with:
 
 ```sh
 ./scripts/update-gradle-deps.sh
 ```
 
-That update resolves Android-test configurations explicitly. A warm Gradle
-cache is not evidence that the sandbox lock contains the instrumentation
-artifacts.
+A warm Gradle cache is not evidence that the lock contains the artifacts. The camera test dependencies are pinned in `gradle/libs.versions.toml` and covered by `nix/gradle/deps.json`.

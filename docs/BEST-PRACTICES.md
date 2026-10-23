@@ -60,8 +60,10 @@ Consequences:
 `OfflineJapaneseAnalyzer`, `NativeMeCab`, `JapaneseOcr`, `ImageMediaProcessor`,
 `EncryptedSecretStore`, `SettingsPersistence`, `AnkiDroidGateway`, `AnkiMediaImporter`,
 `SubmissionRecovery`, `VerifiedFirstRunResources`, `UniDicResourceCatalog`.
-Test these with `app/src/androidTest` when the guarantee is the platform's (SQLite, WebP, playback),
-and with a seam plus a JVM test when the logic is yours.
+Use Robolectric in `app/src/test` for local SQLite/WebP behavior, asset checks, and the `MediaPlayer`
+lifecycle contract. Keep real CameraX/ML Kit, system UI, third-party AnkiDroid, signed-release, and
+real decoder acceptance on the device/release lane: a Robolectric shadow cannot prove codec support,
+and an emulator result does not prove physical-hardware output.
 
 **Compose UI** — everything in `ui/`: `FlowTheme` (palette, type scale, shared controls),
 `InputScreen`, `TargetScreen`, `ReviewCard`, `SettingsScreen`, `CameraCapture`,
@@ -119,8 +121,8 @@ What must be tested where:
 | Concern | Where | Why |
 |---|---|---|
 | Parsing, spans, readings, serialization, state machines, hint building, request mapping, cache identity | `app/src/test` (JVM) | Fast lane; no framework needed |
-| SQLite behaviour, WebP encode/decode, `MediaPlayer` playback, bundled-asset presence, OCR model | `app/src/androidTest` | Only the platform can prove these |
-| Camera, permission flows, provider insertion into a real AnkiDroid, TalkBack | Emulator runbook + recorded evidence | Not automatable from JVM |
+| Local SQLite/WebP contracts, `MediaPlayer` lifecycle, bundled-asset checks, other local framework behavior | `app/src/test` (Robolectric/native graphics) | Deterministic local framework contract; not device/native codec acceptance |
+| Real Android decoder support, CameraX/ML Kit, system insets, real AnkiDroid provider, signed release | Device/release lane | Requires real codecs, sensor, system UI, third-party app, or signed artifact |
 
 - JUnit 4, one behaviour per test, sentence-style camelCase names
   (`@Test fun selectionRetainsExactOccurrence()`), assertions on values rather than logs.
@@ -148,12 +150,13 @@ nix develop
 Inside that shell:
 
 ```sh
-# 1. Fast lane: platform-independent core tests (seconds). Fails fast if gradle is absent.
+# 1. Core logic checks, separate from the Android/Compose test lane.
 ./scripts/test-core.sh
 
-# 2. Full JVM unit tests + debug APKs for both ABIs.
-gradle -Pandroid.aapt2FromMavenOverride="$ANDROID_HOME/build-tools/36.0.0/aapt2" \
-  testDebugUnitTest assembleDebug
+# 2. Complete offline JVM, Robolectric, Compose and Roborazzi verification + debug APKs.
+gradle --offline --configuration-cache --build-cache \
+  -Pandroid.aapt2FromMavenOverride="$ANDROID_HOME/build-tools/36.0.0/aapt2" \
+  verifyFast assembleDebug
 
 # 3. What CI runs (core lane + the Gradle command above).
 ./scripts/ci-build-apk.sh
@@ -163,7 +166,7 @@ Nix-side checks (no dev shell needed):
 
 ```sh
 nix build .#checks.x86_64-linux.core   # builder + dictionary + UniDic packaging self-checks
-nix build .#debugApk                   # sandboxed debug APK, runs testDebugUnitTest (doCheck)
+nix build .#debugApk                   # sandboxed debug APK, runs verifyFast (doCheck)
 nix build .#apk                        # unsigned release APK
 nix build .#unidicRuntime              # the first-run UniDic asset that must ship beside the APK
 ```
@@ -312,12 +315,12 @@ Rules:
 
   1. targeted compile / single test class;
   2. `./scripts/test-core.sh` (once per branch);
-  3. `testDebugUnitTest assembleDebug` (once per branch), plus `lintDebug` on integration;
-  4. one coordinated API-37 emulator lane for the runtime checks that need it, with captures and
-     logcat retained.
+  3. `verifyFast assembleDebug` (once per branch), plus `lintDebug` on integration;
+  4. one coordinated API-37 device lane only for camera/ML Kit, system-insets/gesture-pill,
+     AnkiDroid round-trip, or signed-APK release smoke; retain captures and logcat.
 
   Do not boot competing emulators, do not run several Gradle builds at once, and do not count a
-  green core lane as proof of CameraX, provider import, modal Back, or native rendering.
+  green JVM lane as proof of CameraX, system UI, provider import, or signed-APK behavior.
 - **Deliverable evidence** for a release: installable APK(s) + checksum, install/setup
   instructions, screenshots of the actual build, and an acceptance record with explicit
   PASS/FAIL/PARTIAL/NOT RUN rows.
