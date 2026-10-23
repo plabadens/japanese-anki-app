@@ -1,12 +1,23 @@
 import org.gradle.api.artifacts.ProjectDependency
+import org.gradle.jvm.toolchain.JavaLanguageVersion
 
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.roborazzi)
 }
 
 val mecabSourceDir = providers.environmentVariable("MECAB_SOURCE_DIR").orNull
     ?: error("Build inside the Nix development shell to provide pinned MeCab source")
+val robolectricDependencyDir = providers.environmentVariable("ROBOLECTRIC_DEPENDENCY_DIR")
+    .orElse(file("$rootDir/robolectric-jars/preinstrumented").absolutePath)
+    .get()
+val testTempDir = providers.environmentVariable("TMPDIR")
+    .orElse(layout.projectDirectory.dir("build/tmp").asFile.absolutePath)
+    .get()
+val robolectricTestLauncher = javaToolchains.launcherFor {
+    languageVersion = JavaLanguageVersion.of(21)
+}
 
 // Release signing material is read from the environment and never from the repository. Every
 // value is optional: when they are absent `assembleRelease` keeps producing the unsigned
@@ -110,6 +121,30 @@ android {
 
     buildFeatures { compose = true }
 
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            all {
+                it.javaLauncher.set(robolectricTestLauncher)
+                it.jvmArgs(
+                    "--add-opens=java.base/java.lang=ALL-UNNAMED",
+                    "--add-opens=java.base/java.util=ALL-UNNAMED",
+                    "--add-opens=java.base/java.io=ALL-UNNAMED",
+                    "--add-opens=java.base/java.net=ALL-UNNAMED",
+                    "--add-opens=java.base/java.security=ALL-UNNAMED",
+                    "--add-opens=java.base/java.text=ALL-UNNAMED",
+                    "--add-opens=java.base/jdk.internal.access=ALL-UNNAMED",
+                    "--add-opens=java.desktop/java.awt.font=ALL-UNNAMED",
+                    "--add-opens=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED",
+                )
+                it.systemProperty("robolectric.offline", "true")
+                it.systemProperty("robolectric.dependency.dir", robolectricDependencyDir)
+                it.systemProperty("java.io.tmpdir", testTempDir)
+                it.systemProperty("org.conscrypt.native.workdir", testTempDir)
+            }
+        }
+    }
+
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
@@ -151,7 +186,14 @@ dependencies {
     debugImplementation(platform(libs.androidx.compose.bom))
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+    testImplementation(platform(libs.androidx.compose.bom))
     testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.test.ext.junit)
+    testImplementation(libs.androidx.test.espresso)
+    testImplementation(libs.roborazzi.compose)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.test.espresso)

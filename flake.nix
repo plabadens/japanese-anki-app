@@ -8,6 +8,7 @@
       system = "x86_64-linux";
       pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
       jdk = pkgs.jdk17;
+      robolectricJdk = pkgs.jdk21;
       gradle = pkgs.gradle_9;
       mecabSource = pkgs.fetchFromGitHub {
         owner = "taku910";
@@ -25,6 +26,17 @@
       } ''
         python3 ${./scripts/package_unidic.py} --archive ${unidicArchive} --output "$out"
       '';
+      robolectricAndroidAll = pkgs.fetchurl {
+        url = "https://repo.maven.apache.org/maven2/org/robolectric/android-all-instrumented/17-robolectric-15733970-i7/android-all-instrumented-17-robolectric-15733970-i7.jar";
+        hash = "sha256-MKFSQ7qaagFjYYdvrMdUMvTsXbD54n1JhKSmsWe0Mr0=";
+      };
+      robolectricDependencyDir = pkgs.runCommand "robolectric-android-all-api37" {} ''
+        mkdir -p "$out"
+        ln -s ${robolectricAndroidAll} "$out/android-all-instrumented-17-robolectric-15733970-i7.jar"
+      '';
+      cjkFontconfig = pkgs.makeFontsConf {
+        fontDirectories = [ pkgs.noto-fonts-cjk-sans ];
+      };
       androidEnv = pkgs.callPackage "${nixpkgs}/pkgs/development/mobile/androidenv" {
         inherit pkgs;
         licenseAccepted = true;
@@ -53,6 +65,9 @@
         ANDROID_SDK_ROOT = sdkRoot;
         ANDROID_NDK_HOME = "${sdkRoot}/ndk/27.2.12479018";
         MECAB_SOURCE_DIR = "${mecabSource}";
+        ROBOLECTRIC_JAVA_HOME = "${robolectricJdk}";
+        ROBOLECTRIC_DEPENDENCY_DIR = "${robolectricDependencyDir}";
+        FONTCONFIG_FILE = "${cjkFontconfig}";
         GRADLE_OPTS = "-Dorg.gradle.native=false";
       };
 
@@ -72,15 +87,18 @@
         };
       };
 
-      # Explicit APK inputs: root build files, the version catalog, and app sources.
-      # `app/build` is deliberately excluded — only `app/src` is source, and a
-      # checkout carrying Gradle outputs must not feed them into the sandbox build.
+      # Explicit APK/test inputs. `app/build` is deliberately excluded — only `app/src` is source,
+      # and a checkout carrying Gradle outputs must not feed them into the sandbox build. These
+      # three docs are test fixtures read by CopyCatalogueTest, so include them in the check source.
       apkSource = pkgs.lib.fileset.toSource {
         root = ./.;
         fileset = pkgs.lib.fileset.unions [
           ./app/build.gradle.kts
           ./app/src
           ./build.gradle.kts
+          ./docs/card-flow-contract.md
+          ./docs/legacy-copy.md
+          ./docs/sentence-mining-flow.md
           ./gradle
           ./gradle.properties
           ./settings.gradle.kts
@@ -114,7 +132,7 @@
           version = "0.1.0";
           src = apkSource;
 
-          nativeBuildInputs = [ jdk gradle ];
+          nativeBuildInputs = [ jdk robolectricJdk gradle ];
           buildInputs = [ android.androidsdk ];
           env = toolchainEnv // {
             JAVA_HOME = "${jdk}";
@@ -184,7 +202,7 @@
       checks.${system}.core = coreTests;
 
       devShells.${system}.default = pkgs.mkShell (toolchainEnv // {
-        packages = [ jdk gradle android.androidsdk android.platform-tools pkgs.git pkgs.python3 ];
+        packages = [ jdk robolectricJdk gradle android.androidsdk android.platform-tools pkgs.git pkgs.python3 pkgs.noto-fonts-cjk-sans ];
         EMULATOR_ADB = "${emulatorAdb}/bin/emulator-adb";
         JAVA_HOME = jdk.home;
         LANG = "C.UTF-8";
