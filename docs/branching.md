@@ -21,7 +21,8 @@ Feature work lands here first. `dev` is where several finished branches are comb
 Per task: `japanese-anki-app/<task-id>-<slug>`, cut from `dev` (not from `main`) unless the task is explicitly a hotfix against what shipped.
 
 - One task, one branch, one worktree.
-- Land by merging into `dev` after the task's own gates pass.
+- **These branches stay local.** They are never pushed — not for backup, not to get CI, not for review. Publishing a task branch is how the remote fills with dead refs that nobody dares delete.
+- Land by merging into `dev` locally, then pushing `dev`. Only `main`, `dev` and deliberate long-lived release branches belong on `origin`.
 - Do not merge straight into `main`; a feature branch that skips `dev` has skipped the integration check that branch exists to provide.
 
 ## Promotion: `dev` → `main`

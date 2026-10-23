@@ -1,6 +1,12 @@
 - All commits must use Pierre Labadens <labadens.pierre@gmail.com> as both
   author and committer. Never substitute agent/profile identities or add agent
   co-author attribution. Check the effective Git identities before committing.
+- **Never push a working branch.** Commit on your own task branch and leave it
+  local. Nothing is published until it is merged into `dev`; then push `dev`
+  itself (`git push origin dev`). `git push origin <task-branch>` is forbidden,
+  including "just for backup", "just for CI", or "just for review" — if a run
+  needs CI or a second pair of eyes, merge into `dev` first. Only `main`, `dev`
+  and deliberate long-lived release branches may exist on `origin`.
 - If running into issues related to the development environment, inform the 
   user and propose a clean fix instead of messy workarounds.
 - When implementing UI elements:
