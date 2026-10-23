@@ -13,18 +13,20 @@ import org.junit.Assert.assertTrue
 import org.junit.BeforeClass
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 
 /**
  * The real [OfflineDictionary] adapter against the real bundled index and against small
  * same-schema fixtures for the corruption and orphan cases that bundled data does not contain.
  */
 @RunWith(AndroidJUnit4::class)
+@Config(sdk = [37], qualifiers = "w390dp-h844dp-xxhdpi")
 class OfflineDictionaryAndroidTest {
     @Test
     fun existenceAgreesWithSearchOnBundledData() {
         val sample = mutableListOf<Pair<String, String>>()
         openReadOnly(bundledFile).use { database ->
-            database.rawQuery("SELECT expression, reading FROM forms ORDER BY random() LIMIT 150", null).use { cursor ->
+            database.rawQuery("SELECT expression, reading FROM forms ORDER BY expression, reading LIMIT 150", null).use { cursor ->
                 while (cursor.moveToNext()) sample += cursor.getString(0) to cursor.getString(1)
             }
         }

@@ -139,7 +139,7 @@
           };
 
           gradleBuildTask = task;
-          gradleCheckTask = "testDebugUnitTest";
+          gradleCheckTask = "verifyFast";
           gradleFlags = [
             "--max-workers=1"
             "-Pandroid.aapt2FromMavenOverride=${sdkRoot}/build-tools/36.0.0/aapt2"
