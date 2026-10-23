@@ -23,8 +23,8 @@ abstract class CardFlowPreviewCatalogueTestBase(
     val composeRule = createComposeRule()
 
     @Test
-    fun catalogueContainsOnlyTheThirteenContractStates() {
-        assertEquals(13, CardFlowPreviewState.values().size)
+    fun catalogueContainsOnlyTheFourteenContractStates() {
+        assertEquals(14, CardFlowPreviewState.values().size)
     }
 
     @Test

@@ -204,6 +204,26 @@ class SettingsCoordinatorTest {
         assertEquals("configured-key", persistence.savedCredential)
     }
 
+    @Test
+    fun selectedVoiceSurvivesSettingsBackFlushAndReopen() {
+        val persistence = FakeSettingsPersistence()
+        val coordinator = SettingsCoordinator(persistence, FakeSettingsScheduler())
+        coordinator.open()
+        coordinator.updateGoogleKey("test-key")
+        val selected = voice("ja-JP-Chirp3-HD-Aoede")
+        val request = coordinator.reloadVoices()!!
+        assertTrue(coordinator.completeVoiceLoad(request, voices = listOf(selected)))
+        coordinator.updateValues(coordinator.currentValues().copy(voiceName = selected.name))
+
+        assertTrue(coordinator.flush().isSuccess)
+
+        val reopened = SettingsCoordinator(persistence, FakeSettingsScheduler())
+        val opened = reopened.open()
+        assertEquals(selected.name, opened.values.voiceName)
+        assertEquals(VoiceCatalogProvenance.CACHED, opened.voiceCatalog.provenance)
+        assertNotNull(opened.initialVoiceRequest)
+    }
+
     private fun loaded(
         key: String,
         values: SettingsValues = SettingsValues(),
@@ -223,8 +243,16 @@ private class FakeSettingsPersistence(
     var failKey = false
     var savedValues = initial.values
     var savedCredential = initial.googleKey
+    private var cachedVoices = initial.cachedVoices
+    private var cachedVoiceListPresent = initial.cachedVoiceListPresent
 
-    override fun load(): LoadedSettings = initial
+    override fun load(): LoadedSettings = LoadedSettings(
+        values = savedValues,
+        googleKey = savedCredential,
+        credentialUnreadable = initial.credentialUnreadable,
+        cachedVoices = cachedVoices,
+        cachedVoiceListPresent = cachedVoiceListPresent,
+    )
 
     override fun saveValues(values: SettingsValues): Boolean {
         valueWrites++
@@ -242,6 +270,8 @@ private class FakeSettingsPersistence(
 
     override fun saveVoiceCache(voices: List<CloudVoice>): Boolean {
         cacheWrites++
+        cachedVoices = voices.toList()
+        cachedVoiceListPresent = true
         return true
     }
 }

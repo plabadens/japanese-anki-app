@@ -343,6 +343,25 @@ private fun DraftAudioState.toDraftAudio(item: AudioItem, context: Context): Dra
 
 enum class AppRoute { Capture, Card }
 
+internal fun visibleRouteForAnalyzer(
+    requestedRoute: AppRoute,
+    analyzerReady: Boolean,
+    frozenCardActive: Boolean,
+): AppRoute = when {
+    !analyzerReady -> AppRoute.Capture
+    frozenCardActive -> AppRoute.Card
+    else -> requestedRoute
+}
+
+internal fun shouldShowSetupWizard(
+    showWizard: Boolean,
+    onboardingComplete: Boolean,
+    analyzerReady: Boolean,
+    showDownloads: Boolean,
+    showSettings: Boolean,
+): Boolean = !showDownloads && !showSettings &&
+    (showWizard || !onboardingComplete || !analyzerReady)
+
 private data class SentenceAudioAuthorization(
     val revision: Long,
     val sentence: String,
@@ -683,6 +702,13 @@ class MainActivity : ComponentActivity() {
             var analyzerReady by remember { mutableStateOf(false) }
             var analyzerLoading by remember { mutableStateOf(false) }
             var analyzerError by remember { mutableStateOf<String?>(null) }
+            val setupWizardVisible = shouldShowSetupWizard(
+                showWizard = showWizard,
+                onboardingComplete = onboardingComplete,
+                analyzerReady = analyzerReady,
+                showDownloads = showDownloads,
+                showSettings = showSettings,
+            )
             var tokenizationLoading by remember { mutableStateOf(false) }
             var tokenizationError by remember { mutableStateOf<String?>(null) }
             var analysisRetry by remember { mutableStateOf(0) }
@@ -1165,6 +1191,17 @@ class MainActivity : ComponentActivity() {
                 showSettings = true
             }
 
+            suspend fun flushSettings(coordinator: SettingsCoordinator): Result<Unit> = try {
+                withContext(Dispatchers.IO) { coordinator.flush() }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Result.failure(error)
+            } finally {
+                // A failed or cancelled flush must not leave every Settings control disabled.
+                settingsSaving = false
+            }
+
             fun closeSettings(resumeSetup: Boolean = false) {
                 if (!showSettings || settingsSaving) return
                 val coordinator = settingsCoordinator
@@ -1174,8 +1211,7 @@ class MainActivity : ComponentActivity() {
                 }
                 settingsSaving = true
                 coroutineScope.launch {
-                    val result = withContext(Dispatchers.IO) { coordinator.flush() }
-                    settingsSaving = false
+                    val result = flushSettings(coordinator)
                     if (result.isSuccess) {
                         syncSettingsScreen(coordinator)
                         googleKey = coordinator.currentGoogleKey()
@@ -1201,8 +1237,7 @@ class MainActivity : ComponentActivity() {
                 setupAudioErrorResource = null
                 settingsSaving = true
                 coroutineScope.launch {
-                    val result = withContext(Dispatchers.IO) { coordinator.flush() }
-                    settingsSaving = false
+                    val result = flushSettings(coordinator)
                     syncSettingsScreen(coordinator)
                     if (result.isFailure) {
                         setupAudioErrorResource = R.string.save_failed
@@ -1258,30 +1293,6 @@ class MainActivity : ComponentActivity() {
                             onboardingComplete = true
                             showWizard = false
                         }
-                    }
-                }
-            }
-
-            fun useAppDuringSetup() {
-                if (!showWizard) return
-                val coordinator = settingsCoordinator.takeIf { onboardingStep == OnboardingStep.AUDIO }
-                if (coordinator == null) {
-                    showWizard = false
-                    return
-                }
-                if (settingsSaving) return
-                settingsSaving = true
-                coroutineScope.launch {
-                    val result = withContext(Dispatchers.IO) { coordinator.flush() }
-                    settingsSaving = false
-                    if (result.isSuccess) {
-                        syncSettingsScreen(coordinator)
-                        googleKey = coordinator.currentGoogleKey()
-                        settingsCoordinator = null
-                        audioNextRequested = false
-                        showWizard = false
-                    } else {
-                        setupAudioErrorResource = R.string.save_failed
                     }
                 }
             }
@@ -2861,7 +2872,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            if (showWizard) {
+            if (setupWizardVisible) {
                 FlowTheme(darkTheme = isSystemInDarkTheme()) {
                     Dialog(
                         onDismissRequest = {
@@ -2992,7 +3003,6 @@ class MainActivity : ComponentActivity() {
                                     ) persistSetupStep(OnboardingStep.READY)
                                 },
                                 onFinish = { nextSetupStep() },
-                                onUseApp = { useAppDuringSetup() },
                                 onOpenDownloads = {
                                     showWizard = false
                                     showDownloads = true
@@ -3253,7 +3263,11 @@ class MainActivity : ComponentActivity() {
             val displayTags = frozenForDisplay?.tags?.joinToString(" ") ?: tags
             val displayPitch = frozenForDisplay?.pitchAccentText?.toIntOrNull()
                 ?.let { PitchAccent.create(displayVocabularyReading, it, pitchHtmlText) } ?: pitch
-            val visibleRoute = if (frozenForDisplay != null) AppRoute.Card else route
+            val visibleRoute = visibleRouteForAnalyzer(
+                requestedRoute = route,
+                analyzerReady = analyzerReady,
+                frozenCardActive = frozenForDisplay != null,
+            )
             val frozenDestinationReady = !frozenRetryReady || (
                 restoredFrozenForUi != null && selectedModel?.id == restoredFrozenForUi.modelId &&
                     selectedDeck?.id == restoredFrozenForUi.deckId && selectedModel.fields == restoredFrozenForUi.modelFields
@@ -3499,8 +3513,8 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            androidx.compose.runtime.LaunchedEffect(showSettings, showWizard, onboardingStep) {
-                val settingsActive = showSettings || (showWizard && onboardingStep == OnboardingStep.AUDIO)
+            androidx.compose.runtime.LaunchedEffect(showSettings, setupWizardVisible, onboardingStep) {
+                val settingsActive = showSettings || (setupWizardVisible && onboardingStep == OnboardingStep.AUDIO)
                 if (!settingsActive) {
                     settingsCoordinator = null
                     settingsLoading = false

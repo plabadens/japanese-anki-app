@@ -1,5 +1,6 @@
 package dev.pierre.japaneseanki.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -128,23 +130,17 @@ internal fun SettingsScreen(
                     }
                 }
             }
-            OutlinedTextField(
+            PickerField(
+                label = stringResource(R.string.note_type),
                 value = selectedModel?.name.orEmpty(),
-                onValueChange = {},
-                modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { modelPickerOpen = true },
-                label = { Text(stringResource(R.string.note_type)) },
-                readOnly = true,
                 enabled = !state.loading && compatibleNoteTypes.isNotEmpty(),
-                singleLine = true,
+                onClick = { modelPickerOpen = true },
             )
-            OutlinedTextField(
+            PickerField(
+                label = stringResource(R.string.deck),
                 value = selectedDeck?.name.orEmpty(),
-                onValueChange = {},
-                modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { deckPickerOpen = true },
-                label = { Text(stringResource(R.string.deck)) },
-                readOnly = true,
                 enabled = !state.loading && decks.isNotEmpty(),
-                singleLine = true,
+                onClick = { deckPickerOpen = true },
             )
 
             OutlinedTextField(
@@ -166,20 +162,23 @@ internal fun SettingsScreen(
                     },
                 ) { Text(if (showKey) hideKeyLabel else showKeyLabel) }
             }
-            OutlinedTextField(
+            PickerField(
+                label = stringResource(R.string.sentence_voice),
                 value = selectedVoice?.displayName ?: state.values.voiceName,
-                onValueChange = {},
-                modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { voicePickerOpen = true },
-                label = { Text(stringResource(R.string.sentence_voice)) },
-                readOnly = true,
                 enabled = !state.loading,
-                singleLine = true,
+                onClick = { voicePickerOpen = true },
             )
             TextButton(
                 enabled = !state.loading && !state.voiceCatalog.loading,
                 onClick = onReloadVoices,
                 modifier = Modifier.fillMaxWidth(),
             ) { Text(stringResource(R.string.reload_voices)) }
+            state.voiceCatalog.error?.let { message ->
+                Text(message, color = MaterialTheme.colorScheme.error)
+            }
+            if (state.voiceCatalog.selectedVoiceMissing(state.values.voiceName)) {
+                Text(stringResource(R.string.voice_unavailable), color = MaterialTheme.colorScheme.error)
+            }
             if (state.voiceCatalog.loading) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -262,13 +261,14 @@ internal fun SettingsScreen(
                 .takeIf { it >= 0 }?.toLong(),
             rows = voiceRows,
             emptyMessage = when {
-                state.voiceCatalog.error != null -> "Could not load voices."
+                state.voiceCatalog.error != null -> state.voiceCatalog.error
+                !state.credentialStored -> stringResource(R.string.key_required)
                 state.voiceCatalog.provenance == VoiceCatalogProvenance.AUTHORITATIVE ->
-                    "No compatible Japanese voices found."
+                    stringResource(R.string.voices_empty)
                 else -> null
             },
             cachedMessage = if (state.voiceCatalog.provenance == VoiceCatalogProvenance.CACHED) {
-                "Saved voices · offline"
+                stringResource(R.string.cached_voices)
             } else null,
             loadingMessage = if (state.voiceCatalog.loading) stringResource(R.string.loading_voices) else null,
             onSelect = { index ->
@@ -296,6 +296,42 @@ internal fun SettingsScreen(
 }
 
 private data class PickerRow(val id: Long, val label: String)
+
+@Composable
+private fun PickerField(
+    label: String,
+    value: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val contentColor = MaterialTheme.colorScheme.onSurface.let {
+        if (enabled) it else it.copy(alpha = 0.38f)
+    }
+    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant.let {
+        if (enabled) it else it.copy(alpha = 0.38f)
+    }
+    Surface(
+        modifier = Modifier.fillMaxWidth().clickable(
+            enabled = enabled,
+            role = Role.Button,
+            onClick = onClick,
+        ),
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outline.copy(alpha = if (enabled) 1f else 0.38f),
+        ),
+    ) {
+        Column(
+            Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(label, style = MaterialTheme.typography.bodySmall, color = labelColor)
+            Text(value, style = MaterialTheme.typography.bodyLarge, color = contentColor)
+        }
+    }
+}
 
 @Composable
 private fun PickerDialog(

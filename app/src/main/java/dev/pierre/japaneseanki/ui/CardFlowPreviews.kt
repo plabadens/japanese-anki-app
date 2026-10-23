@@ -19,6 +19,7 @@ import java.io.File
 internal enum class CardFlowPreviewState(val fileName: String) {
     CAPTURE_CAMERA_IDLE("capture-camera-idle"),
     CAPTURE_PERMISSION_PROMPT("capture-camera-permission-prompt"),
+    SETUP_DICTIONARY_REQUIRED("setup-dictionary-required"),
     SETUP_DICTIONARY_DOWNLOADING("setup-dictionary-downloading"),
     CAPTURE_TORCH_ON("capture-torch-on"),
     TYPE_EMPTY_FIELD("type-empty-field"),
@@ -66,6 +67,7 @@ internal fun CardFlowPreviewContent(
                 CardFlowPreviewState.CAPTURE_PERMISSION_PROMPT -> CapturePreview(
                     cameraPermissionGranted = false,
                 )
+                CardFlowPreviewState.SETUP_DICTIONARY_REQUIRED -> DictionarySetupPreview(downloading = false)
                 CardFlowPreviewState.SETUP_DICTIONARY_DOWNLOADING -> DictionarySetupPreview()
                 CardFlowPreviewState.CAPTURE_TORCH_ON -> CapturePreview(
                     cameraPermissionGranted = true,
@@ -108,16 +110,16 @@ private fun CapturePreview(
 }
 
 @Composable
-private fun DictionarySetupPreview() {
+private fun DictionarySetupPreview(downloading: Boolean = true) {
     OnboardingScreen(
         step = OnboardingStep.DICTIONARY,
         dictionary = DictionaryTaskUi(
-            phase = DictionaryTaskPhase.DOWNLOADING,
-            downloadedBytes = stringResource(R.string.byte_progress, "32 MiB", "426 MiB"),
-            progressFraction = 0.075f,
-            hasStarted = true,
-            canPause = true,
-            canCancel = true,
+            phase = if (downloading) DictionaryTaskPhase.DOWNLOADING else DictionaryTaskPhase.IDLE,
+            downloadedBytes = if (downloading) stringResource(R.string.byte_progress, "32 MiB", "426 MiB") else null,
+            progressFraction = if (downloading) 0.075f else null,
+            hasStarted = downloading,
+            canPause = downloading,
+            canCancel = downloading,
         ),
         dictionarySize = "426 MiB",
         cameraPermissionGranted = false,
@@ -153,7 +155,6 @@ private fun DictionarySetupPreview() {
         onSelectDeck = {},
         onSetupAnkiLater = {},
         onFinish = {},
-        onUseApp = {},
         onOpenDownloads = {},
     )
 }
@@ -249,6 +250,10 @@ internal fun CapturePermissionPromptPreview() = CardFlowPreviewContent(CardFlowP
 @Preview(name = "Setup / dictionary downloading", widthDp = 390, heightDp = 844)
 @Composable
 internal fun SetupDictionaryDownloadingPreview() = CardFlowPreviewContent(CardFlowPreviewState.SETUP_DICTIONARY_DOWNLOADING)
+
+@Preview(name = "Setup / dictionary required", widthDp = 390, heightDp = 844)
+@Composable
+internal fun SetupDictionaryRequiredPreview() = CardFlowPreviewContent(CardFlowPreviewState.SETUP_DICTIONARY_REQUIRED)
 
 @Preview(name = "Capture / torch on", widthDp = 390, heightDp = 844)
 @Composable

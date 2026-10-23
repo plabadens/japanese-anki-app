@@ -37,7 +37,7 @@ class CopyCatalogueTest {
         val failures = section(flow, "### Failure and recovery copy", "## Import verification")
         val staticIds = tableIds(staticCatalogue)
         val failureIds = tableIds(failures)
-        val retired = removed + "use_mobile_body"
+        val retired = removed + setOf("use_mobile_body", "use_app")
         val cataloguedIds = (staticIds + failureIds + added) - retired
         assertTrue(
             "Catalogue IDs missing from strings.xml: ${cataloguedIds - resourceIds}",

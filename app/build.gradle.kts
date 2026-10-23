@@ -223,7 +223,10 @@ if (renderDesignStatesRequested) {
     afterEvaluate {
         tasks.named<RoborazziPlugin.RoborazziTask>("recordRoborazziDebug").get()
             .setTestNameIncludePatterns(
-                listOf("dev.pierre.japaneseanki.ui.CardFlowPreviewCatalogue*"),
+                listOf(
+                    "dev.pierre.japaneseanki.ui.CardFlowPreviewCatalogue*",
+                    "dev.pierre.japaneseanki.ui.SettingsPreviewCatalogue*",
+                ),
             )
     }
 }

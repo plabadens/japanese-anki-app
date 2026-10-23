@@ -29,7 +29,6 @@
     <string name="cancelled">Cancelled</string>
     <string name="pause">Pause</string>
     <string name="resume">Resume</string>
-    <string name="use_app">Use app while setup runs</string>
     <string name="finish_setup">Finish setup</string>
     <string name="restart_download">The download will start over.</string>
     <string name="download_notification">Dictionary download</string>

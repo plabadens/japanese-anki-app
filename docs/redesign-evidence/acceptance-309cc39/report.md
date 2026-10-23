@@ -3,6 +3,10 @@ Commit: 309cc394e73eb4246504aaf0b6c671524d44268f
 Device: emulator-5554, API 37, x86_64, sdk_gphone64_x86_64
 Viewport configured through scripts/ui-journey.py: 390x844 dp at density 320 (780x1688 px)
 
+Historical only — this run predates removal of the “Use app while setup runs” escape hatch. It
+documents the old behavior and is not acceptance evidence for the current first-run contract, where
+Capture/Card stay inaccessible until setup finishes.
+
 Build and instrumentation
 
 PASS — Current app APK is installed on the named commit. Prior run evidence in the task thread records the build command and successful install on this exact SHA.
@@ -16,8 +20,8 @@ Evidence:
 - onboarding-unidic-waiting-390x844.png — download waiting state
 - use-app-setup-running.png — capture view permission prompt after choosing “Use app while setup runs”
 
-PASS — A setup-only route reaches Capture without configuring or entering an API key. The app presented the camera permission request; it was granted using the Android system UI. The resource download was canceled before leaving this run. Note: a network transfer did start transiently during the setup interaction; the UI subsequently showed 96.1 MiB of 425.9 MiB, and Cancel changed the state to “Cancelled”. No further download was attempted.
-NOT RUN — Full onboarding completion / dictionary byte-transfer completion: requires a 425.9 MiB transfer; no need to complete it for these checks, and the app explicitly allowed use while setup runs.
+HISTORICAL PASS — The then-current build allowed a setup-only route to reach Capture without configuring or entering an API key. The app presented the camera permission request; it was granted using the Android system UI. The resource download was canceled before leaving this run. Note: a network transfer did start transiently during the setup interaction; the UI subsequently showed 96.1 MiB of 425.9 MiB, and Cancel changed the state to “Cancelled”. No further download was attempted.
+NOT RUN — Full onboarding completion / dictionary byte-transfer completion: requires a 425.9 MiB transfer. The old build explicitly allowed use while setup ran; that behavior has since been retired.
 
 Capture / Type observations
 
@@ -37,7 +41,7 @@ NOT RUN — “Hint line as the only instruction” for every flow state: captur
 
 Card / provider / analytics checks
 
-NOT RUN — Card surface, selectable word, meaning sheet, ready and sent states: the installed app is in first-run setup with no configured provider API key. The app can be used during dictionary setup, but no sentence/card state can be produced from the empty Type view without the required input/setup. No credentials were entered.
+NOT RUN — Card surface, selectable word, meaning sheet, ready and sent states: the installed app was in first-run setup with no configured provider API key. The historical build allowed use during dictionary setup, but no sentence/card state was produced. Current behavior is gated until setup finishes. No credentials were entered.
 NOT RUN — Audio and pitch playback; exactly one translation and one synthesis on commit; zero on rotation and zero on Back: provider-dependent journey cannot be reached without configuring the user-owned provider/TTS credentials. No paid call was made. No analytics instrumentation log/counter was captured for those actions.
 NOT RUN — OCR-to-sentence: the camera preview is visible, but no supported fixture image was available in the emulator flow during this run. No OCR result is claimed.
 
