@@ -3702,7 +3702,10 @@ class MainActivity : ComponentActivity() {
                                     cardAnalyzerError != null -> ({ analysisRetry++ })
                                     submitMessage != null && !sendBlockedStatus -> ({ submitAction() })
                                     recoveryActionLabel != null -> submitHintAction
-                                    else -> submitAction
+                                    // `submitAction` is assigned further down this composition, so it
+                                    // still holds the empty placeholder here. Invoke it at click time;
+                                    // capturing the value wires the button to a no-op.
+                                    else -> ({ submitAction() })
                                 }
                                 val cardMeaningChoices = DictionaryMeaningChoices.from(dictionaryEntries)
                                 val selectedMeaningChoice = DictionaryMeaningChoices.find(
