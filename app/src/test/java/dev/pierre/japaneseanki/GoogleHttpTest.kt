@@ -18,6 +18,9 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import kotlinx.coroutines.runBlocking
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 
 @RunWith(AndroidJUnit4::class)
 class GoogleHttpTest {
@@ -251,21 +254,28 @@ class GoogleHttpTest {
         assertEquals(256 * 1024, HttpTranslatorTransport.MAX_RESPONSE_BYTES)
         assertEquals(32 * 1024 * 1024, HttpGoogleSpeechTransport.MAX_RESPONSE_BYTES)
 
-        val translationResponse =
-            """{"data":{"translations":[{"translatedText":"Hello."}]}}""".toByteArray()
-        val translationStream = TrackingInputStream(translationResponse)
-        val translationConnection = FakeConnection(
-            URL("https://translation.googleapis.com/language/translate/v2"),
-            input = translationStream,
-        )
-        val translator = GoogleTranslationClient(
-            HttpTranslatorTransport(GoogleHttpConnectionFactory { translationConnection }),
-            timeoutMillis = 1_000,
-        )
-        assertEquals("Hello.", translator.translate("test-key", "文"))
-        assertEquals("POST", translationConnection.requestMethod)
-        assertEquals("test-key", translationConnection.getRequestProperty("X-Goog-Api-Key"))
-        assertTrue(translationConnection.disconnected)
+        val translationServer = MockWebServer()
+        translationServer.start()
+        try {
+            val translationBody = """{"data":{"translations":[{"translatedText":"Hello."}]}}"""
+            translationServer.enqueue(
+                MockResponse().setResponseCode(200).setBody(translationBody),
+            )
+            val request = """{"q":"文"}""".toByteArray(Charsets.UTF_8)
+            val response = runBlocking {
+                HttpTranslatorTransport().post(
+                    translationServer.url("/translate").toString(), "test-key", request, 1_000,
+                )
+            }
+            val recorded = translationServer.takeRequest()
+            assertEquals(200, response.code)
+            assertEquals(translationBody, response.body)
+            assertEquals("POST", recorded.method)
+            assertEquals("test-key", recorded.getHeader("X-Goog-Api-Key"))
+            assertArrayEquals(request, recorded.body.readByteArray())
+        } finally {
+            translationServer.shutdown()
+        }
 
         val voiceList = """{"voices":[]}""".toByteArray()
         val speechStream = TrackingInputStream(voiceList)
