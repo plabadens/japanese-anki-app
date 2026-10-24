@@ -69,6 +69,10 @@ import dev.pierre.japaneseanki.ui.AppContentMaxWidth
 
 import dev.pierre.japaneseanki.ui.ReviewAudioPresentation
 import dev.pierre.japaneseanki.ui.CardScreen
+import dev.pierre.japaneseanki.ui.CardAction
+import dev.pierre.japaneseanki.ui.CardPresentationCopy
+import dev.pierre.japaneseanki.ui.CardPresentationInput
+import dev.pierre.japaneseanki.ui.cardPresentation
 import dev.pierre.japaneseanki.ui.DictionaryMeaningSheet
 import dev.pierre.japaneseanki.ui.englishPartOfSpeechLabel
 import dev.pierre.japaneseanki.ui.reviewTranslationFailureStatus
@@ -3645,55 +3649,49 @@ class MainActivity : ComponentActivity() {
                                 val recoveryActionLabel = submitHintActionLabel.takeIf {
                                     submitHint != null && it != this@MainActivity.getString(R.string.card_edit_preparation)
                                 }
-                                val cardStatus = when {
-                                    completedSubmission != null -> submitMessage ?: stringResource(R.string.card_note_sent_to_ankidroid)
-                                    duplicateBlocked -> submitMessage ?: stringResource(R.string.card_matching_note_exists)
-                                    recoveryRequired -> recoveryMessage ?: stringResource(R.string.card_pending_send_needs_review)
-                                    else -> null
-                                }
-                                val cardHint = when {
-                                    cardAnalyzerError != null -> cardAnalyzerError
-                                    cardAnalyzing -> stringResource(R.string.card_analyzing_the_sentence)
-                                    target == null -> stringResource(R.string.card_hint_word)
-                                    completedSubmission != null -> cardStatus
-                                    duplicateBlocked -> cardStatus
-                                    recoveryRequired -> cardStatus
-                                    isSubmitting -> stringResource(R.string.sending)
-                                    sendBlockedStatus -> submitMessage
-                                    submitMessage != null -> submitMessage
-                                    reviewTranslationError != null -> this@MainActivity.getString(
-                                        reviewTranslationFailureStatus(reviewTranslationError).headlineResource,
-                                    )
-                                    wordAudioPresentation == ReviewAudioPresentation.Generating ->
-                                        stringResource(R.string.card_hint_preparing)
-                                    submitHint != null -> submitHint
-                                    else -> null
-                                }
-                                val cardNoWordAction = reviewTarget == null && cardAnalyzerError == null && !cardAnalyzing &&
-                                    !recoveryRequired && !duplicateBlocked && completedSubmission == null && submitMessage == null
-                                val cardActionLabel = when {
-                                    cardNoWordAction -> stringResource(R.string.send)
-                                    cardAnalyzerError != null -> stringResource(R.string.retry)
-                                    recoveryRequired || duplicateBlocked || completedSubmission != null || isSubmitting ->
-                                        stringResource(R.string.send)
-                                    submitMessage != null && !sendBlockedStatus -> stringResource(R.string.card_retry_send)
-                                    recoveryActionLabel != null -> recoveryActionLabel
-                                    else -> stringResource(R.string.send)
-                                }
-                                val cardActionEnabled = when {
-                                    cardNoWordAction -> false
-                                    isSubmitting || cardAnalyzing || completedSubmission != null || duplicateBlocked || recoveryRequired -> false
-                                    cardAnalyzerError != null -> !submissionLocked
-                                    submitMessage != null && !sendBlockedStatus -> canSend
-                                    recoveryActionLabel != null -> !submissionLocked
-                                    else -> canSend && reviewTarget != null
-                                }
-                                val cardAction: () -> Unit = when {
-                                    cardNoWordAction -> ({})
-                                    cardAnalyzerError != null -> ({ analysisRetry++ })
-                                    submitMessage != null && !sendBlockedStatus -> ({ submitAction() })
-                                    recoveryActionLabel != null -> submitHintAction
-                                    else -> submitAction
+                                val presentation = cardPresentation(
+                                    CardPresentationInput(
+                                        hasTarget = target != null,
+                                        analyzerError = cardAnalyzerError,
+                                        analyzing = cardAnalyzing,
+                                        completed = completedSubmission != null,
+                                        duplicateBlocked = duplicateBlocked,
+                                        recoveryRequired = recoveryRequired,
+                                        submitting = isSubmitting,
+                                        sendBlocked = sendBlockedStatus,
+                                        submitMessage = submitMessage,
+                                        recoveryActionLabel = recoveryActionLabel,
+                                        translationFailure = reviewTranslationError?.let {
+                                            this@MainActivity.getString(reviewTranslationFailureStatus(it).headlineResource)
+                                        },
+                                        wordAudioGenerating = wordAudioPresentation == ReviewAudioPresentation.Generating,
+                                        submitHint = submitHint,
+                                        noWordAction = reviewTarget == null && cardAnalyzerError == null && !cardAnalyzing &&
+                                            !recoveryRequired && !duplicateBlocked && completedSubmission == null && submitMessage == null,
+                                        canSend = canSend,
+                                        submissionLocked = submissionLocked,
+                                        actionHasTarget = reviewTarget != null,
+                                        recoveryMessage = recoveryMessage,
+                                        copy = CardPresentationCopy(
+                                            noTargetHint = stringResource(R.string.card_hint_word),
+                                            analyzingHint = stringResource(R.string.card_analyzing_the_sentence),
+                                            sendingHint = stringResource(R.string.sending),
+                                            wordAudioPreparingHint = stringResource(R.string.card_hint_preparing),
+                                            completedStatusFallback = stringResource(R.string.card_note_sent_to_ankidroid),
+                                            duplicateStatusFallback = stringResource(R.string.card_matching_note_exists),
+                                            recoveryStatusFallback = stringResource(R.string.card_pending_send_needs_review),
+                                            sendActionLabel = stringResource(R.string.send),
+                                            retryActionLabel = stringResource(R.string.retry),
+                                            retrySendActionLabel = stringResource(R.string.card_retry_send),
+                                        ),
+                                    ),
+                                )
+                                val cardAction: () -> Unit = when (presentation.action) {
+                                    CardAction.None -> ({})
+                                    CardAction.RetryAnalysis -> ({ analysisRetry++ })
+                                    CardAction.RetrySend -> ({ submitAction() })
+                                    CardAction.Recovery -> submitHintAction
+                                    CardAction.Submit -> submitAction
                                 }
                                 val cardMeaningChoices = DictionaryMeaningChoices.from(dictionaryEntries)
                                 val selectedMeaningChoice = DictionaryMeaningChoices.find(
@@ -3787,13 +3785,13 @@ class MainActivity : ComponentActivity() {
                                         }
                                     },
                                     onRetryWordAudio = { onAudioAction(AudioItem.VOCABULARY) },
-                                    hint = cardHint,
-                                    hintPreparing = cardAnalyzing,
-                                    actionLabel = cardActionLabel,
-                                    actionEnabled = cardActionEnabled,
+                                    hint = presentation.hint,
+                                    hintPreparing = presentation.hintPreparing,
+                                    actionLabel = presentation.actionLabel,
+                                    actionEnabled = presentation.actionEnabled,
                                     actionLoading = isSubmitting,
                                     onAction = cardAction,
-                                    statusMessage = cardStatus?.takeIf { it != cardHint },
+                                    statusMessage = presentation.status?.takeIf { it != presentation.hint },
                                     statusContent = {
                                         if (duplicateBlocked || recoveryRequired) sendRecoveryContent()
                                     },
