@@ -14,10 +14,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -185,7 +183,7 @@ internal fun SettingsScreen(
                     MotionAwareProgressIndicator(
                         modifier = Modifier.padding(2.dp),
                         color = MaterialTheme.colorScheme.primary,
-                        diameter = 40.dp,
+                        progressSize = ProgressSize.Large,
                         stateDescription = stringResource(R.string.loading_voices),
                     )
                     Text(stringResource(R.string.loading_voices))
@@ -271,7 +269,7 @@ internal fun SettingsScreen(
         )
     }
     if (clearCacheConfirm) {
-        AlertDialog(
+        FlowDialog(
             onDismissRequest = { clearCacheConfirm = false },
             title = { Text(stringResource(R.string.clear_cache_title)) },
             text = { Text(stringResource(R.string.clear_cache_body)) },
@@ -336,7 +334,7 @@ private fun PickerDialog(
     cachedMessage: String? = null,
     loadingMessage: String? = null,
 ) {
-    AlertDialog(
+    FlowDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
@@ -347,13 +345,11 @@ private fun PickerDialog(
                 cachedMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 emptyMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                 rows.forEach { row ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth().clickable { onSelect(row.id) },
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(selected = row.id == selectedId, onClick = { onSelect(row.id) })
-                        Text(row.label, modifier = Modifier.weight(1f))
-                    }
+                    FlowPickerField(
+                        label = row.label,
+                        selected = row.id == selectedId,
+                        onSelect = { onSelect(row.id) },
+                    )
                 }
             }
         },

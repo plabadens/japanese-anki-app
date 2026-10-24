@@ -2,6 +2,8 @@ package dev.pierre.japaneseanki.ui
 
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -12,12 +14,14 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.pierre.japaneseanki.AnkiDeck
 import dev.pierre.japaneseanki.AnkiFieldContract
 import dev.pierre.japaneseanki.AnkiNoteType
 import dev.pierre.japaneseanki.speech.CloudVoice
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -116,6 +120,58 @@ class SetupScreenBehaviorTest {
             assertEquals("ja-JP-Chirp3-HD-Kore", state.value.audio.selectedVoice)
         }
         composeRule.onNodeWithText("Kore · ja-JP-Chirp3-HD-Kore").assertIsDisplayed()
+    }
+
+    @Test
+    fun setupPickersUseFortyEightDpRadioRowsAndSelectOptions() {
+        val initial = setupUi()
+        val state = mutableStateOf(
+            initial.copy(
+                anki = initial.anki.copy(
+                    noteTypes = initial.anki.noteTypes + AnkiNoteType(
+                        2,
+                        "Alternate note type",
+                        AnkiFieldContract.requiredFields,
+                    ),
+                    decks = initial.anki.decks + AnkiDeck(11, "Second deck"),
+                ),
+            ),
+        )
+        composeRule.setContent {
+            FlowTheme(darkTheme = false) {
+                SetupScreen(
+                    state = state.value,
+                    onBack = null,
+                    onKeyChange = {},
+                    onVoiceChange = {},
+                    onLoadVoices = {},
+                    onRequestCamera = {},
+                    onConnectAnki = {},
+                    onSelectNoteType = { id ->
+                        state.value = state.value.copy(anki = state.value.anki.copy(selectedNoteTypeId = id))
+                    },
+                    onSelectDeck = { id ->
+                        state.value = state.value.copy(anki = state.value.anki.copy(selectedDeckId = id))
+                    },
+                    onRetryDictionary = {},
+                    onFinish = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Note type").performScrollTo().performClick()
+        val noteTypeOption = composeRule.onNodeWithText("Alternate note type").fetchSemanticsNode()
+        assertEquals(Role.RadioButton, noteTypeOption.config[SemanticsProperties.Role])
+        assertTrue(noteTypeOption.boundsInRoot.height >= with(composeRule.density) { 48.dp.toPx() })
+        composeRule.onNodeWithText("Alternate note type").performClick()
+        composeRule.runOnIdle { assertEquals(2L, state.value.anki.selectedNoteTypeId) }
+
+        composeRule.onNodeWithText("Deck").performScrollTo().performClick()
+        val deckOption = composeRule.onNodeWithText("Second deck").fetchSemanticsNode()
+        assertEquals(Role.RadioButton, deckOption.config[SemanticsProperties.Role])
+        assertTrue(deckOption.boundsInRoot.height >= with(composeRule.density) { 48.dp.toPx() })
+        composeRule.onNodeWithText("Second deck").performClick()
+        composeRule.runOnIdle { assertEquals(11L, state.value.anki.selectedDeckId) }
     }
 
     @Test

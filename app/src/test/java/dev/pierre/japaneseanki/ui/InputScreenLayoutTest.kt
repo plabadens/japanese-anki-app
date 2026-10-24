@@ -88,7 +88,7 @@ class InputScreenLayoutTest {
         val dispatcher = TouchFeedbackDispatcher { event -> events += event }
         composeRule.setContent {
             CompositionLocalProvider(
-                LocalMotionEnabled provides false,
+                LocalMotion provides ReducedMotionTestPolicy,
                 LocalTouchFeedbackDispatcher provides dispatcher,
             ) {
                 MaterialTheme {
@@ -134,7 +134,7 @@ class InputScreenLayoutTest {
         val resolvedMotionEnabled = AtomicReference<Boolean?>(null)
         composeRule.setContent {
             FlowTheme(darkTheme = false) {
-                val motionEnabled = LocalMotionEnabled.current
+                val motionEnabled = LocalMotion.current.animated
                 SideEffect { resolvedMotionEnabled.set(motionEnabled) }
                 Box(Modifier.width(390.dp).height(796.dp)) {
                     InputScreen(
@@ -205,7 +205,7 @@ class InputScreenLayoutTest {
         val dispatcher = TouchFeedbackDispatcher { event -> events += event }
         composeRule.setContent {
             CompositionLocalProvider(
-                LocalMotionEnabled provides false,
+                LocalMotion provides ReducedMotionTestPolicy,
                 LocalTouchFeedbackDispatcher provides dispatcher,
             ) {
                 MaterialTheme {
@@ -228,11 +228,17 @@ class InputScreenLayoutTest {
         }
 
         composeRule.onNodeWithTag("capture-mode-type").performClick()
+        composeRule.waitForIdle()
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        composeRule.waitUntil(1_000) { events.size == 1 }
         assertEquals("Type", mode.value)
         assertEquals(listOf(TouchFeedbackEvent.MODE_SELECTION), events)
         composeRule.onNodeWithTag("capture-mode-type").performClick()
+        composeRule.waitForIdle()
         assertEquals("Re-tapping the selected mode must be silent", listOf(TouchFeedbackEvent.MODE_SELECTION), events)
         composeRule.onNodeWithTag("capture-mode-camera").performClick()
+        composeRule.waitForIdle()
+        composeRule.waitUntil(1_000) { events.size == 2 }
         assertEquals("Photo", mode.value)
         assertEquals(
             listOf(TouchFeedbackEvent.MODE_SELECTION, TouchFeedbackEvent.MODE_SELECTION),

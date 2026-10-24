@@ -45,7 +45,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -55,31 +54,48 @@ import androidx.compose.material3.InputChip
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.semantics.semantics
+import dev.pierre.japaneseanki.ui.FlowDialog
+import dev.pierre.japaneseanki.ui.FlowSheet
+import dev.pierre.japaneseanki.ui.FlowStatusText
+import dev.pierre.japaneseanki.ui.flow
 import dev.pierre.japaneseanki.ui.AppContentMaxWidth
 
 import dev.pierre.japaneseanki.ui.ReviewAudioPresentation
 import dev.pierre.japaneseanki.ui.CardScreen
+import dev.pierre.japaneseanki.ui.CardAction
+import dev.pierre.japaneseanki.ui.CardPresentationCopy
+import dev.pierre.japaneseanki.ui.CardPresentationInput
+import dev.pierre.japaneseanki.ui.cardPresentation
 import dev.pierre.japaneseanki.ui.DictionaryMeaningSheet
 import dev.pierre.japaneseanki.ui.englishPartOfSpeechLabel
 import dev.pierre.japaneseanki.ui.reviewTranslationFailureStatus
 import dev.pierre.japaneseanki.ui.reviewAudioGenerationFailureMessage
 import dev.pierre.japaneseanki.ui.reviewAudioPlaybackFailureMessage
 import dev.pierre.japaneseanki.ui.reviewAudioSendBlocker
+import dev.pierre.japaneseanki.ui.RecoveryReason
+import dev.pierre.japaneseanki.ui.SendPhase
+import dev.pierre.japaneseanki.ui.SendState
 import dev.pierre.japaneseanki.ui.FlowTheme
 import dev.pierre.japaneseanki.ui.FlowTopBar
 import dev.pierre.japaneseanki.ui.LocalTouchFeedbackDispatcher
+import dev.pierre.japaneseanki.ui.rememberChangeFeedback
 import dev.pierre.japaneseanki.ui.MotionAwareProgressIndicator
 import dev.pierre.japaneseanki.ui.TouchFeedbackEvent
+import dev.pierre.japaneseanki.send.IndeterminateReason
+import dev.pierre.japaneseanki.send.SendCoordinator
+import dev.pierre.japaneseanki.send.SendOutcome
+import dev.pierre.japaneseanki.send.SendRequest
+import dev.pierre.japaneseanki.send.SharedPreferencesFrozenSubmissionStore
+import dev.pierre.japaneseanki.send.cardActionClickHandler
+import dev.pierre.japaneseanki.send.clearPersistedDraft
+import dev.pierre.japaneseanki.send.toUiUpdate
 import dev.pierre.japaneseanki.ui.InputScreen
 import dev.pierre.japaneseanki.ui.SettingsScreen
 import dev.pierre.japaneseanki.ui.SettingsScreenState
@@ -144,22 +160,22 @@ private fun formatIecByteCount(context: Context, bytes: Long): String {
 
 private const val ANKIDROID_READ_WRITE_PERMISSION =
     "com.ichi2.anki.permission.READ_WRITE_DATABASE"
-private const val IMAGE_RECEIPT_PATH = "image_import_receipt_path"
-private const val IMAGE_RECEIPT_FILENAME = "image_import_receipt_filename"
-private const val IMAGE_RECEIPT_SIZE = "image_import_receipt_size"
-private const val IMAGE_RECEIPT_MODIFIED = "image_import_receipt_modified"
+internal const val IMAGE_RECEIPT_PATH = "image_import_receipt_path"
+internal const val IMAGE_RECEIPT_FILENAME = "image_import_receipt_filename"
+internal const val IMAGE_RECEIPT_SIZE = "image_import_receipt_size"
+internal const val IMAGE_RECEIPT_MODIFIED = "image_import_receipt_modified"
 private const val VOICE_CACHE_PREF = "google_voice_cache"
 
 /** Fixed, disclosed sample for the explicit translation check; one billable request. */
 private const val TRANSLATION_TEST_SAMPLE = "今日はいい天気ですね。"
-private const val SENTENCE_AUDIO_RECEIPT_PATH = "sentence_audio_receipt_path"
-private const val SENTENCE_AUDIO_RECEIPT_FILENAME = "sentence_audio_receipt_filename"
-private const val SENTENCE_AUDIO_RECEIPT_SIZE = "sentence_audio_receipt_size"
-private const val SENTENCE_AUDIO_RECEIPT_MODIFIED = "sentence_audio_receipt_modified"
-private const val WORD_AUDIO_RECEIPT_PATH = "word_audio_receipt_path"
-private const val WORD_AUDIO_RECEIPT_FILENAME = "word_audio_receipt_filename"
-private const val WORD_AUDIO_RECEIPT_SIZE = "word_audio_receipt_size"
-private const val WORD_AUDIO_RECEIPT_MODIFIED = "word_audio_receipt_modified"
+internal const val SENTENCE_AUDIO_RECEIPT_PATH = "sentence_audio_receipt_path"
+internal const val SENTENCE_AUDIO_RECEIPT_FILENAME = "sentence_audio_receipt_filename"
+internal const val SENTENCE_AUDIO_RECEIPT_SIZE = "sentence_audio_receipt_size"
+internal const val SENTENCE_AUDIO_RECEIPT_MODIFIED = "sentence_audio_receipt_modified"
+internal const val WORD_AUDIO_RECEIPT_PATH = "word_audio_receipt_path"
+internal const val WORD_AUDIO_RECEIPT_FILENAME = "word_audio_receipt_filename"
+internal const val WORD_AUDIO_RECEIPT_SIZE = "word_audio_receipt_size"
+internal const val WORD_AUDIO_RECEIPT_MODIFIED = "word_audio_receipt_modified"
 
 /** SharedPreferences adapter for [DraftAudioController]: commit, never apply. */
 private class SharedPreferencesDraftAudioPersistence(
@@ -176,21 +192,21 @@ private class SharedPreferencesDraftAudioPersistence(
     }
 }
 
-private val IMAGE_RECEIPT_KEYS = ImportedReceiptKeys(
+internal val IMAGE_RECEIPT_KEYS = ImportedReceiptKeys(
     path = IMAGE_RECEIPT_PATH,
     filename = IMAGE_RECEIPT_FILENAME,
     size = IMAGE_RECEIPT_SIZE,
     modified = IMAGE_RECEIPT_MODIFIED,
 )
 
-private val SENTENCE_AUDIO_RECEIPT_KEYS = ImportedReceiptKeys(
+internal val SENTENCE_AUDIO_RECEIPT_KEYS = ImportedReceiptKeys(
     path = SENTENCE_AUDIO_RECEIPT_PATH,
     filename = SENTENCE_AUDIO_RECEIPT_FILENAME,
     size = SENTENCE_AUDIO_RECEIPT_SIZE,
     modified = SENTENCE_AUDIO_RECEIPT_MODIFIED,
 )
 
-private val WORD_AUDIO_RECEIPT_KEYS = ImportedReceiptKeys(
+internal val WORD_AUDIO_RECEIPT_KEYS = ImportedReceiptKeys(
     path = WORD_AUDIO_RECEIPT_PATH,
     filename = WORD_AUDIO_RECEIPT_FILENAME,
     size = WORD_AUDIO_RECEIPT_SIZE,
@@ -198,12 +214,12 @@ private val WORD_AUDIO_RECEIPT_KEYS = ImportedReceiptKeys(
 )
 
 /** Persisted receipt identity, read without touching the file system. */
-private fun receiptIdentity(preferences: SharedPreferences, keys: ImportedReceiptKeys): MediaIdentity? =
+internal fun receiptIdentity(preferences: SharedPreferences, keys: ImportedReceiptKeys): MediaIdentity? =
     preferences.getString(keys.path, null)?.let { path ->
         MediaIdentity(path, preferences.getLong(keys.size, -1L), preferences.getLong(keys.modified, -1L))
     }
 
-private fun mediaImportRequest(
+internal fun mediaImportRequest(
     preferences: SharedPreferences,
     keys: ImportedReceiptKeys,
     operation: MediaImportOperation,
@@ -255,7 +271,7 @@ internal fun applyImportedReceipt(snapshot: FrozenSubmission, receipt: ImportedM
     return updatedSnapshot.copy(orderedFields = mapping.values)
 }
 
-private fun putMediaReceipt(editor: SharedPreferences.Editor, receipt: ImportedMediaReceipt): SharedPreferences.Editor {
+internal fun putMediaReceipt(editor: SharedPreferences.Editor, receipt: ImportedMediaReceipt): SharedPreferences.Editor {
     val keys = when (receipt.operation) {
         MediaImportOperation.IMAGE -> IMAGE_RECEIPT_KEYS
         MediaImportOperation.SENTENCE_AUDIO -> SENTENCE_AUDIO_RECEIPT_KEYS
@@ -269,20 +285,6 @@ private fun putMediaReceipt(editor: SharedPreferences.Editor, receipt: ImportedM
 }
 
 /** Every preference key the draft-audio controller owns, for a full draft reset. */
-private fun draftAudioPreferenceKeys(): List<String> = buildList {
-    add(DraftAudioPreferences.VERSION)
-    add(DraftAudioPreferences.EPOCH)
-    for (item in AudioItem.entries) {
-        add(DraftAudioPreferences.identity(item))
-        add(DraftAudioPreferences.status(item))
-        add(DraftAudioPreferences.path(item))
-        add(DraftAudioPreferences.format(item))
-        add(DraftAudioPreferences.size(item))
-        add(DraftAudioPreferences.modified(item))
-        add(DraftAudioPreferences.frozenPath(item))
-    }
-}
-
 private fun pitchUnavailableMessage(failure: AjtPitchFailure): Int = when (failure) {
     AjtPitchFailure.MISSING_INDEX -> R.string.card_ajt_pitch_index_missing
     AjtPitchFailure.EMPTY_INDEX -> R.string.card_ajt_pitch_index_empty
@@ -335,25 +337,6 @@ private fun DraftAudioState.toDraftAudio(item: AudioItem, context: Context): Dra
     }
 }
 
-enum class AppRoute { Capture, Card }
-
-internal fun visibleRouteForAnalyzer(
-    requestedRoute: AppRoute,
-    analyzerReady: Boolean,
-    frozenCardActive: Boolean,
-): AppRoute = when {
-    !analyzerReady -> AppRoute.Capture
-    frozenCardActive -> AppRoute.Card
-    else -> requestedRoute
-}
-
-internal fun shouldShowSetup(
-    showSetup: Boolean,
-    onboardingComplete: Boolean,
-    analyzerReady: Boolean,
-    showSettings: Boolean,
-): Boolean = !showSettings && (showSetup || !onboardingComplete || !analyzerReady)
-
 private data class SentenceAudioAuthorization(
     val revision: Long,
     val sentence: String,
@@ -380,16 +363,16 @@ internal fun ankiBrowserIntent(noteId: Long): Intent =
 internal fun draftCallbackIsCurrent(
     callbackGeneration: Long,
     currentGeneration: Long,
-    submissionLocked: Boolean,
-): Boolean = !submissionLocked && callbackGeneration == currentGeneration
+    locked: Boolean,
+): Boolean = !locked && callbackGeneration == currentGeneration
 
 internal fun ocrResultIsCurrent(
     callbackGeneration: Long,
     currentGeneration: Long,
     callbackEditorRevision: Long,
     currentEditorRevision: Long,
-    submissionLocked: Boolean,
-): Boolean = draftCallbackIsCurrent(callbackGeneration, currentGeneration, submissionLocked) &&
+    locked: Boolean,
+): Boolean = draftCallbackIsCurrent(callbackGeneration, currentGeneration, locked) &&
     callbackEditorRevision == currentEditorRevision
 
 internal fun intentPayloadMatches(
@@ -459,96 +442,45 @@ class MainActivity : ComponentActivity() {
                     ),
                 )
             }
-            var target by remember {
+            val draftState = remember {
                 mutableStateOf(
-                    TargetSpan(
-                        preferences.getInt("target_start", -1),
-                        preferences.getInt("target_end", -1),
-                    ).takeIf { it.textIn(editor.text) != null },
+                    restoreDraftModel(
+                        preferences = preferences,
+                        sentence = editor.text,
+                        defaultTags = settings.getString(SettingsPreferenceKeys.DEFAULT_TAGS, "").orEmpty(),
+                    ),
                 )
             }
-            var vocabulary by remember { mutableStateOf(preferences.getString("vocabulary", "").orEmpty()) }
-            var vocabularyReading by remember { mutableStateOf(preferences.getString("vocabulary_reading", "").orEmpty()) }
+            var target by draftState.field(DraftModel::target, DraftModel::withTarget)
+            var vocabulary by draftState.field(DraftModel::vocabulary, DraftModel::withVocabulary)
+            var vocabularyReading by draftState.field(DraftModel::vocabularyReading, DraftModel::withVocabularyReading)
+            var pitchAccentText by draftState.field(DraftModel::pitchAccent, DraftModel::withPitchAccent)
+            var definition by draftState.field(DraftModel::definition, DraftModel::withDefinition)
+            var sentenceReading by draftState.field(DraftModel::sentenceReading, DraftModel::withSentenceReading)
+            var readingCorrections by draftState.field(DraftModel::readingCorrections, DraftModel::withReadingCorrections)
+            var notes by draftState.field(DraftModel::notes, DraftModel::withNotes)
+            var tags by draftState.field(DraftModel::tags, DraftModel::withTags)
+            val draft = draftState.value
             var vocabularyReadingError by remember { mutableStateOf<String?>(null) }
-            var pitchAccentText by remember { mutableStateOf(preferences.getString("pitch_accent", "").orEmpty()) }
             var pitchHtmlText by remember { mutableStateOf(preferences.getString("pitch_html", null)) }
             var pitchIndexError by remember { mutableStateOf<String?>(null) }
             val pitch = pitchAccentText.toIntOrNull()?.let {
                 PitchAccent.create(vocabularyReading, it, pitchHtmlText)
             }
-            var definition by remember { mutableStateOf(preferences.getString("definition", "").orEmpty()) }
             var definitionManuallyEdited by remember { mutableStateOf(preferences.getBoolean("definition_manual", false)) }
             var definitionProvenanceKnown by remember { mutableStateOf(preferences.contains("definition_manual")) }
-            var sentenceReading by remember { mutableStateOf(preferences.getString("sentence_reading", "").orEmpty()) }
-            var readingCorrections by remember {
-                mutableStateOf(
-                    SentenceReadings.decode(
-                        preferences.getString("sentence_reading_corrections", null),
-                        preferences.getString("sentence", "").orEmpty(),
-                    ),
-                )
-            }
-            var readingCorrectionError by remember { mutableStateOf<String?>(null) }
             var dependentFieldsStale by remember {
                 mutableStateOf(preferences.getBoolean("definition_manual_stale", false) &&
                     preferences.getBoolean("definition_manual", false))
             }
+            var readingCorrectionError by remember { mutableStateOf<String?>(null) }
             var showDictionarySheet by remember { mutableStateOf(false) }
             var definitionSheetText by remember { mutableStateOf<String?>(null) }
-            val restoredTranslationText = preferences.getString("translation", "").orEmpty()
-            val restoredTranslationSource = preferences.getString("translation_source", null)
-                ?.let { saved -> TranslationSource.entries.firstOrNull { it.name == saved } }
-            val restoredTranslationWasPending = preferences.getBoolean("translation_pending", false)
-            val restoredTranslationError = preferences.getString("translation_error", null)
-            val restoredSuggestionError = preferences.getString("translation_suggestion_error", null)
-            val restoredTranslationManual = preferences.getBoolean(
-                "translation_manual",
-                restoredTranslationSource == TranslationSource.MANUAL ||
-                    (restoredTranslationText.isNotBlank() && restoredTranslationSource == null),
-            )
-            val restoredTranslationStale = preferences.getBoolean("translation_stale", false)
-            val restoredSuggestionText = preferences.getString("translation_suggestion", null)
-            val restoredSuggestionSource = preferences.getString("translation_suggestion_source", null)
-                ?.let { saved -> TranslationSource.entries.firstOrNull { it.name == saved } }
-            val restoredCommittedSentence = preferences.getString("committed_sentence", null)
-            val committedTranslationWasNotAttempted = !restoredTranslationManual &&
-                restoredTranslationText.isBlank() && !restoredCommittedSentence.isNullOrBlank() &&
-                restoredCommittedSentence == preferences.getString("sentence", "").orEmpty() &&
-                preferences.getString("translation_attempted_sentence", null) != restoredCommittedSentence
-            val interruptedTranslation = TranslationResult.Failed("Translation was interrupted. Tap Retry to continue.")
-            var translationDraft by remember {
-                mutableStateOf(
-                    TranslationDraft(
-                        sentence = preferences.getString(
-                            "translation_sentence",
-                            preferences.getString("sentence", "").orEmpty(),
-                        ).orEmpty(),
-                        result = when {
-                            restoredTranslationManual -> TranslationResult.Ready(restoredTranslationText, TranslationSource.MANUAL)
-                            restoredTranslationSource != null && restoredTranslationText.isNotBlank() ->
-                                TranslationResult.Ready(restoredTranslationText, restoredTranslationSource)
-                            restoredTranslationText.isNotBlank() -> TranslationResult.Ready(restoredTranslationText, TranslationSource.MANUAL)
-                            restoredTranslationWasPending -> interruptedTranslation
-                            restoredTranslationError != null -> TranslationResult.Failed(restoredTranslationError)
-                            committedTranslationWasNotAttempted -> interruptedTranslation
-                            else -> TranslationResult.Pending
-                        },
-                        manuallyEdited = restoredTranslationManual,
-                        stale = restoredTranslationStale,
-                        suggestion = when {
-                            restoredSuggestionText != null && restoredSuggestionSource != null ->
-                                TranslationResult.Ready(restoredSuggestionText, restoredSuggestionSource)
-                            restoredTranslationWasPending && restoredTranslationManual && restoredTranslationStale ->
-                                interruptedTranslation
-                            restoredSuggestionError != null -> TranslationResult.Failed(restoredSuggestionError)
-                            else -> null
-                        },
-                    ),
-                )
-            }
+            val restoredTranslation = remember { restoreTranslationDraft(preferences) }
+            var translationDraft by remember { mutableStateOf(restoredTranslation.draft) }
             val translation = (translationDraft.result as? TranslationResult.Ready)?.text.orEmpty()
             var translationAttemptedSentence by remember {
-                mutableStateOf(preferences.getString("translation_attempted_sentence", null))
+                mutableStateOf(restoredTranslation.attemptedSentence)
             }
             var translationAutoAllowed by remember {
                 mutableStateOf(false)
@@ -570,15 +502,6 @@ class MainActivity : ComponentActivity() {
                 if (translationDraft.manuallyEdited && translationDraft.stale) {
                     translationDraft.suggestion ?: TranslationResult.Pending
                 } else translationDraft.result
-            }
-            var notes by remember { mutableStateOf(preferences.getString("notes", "").orEmpty()) }
-            var tags by remember {
-                mutableStateOf(
-                    seedFreshNoteTags(
-                        preferences.getString("tags", null),
-                        settings.getString(SettingsPreferenceKeys.DEFAULT_TAGS, "").orEmpty(),
-                    ),
-                )
             }
             val restoredPendingPhoto = preferences.getString("pending_replacement_image_path", null)
                 ?.let(::File)?.takeIf(File::isFile)
@@ -778,6 +701,18 @@ class MainActivity : ComponentActivity() {
                     ),
                 )
             }
+            val sendCoordinator = remember(audioController) {
+                SendCoordinator(
+                    gateway = AnkiDroidGateway(contentResolver, applicationContext),
+                    preferences = preferences,
+                    audio = audioController,
+                    repository = SharedPreferencesFrozenSubmissionStore(
+                        preferences = preferences,
+                        settings = settings,
+                        draftDirectory = File(filesDir, "draft"),
+                    ),
+                )
+            }
             val preparationAuthorization = remember {
                 PreparationAuthorization(
                     initialCommittedSentence = committedSentence,
@@ -957,16 +892,20 @@ class MainActivity : ComponentActivity() {
             var cameraPermissionGranted by remember {
                 mutableStateOf(checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
             }
-            fun setupAudioReady(): Boolean =
-                (settingsScreenState.googleKey.isNotBlank() || settingsScreenState.credentialStored) &&
-                    settingsScreenState.values.voiceName.isNotBlank()
             fun compatibleSetupNoteTypes(): List<AnkiNoteType> = noteTypes.filter { model ->
                 AnkiFieldContract.mapToModelOrder(model.fields, emptyMap()).isValid
             }
-            fun setupAnkiReady(): Boolean =
-                ankiDroidInstalled && apiPermissionGranted && setupLoadedSuccessfully &&
-                    compatibleSetupNoteTypes().any { it.id == selectedModelId } &&
-                    decks.any { it.id == selectedDeckId }
+            val setupReadiness = SettingsCoordinator.setupReadiness(
+                audioCredentialAvailable = settingsScreenState.googleKey.isNotBlank() ||
+                    settingsScreenState.credentialStored,
+                selectedVoiceName = settingsScreenState.values.voiceName,
+                ankiDroidInstalled = ankiDroidInstalled,
+                ankiPermissionGranted = apiPermissionGranted,
+                ankiSetupLoaded = setupLoadedSuccessfully,
+                selectedCompatibleNoteType = compatibleSetupNoteTypes().any { it.id == selectedModelId },
+                selectedDeckAvailable = decks.any { it.id == selectedDeckId },
+                dictionaryReady = analyzerReady,
+            )
             fun markCameraStepDone() {
                 settings.edit()
                     .putBoolean("onboarding_camera_done", true)
@@ -981,17 +920,25 @@ class MainActivity : ComponentActivity() {
             var captureInProgress by remember { mutableStateOf(false) }
             var showModelMenu by remember { mutableStateOf(false) }
             var showDeckMenu by remember { mutableStateOf(false) }
-            var isSubmitting by remember { mutableStateOf(false) }
-            var duplicateBlocked by remember { mutableStateOf(false) }
             var submitMessage by remember { mutableStateOf<String?>(null) }
             val restoredPhase = SubmissionPhase.fromPersisted(
                 preferences.getString(SubmissionRecoveryKeys.STATUS, null),
             )
-            var recoveryRequired by remember { mutableStateOf(restoredPhase != null) }
-            var recoveryPhase by remember { mutableStateOf(restoredPhase) }
-            var frozenRetryReady by remember { mutableStateOf(false) }
-            var recoveryMessage by remember {
+            var sendState by remember {
                 mutableStateOf(
+                    SendState(
+                        phase = when (restoredPhase) {
+                            null -> SendPhase.Idle
+                            SubmissionPhase.DESTINATION_VERIFIED -> SendPhase.Verified
+                            else -> SendPhase.Inserted
+                        },
+                        frozen = if (restoredPhase != null) readFrozenSubmission(preferences) else null,
+                        recovery = when (restoredPhase) {
+                            SubmissionPhase.MEDIA_IMPORTING -> RecoveryReason.MediaInterrupted
+                            SubmissionPhase.MEDIA_IMPORTED -> RecoveryReason.MediaImported
+                            else -> RecoveryReason.None
+                        },
+                        message =
                     when (restoredPhase) {
                         SubmissionPhase.MEDIA_IMPORTING -> {
                             val operation = preferences.getString(SubmissionRecoveryKeys.MEDIA_OPERATION, null)
@@ -1008,12 +955,44 @@ class MainActivity : ComponentActivity() {
                         SubmissionPhase.DESTINATION_VERIFIED -> this@MainActivity.getString(R.string.card_send_recovery_destination_verified_initial)
                         null -> null
                     },
+                    ),
                 )
             }
-            var recoveryDuplicate by remember { mutableStateOf(false) }
-            var knownNoteId by remember { mutableStateOf<Long?>(null) }
-            var publishedFrozenSnapshot by remember { mutableStateOf<FrozenSubmission?>(null) }
-            var completedSubmission by remember { mutableStateOf<FrozenSubmission?>(null) }
+            fun updateRecoveryMessage(
+                message: String?,
+                reason: RecoveryReason = sendState.recovery,
+                phase: SendPhase = sendState.phase,
+            ) {
+                sendState = sendState.copy(message = message, recovery = reason, phase = phase)
+            }
+            val isSubmitting = sendState.submitting
+            val duplicateBlocked = sendState.duplicateBlocked
+            val recoveryRequired = sendState.recoveryRequired
+            val frozenRetryReady = sendState.retryReady
+            val recoveryDuplicate = sendState.recovery == RecoveryReason.MatchingNoteExists && sendState.phase != SendPhase.Idle
+            val recoveryMessage = sendState.message
+            val completedSubmission = sendState.completedSubmission
+            val knownNoteId = sendState.duplicateNoteId ?: sendState.frozen?.noteId.takeIf { sendState.recoveryRequired }
+            val recoveryPhase = when (sendState.recovery) {
+                RecoveryReason.MediaInterrupted -> SubmissionPhase.MEDIA_IMPORTING
+                RecoveryReason.MediaImported -> SubmissionPhase.MEDIA_IMPORTED
+                RecoveryReason.MatchingNoteExists -> SubmissionPhase.NOTE_INSERTING
+                RecoveryReason.SavedNoteMissing,
+                RecoveryReason.DestinationUnavailable,
+                RecoveryReason.Unverifiable -> when {
+                    sendState.phase == SendPhase.Verified -> SubmissionPhase.DESTINATION_VERIFIED
+                    sendState.frozen?.noteId != null -> SubmissionPhase.NOTE_INSERTED
+                    else -> restoredPhase ?: SubmissionPhase.NOTE_INSERTING
+                }
+                RecoveryReason.None -> when {
+                    sendState.phase == SendPhase.Verified && sendState.completedNoteId == null ->
+                        SubmissionPhase.DESTINATION_VERIFIED
+                    sendState.phase == SendPhase.Inserted && sendState.frozen?.noteId != null ->
+                        SubmissionPhase.NOTE_INSERTED
+                    sendState.phase == SendPhase.Inserted -> restoredPhase ?: SubmissionPhase.NOTE_INSERTING
+                    else -> null
+                }
+            }
             var pitchInfoExpanded by remember { mutableStateOf(false) }
             var frozenSnapshotAppliedRevision by remember { mutableStateOf(-1L) }
             var draftGeneration by remember { mutableStateOf(0L) }
@@ -1022,10 +1001,9 @@ class MainActivity : ComponentActivity() {
             val selectedModel = noteTypes.firstOrNull { it.id == selectedModelId }
             val selectedDeck = decks.firstOrNull { it.id == selectedDeckId }
             val incoming = sharedText.value
-            val submissionLocked = isSubmitting || recoveryRequired || frozenRetryReady || duplicateBlocked
             val blockedStatusPrefix = stringResource(R.string.card_blocked)
-            val navigationLocked = submissionLocked || captureInProgress
-            val currentSubmissionLocked = rememberUpdatedState(submissionLocked)
+            val navigationLocked = sendState.locked || captureInProgress
+            val currentSubmissionLocked = rememberUpdatedState(sendState.locked)
             val currentDraftGeneration = rememberUpdatedState(draftGeneration)
             val currentEditorInputRevision = rememberUpdatedState(editorInputRevision)
             val currentSetupGeneration = rememberUpdatedState(setupGeneration)
@@ -1134,7 +1112,7 @@ class MainActivity : ComponentActivity() {
 
             fun finishSetup() {
                 if (settingsLoading || settingsSaving) return
-                if (!analyzerReady || !setupAudioReady() || !setupAnkiReady()) return
+                if (!setupReadiness.dictionaryReady || !setupReadiness.audioReady || !setupReadiness.ankiReady) return
                 val coordinator = settingsCoordinator
                 if (coordinator == null) {
                     setupAudioErrorResource = R.string.save_failed
@@ -1215,22 +1193,18 @@ class MainActivity : ComponentActivity() {
                 listOfNotNull(photoSourcePath, noteImagePath, processedImagePath).distinct().forEach { File(it).delete() }
                 editorInputRevision++
                 editor = TextFieldValue("")
+                draftState.value = draftState.value.cleared(
+                    normalizeTagInput(settings.getString(SettingsPreferenceKeys.DEFAULT_TAGS, "").orEmpty()),
+                )
                 route = AppRoute.Capture
                 photoSourcePath = null
                 noteImagePath = null
                 processedImagePath = null
                 clearPersistedDraft(preferences, File(filesDir, "draft"))
-                publishedFrozenSnapshot = null
-                completedSubmission = null
-                duplicateBlocked = false
+                sendState = SendState(message = sendState.message)
                 submitMessage = null
                 frozenSnapshotAppliedRevision = -1L
                 draftGeneration++
-                frozenRetryReady = false
-                recoveryRequired = false
-                recoveryPhase = null
-                recoveryDuplicate = false
-                knownNoteId = null
                 imageProcessingRevision++
                 imageProcessing = false
                 imageError = null
@@ -1248,12 +1222,6 @@ class MainActivity : ComponentActivity() {
                 pitchLookupLoading = false
                 japaneseTokens = emptyList()
                 tokenizationError = null
-                target = null
-                vocabulary = ""
-                vocabularyReading = ""
-                pitchAccentText = ""
-                definition = ""
-                sentenceReading = ""
                 definitionManuallyEdited = false
                 definitionProvenanceKnown = true
                 dependentFieldsStale = false
@@ -1272,8 +1240,6 @@ class MainActivity : ComponentActivity() {
                 pendingWordAudioAuthorization = null
                 handledSentenceAudioAuthorization = null
                 handledWordAudioAuthorization = null
-                notes = ""
-                tags = normalizeTagInput(settings.getString(SettingsPreferenceKeys.DEFAULT_TAGS, "").orEmpty())
                 selectedDictionaryEntry = null
                 selectedDictionaryEntryId = null
                 selectedSenseIndices = emptySet()
@@ -1310,7 +1276,8 @@ class MainActivity : ComponentActivity() {
                 if (text != editor.text) {
                     cardInvalidated = true
                     generationStarted = false
-                    if (submissionLocked) translationRequestRevision++ else updateTranslationSentence(text)
+                    if (sendState.locked) translationRequestRevision++ else updateTranslationSentence(text)
+                    draftState.value = draftState.value.withSentence(text)
                 }
                 editor = TextFieldValue(text, selection = TextRange(text.length))
             }
@@ -1352,16 +1319,13 @@ class MainActivity : ComponentActivity() {
                     dictionaryError = null
                     dictionaryHasMore = false
                     selectedSenseIndices = emptySet()
-                    vocabulary = ""
-                    vocabularyReading = ""
                     vocabularyReadingError = null
-                    definition = ""
                     definitionManuallyEdited = false
                     definitionProvenanceKnown = true
-                    pitchAccentText = ""
                     audioController.clear(AudioItem.VOCABULARY)
                     audioSnapshot = audioController.snapshot()
                 }
+                target = selected
                 if (selected != previousTarget) {
                     // The reading belongs to the selected occurrence; a new target must never
                     // inherit the previous target's reading.
@@ -1369,7 +1333,6 @@ class MainActivity : ComponentActivity() {
                         resolveSurfaceReading(editor.text, japaneseTokens, span)
                     }.orEmpty()
                 }
-                target = selected
                 if (selected != null) {
                     val surface = selected.textIn(editor.text).orEmpty()
                     val identity = "${selected.start}:${selected.end}:$surface"
@@ -1537,7 +1500,7 @@ class MainActivity : ComponentActivity() {
                 Unit
             }
             val stagePhotoReplacement: (File) -> Unit = stagePhotoReplacement@{ file ->
-                if (submissionLocked) return@stagePhotoReplacement
+                if (sendState.locked) return@stagePhotoReplacement
                 check(
                     preferences.edit().putString("pending_replacement_image_path", file.absolutePath).commit(),
                 ) { this@MainActivity.getString(R.string.legacy_capture_pending_photo_replacement_save_failed) }
@@ -1607,8 +1570,8 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            androidx.compose.runtime.LaunchedEffect(Unit, draftGeneration, submissionLocked) {
-                if (submissionLocked) return@LaunchedEffect
+            androidx.compose.runtime.LaunchedEffect(Unit, draftGeneration, sendState.locked) {
+                if (sendState.locked) return@LaunchedEffect
                 val source = noteImagePath?.let(::File)?.takeIf(File::isFile)
                 if (source != null && processedImagePath?.let(::File)?.isFile != true) {
                     processImage(source, photoSourcePath == source.absolutePath && editor.text.isBlank())
@@ -1617,7 +1580,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            androidx.compose.runtime.LaunchedEffect(dictionaryRetry, setupGeneration, submissionLocked) {
+            androidx.compose.runtime.LaunchedEffect(dictionaryRetry, setupGeneration, sendState.locked) {
                 if (currentSubmissionLocked.value) return@LaunchedEffect
                 val callbackGeneration = setupGeneration
                 dictionaryLoading = true
@@ -1710,7 +1673,7 @@ class MainActivity : ComponentActivity() {
             }
 
             fun commitDictionaryChoice(choice: DictionaryMeaningChoice) {
-                if (submissionLocked) return
+                if (sendState.locked) return
                 val previousIsResolved = selectedDictionaryEntry?.let {
                     it.id == selectedDictionaryEntryId && it.expression == vocabulary && it.reading == vocabularyReading
                 } == true
@@ -1729,10 +1692,8 @@ class MainActivity : ComponentActivity() {
                 }
                 selectedDictionaryEntry = choice.entry
                 selectedDictionaryEntryId = choice.entry.id
-                vocabulary = choice.entry.expression
-                vocabularyReading = choice.entry.reading
+                draftState.value = draftState.value.withEntry(choice.entry, setOf(choice.senseIndex))
                 selectedSenseIndices = setOf(choice.senseIndex)
-                definition = choice.definition
                 definitionManuallyEdited = false
                 definitionProvenanceKnown = true
                 dictionaryError = null
@@ -1742,7 +1703,7 @@ class MainActivity : ComponentActivity() {
 
             /** A corrected vocabulary reading re-resolves entry, pitch and recording identity. */
             fun applyVocabularyReading(raw: String): Boolean {
-                if (submissionLocked) return false
+                if (sendState.locked) return false
                 val corrected = VocabularyReadings.normalize(raw)
                 val match = VocabularyReadings.selectEntry(
                     dictionaryEntries.map { ReadingCandidate(it.id, it.expression, it.reading) },
@@ -1805,7 +1766,7 @@ class MainActivity : ComponentActivity() {
 
             /** Correct one kanji span's reading without editing the sentence (SPEC §4.5). */
             fun applyReadingCorrection(span: TargetSpan, reading: String): Boolean {
-                if (submissionLocked) return false
+                if (sendState.locked) return false
                 val rejection = SentenceReadings.rejection(editor.text, span, reading)
                 if (rejection != null) {
                     readingCorrectionError = rejection
@@ -1825,161 +1786,80 @@ class MainActivity : ComponentActivity() {
                 return true
             }
 
-            // Typing in the sentence can shift the spans a correction was stored against.
-            androidx.compose.runtime.LaunchedEffect(editor.text) {
-                val stale = readingCorrections.filter { it.span.textIn(editor.text) != it.surface }
-                if (stale.isNotEmpty()) {
-                    readingCorrections = readingCorrections.filter { it.span.textIn(editor.text) == it.surface }
-                }
-            }
+            DraftReadingCorrectionCleanupEffect(
+                sentence = draft.sentence,
+                corrections = draft.readingCorrections,
+                onCorrectionsChanged = { readingCorrections = it },
+            )
 
-            androidx.compose.runtime.LaunchedEffect(
-                editor.text, translationRequestRevision, translationRetry, translationAutoAllowed, submissionLocked,
-                generationStarted,
-            ) {
-                val sentence = editor.text
-                // Network work starts only after the deliberate Continue, never on typing or token taps.
-                if (sentence.isBlank() || submissionLocked || !generationStarted) return@LaunchedEffect
+            DraftTranslationEffect(
+                sentence = draft.sentence,
+                requestRevision = translationRequestRevision,
+                retry = translationRetry,
+                autoAllowed = translationAutoAllowed,
+                sendLocked = sendState.locked,
+                generationStarted = generationStarted,
+                lastHandledRetry = lastHandledTranslationRetry,
+                attemptedSentence = translationAttemptedSentence,
+                currentDraft = { translationDraft },
+                currentRequestRevision = currentTranslationRequestRevision,
+                currentSubmissionLocked = currentSubmissionLocked,
+                translationService = translationService,
+                preferences = preferences,
+                onDraftChanged = { translationDraft = it },
+                onLastHandledRetryChanged = { lastHandledTranslationRetry = it },
+                onAttemptedSentenceChanged = { translationAttemptedSentence = it },
+                retryNeededMessage = this@MainActivity.getString(
+                    R.string.card_translation_needs_retry_tap_retry_to_conti,
+                ),
+                notStartedMessage = this@MainActivity.getString(
+                    R.string.card_translation_was_not_started_tap_retry_to_c,
+                ),
+                requestRecordFailedMessage = this@MainActivity.getString(
+                    R.string.card_translation_request_could_not_be_recorded,
+                ),
+                unavailableMessage = this@MainActivity.getString(
+                    R.string.card_translation_is_unavailable_tap_retry_to_co,
+                ),
+            )
 
-                var requestDraft = translationDraft
-                if (requestDraft.sentence != sentence) {
-                    requestDraft = requestDraft.sentenceChanged(sentence)
-                    translationDraft = requestDraft
-                }
-                if (requestDraft.manuallyEdited && !requestDraft.stale) return@LaunchedEffect
-                if (!requestDraft.manuallyEdited && !requestDraft.stale && requestDraft.result is TranslationResult.Ready) {
-                    return@LaunchedEffect
-                }
+            DraftTokenizationEffect(
+                analyzerReady = analyzerReady,
+                sentence = draft.sentence,
+                analysisRetry = analysisRetry,
+                draftGeneration = draftGeneration,
+                sendLocked = sendState.locked,
+                dictionaryReady = dictionaryReady,
+                offlineAnalyzer = offlineAnalyzer,
+                offlineDictionary = offlineDictionary,
+                isDraftCurrent = ::asyncDraftIsCurrent,
+                onTokensChanged = { japaneseTokens = it },
+                onLoadingChanged = { tokenizationLoading = it },
+                onError = { tokenizationError = it.takeIf(String::isNotEmpty) },
+                errorMessage = this@MainActivity.getString(R.string.card_could_not_analyze_this_sentence_select_a_t),
+            )
 
-                val explicitRetry = translationRetry != lastHandledTranslationRetry
-                if (translationAttemptedSentence == sentence && !explicitRetry) {
-                    val active = if (requestDraft.manuallyEdited && requestDraft.stale) {
-                        requestDraft.suggestion ?: TranslationResult.Pending
-                    } else requestDraft.result
-                    if (active is TranslationResult.Pending) {
-                        translationDraft = requestDraft.requestFinished(
-                            TranslationResult.Failed(this@MainActivity.getString(R.string.card_translation_needs_retry_tap_retry_to_conti)),
-                        )
-                    }
-                    return@LaunchedEffect
-                }
-                if (!translationAutoAllowed && !explicitRetry) {
-                    translationDraft = requestDraft.requestFinished(
-                        TranslationResult.Failed(this@MainActivity.getString(R.string.card_translation_was_not_started_tap_retry_to_c)),
-                    )
-                    return@LaunchedEffect
-                }
+            DraftTargetVocabularyEffect(
+                target = draft.target,
+                sentence = draft.sentence,
+                tokens = japaneseTokens,
+                vocabulary = draft.vocabulary,
+                vocabularyReading = draft.vocabularyReading,
+                vocabularyReadingError = vocabularyReadingError,
+                dependentFieldsStale = dependentFieldsStale,
+                sendLocked = sendState.locked,
+                onVocabularyChanged = { vocabulary = it },
+                onVocabularyReadingChanged = { vocabularyReading = it },
+            )
 
-                lastHandledTranslationRetry = translationRetry
-                val requestRevision = translationRequestRevision
-                kotlinx.coroutines.delay(350)
-                if (!translationResponseIsCurrent(
-                        sentence, requestRevision, editor.text,
-                        currentTranslationRequestRevision.value, currentSubmissionLocked.value,
-                    )
-                ) return@LaunchedEffect
-
-                translationDraft = translationDraft.requestStarted()
-                translationAttemptedSentence = sentence
-                val requestRecorded = preferences.edit()
-                    .putString("translation_attempted_sentence", sentence)
-                    .putBoolean("translation_pending", true)
-                    .commit()
-                if (!requestRecorded) {
-                    translationDraft = translationDraft.requestFinished(
-                        TranslationResult.Failed(this@MainActivity.getString(R.string.card_translation_request_could_not_be_recorded)),
-                    )
-                    return@LaunchedEffect
-                }
-
-                val result = try {
-                    withContext(Dispatchers.IO) {
-                        translationService.translate(sentence)
-                    }
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) {
-                    TranslationResult.Failed(this@MainActivity.getString(R.string.card_translation_is_unavailable_tap_retry_to_co))
-                }
-                if (translationResponseIsCurrent(
-                        sentence, requestRevision, editor.text,
-                        currentTranslationRequestRevision.value, currentSubmissionLocked.value,
-                    )
-                ) {
-                    translationDraft = translationDraft.requestFinished(result)
-                }
-            }
-
-            androidx.compose.runtime.LaunchedEffect(
-                analyzerReady, editor.text, analysisRetry, draftGeneration, submissionLocked, dictionaryReady,
-            ) {
-                if (currentSubmissionLocked.value) return@LaunchedEffect
-                val callbackGeneration = draftGeneration
-                if (!analyzerReady || editor.text.isBlank()) {
-                    japaneseTokens = emptyList()
-                    tokenizationLoading = false
-                    return@LaunchedEffect
-                }
-                tokenizationLoading = true
-                tokenizationError = null
-                try {
-                    kotlinx.coroutines.delay(150)
-                    val analyzed = withContext(Dispatchers.IO) {
-                        val raw = offlineAnalyzer.analyze(editor.text)
-                        groupTokens(raw) { candidate ->
-                            dictionaryReady && runCatching {
-                                // One bound existence probe; the readiness gate and the
-                                // exception-to-false policy are unchanged.
-                                offlineDictionary.hasEntry(candidate)
-                            }.getOrDefault(false)
-                        }
-                    }
-                    if (!asyncDraftIsCurrent(callbackGeneration)) return@LaunchedEffect
-                    japaneseTokens = analyzed
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) {
-                    if (asyncDraftIsCurrent(callbackGeneration)) {
-                        japaneseTokens = emptyList()
-                        tokenizationError = this@MainActivity.getString(R.string.card_could_not_analyze_this_sentence_select_a_t)
-                    }
-                } finally {
-                    tokenizationLoading = false
-                }
-            }
-
-            androidx.compose.runtime.LaunchedEffect(
-                target, editor.text, japaneseTokens, vocabulary, vocabularyReading,
-                vocabularyReadingError, dependentFieldsStale,
-            ) {
-                if (submissionLocked) return@LaunchedEffect
-                val targetSpan = target ?: return@LaunchedEffect
-                val targetText = targetSpan.textIn(editor.text) ?: return@LaunchedEffect
-                val resolved = resolveAnalyzedLemma(japaneseTokens, targetSpan) ?: return@LaunchedEffect
-                val shouldResolveSurface = vocabulary.isBlank() ||
-                    (!dependentFieldsStale && vocabulary == targetText)
-                if (shouldResolveSurface) vocabulary = resolved.expression
-                // A rejected reading correction stays unresolved; do not silently restore a
-                // different pronunciation over the user's attempt.
-                if (vocabularyReadingError == null &&
-                    (shouldResolveSurface || vocabulary == resolved.expression) && vocabularyReading.isBlank() &&
-                    containsKanji(resolved.expression)
-                ) vocabularyReading = resolved.reading
-            }
-
-            androidx.compose.runtime.LaunchedEffect(
-                target, editor.text, japaneseTokens, sentenceReading,
-            ) {
-                if (submissionLocked) return@LaunchedEffect
-                val targetSpan = target ?: return@LaunchedEffect
-                val targetText = targetSpan.textIn(editor.text) ?: return@LaunchedEffect
-                if (sentenceReading.isNotBlank() || !containsKanji(targetText)) {
-                    return@LaunchedEffect
-                }
-                sentenceReading = resolveSurfaceReading(
-                    editor.text, japaneseTokens, targetSpan,
-                )?.takeIf(String::isNotBlank) ?: return@LaunchedEffect
-            }
+            DraftSentenceReadingEffect(
+                target = draft.target,
+                sentence = draft.sentence,
+                tokens = japaneseTokens,
+                sentenceReading = draft.sentenceReading,
+                sendLocked = sendState.locked,
+                onSentenceReadingChanged = { sentenceReading = it },
+            )
 
             fun playAudio(item: AudioItem, file: DraftAudioFile) {
                 stopAudioPlayback()
@@ -2065,11 +1945,11 @@ class MainActivity : ComponentActivity() {
             // Inputs are cheap to declare. Provider work is started only by the matching
             // sentence-commit or word-selection authorization token.
             androidx.compose.runtime.LaunchedEffect(
-                route, submissionLocked, audioInputRevision, reviewAuthorizationSequence,
+                route, sendState.locked, audioInputRevision, reviewAuthorizationSequence,
                 pendingSentenceAudioAuthorization, pendingWordAudioAuthorization,
                 currentSentenceIdentity.value, currentWordIdentity.value,
             ) {
-                if (submissionLocked) return@LaunchedEffect
+                if (sendState.locked) return@LaunchedEffect
 
                 val declaredAudioRevision = reviewAuthorizationSequence
                 val sentenceText = editor.text
@@ -2225,118 +2105,61 @@ class MainActivity : ComponentActivity() {
             }
 
 
-            androidx.compose.runtime.LaunchedEffect(dictionaryReady, target, editor.text, dictionaryRetry, japaneseTokens, draftGeneration, submissionLocked) {
-                if (currentSubmissionLocked.value) return@LaunchedEffect
-                val callbackGeneration = draftGeneration
-                val targetText = target?.textIn(editor.text)
-                if (!dictionaryReady || targetText == null) {
-                    dictionaryEntries = emptyList()
-                    dictionaryHasMore = false
-                    selectedDictionaryEntry = null
-                } else {
-                    dictionarySearchLoading = true
-                    try {
-                        val entries = withContext(Dispatchers.IO) {
-                            offlineDictionary.search(targetText, analyzedTarget?.expression)
-                        }
-                        if (!asyncDraftIsCurrent(callbackGeneration)) return@LaunchedEffect
-                        dictionaryEntries = entries
-                        dictionaryError = null
-                        dictionaryHasMore = entries.size == 50
-                        val choices = DictionaryMeaningChoices.from(entries)
-                        val restoredEntry = entries.firstOrNull {
-                            it.id == selectedDictionaryEntryId &&
-                                it.expression == vocabulary && it.reading == vocabularyReading
-                        }
-                        val restoredSenseIndex = restoredEntry?.let { entry ->
-                            preferences.getStringSet("dictionary_sense_indices", null)
-                                ?.mapNotNull(String::toIntOrNull)
-                                ?.filter { it in entry.senses.indices }
-                                ?.minOrNull() ?: 0
-                        }
-                        val restoredChoice = DictionaryMeaningChoices.find(
-                            choices = choices,
-                            entryId = restoredEntry?.id,
-                            expression = vocabulary,
-                            reading = vocabularyReading,
-                            senseIndex = restoredSenseIndex,
-                        )
-                        when {
-                            restoredChoice != null -> commitDictionaryChoice(restoredChoice)
-                            choices.size == 1 -> commitDictionaryChoice(choices.single())
-                            choices.size > 1 -> {
-                                // Do not guess between viable readings/meanings. The selected
-                                // occurrence remains visible while the one combined sheet is open.
-                                clearUnresolvedVocabulary()
-                                showDictionarySheet = true
-                            }
-                            else -> {
-                                // No usable dictionary meaning is a card-local source miss, not a
-                                // chooser or an invitation to load more rows.
-                                clearUnresolvedVocabulary()
-                                showDictionarySheet = false
-                            }
-                        }
-                    } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (_: Exception) {
-                        if (asyncDraftIsCurrent(callbackGeneration)) {
-                            dictionaryError = this@MainActivity.getString(R.string.card_dictionary_lookup_failed_retry_before_sele)
-                        }
-                    } finally {
-                        dictionarySearchLoading = false
-                    }
-                }
-            }
+            DraftDictionarySearchEffect(
+                dictionaryReady = dictionaryReady,
+                target = draft.target,
+                sentence = draft.sentence,
+                dictionaryRetry = dictionaryRetry,
+                tokens = japaneseTokens,
+                draftGeneration = draftGeneration,
+                sendLocked = sendState.locked,
+                analyzedExpression = analyzedTarget?.expression,
+                selectedEntryId = selectedDictionaryEntryId,
+                vocabulary = draft.vocabulary,
+                vocabularyReading = draft.vocabularyReading,
+                preferences = preferences,
+                offlineDictionary = offlineDictionary,
+                isDraftCurrent = ::asyncDraftIsCurrent,
+                onEntriesChanged = { dictionaryEntries = it },
+                onHasMoreChanged = { dictionaryHasMore = it },
+                onSelectedEntryChanged = { selectedDictionaryEntry = it },
+                onLoadingChanged = { dictionarySearchLoading = it },
+                onError = { dictionaryError = it.takeIf(String::isNotEmpty) },
+                clearUnresolvedVocabulary = ::clearUnresolvedVocabulary,
+                commitChoice = ::commitDictionaryChoice,
+                onSheetChanged = { showDictionarySheet = it },
+                lookupFailedMessage = this@MainActivity.getString(
+                    R.string.card_dictionary_lookup_failed_retry_before_sele,
+                ),
+            )
 
-            androidx.compose.runtime.LaunchedEffect(
-                dictionaryReady, selectedDictionaryEntryId, selectedDictionaryEntry, vocabulary, vocabularyReading,
-                target, editor.text, dictionaryRetry, draftGeneration, submissionLocked, ajtAvailability,
-            ) {
-                if (currentSubmissionLocked.value) return@LaunchedEffect
-                val callbackGeneration = draftGeneration
-                val entry = selectedDictionaryEntry?.takeIf {
-                    it.id == selectedDictionaryEntryId && it.expression == vocabulary && it.reading == vocabularyReading
-                }
-                if (!dictionaryReady || entry == null || vocabulary.isBlank() || vocabularyReading.isBlank() ||
-                    ajtAvailability !is AjtPitchAvailability.Ready
-                ) {
-                    pitchCandidates = emptyList()
-                    pitchAccentText = ""
-                    pitchHtmlText = null
-                    pitchLookupLoading = false
-                    pitchIndexError = (ajtAvailability as? AjtPitchAvailability.Unavailable)
-                        ?.let { this@MainActivity.getString(pitchUnavailableMessage(it.failure)) }
-                    return@LaunchedEffect
-                }
-                pitchAccentText = ""
-                pitchHtmlText = null
-                pitchCandidates = emptyList()
-                pitchLookupLoading = true
-                try {
-                    val candidates = withContext(Dispatchers.IO) {
-                        ajtPitchRepository.pitch(entry.expression, entry.reading)
-                    }.filter { PitchAccent.create(entry.reading, it.accent, it.html) != null }
-                    if (!asyncDraftIsCurrent(callbackGeneration)) return@LaunchedEffect
-                    pitchCandidates = candidates
-                    pitchIndexError = if (candidates.isEmpty()) {
-                        this@MainActivity.getString(R.string.card_ajt_pitch_record_missing)
-                    } else null
-                    if (candidates.isNotEmpty()) {
-                        pitchAccentText = candidates.first().accent.toString()
-                        pitchHtmlText = candidates.first().html
-                    }
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) {
-                    if (asyncDraftIsCurrent(callbackGeneration)) pitchCandidates = emptyList()
-                } finally {
-                    pitchLookupLoading = false
-                }
-            }
+            DraftPitchLookupEffect(
+                dictionaryReady = dictionaryReady,
+                selectedEntryId = selectedDictionaryEntryId,
+                selectedEntry = selectedDictionaryEntry,
+                vocabulary = draft.vocabulary,
+                vocabularyReading = draft.vocabularyReading,
+                target = draft.target,
+                sentence = draft.sentence,
+                dictionaryRetry = dictionaryRetry,
+                draftGeneration = draftGeneration,
+                sendLocked = sendState.locked,
+                availability = ajtAvailability,
+                repository = ajtPitchRepository,
+                isDraftCurrent = ::asyncDraftIsCurrent,
+                onCandidatesChanged = { pitchCandidates = it },
+                onPitchAccentChanged = { pitchAccentText = it },
+                onPitchHtmlChanged = { pitchHtmlText = it },
+                onLoadingChanged = { pitchLookupLoading = it },
+                onError = { pitchIndexError = it },
+                unavailableMessage = { failure ->
+                    this@MainActivity.getString(pitchUnavailableMessage(failure))
+                },
+                missingMessage = this@MainActivity.getString(R.string.card_ajt_pitch_record_missing),
+            )
 
-            androidx.compose.runtime.LaunchedEffect(incoming, submissionLocked) {
-                if (submissionLocked) {
+            androidx.compose.runtime.LaunchedEffect(incoming, sendState.locked) {
+                if (sendState.locked) {
                     incoming?.let {
                         val rawImage = imageFromIntent(intent)
                         if (clearConsumedShareIntent(expectedText = it, expectedImage = rawImage)) {
@@ -2361,8 +2184,8 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            androidx.compose.runtime.LaunchedEffect(sharedImage.value, submissionLocked) {
-                if (submissionLocked) {
+            androidx.compose.runtime.LaunchedEffect(sharedImage.value, sendState.locked) {
+                if (sendState.locked) {
                     sharedImage.value?.let {
                         val rawText = textFromIntent(intent)
                         val rawImage = imageFromIntent(intent)
@@ -2405,8 +2228,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
             if (showSettings) {
-                FlowTheme(darkTheme = isSystemInDarkTheme()) {
-                    Dialog(
+                FlowDialog(
                     onDismissRequest = { closeSettings() },
                     properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
                 ) {
@@ -2525,12 +2347,10 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
-                    }
                 }
             }
             if (showSources) {
-                FlowTheme(darkTheme = isSystemInDarkTheme()) {
-                    Dialog(
+                FlowDialog(
                     onDismissRequest = { showSources = false },
                     properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
                 ) {
@@ -2569,14 +2389,11 @@ class MainActivity : ComponentActivity() {
                                 Text(licenseDocuments)
                             }
                         }
-                    }
-                    }
                 }
             }
             if (setupVisible) {
-                FlowTheme(darkTheme = isSystemInDarkTheme()) {
-                    Dialog(
-                        onDismissRequest = { if (onboardingComplete && analyzerReady) showSetup = false },
+                FlowDialog(
+                    onDismissRequest = { if (onboardingComplete && analyzerReady) showSetup = false },
                         properties = DialogProperties(
                             usePlatformDefaultWidth = false,
                             decorFitsSystemWindows = false,
@@ -2609,12 +2426,12 @@ class MainActivity : ComponentActivity() {
                                     ),
                                     cameraPermissionGranted = cameraPermissionGranted,
                                     cameraDenied = cameraDenied,
-                                    dictionaryPreparing = !analyzerReady && analyzerFailure == null,
+                                    dictionaryPreparing = !setupReadiness.dictionaryReady && analyzerFailure == null,
                                     dictionaryErrorResource = analyzerFailure,
-                                    audioReady = setupAudioReady(),
-                                    ankiReady = setupAnkiReady(),
+                                    audioReady = setupReadiness.audioReady,
+                                    ankiReady = setupReadiness.ankiReady,
                                 ),
-                                onBack = if (onboardingComplete && analyzerReady) ({ showSetup = false }) else null,
+                                onBack = if (onboardingComplete && setupReadiness.dictionaryReady) ({ showSetup = false }) else null,
                                 onKeyChange = { value ->
                                     settingsCoordinator?.let { coordinator ->
                                         val changed = value != coordinator.currentGoogleKey()
@@ -2678,12 +2495,10 @@ class MainActivity : ComponentActivity() {
                                 onFinish = { finishSetup() },
                             )
                         }
-                    }
                 }
             }
-            if (!submissionLocked && showReplace && (incoming != null || pendingPhotoFile != null || pendingSharedImageUri != null)) {
-                FlowTheme(darkTheme = isSystemInDarkTheme()) {
-                    AlertDialog(
+            if (!sendState.locked && showReplace && (incoming != null || pendingPhotoFile != null || pendingSharedImageUri != null)) {
+                FlowDialog(
                     onDismissRequest = {
                         discardSharePayload()
                         showReplace = false
@@ -2752,41 +2567,35 @@ class MainActivity : ComponentActivity() {
                         }) { Text(stringResource(R.string.keep_draft)) }
                     },
                     )
-                }
             }
 
             if (showOcrSheet && ocrChoices.size > 1) {
-                FlowTheme(darkTheme = isSystemInDarkTheme()) {
-                    ModalBottomSheet(onDismissRequest = { showOcrSheet = false }) {
-                    Column(
-                        Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState())
-                            .padding(horizontal = 20.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Text(stringResource(R.string.choose_sentence), style = MaterialTheme.typography.titleLarge)
-                        ocrChoices.forEach { block ->
-                            OutlinedButton(
-                                enabled = !submissionLocked,
-                                onClick = {
-                                    showOcrSheet = false
-                                    ocrChoices = emptyList()
-                                    applyOcrText(block.text, ocrFocusFraction(block.bounds, ocrImageHeight))
-                                },
-                                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                            ) { Text(block.text.trim()) }
-                        }
-                        TextButton(
-                            onClick = { showOcrSheet = false },
+                FlowSheet(
+                    onDismissRequest = { showOcrSheet = false },
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(stringResource(R.string.choose_sentence), style = MaterialTheme.typography.titleLarge)
+                    ocrChoices.forEach { block ->
+                        OutlinedButton(
+                            enabled = !sendState.locked,
+                            onClick = {
+                                showOcrSheet = false
+                                ocrChoices = emptyList()
+                                applyOcrText(block.text, ocrFocusFraction(block.bounds, ocrImageHeight))
+                            },
                             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                        ) { Text(stringResource(R.string.cancel)) }
+                        ) { Text(block.text.trim()) }
                     }
-                    }
+                    TextButton(
+                        onClick = { showOcrSheet = false },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    ) { Text(stringResource(R.string.cancel)) }
                 }
             }
 
             if (showDiscardConfirm) {
                 val hasWork = editor.text.isNotBlank() || noteImagePath != null || target != null
-                AlertDialog(
+                FlowDialog(
                     onDismissRequest = { showDiscardConfirm = false },
                     title = { Text(stringResource(R.string.legacy_capture_discard_this_draft)) },
                     text = {
@@ -2800,7 +2609,7 @@ class MainActivity : ComponentActivity() {
                     },
                     confirmButton = {
                         TextButton(
-                            enabled = !submissionLocked,
+                            enabled = !sendState.locked,
                             onClick = {
                                 showDiscardConfirm = false
                                 clearDraft()
@@ -2877,8 +2686,8 @@ class MainActivity : ComponentActivity() {
             val modelMapping = selectedModel?.let {
                 AnkiFieldContract.mapToModelOrder(it.fields, fieldsByName.orEmpty())
             }
-            val frozenForDisplay = completedSubmission ?: if (submissionLocked) {
-                publishedFrozenSnapshot ?: readFrozenSubmission(preferences)
+            val frozenForDisplay = completedSubmission ?: if (sendState.locked) {
+                sendState.frozen ?: readFrozenSubmission(preferences)
             } else null
             val restoredFrozenForUi = if (frozenRetryReady) frozenForDisplay else null
             val displaySentence = frozenForDisplay?.sentence ?: editor.text
@@ -2935,8 +2744,8 @@ class MainActivity : ComponentActivity() {
                 (frozenRetryReady || pitch != null) &&
                 (frozenRetryReady || (sentenceAudioReady && wordAudioReady)) &&
                 (frozenRetryReady || (!dictionaryLoading && !dictionarySearchLoading)) &&
-                setupLoadedSuccessfully && !setupLoading && setupError == null && !recoveryRequired &&
-                !isSubmitting && !duplicateBlocked
+                setupLoadedSuccessfully && !setupLoading && setupError == null &&
+                (sendState.editingEnabled || frozenRetryReady)
 
             // The card has one action: Send. Preparation is automatic, so an invalidated card only
             // greys Send out until every prepared artifact matches the committed sentence again.
@@ -2980,9 +2789,9 @@ class MainActivity : ComponentActivity() {
                 frozenSnapshotAppliedRevision = snapshot.revision
             }
 
-            androidx.compose.runtime.LaunchedEffect(submissionLocked, publishedFrozenSnapshot) {
-                if (!submissionLocked) return@LaunchedEffect
-                val snapshot = publishedFrozenSnapshot ?: readFrozenSubmission(preferences) ?: return@LaunchedEffect
+            androidx.compose.runtime.LaunchedEffect(sendState.locked, sendState.frozen) {
+                if (!sendState.locked) return@LaunchedEffect
+                val snapshot = sendState.frozen ?: readFrozenSubmission(preferences) ?: return@LaunchedEffect
                 if (frozenSnapshotAppliedRevision == snapshot.revision) return@LaunchedEffect
                 applyFrozenSubmissionToDraft(snapshot)
             }
@@ -2997,9 +2806,12 @@ class MainActivity : ComponentActivity() {
                 ) ?: return@LaunchedEffect
                 val snapshot = readFrozenSubmission(preferences)
                 if (snapshot == null) {
-                    recoveryMessage = this@MainActivity.getString(R.string.card_the_frozen_send_record_is_incomplete_keep)
+                    updateRecoveryMessage(
+                        this@MainActivity.getString(R.string.card_the_frozen_send_record_is_incomplete_keep),
+                    )
                     return@LaunchedEffect
                 }
+                sendState = sendState.copy(frozen = snapshot)
                 if (selectedModelId != snapshot.modelId) {
                     selectedModelId = snapshot.modelId
                     return@LaunchedEffect
@@ -3010,78 +2822,96 @@ class MainActivity : ComponentActivity() {
                 }
                 val model = noteTypes.firstOrNull { it.id == snapshot.modelId }
                 if (model == null) {
-                    recoveryMessage = this@MainActivity.getString(R.string.card_the_frozen_note_type_is_unavailable_confir)
+                    updateRecoveryMessage(
+                        this@MainActivity.getString(R.string.card_the_frozen_note_type_is_unavailable_confir),
+                        RecoveryReason.DestinationUnavailable,
+                    )
                     return@LaunchedEffect
                 }
                 if (model.fields != snapshot.modelFields) {
-                    recoveryMessage = this@MainActivity.getString(R.string.card_the_frozen_note_type_fields_changed_confir)
+                    updateRecoveryMessage(
+                        this@MainActivity.getString(R.string.card_the_frozen_note_type_fields_changed_confir),
+                    )
                     return@LaunchedEffect
                 }
-                val values = snapshot.modelFields.zip(snapshot.orderedFields).toMap()
-                if (phase == SubmissionPhase.NOTE_INSERTED || phase == SubmissionPhase.DESTINATION_VERIFIED) {
-                    val noteId = snapshot.noteId
-                    if (noteId == null) {
-                        recoveryMessage = this@MainActivity.getString(R.string.card_the_inserted_note_id_was_not_saved_the_out)
-                        return@LaunchedEffect
-                    }
-                    knownNoteId = noteId
-                    recoveryMessage = this@MainActivity.getString(R.string.card_checking_the_saved_note_id_and_destination)
-                    try {
-                        val decision = withContext(Dispatchers.IO) {
-                            val gateway = AnkiDroidGateway(contentResolver)
-                            noteInsertedRecoveryDecision(noteId, gateway.noteCards(noteId), snapshot.deckId)
-                        }
-                        when (decision) {
-                            NoteInsertedRecoveryDecision.COMPLETE -> {
-                                check(preferences.edit().putString(SubmissionRecoveryKeys.STATUS, SubmissionPhase.DESTINATION_VERIFIED.persisted).commit())
-                                persistLastSentTags(snapshot)
-                                check(preferences.edit().putString(SubmissionRecoveryKeys.STATUS, "done").commit())
-                                recoveryRequired = false
-                                recoveryPhase = null
-                                frozenRetryReady = false
-                                verifiedDelivery = true
-                                touchFeedbackDispatcher.dispatch(TouchFeedbackEvent.DELIVERY_VERIFIED)
-                                completedSubmission = snapshot
-                                knownNoteId = null
-                                submitMessage = this@MainActivity.getString(R.string.card_note_1_d_recovered_in_the_selected_deck, noteId.toString())
-                            }
-                            NoteInsertedRecoveryDecision.NEEDS_REVIEW -> recoveryMessage =
-                                this@MainActivity.getString(R.string.card_the_saved_note_has_cards_in_another_or_mix)
-                            NoteInsertedRecoveryDecision.INDETERMINATE -> recoveryMessage =
-                                this@MainActivity.getString(R.string.card_the_saved_note_id_has_no_verifiable_cards)
-                            NoteInsertedRecoveryDecision.FAIL -> error(this@MainActivity.getString(R.string.card_frozen_note_destination_invalid))
-                        }
-                    } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (_: Exception) {
-                        recoveryMessage = this@MainActivity.getString(R.string.card_could_not_verify_the_saved_note_id_retry_t)
-                    }
-                    return@LaunchedEffect
-                }
-                if (phase != SubmissionPhase.NOTE_INSERTING) return@LaunchedEffect
-                recoveryMessage = this@MainActivity.getString(R.string.card_checking_the_frozen_send_revision_in_ankid)
-                try {
-                    val duplicateId = withContext(Dispatchers.IO) {
-                        AnkiDroidGateway(contentResolver).hasMatchingNoteInAnyDeck(model, values)
-                    }
-                    if (duplicateId != null) {
-                        recoveryDuplicate = true
-                        knownNoteId = duplicateId
-                        recoveryMessage = this@MainActivity.getString(R.string.card_a_matching_note_exists_for_the_frozen_revi)
-                    } else if (decks.none { it.id == snapshot.deckId }) {
-                        recoveryDuplicate = false
-                        recoveryMessage = this@MainActivity.getString(R.string.card_no_matching_note_was_found_but_the_frozen)
+                if (phase != SubmissionPhase.NOTE_INSERTED &&
+                    phase != SubmissionPhase.DESTINATION_VERIFIED &&
+                    phase != SubmissionPhase.NOTE_INSERTING
+                ) return@LaunchedEffect
+                val checkingInserted = phase == SubmissionPhase.NOTE_INSERTED ||
+                    phase == SubmissionPhase.DESTINATION_VERIFIED
+                updateRecoveryMessage(
+                    if (checkingInserted) {
+                        this@MainActivity.getString(R.string.card_checking_the_saved_note_id_and_destination)
                     } else {
-                        recoveryRequired = false
-                        frozenRetryReady = true
-                        recoveryDuplicate = false
-                        knownNoteId = null
-                        recoveryMessage = this@MainActivity.getString(R.string.card_no_matching_note_was_found_for_the_frozen)
+                        this@MainActivity.getString(R.string.card_checking_the_frozen_send_revision_in_ankid)
+                    },
+                )
+                when (val outcome = sendCoordinator.recover(sendState.copy(frozen = snapshot))) {
+                    is SendOutcome.Created -> {
+                        sendState = sendState.copy(
+                            phase = SendPhase.Verified,
+                            frozen = snapshot,
+                            completedNoteId = outcome.noteId,
+                            duplicateNoteId = null,
+                            recovery = RecoveryReason.None,
+                        )
+                        verifiedDelivery = true
+                        touchFeedbackDispatcher.dispatch(TouchFeedbackEvent.DELIVERY_VERIFIED)
+                        submitMessage = this@MainActivity.getString(
+                            R.string.card_note_1_d_recovered_in_the_selected_deck,
+                            outcome.noteId.toString(),
+                        )
                     }
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) {
-                    recoveryMessage = this@MainActivity.getString(R.string.card_could_not_verify_the_frozen_send_retry_the)
+                    is SendOutcome.DestinationUnverified -> updateRecoveryMessage(
+                        this@MainActivity.getString(R.string.card_the_saved_note_has_cards_in_another_or_mix),
+                    )
+                    is SendOutcome.Duplicate -> {
+                        updateRecoveryMessage(
+                            this@MainActivity.getString(R.string.card_a_matching_note_exists_for_the_frozen_revi),
+                            RecoveryReason.MatchingNoteExists,
+                            SendPhase.Inserted,
+                        )
+                        sendState = sendState.copy(duplicateNoteId = outcome.noteId)
+                    }
+                    SendOutcome.RetryAvailable -> {
+                        if (decks.none { it.id == snapshot.deckId }) {
+                            updateRecoveryMessage(
+                                this@MainActivity.getString(R.string.card_no_matching_note_was_found_but_the_frozen),
+                                RecoveryReason.DestinationUnavailable,
+                                SendPhase.Preparing,
+                            )
+                        } else {
+                            updateRecoveryMessage(
+                                this@MainActivity.getString(R.string.card_no_matching_note_was_found_for_the_frozen),
+                                RecoveryReason.None,
+                                SendPhase.Preparing,
+                            )
+                        }
+                    }
+                    is SendOutcome.Indeterminate -> when (outcome.reason) {
+                        IndeterminateReason.MISSING_NOTE_ID -> updateRecoveryMessage(
+                            this@MainActivity.getString(R.string.card_the_inserted_note_id_was_not_saved_the_out),
+                            RecoveryReason.SavedNoteMissing,
+                        )
+                        IndeterminateReason.NO_VERIFIABLE_CARDS -> updateRecoveryMessage(
+                            this@MainActivity.getString(R.string.card_the_saved_note_id_has_no_verifiable_cards),
+                        )
+                        IndeterminateReason.LOOKUP_FAILED,
+                        IndeterminateReason.OPERATION_FAILED -> updateRecoveryMessage(
+                            if (checkingInserted) {
+                                this@MainActivity.getString(R.string.card_could_not_verify_the_saved_note_id_retry_t)
+                            } else {
+                                this@MainActivity.getString(R.string.card_could_not_verify_the_frozen_send_retry_the)
+                            },
+                            RecoveryReason.Unverifiable,
+                            if (checkingInserted) sendState.phase else SendPhase.Inserted,
+                        )
+                    }
+                    SendOutcome.PendingRecovery -> Unit
+                    is SendOutcome.InsertFailed,
+                    is SendOutcome.MediaFailed,
+                    is SendOutcome.NotReady -> Unit
                 }
             }
 
@@ -3196,59 +3026,29 @@ class MainActivity : ComponentActivity() {
             }
 
             androidx.compose.runtime.LaunchedEffect(
-                editor.text, editor.selection, target, vocabulary, vocabularyReading, pitchAccentText, pitchHtmlText, definition,
-                sentenceReading, readingCorrections, definitionManuallyEdited, dependentFieldsStale, translationDraft,
-                translationAttemptedSentence,
-                cardInvalidated,
-                notes, tags, selectedModelId, selectedDeckId, selectedDictionaryEntryId, selectedSenseIndices, completedSubmission,
+                draft, editor.selection, pitchHtmlText, definitionManuallyEdited, dependentFieldsStale,
+                translationDraft, translationAttemptedSentence, cardInvalidated,
+                selectedModelId, selectedDeckId, selectedDictionaryEntryId, selectedSenseIndices, completedSubmission,
             ) {
                 if (completedSubmission != null) return@LaunchedEffect
-                preferences.edit()
-                    .putString("sentence", editor.text)
-                    .putInt("selection_start", editor.selection.min)
-                    .putInt("selection_end", editor.selection.max)
-                    .putInt("target_start", target?.start ?: -1)
-                    .putInt("target_end", target?.end ?: -1)
-                    .putString("vocabulary", vocabulary)
-                    .putString("vocabulary_reading", vocabularyReading)
-                    .putString("pitch_accent", pitchAccentText)
-                    .putString("pitch_html", pitchHtmlText)
-                    .putString("definition", definition)
-                    .putBoolean("definition_manual", definitionManuallyEdited)
-                    .putBoolean("definition_manual_stale", dependentFieldsStale && definitionManuallyEdited)
-                    .remove("dependent_fields_stale")
-                    .putString("sentence_reading", sentenceReading)
-                    .putString("sentence_reading_corrections", SentenceReadings.encode(readingCorrections))
-                    .remove("leave_sentence_target_unannotated")
-                    .remove("leave_vocabulary_unannotated")
-                    .putString("translation", translation)
-                    .putString("translation_sentence", translationDraft.sentence)
-                    .putString("translation_source", (translationDraft.result as? TranslationResult.Ready)?.source?.name)
-                    .putBoolean("translation_manual", translationDraft.manuallyEdited)
-                    .putBoolean("translation_stale", translationDraft.stale)
-                    .putBoolean("translation_pending", activeTranslationResult() is TranslationResult.Pending)
-                    .putString("translation_error", (activeTranslationResult() as? TranslationResult.Failed)?.message)
-                    .putString(
-                        "translation_suggestion",
-                        (translationDraft.suggestion as? TranslationResult.Ready)?.text,
-                    )
-                    .putString(
-                        "translation_suggestion_source",
-                        (translationDraft.suggestion as? TranslationResult.Ready)?.source?.name,
-                    )
-                    .putString(
-                        "translation_suggestion_error",
-                        (translationDraft.suggestion as? TranslationResult.Failed)?.message,
-                    )
-                    .putString("translation_attempted_sentence", translationAttemptedSentence)
-                    .putBoolean("card_invalidated", cardInvalidated)
-                    .putString("notes", notes)
-                    .putString("tags", tags)
-                    .putLong("model_id", selectedModelId ?: -1)
-                    .putLong("deck_id", selectedDeckId ?: -1)
-                    .putLong("dictionary_entry_id", selectedDictionaryEntryId ?: -1)
-                    .putStringSet("dictionary_sense_indices", selectedSenseIndices.mapTo(mutableSetOf()) { it.toString() })
-                    .apply()
+                persistDraftPreferences(
+                    preferences = preferences,
+                    selectionStart = editor.selection.min,
+                    selectionEnd = editor.selection.max,
+                    draft = draft,
+                    pitchHtmlText = pitchHtmlText,
+                    definitionManuallyEdited = definitionManuallyEdited,
+                    dependentFieldsStale = dependentFieldsStale,
+                    translation = translation,
+                    translationDraft = translationDraft,
+                    activeTranslationResult = activeTranslationResult(),
+                    translationAttemptedSentence = translationAttemptedSentence,
+                    cardInvalidated = cardInvalidated,
+                    selectedModelId = selectedModelId,
+                    selectedDeckId = selectedDeckId,
+                    selectedDictionaryEntryId = selectedDictionaryEntryId,
+                    selectedSenseIndices = selectedSenseIndices,
+                )
             }
 
             val openKnownNote: (Long) -> Unit = { noteId ->
@@ -3267,18 +3067,12 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 if (duplicateBlocked) TextButton(onClick = {
-                    val blockedSnapshot = publishedFrozenSnapshot ?: readFrozenSubmission(preferences)
+                    val blockedSnapshot = sendState.frozen ?: readFrozenSubmission(preferences)
                     if (blockedSnapshot != null) applyFrozenSubmissionToDraft(blockedSnapshot)
                     clearPendingSubmission(preferences)
-                    duplicateBlocked = false
-                    recoveryRequired = false
-                    recoveryPhase = null
-                    frozenRetryReady = false
-                    publishedFrozenSnapshot = null
+                    sendState = SendState()
                     frozenSnapshotAppliedRevision = -1L
-                    knownNoteId = null
                     submitMessage = null
-                    recoveryMessage = null
                     route = AppRoute.Card
                     draftGeneration++
                 }, modifier = Modifier.heightIn(min = 48.dp)) {
@@ -3289,96 +3083,139 @@ class MainActivity : ComponentActivity() {
                     Text(stringResource(R.string.card_recovery_is_held_until_ankidroid_setup_suc), style = MaterialTheme.typography.bodyMedium)
                 } else if (recoveryRequired && recoveryDuplicate) {
                     TextButton(onClick = {
-                        val confirmedSnapshot = publishedFrozenSnapshot ?: readFrozenSubmission(preferences)
+                        val confirmedSnapshot = sendState.frozen ?: readFrozenSubmission(preferences)
                         if (confirmedSnapshot == null) {
-                            recoveryMessage = this@MainActivity.getString(R.string.card_the_frozen_send_is_unavailable_keep_the_dr)
+                            updateRecoveryMessage(
+                                this@MainActivity.getString(R.string.card_the_frozen_send_is_unavailable_keep_the_dr),
+                                RecoveryReason.MatchingNoteExists,
+                            )
                             return@TextButton
                         }
                         persistLastSentTags(confirmedSnapshot)
                         check(preferences.edit().putString(SubmissionRecoveryKeys.STATUS, "done").commit()) {
                             this@MainActivity.getString(R.string.card_resolved_send_state_save_failed)
                         }
-                        completedSubmission = confirmedSnapshot
-                        recoveryRequired = false
-                        recoveryPhase = null
-                        recoveryDuplicate = false
-                        knownNoteId = null
+                        sendState = sendState.copy(
+                            phase = SendPhase.Verified,
+                            frozen = confirmedSnapshot,
+                            completedNoteId = sendState.duplicateNoteId ?: confirmedSnapshot.noteId,
+                            duplicateNoteId = null,
+                            recovery = RecoveryReason.None,
+                        )
                         submitMessage = this@MainActivity.getString(R.string.card_pending_send_marked_complete)
                     }) { Text(stringResource(R.string.card_treat_pending_send_as_complete)) }
                 } else if (recoveryRequired && recoveryPhase == SubmissionPhase.MEDIA_IMPORTING) {
                     val pendingOperation = preferences.getString(SubmissionRecoveryKeys.MEDIA_OPERATION, null)
                         ?.let { name -> runCatching { MediaImportOperation.valueOf(name) }.getOrNull() }
                     TextButton(onClick = {
-                        recoveryRequired = false
-                        frozenRetryReady = true
-                        recoveryMessage = this@MainActivity.getString(R.string.card_retrying_the_frozen_media_sequence_may_dup)
+                        updateRecoveryMessage(
+                            this@MainActivity.getString(R.string.card_retrying_the_frozen_media_sequence_may_dup),
+                            RecoveryReason.None,
+                            SendPhase.Preparing,
+                        )
                     }) { Text(stringResource(R.string.card_retry_media_import_may_duplicate)) }
                     if (pendingOperation == MediaImportOperation.IMAGE) {
                         TextButton(onClick = {
                             clearPendingSubmission(preferences)
                             removeDraftImage()
-                            recoveryRequired = false
-                            recoveryPhase = null
-                            recoveryMessage = this@MainActivity.getString(R.string.card_the_interrupted_image_was_discarded_the_re)
+                            updateRecoveryMessage(
+                                this@MainActivity.getString(R.string.card_the_interrupted_image_was_discarded_the_re),
+                                RecoveryReason.None,
+                                SendPhase.Idle,
+                            )
                         }) { Text(stringResource(R.string.card_remove_interrupted_image)) }
                     } else {
                         TextButton(onClick = {
                             clearPendingSubmission(preferences)
                             audioController.releaseFreeze(retainFiles = true)
                             audioSnapshot = audioController.snapshot()
-                            publishedFrozenSnapshot = null
-                            recoveryRequired = false
-                            recoveryPhase = null
-                            frozenRetryReady = false
-                            recoveryMessage = this@MainActivity.getString(R.string.card_frozen_recovery_cleared_after_review_the_d)
+                            updateRecoveryMessage(
+                                this@MainActivity.getString(R.string.card_frozen_recovery_cleared_after_review_the_d),
+                                RecoveryReason.None,
+                                SendPhase.Idle,
+                            )
+                            sendState = sendState.copy(frozen = null, duplicateNoteId = null)
                         }) { Text(stringResource(R.string.card_i_checked_clear_frozen_recovery)) }
                     }
                 } else if (recoveryRequired && recoveryPhase == SubmissionPhase.MEDIA_IMPORTED) {
                     TextButton(onClick = {
-                        recoveryRequired = false
-                        frozenRetryReady = true
-                        recoveryMessage = this@MainActivity.getString(R.string.card_resuming_the_frozen_send_will_reuse_the_sa)
+                        updateRecoveryMessage(
+                            this@MainActivity.getString(R.string.card_resuming_the_frozen_send_will_reuse_the_sa),
+                            RecoveryReason.None,
+                            SendPhase.Preparing,
+                        )
                     }) { Text(stringResource(R.string.card_resume_frozen_send)) }
                     TextButton(onClick = {
                         clearPendingSubmission(preferences)
                         removeDraftImage()
-                        recoveryRequired = false
-                        recoveryPhase = null
-                        recoveryMessage = this@MainActivity.getString(R.string.card_pending_send_cleared_after_review_configur)
+                        updateRecoveryMessage(
+                            this@MainActivity.getString(R.string.card_pending_send_cleared_after_review_configur),
+                            RecoveryReason.None,
+                            SendPhase.Idle,
+                        )
                     }) { Text(stringResource(R.string.card_i_checked_configure_destination)) }
-                } else if (recoveryRequired && recoveryMessage?.contains("No matching note") == true) {
-                    TextButton(onClick = {
-                        recoveryRequired = false
-                        frozenRetryReady = true
-                        recoveryMessage = this@MainActivity.getString(R.string.card_retrying_the_frozen_send_the_draft_remains)
-                    }) { Text(stringResource(R.string.card_retry_frozen_send)) }
-                } else if (recoveryRequired && knownNoteId != null && recoveryMessage?.contains("no longer") == true) {
-                    Text(stringResource(R.string.card_the_saved_note_id_cannot_be_found_no_autom), style = MaterialTheme.typography.bodyMedium)
-                    TextButton(onClick = {
-                        clearPendingSubmission(preferences)
-                        recoveryRequired = false
-                        recoveryPhase = null
-                        frozenRetryReady = false
-                        knownNoteId = null
-                        recoveryMessage = this@MainActivity.getString(R.string.card_the_missing_saved_note_outcome_was_explici)
-                    }) { Text(stringResource(R.string.card_i_checked_resolve_outcome)) }
-                } else if (recoveryRequired && recoveryMessage?.contains("unavailable") == true) {
-                    TextButton(onClick = {
-                        clearPendingSubmission(preferences)
-                        recoveryRequired = false
-                        recoveryPhase = null
-                        recoveryMessage = this@MainActivity.getString(R.string.card_outcome_acknowledged_choose_a_valid_destin)
-                    }) { Text(stringResource(R.string.card_i_checked_configure_destination)) }
-                } else if (recoveryRequired && recoveryMessage?.startsWith("Could not verify") == true) {
-                    TextButton(onClick = { setupReload++ }) { Text(stringResource(R.string.card_retry_pending_send_check)) }
                 } else if (recoveryRequired) {
-                    TextButton(onClick = {
-                        clearPendingSubmission(preferences)
-                        recoveryRequired = false
-                        recoveryPhase = null
-                        recoveryDuplicate = false
-                        recoveryMessage = this@MainActivity.getString(R.string.card_pending_send_held_for_manual_resolution_co)
-                    }) { Text(stringResource(R.string.card_i_checked_configure_destination)) }
+                    when (sendState.recovery) {
+                        RecoveryReason.DestinationUnavailable -> {
+                            if (sendState.phase == SendPhase.Preparing) {
+                                TextButton(onClick = {
+                                    updateRecoveryMessage(
+                                        this@MainActivity.getString(R.string.card_retrying_the_frozen_send_the_draft_remains),
+                                        RecoveryReason.None,
+                                        SendPhase.Preparing,
+                                    )
+                                }) { Text(stringResource(R.string.card_retry_frozen_send)) }
+                            } else {
+                                TextButton(onClick = {
+                                    clearPendingSubmission(preferences)
+                                    updateRecoveryMessage(
+                                        this@MainActivity.getString(R.string.card_outcome_acknowledged_choose_a_valid_destin),
+                                        RecoveryReason.None,
+                                        SendPhase.Idle,
+                                    )
+                                }) { Text(stringResource(R.string.card_i_checked_configure_destination)) }
+                            }
+                        }
+                        RecoveryReason.SavedNoteMissing -> {
+                            if (knownNoteId != null) {
+                                FlowStatusText(
+                                    stringResource(R.string.card_the_saved_note_id_cannot_be_found_no_autom),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                TextButton(onClick = {
+                                    clearPendingSubmission(preferences)
+                                    updateRecoveryMessage(
+                                        this@MainActivity.getString(R.string.card_the_missing_saved_note_outcome_was_explici),
+                                        RecoveryReason.None,
+                                        SendPhase.Idle,
+                                    )
+                                }) { Text(stringResource(R.string.card_i_checked_resolve_outcome)) }
+                            } else {
+                                TextButton(onClick = {
+                                    clearPendingSubmission(preferences)
+                                    updateRecoveryMessage(
+                                        this@MainActivity.getString(R.string.card_pending_send_held_for_manual_resolution_co),
+                                        RecoveryReason.None,
+                                        SendPhase.Idle,
+                                    )
+                                }) { Text(stringResource(R.string.card_i_checked_configure_destination)) }
+                            }
+                        }
+                        RecoveryReason.Unverifiable ->
+                            TextButton(onClick = { setupReload++ }) { Text(stringResource(R.string.card_retry_pending_send_check)) }
+                        RecoveryReason.MatchingNoteExists,
+                        RecoveryReason.MediaInterrupted,
+                        RecoveryReason.MediaImported,
+                        RecoveryReason.None -> TextButton(onClick = {
+                            clearPendingSubmission(preferences)
+                            updateRecoveryMessage(
+                                this@MainActivity.getString(R.string.card_pending_send_held_for_manual_resolution_co),
+                                RecoveryReason.None,
+                                SendPhase.Idle,
+                            )
+                        }) { Text(stringResource(R.string.card_i_checked_configure_destination)) }
+                    }
                 }
             }
 
@@ -3423,7 +3260,6 @@ class MainActivity : ComponentActivity() {
                             .navigationBarsPadding()
                             .imePadding(),
                     ) {
-                        var submitAction: () -> Unit = {}
                         val reviewTarget = displayTarget?.takeIf { it.textIn(displaySentence) != null }
                         if (visibleRoute == AppRoute.Card) {
                             FlowTopBar(
@@ -3434,7 +3270,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         val updateEditor: (TextFieldValue) -> Unit = updateEditor@{ updated ->
-                            if (submissionLocked) return@updateEditor
+                            if (sendState.locked) return@updateEditor
                             if (updated.text != editor.text) {
                                 if (photoSourcePath == null) setDraftOrigin("Type")
                                 draftGeneration++
@@ -3443,6 +3279,7 @@ class MainActivity : ComponentActivity() {
                                 updateTranslationSentence(updated.text)
                                 if (hasManualDefinition) dependentFieldsStale = true
                                 selectTarget(null)
+                                draftState.value = draftState.value.withSentence(updated.text)
                                 japaneseTokens = emptyList()
                                 tokenizationError = null
                                 tokenizationLoading = analyzerReady
@@ -3450,7 +3287,7 @@ class MainActivity : ComponentActivity() {
                             editor = updated
                         }
                         val sendBlockers = buildList {
-                            if (!setupAudioReady()) {
+                            if (!setupReadiness.audioReady) {
                                 add(this@MainActivity.getString(R.string.audio_setup_needed))
                             }
                             if (imagePending) {
@@ -3524,7 +3361,7 @@ class MainActivity : ComponentActivity() {
                         } == true
                         val submitHintActionLabel = when {
                             translationNeedsSettings -> this@MainActivity.getString(R.string.card_open_settings_action)
-                            !setupAudioReady() -> this@MainActivity.getString(R.string.finish_setup)
+                            !setupReadiness.audioReady -> this@MainActivity.getString(R.string.finish_setup)
                             reviewTranslationError != null -> this@MainActivity.getString(R.string.retry)
                             !sentenceAudioReady -> this@MainActivity.getString(audioActionLabel(AudioItem.SENTENCE))
                             !wordAudioReady -> this@MainActivity.getString(audioActionLabel(AudioItem.VOCABULARY))
@@ -3535,7 +3372,7 @@ class MainActivity : ComponentActivity() {
 
                         val submitHintAction: (() -> Unit) = when {
                             translationNeedsSettings -> ({ openSettings() })
-                            !setupAudioReady() -> ({ enterSetup() })
+                            !setupReadiness.audioReady -> ({ enterSetup() })
                             reviewTranslationError != null -> ({
                                 if (committedSentence == editor.text) {
                                     generationStarted = true
@@ -3580,6 +3417,87 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
+                        val submitAtClick: () -> Unit = submitAtClick@{
+                            if (!canSend || (sendState.locked && !frozenRetryReady) || sendState.completedNoteId != null ||
+                                submitMessage?.startsWith(blockedStatusPrefix) == true
+                            ) return@submitAtClick
+                            val model = selectedModel ?: return@submitAtClick
+                            val deck = selectedDeck ?: return@submitAtClick
+                            val restoredFrozen = if (frozenRetryReady) readFrozenSubmission(preferences) else null
+                            if (frozenRetryReady && (restoredFrozen == null || restoredFrozen.modelId != model.id ||
+                                    restoredFrozen.deckId != deck.id || restoredFrozen.modelFields != model.fields)
+                            ) {
+                                submitMessage = this@MainActivity.getString(R.string.card_the_frozen_send_destination_is_unavailable)
+                                return@submitAtClick
+                            }
+                            val fields = restoredFrozen?.modelFields?.zip(restoredFrozen.orderedFields)?.toMap()
+                                ?: fieldsByName ?: return@submitAtClick
+                            val tagSet = restoredFrozen?.tags ?: AnkiFieldContract.parseTags(tags)
+                            val request = SendRequest(
+                                draft = noteDraft,
+                                fieldsByName = fields,
+                                model = model,
+                                deck = deck,
+                                tags = tagSet,
+                                pitchAccentText = pitchAccentText,
+                                imageAttached = imageAttached,
+                                imageProcessing = imageProcessing,
+                                processedImagePath = processedImagePath,
+                                processedImageIdentity = processedImageIdentity,
+                                imageReceiptFilename = imageReceiptFilename,
+                                restoredFrozen = restoredFrozen,
+                            )
+                            draftGeneration++
+                            translationRequestRevision++
+                            translationAutoAllowed = false
+                            if (activeTranslationResult() is TranslationResult.Pending) {
+                                translationDraft = translationDraft.requestFinished(
+                                    TranslationResult.Failed(this@MainActivity.getString(
+                                        R.string.card_translation_paused_while_sending_retry_aft,
+                                    )),
+                                )
+                            }
+                            dictionaryLoading = false
+                            dictionarySearchLoading = false
+                            analyzerLoading = false
+                            tokenizationLoading = false
+                            pitchLookupLoading = false
+                            ocrLoading = false
+                            sendState = sendState.copy(
+                                phase = SendPhase.Submitting,
+                                frozen = restoredFrozen,
+                                completedNoteId = null,
+                                duplicateNoteId = null,
+                                recovery = RecoveryReason.None,
+                            )
+                            submitMessage = null
+                            coroutineScope.launch {
+                                try {
+                                    val outcome = sendCoordinator.submit(request) { updated ->
+                                        sendState = sendState.copy(frozen = updated.frozen)
+                                    }
+                                    val update = outcome.toUiUpdate(
+                                        current = sendState,
+                                        context = this@MainActivity,
+                                        preferences = preferences,
+                                        imageAttached = imageAttached,
+                                    )
+                                    sendState = update.state
+                                    if (update.updateSubmitMessage) submitMessage = update.submitMessage
+                                    audioSnapshot = audioController.snapshot()
+                                    if (update.deliveryVerified) {
+                                        verifiedDelivery = true
+                                        touchFeedbackDispatcher.dispatch(TouchFeedbackEvent.DELIVERY_VERIFIED)
+                                    }
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } finally {
+                                    if (sendState.phase == SendPhase.Submitting) {
+                                        sendState = sendState.copy(phase = SendPhase.Idle)
+                                    }
+                                }
+                            }
+                        }
                         when (visibleRoute) {
                             AppRoute.Capture -> InputScreen(
                                 captureMode = captureMode,
@@ -3611,7 +3529,7 @@ class MainActivity : ComponentActivity() {
                                 onReopenOcrChooser = { showOcrSheet = ocrChoices.size > 1 },
                                 outputDirectory = File(filesDir, "draft").apply { mkdirs() },
                                 modifier = Modifier.weight(1f).fillMaxWidth(),
-                                enabled = !submissionLocked,
+                                enabled = !sendState.locked,
                                 cameraPermissionGranted = cameraPermissionGranted,
                                 onRequestCamera = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) },
                                 cameraError = cameraError,
@@ -3654,59 +3572,53 @@ class MainActivity : ComponentActivity() {
                                 val recoveryActionLabel = submitHintActionLabel.takeIf {
                                     submitHint != null && it != this@MainActivity.getString(R.string.card_edit_preparation)
                                 }
-                                val cardStatus = when {
-                                    completedSubmission != null -> submitMessage ?: stringResource(R.string.card_note_sent_to_ankidroid)
-                                    duplicateBlocked -> submitMessage ?: stringResource(R.string.card_matching_note_exists)
-                                    recoveryRequired -> recoveryMessage ?: stringResource(R.string.card_pending_send_needs_review)
-                                    else -> null
-                                }
-                                val cardHint = when {
-                                    cardAnalyzerError != null -> cardAnalyzerError
-                                    cardAnalyzing -> stringResource(R.string.card_analyzing_the_sentence)
-                                    target == null -> stringResource(R.string.card_hint_word)
-                                    completedSubmission != null -> cardStatus
-                                    duplicateBlocked -> cardStatus
-                                    recoveryRequired -> cardStatus
-                                    isSubmitting -> stringResource(R.string.sending)
-                                    sendBlockedStatus -> submitMessage
-                                    submitMessage != null -> submitMessage
-                                    reviewTranslationError != null -> this@MainActivity.getString(
-                                        reviewTranslationFailureStatus(reviewTranslationError).headlineResource,
-                                    )
-                                    wordAudioPresentation == ReviewAudioPresentation.Generating ->
-                                        stringResource(R.string.card_hint_preparing)
-                                    submitHint != null -> submitHint
-                                    else -> null
-                                }
-                                val cardNoWordAction = reviewTarget == null && cardAnalyzerError == null && !cardAnalyzing &&
-                                    !recoveryRequired && !duplicateBlocked && completedSubmission == null && submitMessage == null
-                                val cardActionLabel = when {
-                                    cardNoWordAction -> stringResource(R.string.send)
-                                    cardAnalyzerError != null -> stringResource(R.string.retry)
-                                    recoveryRequired || duplicateBlocked || completedSubmission != null || isSubmitting ->
-                                        stringResource(R.string.send)
-                                    submitMessage != null && !sendBlockedStatus -> stringResource(R.string.card_retry_send)
-                                    recoveryActionLabel != null -> recoveryActionLabel
-                                    else -> stringResource(R.string.send)
-                                }
-                                val cardActionEnabled = when {
-                                    cardNoWordAction -> false
-                                    isSubmitting || cardAnalyzing || completedSubmission != null || duplicateBlocked || recoveryRequired -> false
-                                    cardAnalyzerError != null -> !submissionLocked
-                                    submitMessage != null && !sendBlockedStatus -> canSend
-                                    recoveryActionLabel != null -> !submissionLocked
-                                    else -> canSend && reviewTarget != null
-                                }
-                                val cardAction: () -> Unit = when {
-                                    cardNoWordAction -> ({})
-                                    cardAnalyzerError != null -> ({ analysisRetry++ })
-                                    submitMessage != null && !sendBlockedStatus -> ({ submitAction() })
-                                    recoveryActionLabel != null -> submitHintAction
-                                    // `submitAction` is assigned further down this composition, so it
-                                    // still holds the empty placeholder here. Invoke it at click time;
-                                    // capturing the value wires the button to a no-op.
-                                    else -> ({ submitAction() })
-                                }
+                                val presentation = cardPresentation(
+                                    CardPresentationInput(
+                                        hasTarget = target != null,
+                                        analyzerError = cardAnalyzerError,
+                                        analyzing = cardAnalyzing,
+                                        completed = completedSubmission != null,
+                                        duplicateBlocked = duplicateBlocked,
+                                        recoveryRequired = recoveryRequired,
+                                        submitting = isSubmitting,
+                                        sendBlocked = sendBlockedStatus,
+                                        submitMessage = submitMessage,
+                                        recoveryActionLabel = recoveryActionLabel,
+                                        translationFailure = reviewTranslationError?.let {
+                                            this@MainActivity.getString(reviewTranslationFailureStatus(it).headlineResource)
+                                        },
+                                        wordAudioGenerating = wordAudioPresentation == ReviewAudioPresentation.Generating,
+                                        submitHint = submitHint,
+                                        noWordAction = reviewTarget == null && cardAnalyzerError == null && !cardAnalyzing &&
+                                            (sendState.editingEnabled || frozenRetryReady) && submitMessage == null,
+                                        canSend = canSend,
+                                        submissionLocked = sendState.locked,
+                                        actionHasTarget = reviewTarget != null,
+                                        recoveryMessage = recoveryMessage,
+                                        copy = CardPresentationCopy(
+                                            noTargetHint = stringResource(R.string.card_hint_word),
+                                            analyzingHint = stringResource(R.string.card_analyzing_the_sentence),
+                                            sendingHint = stringResource(R.string.sending),
+                                            wordAudioPreparingHint = stringResource(R.string.card_hint_preparing),
+                                            completedStatusFallback = stringResource(R.string.card_note_sent_to_ankidroid),
+                                            duplicateStatusFallback = stringResource(R.string.card_matching_note_exists),
+                                            recoveryStatusFallback = stringResource(R.string.card_pending_send_needs_review),
+                                            sendActionLabel = stringResource(R.string.send),
+                                            retryActionLabel = stringResource(R.string.retry),
+                                            retrySendActionLabel = stringResource(R.string.card_retry_send),
+                                        ),
+                                    ),
+                                )
+                                // The click handler is ready before the Card is built; it invokes the
+                                // coordinator when clicked rather than capturing a later assignment.
+                                val cardAction = cardActionClickHandler(
+                                    action = presentation.action,
+                                    sendState = sendState,
+                                    frozenRetryReady = frozenRetryReady,
+                                    onSubmit = submitAtClick,
+                                    onRetryAnalysis = { analysisRetry++ },
+                                    onRecovery = submitHintAction,
+                                )
                                 val cardMeaningChoices = DictionaryMeaningChoices.from(dictionaryEntries)
                                 val selectedMeaningChoice = DictionaryMeaningChoices.find(
                                     choices = cardMeaningChoices,
@@ -3744,16 +3656,15 @@ class MainActivity : ComponentActivity() {
                                     sentence = displaySentence,
                                     tokens = japaneseTokens,
                                     selectedSpan = reviewTarget,
-                                    selectionEnabled = !submissionLocked && completedSubmission == null &&
-                                        !duplicateBlocked && !recoveryRequired,
+                                    selectionEnabled = sendState.editingEnabled,
                                     onSelectSpan = { span ->
-                                        if (!submissionLocked && completedSubmission == null && !duplicateBlocked && !recoveryRequired) {
+                                        if (sendState.editingEnabled) {
                                             selectTarget(span)
                                             editor = editor.copy(selection = TextRange(span.start, span.end))
                                         }
                                     },
                                     furigana = if (frozenForDisplay == null) sentenceFurigana else emptyList(),
-                                    onEditSentence = { if (!submissionLocked) showSentenceEditor = true },
+                                    onEditSentence = { if (!sendState.locked) showSentenceEditor = true },
                                     translation = displayTranslation,
                                     vocabulary = displayVocabulary,
                                     vocabularyReading = displayVocabularyReading,
@@ -3765,20 +3676,20 @@ class MainActivity : ComponentActivity() {
                                     pitchStatus = cardPitchStatus,
                                     pitchPending = cardPitchPending,
                                     wordStatus = cardWordStatus,
-                                    wordAudioEnabled = selectedEntryIsResolved && !submissionLocked,
+                                    wordAudioEnabled = selectedEntryIsResolved && !sendState.locked,
                                     meaningAvailable = DictionaryMeaningChoices.hasAlternative(
                                         cardMeaningChoices,
                                         selectedMeaningChoice,
-                                    ) && !submissionLocked,
+                                    ) && !sendState.locked,
                                     onChangeMeaning = {
-                                        if (!submissionLocked && cardMeaningChoices.size > 1) showDictionarySheet = true
+                                        if (!sendState.locked && cardMeaningChoices.size > 1) showDictionarySheet = true
                                     },
                                     imagePath = frozenForDisplay?.media?.path ?: processedImagePath.takeIf { imageReady },
                                     imageFocusY = photoFocusY,
                                     notes = displayNotes,
                                     tags = displayTags,
-                                    onNotesChange = { text -> if (!submissionLocked && completedSubmission == null) notes = text },
-                                    onTagsChange = { text -> if (!submissionLocked && completedSubmission == null) tags = text },
+                                    onNotesChange = { text -> if (sendState.editingEnabled) notes = text },
+                                    onTagsChange = { text -> if (sendState.editingEnabled) tags = text },
                                     sentenceAudio = sentenceAudioPresentation,
                                     wordAudio = wordAudioPresentation,
                                     onToggleSentenceAudio = {
@@ -3799,13 +3710,13 @@ class MainActivity : ComponentActivity() {
                                         }
                                     },
                                     onRetryWordAudio = { onAudioAction(AudioItem.VOCABULARY) },
-                                    hint = cardHint,
-                                    hintPreparing = cardAnalyzing,
-                                    actionLabel = cardActionLabel,
-                                    actionEnabled = cardActionEnabled,
+                                    hint = presentation.hint,
+                                    hintPreparing = presentation.hintPreparing,
+                                    actionLabel = presentation.actionLabel,
+                                    actionEnabled = presentation.actionEnabled,
                                     actionLoading = isSubmitting,
                                     onAction = cardAction,
-                                    statusMessage = cardStatus?.takeIf { it != cardHint },
+                                    statusMessage = presentation.status?.takeIf { it != presentation.hint },
                                     statusContent = {
                                         if (duplicateBlocked || recoveryRequired) sendRecoveryContent()
                                     },
@@ -3814,15 +3725,15 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         if (showSentenceEditor) {
-                            ModalBottomSheet(onDismissRequest = {
-                                sentenceEditorDraft = null
-                                showSentenceEditor = false
-                            }) {
-                                Column(
-                                    Modifier.fillMaxWidth().heightIn(max = 620.dp).verticalScroll(rememberScrollState())
-                                        .padding(horizontal = 24.dp, vertical = 8.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                                ) {
+                            FlowSheet(
+                                onDismissRequest = {
+                                    sentenceEditorDraft = null
+                                    showSentenceEditor = false
+                                },
+                                maxHeight = MaterialTheme.flow.tallSheetMaxHeight,
+                                horizontalPadding = MaterialTheme.flow.sheetWidePadding,
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
                                     Text(stringResource(R.string.edit_sentence), style = MaterialTheme.typography.titleLarge)
                                     OutlinedTextField(
                                         value = sentenceEditorDraft ?: editor,
@@ -3870,16 +3781,14 @@ class MainActivity : ComponentActivity() {
                                             modifier = Modifier.heightIn(min = 48.dp),
                                         ) { Text(stringResource(R.string.done)) }
                                     }
-                                }
                             }
                         }
                         if (showDeckSheet) {
-                            ModalBottomSheet(onDismissRequest = { showDeckSheet = false }) {
-                                Column(
-                                    Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState())
-                                        .padding(horizontal = 24.dp, vertical = 8.dp),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                                ) {
+                            FlowSheet(
+                                onDismissRequest = { showDeckSheet = false },
+                                horizontalPadding = MaterialTheme.flow.sheetWidePadding,
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
                                     Text(stringResource(R.string.legacy_settings_destination_deck), style = MaterialTheme.typography.titleLarge)
                                     if (decks.isEmpty()) {
                                         Text(
@@ -3897,449 +3806,55 @@ class MainActivity : ComponentActivity() {
                                             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                                         ) { Text(deck.name) }
                                     }
-                                }
                             }
                         }
                         if (visibleRoute == AppRoute.Card && reviewTarget == null) {
-                            submitMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
-                            recoveryMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                            submitMessage?.let {
+                                FlowStatusText(
+                                    it,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
+                            recoveryMessage?.let {
+                                FlowStatusText(
+                                    it,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
                             sendRecoveryContent()
                         }
-                        submitAction = submitAction@{
-                            if (!canSend || isSubmitting || recoveryRequired || duplicateBlocked || completedSubmission != null ||
-                                submitMessage?.startsWith(blockedStatusPrefix) == true
-                            ) {
-                                return@submitAction
-                            }
-                            val model = selectedModel ?: return@submitAction
-                            val deck = selectedDeck ?: return@submitAction
-                            val restoredFrozen = if (frozenRetryReady) readFrozenSubmission(preferences) else null
-                            if (frozenRetryReady && (restoredFrozen == null || restoredFrozen.modelId != model.id ||
-                                    restoredFrozen.deckId != deck.id || restoredFrozen.modelFields != model.fields)
-                            ) {
-                                submitMessage = this@MainActivity.getString(R.string.card_the_frozen_send_destination_is_unavailable)
-                                return@submitAction
-                            }
-                            val fields = restoredFrozen?.modelFields?.zip(restoredFrozen.orderedFields)?.toMap()
-                                ?: fieldsByName ?: return@submitAction
-                            val tagSet = restoredFrozen?.tags ?: AnkiFieldContract.parseTags(tags)
-                            // Freeze both audio items before any import: the files are pinned by
-                            // leases and the identities are immutable from here on. A restored
-                            // frozen Send already owns its audio, so it is not frozen twice.
-                            val frozenAudio = if (restoredFrozen != null) null else {
-                                when (val freeze = audioController.freezeForSend()) {
-                                    is DraftAudioFreeze.Frozen -> freeze.snapshot
-                                    is DraftAudioFreeze.Incomplete -> {
-                                        submitMessage =
-                                            this@MainActivity.getString(R.string.card_wait_for_or_retry_the_missing_audio_before)
-                                        return@submitAction
-                                    }
-                                    DraftAudioFreeze.Disposed -> return@submitAction
-                                }
-                            }
-                            audioSnapshot = audioController.snapshot()
-                            publishedFrozenSnapshot = restoredFrozen ?: modelMapping?.takeIf { it.isValid }?.let { mapping ->
-                                FrozenSubmission(
-                                    revision = nextSubmissionRevision(
-                                        preferences.getLong(SubmissionRecoveryKeys.REVISION_SEQUENCE, 0L),
-                                        preferences.getLong(SubmissionRecoveryKeys.REVISION, 0L),
-                                    ),
-                                    modelId = model.id,
-                                    deckId = deck.id,
-                                    modelFields = model.fields,
-                                    orderedFields = mapping.values,
-                                    sentence = editor.text,
-                                    lemma = vocabulary,
-                                    vocabularyReading = vocabularyReading,
-                                    sentenceReading = sentenceReading,
-                                    definition = definition,
-                                    translation = translation,
-                                    notes = notes,
-                                    tags = tagSet,
-                                    pitchAccentText = pitchAccentText,
-                                    targetStart = target?.start ?: -1,
-                                    targetEnd = target?.end ?: -1,
-                                    media = processedImageIdentity,
-                                    importedFilename = imageReceiptFilename,
-                                    noteId = null,
-                                )
-                            }
-                            draftGeneration++
-                            translationRequestRevision++
-                            translationAutoAllowed = false
-                            if (activeTranslationResult() is TranslationResult.Pending) {
-                                translationDraft = translationDraft.requestFinished(
-                                    TranslationResult.Failed(this@MainActivity.getString(R.string.card_translation_paused_while_sending_retry_aft)),
-                                )
-                            }
-                            dictionaryLoading = false
-                            dictionarySearchLoading = false
-                            analyzerLoading = false
-                            tokenizationLoading = false
-                            pitchLookupLoading = false
-                            ocrLoading = false
-                            isSubmitting = true
-                            knownNoteId = null
-                            submitMessage = null
-                            coroutineScope.launch {
-                                suspend fun publishFrozen(snapshot: FrozenSubmission) {
-                                    withContext(Dispatchers.Main.immediate) {
-                                        publishedFrozenSnapshot = snapshot
-                                    }
-                                }
-                                try {
-                                    val outcome = withContext(Dispatchers.IO) {
-                                        val gateway = AnkiDroidGateway(contentResolver, applicationContext)
-                                        val duplicateId = gateway.hasDuplicate(model, deck, fields)
-                                        if (duplicateId != null) {
-                                            preferences.edit().putString(SubmissionRecoveryKeys.STATUS, "blocked").commit()
-                                            SubmissionOutcome("duplicate", duplicateId)
-                                        } else {
-                                            var frozen = if (restoredFrozen != null) {
-                                                val localFile = restoredFrozen.media?.let { File(it.path) }
-                                                val localExists = localFile?.exists() == true
-                                                check(
-                                                    frozenImagePermitsImport(
-                                                        importedFilename = restoredFrozen.importedFilename,
-                                                        frozenIdentity = restoredFrozen.media,
-                                                        receiptIdentity = receiptIdentity(preferences, IMAGE_RECEIPT_KEYS),
-                                                        receiptFilename = preferences.getString(IMAGE_RECEIPT_FILENAME, null),
-                                                        localFileExists = localExists,
-                                                        localIdentity = if (localExists) liveMediaIdentity(localFile) else null,
-                                                    ),
-                                                ) { this@MainActivity.getString(R.string.card_frozen_image_receipt_unavailable) }
-                                                restoredFrozen
-                                            } else {
-                                                val includeImage = imageAttached && !imageProcessing
-                                                val processed = if (includeImage) {
-                                                    processedImagePath?.let(::File)?.takeIf(File::isFile)
-                                                } else null
-                                                if (includeImage) check(processed != null) {
-                                                    this@MainActivity.getString(R.string.card_selected_image_not_ready_for_import)
-                                                }
-                                                val imageIdentity = liveMediaIdentity(processed)
-                                                val importedImage = if (includeImage) {
-                                                    importedReceiptFromPreferences(
-                                                        preferences,
-                                                        IMAGE_RECEIPT_KEYS,
-                                                        imageIdentity,
-                                                        AnkiMediaImporter::sanitizeFilename,
-                                                    )
-                                                } else null
-                                                val frozenFiles = frozenAudio
-                                                    ?: error(this@MainActivity.getString(R.string.card_draft_audio_not_frozen))
-                                                val sentenceEntry = frozenFiles.files.getValue(AudioItem.SENTENCE)
-                                                val wordEntry = frozenFiles.files.getValue(AudioItem.VOCABULARY)
-                                                val sentenceIdentity = MediaIdentity(
-                                                    sentenceEntry.path, sentenceEntry.size, sentenceEntry.modified,
-                                                )
-                                                val wordIdentity = MediaIdentity(
-                                                    wordEntry.path, wordEntry.size, wordEntry.modified,
-                                                )
-                                                val sentenceImported = importedReceiptFromPreferences(
-                                                    preferences, SENTENCE_AUDIO_RECEIPT_KEYS, sentenceIdentity,
-                                                    AnkiMediaImporter::sanitizeAudioFilename,
-                                                )
-                                                val wordImported = importedReceiptFromPreferences(
-                                                    preferences, WORD_AUDIO_RECEIPT_KEYS, wordIdentity,
-                                                    AnkiMediaImporter::sanitizeAudioFilename,
-                                                )
-                                                val baseDraft = noteDraft.copy(
-                                                    imageFilename = importedImage,
-                                                    sentenceAudioFilename = sentenceImported,
-                                                    vocabularyAudioFilename = wordImported,
-                                                )
-                                                val baseFields = baseDraft.fieldsByName()
-                                                    ?: error(this@MainActivity.getString(R.string.card_note_changed_before_send_freeze))
-                                                val baseMapping = AnkiFieldContract.mapToModelOrder(model.fields, baseFields)
-                                                check(baseMapping.isValid) { baseMapping.errors.joinToString() }
-                                                FrozenSubmission(
-                                                    revision = nextSubmissionRevision(
-                                                        preferences.getLong(SubmissionRecoveryKeys.REVISION_SEQUENCE, 0L),
-                                                        preferences.getLong(SubmissionRecoveryKeys.REVISION, 0L),
-                                                    ),
-                                                    modelId = model.id,
-                                                    deckId = deck.id,
-                                                    modelFields = model.fields,
-                                                    orderedFields = baseMapping.values,
-                                                    sentence = editor.text,
-                                                    lemma = vocabulary,
-                                                    vocabularyReading = vocabularyReading,
-                                                    sentenceReading = sentenceReading,
-                                                    definition = definition,
-                                                    translation = translation,
-                                                    notes = notes,
-                                                    tags = tagSet,
-                                                    pitchAccentText = pitchAccentText,
-                                                    targetStart = target?.start ?: -1,
-                                                    targetEnd = target?.end ?: -1,
-                                                    media = imageIdentity,
-                                                    importedFilename = importedImage,
-                                                    noteId = null,
-                                                    sentenceAudio = FrozenAudioItem(sentenceIdentity, sentenceImported),
-                                                    wordAudio = FrozenAudioItem(wordIdentity, wordImported),
-                                                ).also { snapshot ->
-                                                    check(preferences.edit()
-                                                        .putLong(SubmissionRecoveryKeys.REVISION_SEQUENCE, snapshot.revision)
-                                                        .putFrozenSubmission(snapshot, SubmissionPhase.MEDIA_IMPORTING)
-                                                        .commit()) { this@MainActivity.getString(R.string.card_frozen_submission_recovery_save_failed) }
-                                                }
-                                            }
-                                            publishFrozen(frozen)
 
-                                            var durableSnapshot = frozen
-                                            fun persistReceipt(receipt: ImportedMediaReceipt): Boolean {
-                                                val updated = try {
-                                                    applyImportedReceipt(durableSnapshot, receipt)
-                                                } catch (_: Exception) {
-                                                    return false
-                                                }
-                                                val saved = runCatching {
-                                                    preferences.edit()
-                                                        .putFrozenSubmission(updated, SubmissionPhase.MEDIA_IMPORTED)
-                                                        .apply { putMediaReceipt(this, receipt) }
-                                                        .remove(SubmissionRecoveryKeys.MEDIA_OPERATION)
-                                                        .remove(SubmissionRecoveryKeys.MEDIA_SOURCE_PATH)
-                                                        .remove(SubmissionRecoveryKeys.MEDIA_SOURCE_SIZE)
-                                                        .remove(SubmissionRecoveryKeys.MEDIA_SOURCE_MODIFIED)
-                                                        .commit()
-                                                }.getOrDefault(false)
-                                                if (saved) durableSnapshot = updated
-                                                return saved
-                                            }
-                                            val importedReceipts = try {
-                                                importSendMedia(
-                                                    sentenceAudio = frozen.sentenceAudio?.takeUnless { it.omitted }?.let { item ->
-                                                        val identity = item.identity
-                                                            ?: error(this@MainActivity.getString(R.string.card_sentence_audio_missing_media_identity))
-                                                        mediaImportRequest(
-                                                            preferences,
-                                                            SENTENCE_AUDIO_RECEIPT_KEYS,
-                                                            MediaImportOperation.SENTENCE_AUDIO,
-                                                            identity,
-                                                            item.importedFilename,
-                                                        )
-                                                    },
-                                                    wordAudio = frozen.wordAudio?.takeUnless { it.omitted }?.let { item ->
-                                                        val identity = item.identity
-                                                            ?: error(this@MainActivity.getString(R.string.card_word_audio_missing_media_identity))
-                                                        mediaImportRequest(
-                                                            preferences,
-                                                            WORD_AUDIO_RECEIPT_KEYS,
-                                                            MediaImportOperation.WORD_AUDIO,
-                                                            identity,
-                                                            item.importedFilename,
-                                                        )
-                                                    },
-                                                    image = frozen.media?.let { identity ->
-                                                        mediaImportRequest(
-                                                            preferences,
-                                                            IMAGE_RECEIPT_KEYS,
-                                                            MediaImportOperation.IMAGE,
-                                                            identity,
-                                                            frozen.importedFilename,
-                                                        )
-                                                    },
-                                                    markImporting = { operation, source ->
-                                                        preferences.edit()
-                                                            .putFrozenSubmission(durableSnapshot, SubmissionPhase.MEDIA_IMPORTING)
-                                                            .putString(SubmissionRecoveryKeys.MEDIA_OPERATION, operation.name)
-                                                            .putString(SubmissionRecoveryKeys.MEDIA_SOURCE_PATH, source.path)
-                                                            .putLong(SubmissionRecoveryKeys.MEDIA_SOURCE_SIZE, source.size)
-                                                            .putLong(SubmissionRecoveryKeys.MEDIA_SOURCE_MODIFIED, source.modified)
-                                                            .commit()
-                                                    },
-                                                    import = { operation, identity ->
-                                                        val file = File(identity.path)
-                                                        check(liveMediaIdentity(file) == identity) {
-                                                            this@MainActivity.getString(R.string.card_frozen_media_changed_before_import)
-                                                        }
-                                                        when (operation) {
-                                                            MediaImportOperation.SENTENCE_AUDIO,
-                                                            MediaImportOperation.WORD_AUDIO -> gateway.importAudio(file, operation)
-                                                            MediaImportOperation.IMAGE -> gateway.importProcessedImage(file)
-                                                            MediaImportOperation.AUDIO -> error("Generic audio is not a Send operation.")
-                                                        }
-                                                    },
-                                                    persistReceipt = ::persistReceipt,
-                                                )
-                                            } catch (cancelled: CancellationException) {
-                                                throw cancelled
-                                            } catch (error: Exception) {
-                                                withContext(Dispatchers.Main.immediate) {
-                                                    publishedFrozenSnapshot = durableSnapshot
-                                                }
-                                                throw error
-                                            }
-                                            // The importer calls the callback for new receipts. Persist
-                                            // reused frozen receipts too, so recovery has one canonical record.
-                                            importedReceipts.forEach { receipt ->
-                                                check(persistReceipt(receipt)) {
-                                                    this@MainActivity.getString(R.string.card_media_receipt_save_failed, receipt.operation.label)
-                                                }
-                                            }
-                                            frozen = durableSnapshot
-                                            check(preferences.edit()
-                                                .putFrozenSubmission(frozen, SubmissionPhase.MEDIA_IMPORTED)
-                                                .remove(SubmissionRecoveryKeys.MEDIA_OPERATION)
-                                                .remove(SubmissionRecoveryKeys.MEDIA_SOURCE_PATH)
-                                                .remove(SubmissionRecoveryKeys.MEDIA_SOURCE_SIZE)
-                                                .remove(SubmissionRecoveryKeys.MEDIA_SOURCE_MODIFIED)
-                                                .commit()) { this@MainActivity.getString(R.string.card_completed_media_recovery_save_failed) }
-                                            publishFrozen(frozen)
-                                            val frozenFields = frozen.modelFields.zip(frozen.orderedFields).toMap()
-                                            val frozenMapping = AnkiFieldContract.mapToModelOrder(model.fields, frozenFields)
-                                            check(frozenMapping.isValid) { frozenMapping.errors.joinToString() }
-                                            check(preferences.edit().putFrozenSubmission(frozen, SubmissionPhase.NOTE_INSERTING).commit()) {
-                                                this@MainActivity.getString(R.string.card_frozen_submission_save_failed)
-                                            }
-                                            publishFrozen(frozen)
-                                            // A process death between provider insert and this commit leaves NOTE_INSERTING without an ID;
-                                            // recovery must reconcile explicitly rather than blindly inserting again.
-                                            val insertedNoteId = gateway.insertNote(model, frozenMapping.values, tagSet)
-                                            val insertedSnapshot = frozen.copy(noteId = insertedNoteId)
-                                            check(preferences.edit().putFrozenSubmission(
-                                                insertedSnapshot,
-                                                SubmissionPhase.NOTE_INSERTED,
-                                            ).commit()) { this@MainActivity.getString(R.string.card_inserted_note_id_save_failed) }
-                                            publishFrozen(insertedSnapshot)
-                                            check(gateway.ensureNoteInDeck(insertedNoteId, deck.id)) {
-                                                this@MainActivity.getString(R.string.card_inserted_note_has_no_cards)
-                                            }
-                                            check(preferences.edit().putFrozenSubmission(
-                                                insertedSnapshot,
-                                                SubmissionPhase.DESTINATION_VERIFIED,
-                                            ).commit()) { this@MainActivity.getString(R.string.card_verified_destination_save_failed) }
-                                            persistLastSentTags(insertedSnapshot)
-                                            check(preferences.edit().putString(SubmissionRecoveryKeys.STATUS, "done").commit())
-                                            clearPersistedDraft(preferences, File(filesDir, "draft"))
-                                            SubmissionOutcome("created", insertedNoteId)
-                                        }
-                                    }
-                                    when (outcome.status) {
-                                        "duplicate" -> {
-                                            audioController.releaseFreeze(retainFiles = false)
-                                            audioSnapshot = audioController.snapshot()
-                                            frozenRetryReady = false
-                                            recoveryPhase = null
-                                            duplicateBlocked = true
-                                            knownNoteId = outcome.noteId
-                                            if (restoredFrozen != null) clearPendingSubmission(preferences)
-                                            submitMessage = this@MainActivity.getString(R.string.card_blocked_a_note_with_this_sentence_and_voca)
-                                        }
-                                        "created" -> {
-                                            // The note is verified: nothing needs the frozen files
-                                            // any more, so release them (clearDraft then discards).
-                                            audioController.releaseFreeze(retainFiles = false)
-                                            audioSnapshot = audioController.snapshot()
-                                            verifiedDelivery = true
-                                            touchFeedbackDispatcher.dispatch(TouchFeedbackEvent.DELIVERY_VERIFIED)
-                                            completedSubmission = publishedFrozenSnapshot ?: readFrozenSubmission(preferences)
-                                            frozenRetryReady = false
-                                            recoveryRequired = false
-                                            recoveryPhase = null
-                                            recoveryDuplicate = false
-                                            knownNoteId = null
-                                            submitMessage = this@MainActivity.getString(R.string.card_note_sent_to_ankidroid)
-                                        }
-                                        else -> {
-                                            audioController.releaseFreeze(retainFiles = false)
-                                            audioSnapshot = audioController.snapshot()
-                                            frozenRetryReady = false
-                                            recoveryPhase = null
-                                            submitMessage = this@MainActivity.getString(R.string.card_ankidroid_did_not_add_the_note_you_can_saf)
-                                        }
-                                    }
-                                } catch (cancelled: CancellationException) {
-                                    throw cancelled
-                                } catch (error: AnkiProviderDefiniteInsertException) {
-                                    audioController.releaseFreeze(retainFiles = false)
-                                    audioSnapshot = audioController.snapshot()
-                                    clearPendingSubmission(preferences)
-                                    publishedFrozenSnapshot = null
-                                    recoveryRequired = false
-                                    recoveryPhase = null
-                                    frozenRetryReady = false
-                                    knownNoteId = null
-                                    submitMessage = this@MainActivity.getString(
-                                        R.string.card_send_retry_suffix,
-                                        error.message.orEmpty(),
-                                    )
-                                } catch (error: Exception) {
-                                    val phase = SubmissionPhase.fromPersisted(
-                                        preferences.getString(SubmissionRecoveryKeys.STATUS, null),
-                                    )
-                                    if (phase != null) {
-                                        val mediaFailure = error as? MediaImportException
-                                        val mediaOperation = mediaFailure?.operation ?: preferences
-                                            .getString(SubmissionRecoveryKeys.MEDIA_OPERATION, null)
-                                            ?.let { name -> runCatching { MediaImportOperation.valueOf(name) }.getOrNull() }
-                                        // Uncertain Send: keep the frozen files and their leases so
-                                        // recovery can still see the audio this draft promised.
-                                        audioController.releaseFreeze(retainFiles = true)
-                                        audioSnapshot = audioController.snapshot()
-                                        recoveryPhase = phase
-                                        recoveryRequired = true
-                                        frozenRetryReady = false
-                                        recoveryMessage = when (phase) {
-                                            SubmissionPhase.MEDIA_IMPORTING -> {
-                                                val label = mediaOperation?.label ?: this@MainActivity.getString(R.string.card_media_label)
-                                                val stage = mediaFailure?.stage?.name?.lowercase()?.replace('_', ' ')
-                                                if (stage == null) {
-                                                    this@MainActivity.getString(R.string.card_send_recovery_media_import_uncertain, label)
-                                                } else {
-                                                    this@MainActivity.getString(R.string.card_send_recovery_media_import_stage_uncertain, label, stage)
-                                                }
-                                            }
-                                            SubmissionPhase.MEDIA_IMPORTED -> this@MainActivity.getString(R.string.card_send_recovery_media_receipts_saved)
-                                            SubmissionPhase.NOTE_INSERTING -> this@MainActivity.getString(R.string.card_send_recovery_note_insertion_uncertain)
-                                            SubmissionPhase.NOTE_INSERTED -> this@MainActivity.getString(R.string.card_send_recovery_note_assignment_interrupted)
-                                            SubmissionPhase.DESTINATION_VERIFIED -> this@MainActivity.getString(R.string.card_send_recovery_destination_verified)
-                                        }
-                                    } else if (imageAttached) {
-                                        audioController.releaseFreeze(retainFiles = false)
-                                        audioSnapshot = audioController.snapshot()
-                                        submitMessage = this@MainActivity.getString(R.string.card_could_not_import_the_selected_image_the_dr)
-                                    } else {
-                                        audioController.releaseFreeze(retainFiles = false)
-                                        audioSnapshot = audioController.snapshot()
-                                        submitMessage = this@MainActivity.getString(R.string.card_could_not_send_the_note_check_ankidroid_ap)
-                                    }
-                                } finally {
-                                    isSubmitting = false
-                                }
-                            }
-                        }
 
                     }
                 }
                 val meaningChoices = DictionaryMeaningChoices.from(dictionaryEntries)
+                val meaningSelectionFeedback = rememberChangeFeedback(
+                    event = TouchFeedbackEvent.MEANING_SELECTION,
+                    key = listOf(selectedDictionaryEntryId, vocabulary, vocabularyReading, selectedSenseIndices),
+                    enabled = !sendState.locked,
+                )
                 if (showDictionarySheet && target?.textIn(editor.text) != null && meaningChoices.size > 1) {
                     DictionaryMeaningSheet(
                         choices = meaningChoices,
-                        enabled = !submissionLocked,
+                        enabled = !sendState.locked,
                         onDismissRequest = { dismissDictionarySheet() },
                         onSelect = { choice ->
-                            val meaningChanged = selectedDictionaryEntryId != choice.entry.id ||
-                                vocabulary != choice.entry.expression || vocabularyReading != choice.entry.reading ||
-                                selectedSenseIndices != setOf(choice.senseIndex)
-                            if (meaningChanged) touchFeedbackDispatcher.dispatch(TouchFeedbackEvent.MEANING_SELECTION)
+                            meaningSelectionFeedback()
                             commitDictionaryChoice(choice)
                         },
                     )
                 }
                 if (definitionSheetText != null) {
-                    ModalBottomSheet(
+                    FlowSheet(
                         onDismissRequest = {
                             definitionSheetText = null
                             showDictionarySheet = true
                         },
+                        horizontalPadding = MaterialTheme.flow.sheetWidePadding,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Column(
-                            Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState())
-                                .padding(horizontal = 24.dp, vertical = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
                         }
                     }
                 }
@@ -4434,50 +3949,6 @@ internal fun formatCacheSize(bytes: Long): String = when {
     else -> String.format(java.util.Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
 }
 
-
-private fun clearPersistedDraft(preferences: SharedPreferences, draftDirectory: File? = null) {
-    val ownedDirectory = draftDirectory?.canonicalFile
-    val ownedPaths = listOfNotNull(
-        preferences.getString("photo_source_path", null),
-        preferences.getString("note_image_path", null),
-        preferences.getString("processed_image_path", null),
-        preferences.getString("pending_replacement_image_path", null),
-    )
-    ownedPaths.distinct().forEach { path ->
-        val file = File(path)
-        if (ownedDirectory != null && file.exists() && file.canonicalFile.parentFile == ownedDirectory) file.delete()
-    }
-    val draftKeys = listOf(
-        "sentence", "selection_start", "selection_end", "target_start", "target_end",
-        "vocabulary", "vocabulary_reading", "pitch_accent", "definition", "definition_manual_stale", "sentence_reading",
-        "sentence_reading_corrections",
-        "leave_sentence_target_unannotated", "leave_vocabulary_unannotated", "dependent_fields_stale",
-        "definition_manual", "definition_manual_stale", "translation", "translation_sentence", "translation_source",
-        "translation_manual", "translation_stale", "translation_pending", "translation_error",
-        "translation_suggestion", "translation_suggestion_source", "translation_suggestion_error",
-        "translation_attempted_sentence", "notes", "tags", "submission_status", "pending_model_id", "pending_deck_id",
-        "pending_sentence", "pending_lemma", "dictionary_entry_id", "dictionary_sense_indices",
-        "sentence_furigana_corrections", "photo_source_path", "note_image_path", "processed_image_path",
-        IMAGE_RECEIPT_PATH, IMAGE_RECEIPT_FILENAME, IMAGE_RECEIPT_SIZE, IMAGE_RECEIPT_MODIFIED,
-        SENTENCE_AUDIO_RECEIPT_PATH, SENTENCE_AUDIO_RECEIPT_FILENAME,
-        SENTENCE_AUDIO_RECEIPT_SIZE, SENTENCE_AUDIO_RECEIPT_MODIFIED,
-        WORD_AUDIO_RECEIPT_PATH, WORD_AUDIO_RECEIPT_FILENAME,
-        WORD_AUDIO_RECEIPT_SIZE, WORD_AUDIO_RECEIPT_MODIFIED,
-        SubmissionRecoveryKeys.MEDIA_OPERATION, SubmissionRecoveryKeys.MEDIA_SOURCE_PATH,
-        SubmissionRecoveryKeys.MEDIA_SOURCE_SIZE, SubmissionRecoveryKeys.MEDIA_SOURCE_MODIFIED,
-        "pending_replacement_image_path",
-        "draft_origin",
-        SubmissionRecoveryKeys.REVISION, SubmissionRecoveryKeys.MODEL_FIELDS,
-        SubmissionRecoveryKeys.ORDERED_FIELDS, SubmissionRecoveryKeys.VOCABULARY_READING,
-        SubmissionRecoveryKeys.SENTENCE_READING, SubmissionRecoveryKeys.DEFINITION,
-        SubmissionRecoveryKeys.TRANSLATION, SubmissionRecoveryKeys.NOTES, SubmissionRecoveryKeys.TAGS,
-        SubmissionRecoveryKeys.PITCH, SubmissionRecoveryKeys.TARGET_START, SubmissionRecoveryKeys.TARGET_END,
-        SubmissionRecoveryKeys.MEDIA_PATH, SubmissionRecoveryKeys.MEDIA_SIZE,
-        SubmissionRecoveryKeys.MEDIA_MODIFIED, SubmissionRecoveryKeys.IMPORTED_FILENAME,
-        SubmissionRecoveryKeys.NOTE_ID,
-    ) + draftAudioPreferenceKeys()
-    preferences.edit().also { editor -> draftKeys.forEach(editor::remove) }.commit()
-}
 
 private fun clearPendingSubmission(preferences: SharedPreferences) {
     clearFrozenSubmission(preferences)

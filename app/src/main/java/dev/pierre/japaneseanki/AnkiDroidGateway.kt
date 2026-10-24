@@ -6,21 +6,22 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.core.content.FileProvider
+import dev.pierre.japaneseanki.send.AnkiNoteSink
 import java.io.File
 
 /** Provider constants reference AnkiDroid v2.24.0, commit ebcf8e0e34921628b9b8a496c66ffd4adbb3705f. */
-class AnkiDroidGateway(
+internal class AnkiDroidGateway(
     private val resolver: ContentResolver,
     private val context: Context? = null,
-) {
+) : AnkiNoteSink {
     /** Imports a completed durable WebP through AnkiDroid's v2.24.0 media provider. */
-    fun importProcessedImage(file: File): String = importMedia(file, MediaImportOperation.IMAGE)
+    override fun importProcessedImage(file: File): String = importMedia(file, MediaImportOperation.IMAGE)
 
     /** Imports a completed draft MP3/Ogg recording through the same media provider. */
     fun importAudio(file: File): String = importMedia(file, MediaImportOperation.AUDIO)
 
     /** Operation-aware overload lets Send errors identify sentence vs. vocabulary audio. */
-    internal fun importAudio(file: File, operation: MediaImportOperation): String {
+    override fun importAudio(file: File, operation: MediaImportOperation): String {
         if (operation.kind != AnkiMediaKind.AUDIO) {
             throw MediaImportException(operation, MediaImportFailureStage.SOURCE_VALIDATION)
         }
@@ -119,19 +120,19 @@ class AnkiDroidGateway(
         throw ankiPermissionError("read available note types", error)
     }
 
-    fun hasDuplicate(
+    override fun hasDuplicate(
         model: AnkiNoteType,
         deck: AnkiDeck,
         fieldsByName: Map<String, String>,
     ): Long? = matchingNoteId(model, deck.id, fieldsByName)
 
     /** Used only to reconcile an interrupted insert whose destination is not yet known. */
-    fun hasMatchingNoteInAnyDeck(
+    override fun hasMatchingNoteInAnyDeck(
         model: AnkiNoteType,
         fieldsByName: Map<String, String>,
     ): Long? = matchingNoteId(model, null, fieldsByName)
 
-    fun noteCards(noteId: Long): List<AnkiCardLocation> {
+    override fun noteCards(noteId: Long): List<AnkiCardLocation> {
         require(noteId > 0) { "Note ID must be positive." }
         val cardsUri = Uri.withAppendedPath(Uri.withAppendedPath(NOTES_URI, noteId.toString()), "cards")
         val cursor = try {
@@ -154,7 +155,7 @@ class AnkiDroidGateway(
     }
 
     /** Moves only cards belonging to noteId, then verifies every card's destination. */
-    fun ensureNoteInDeck(noteId: Long, deckId: Long): Boolean {
+    override fun ensureNoteInDeck(noteId: Long, deckId: Long): Boolean {
         require(noteId > 0) { "Note ID must be positive." }
         require(deckId > 0) { "Deck ID must be positive." }
         val cards = noteCards(noteId)
@@ -231,7 +232,7 @@ class AnkiDroidGateway(
     }
 
     /** Inserts one note; AnkiDroid creates its cards in the model's default deck. */
-    fun insertNote(
+    override fun insertNote(
         model: AnkiNoteType,
         orderedFields: List<String>,
         tags: Set<String>,

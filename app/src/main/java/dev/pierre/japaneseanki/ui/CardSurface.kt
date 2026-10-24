@@ -9,8 +9,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.Canvas
@@ -30,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -40,7 +39,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -81,7 +79,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import dev.pierre.japaneseanki.FuriganaSpan
 import dev.pierre.japaneseanki.JapaneseToken
@@ -246,7 +243,7 @@ internal fun CardScreen(
     var editingNotes by remember { mutableStateOf(false) }
     var editingTags by remember { mutableStateOf(false) }
     val fontScale = LocalConfiguration.current.fontScale
-    val motionEnabled = LocalMotionEnabled.current
+    val motion = rememberFlowMotion()
 
     BoxWithConstraints(modifier) {
         val bandHeight = cardPhotoBandHeight(maxWidth, maxHeight, fontScale)
@@ -311,16 +308,17 @@ internal fun CardScreen(
                             AnimatedVisibility(
                         visible = selectedSpan != null,
                         modifier = Modifier.fillMaxWidth(),
-                        enter = if (motionEnabled) {
-                            fadeIn(tween(180)) + scaleIn(initialScale = 0.98f, animationSpec = tween(180))
+                        enter = if (LocalMotion.current.animated) {
+                            fadeIn(motion.colour()) +
+                                scaleIn(initialScale = 0.98f, animationSpec = motion.containerSpatial())
                         } else {
                             EnterTransition.None
                         },
                         exit = ExitTransition.None,
                     ) {
-                        FlowCard {
+                        FlowCard(contentPadding = PaddingValues(16.dp)) {
                                 Column(
-                                    Modifier.fillMaxWidth().padding(16.dp),
+                                    Modifier.fillMaxWidth(),
                                     verticalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
                                     Row(verticalAlignment = Alignment.Top) {
@@ -364,7 +362,7 @@ internal fun CardScreen(
                                         Text(definition, style = MaterialTheme.typography.bodyLarge)
                                     }
                                     wordStatus?.let {
-                                        Text(
+                                        FlowStatusText(
                                             it,
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -420,7 +418,7 @@ internal fun CardScreen(
                     }
 
                     if (statusMessage != null) {
-                        Text(
+                        FlowStatusText(
                             statusMessage,
                             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                             style = MaterialTheme.typography.bodySmall,
@@ -462,8 +460,12 @@ internal fun SelectableSentence(
     val readingBySpan = furigana.associateBy { it.span }
     val selectedLabel = stringResource(R.string.card_word_selected_state)
     val unselectedLabel = stringResource(R.string.card_word_not_selected_state)
-    val feedback = LocalTouchFeedbackDispatcher.current
-    val motionEnabled = LocalMotionEnabled.current
+    val feedback = rememberChangeFeedback(
+        event = TouchFeedbackEvent.WORD_SELECTION,
+        key = selectedSpan,
+        enabled = selectionEnabled,
+    )
+    val motion = rememberFlowMotion()
     val readingBandHeight = with(LocalDensity.current) { 13.sp.toDp().coerceAtLeast(14.dp) }
     if (tokens.isEmpty() || sentence.isBlank()) {
         Text(sentence, modifier = modifier, style = MaterialTheme.typography.headlineMedium)
@@ -481,7 +483,7 @@ internal fun SelectableSentence(
             val selectedFill = MaterialTheme.colorScheme.secondaryContainer
             val selectionFill by animateColorAsState(
                 targetValue = if (isSelected || isPressed) selectedFill else Color.Transparent,
-                animationSpec = if (motionEnabled) tween(durationMillis = 80) else snap(),
+                animationSpec = motion.colour(),
                 label = "word-selection-fill",
             )
             val selectedText = MaterialTheme.colorScheme.onSecondaryContainer
@@ -505,15 +507,12 @@ internal fun SelectableSentence(
                 append(pill.suffix)
             }
             val layoutResult = remember(token.span, display.text) { mutableStateOf<TextLayoutResult?>(null) }
-            // A real press repaints the word, which re-lays out the text and recomposes this item.
-            // Reading the selection state at gesture time (instead of capturing it in the gesture
-            // keys) keeps a finger-down from cancelling its own tap half way through.
+            // Read the latest enabled state at gesture time so a press highlight cannot cancel its tap.
             val currentSelectionEnabled by rememberUpdatedState(selectionEnabled)
-            val currentSelectedSpan by rememberUpdatedState(selectedSpan)
             val currentOnSelectSpan by rememberUpdatedState(onSelectSpan)
-            val selectSpanIfChanged = {
-                if (currentSelectionEnabled && token.span != currentSelectedSpan) {
-                    feedback.dispatch(TouchFeedbackEvent.WORD_SELECTION)
+            val selectSpan = {
+                if (currentSelectionEnabled) {
+                    feedback()
                     currentOnSelectSpan(token.span)
                 }
             }
@@ -532,7 +531,7 @@ internal fun SelectableSentence(
                             if (!selectionEnabled) {
                                 false
                             } else {
-                                selectSpanIfChanged()
+                                selectSpan()
                                 true
                             }
                         }
@@ -576,7 +575,7 @@ internal fun SelectableSentence(
                                             position.x >= character.left && position.x <= character.right &&
                                                 position.y >= top && position.y <= bottom
                                         }
-                                        if (hitBaseText) selectSpanIfChanged()
+                                        if (hitBaseText) selectSpan()
                                     },
                                 )
                             }
@@ -654,7 +653,7 @@ private fun CardPhotoBand(imagePath: String, height: Dp, focusY: Float, onOpen: 
 private fun FullPhotoDialog(imagePath: String, onDismiss: () -> Unit) {
     val description = stringResource(R.string.card_full_photo)
     val closeDescription = stringResource(R.string.card_close_photo)
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    FlowDialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(
             Modifier.fillMaxSize().background(Color.Black).semantics { contentDescription = description },
         ) {
@@ -760,14 +759,12 @@ private fun CardInstruction(hint: String?, loading: Boolean) {
     ) {
         if (loading) {
             MotionAwareProgressIndicator(
-                modifier = Modifier.size(16.dp),
                 color = MaterialTheme.colorScheme.primary,
-                diameter = 16.dp,
-                strokeWidth = 2.dp,
+                progressSize = ProgressSize.Small,
                 stateDescription = progressLabel,
             )
         }
-        Text(
+        FlowStatusText(
             hint.orEmpty(),
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.bodyMedium,

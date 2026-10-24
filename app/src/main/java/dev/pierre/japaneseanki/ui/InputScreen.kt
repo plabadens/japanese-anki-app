@@ -4,7 +4,6 @@ import androidx.camera.view.LifecycleCameraController
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.BorderStroke
@@ -31,7 +30,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
@@ -123,6 +121,11 @@ internal fun InputScreen(
     var captureInProgress by remember { mutableStateOf(false) }
     val captureOperationGate = remember { CaptureOperationGate() }
     val actionsEnabled = captureActionsEnabled(enabled, captureInProgress || captureOperationGate.isActive)
+    val modeSelectionFeedback = rememberChangeFeedback(
+        event = TouchFeedbackEvent.MODE_SELECTION,
+        key = captureMode,
+        enabled = actionsEnabled && !captureOperationGate.isActive,
+    )
     val context = LocalContext.current
     val hasTorch = cameraPreviewState?.hasTorch
         ?: if (cameraController != null) rememberTorchAvailability(cameraController) else false
@@ -151,6 +154,7 @@ internal fun InputScreen(
                 captureMode = captureMode,
                 enabled = actionsEnabled && !captureOperationGate.isActive,
                 onCaptureModeChange = onCaptureModeChange,
+                onModeSelectionFeedback = modeSelectionFeedback,
                 onSettings = onSettings,
             )
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
@@ -236,6 +240,7 @@ internal fun InputScreen(
                 captureMode = captureMode,
                 enabled = actionsEnabled && !captureOperationGate.isActive,
                 onCaptureModeChange = onCaptureModeChange,
+                onModeSelectionFeedback = modeSelectionFeedback,
                 onSettings = onSettings,
             )
             WritingPane(
@@ -277,6 +282,7 @@ private fun CaptureTopBar(
     captureMode: String,
     enabled: Boolean,
     onCaptureModeChange: (String) -> Unit,
+    onModeSelectionFeedback: () -> Unit,
     onSettings: () -> Unit,
 ) {
     Box(
@@ -302,7 +308,10 @@ private fun CaptureTopBar(
                 enabled = enabled,
                 shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(),
                 modifier = Modifier.weight(1f),
-                onClick = { onCaptureModeChange("Photo") },
+                onClick = {
+                    onModeSelectionFeedback()
+                    onCaptureModeChange("Photo")
+                },
             )
             ModeSelectorOption(
                 label = stringResource(R.string.type),
@@ -313,7 +322,10 @@ private fun CaptureTopBar(
                 enabled = enabled,
                 shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
                 modifier = Modifier.weight(1f),
-                onClick = { onCaptureModeChange("Type") },
+                onClick = {
+                    onModeSelectionFeedback()
+                    onCaptureModeChange("Type")
+                },
             )
         }
         androidx.compose.material3.IconButton(
@@ -344,16 +356,12 @@ private fun ModeSelectorOption(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    val feedback = LocalTouchFeedbackDispatcher.current
     val selectedState = stringResource(R.string.card_word_selected_state)
     val unselectedState = stringResource(R.string.card_word_not_selected_state)
     ToggleButton(
         checked = selected,
         onCheckedChange = { checked ->
-            if (checked && !selected) {
-                feedback.dispatch(TouchFeedbackEvent.MODE_SELECTION)
-                onClick()
-            }
+            if (checked) onClick()
         },
         modifier = modifier
             .fillMaxHeight()
@@ -413,7 +421,7 @@ private fun InputStatusPanel(
         recoveryActions.reopenOcrChoices -> stringResource(R.string.legacy_capture_text_choices_are_ready)
         else -> null
     } ?: return
-    val motionEnabled = LocalMotionEnabled.current
+    val motion = rememberFlowMotion()
 
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(max = 48.dp)
@@ -429,8 +437,9 @@ private fun InputStatusPanel(
     ) {
         AnimatedVisibility(
             visible = confirmationMessage != null && message == confirmationMessage,
-            enter = if (motionEnabled) {
-                fadeIn(tween(140)) + scaleIn(initialScale = 0.88f, animationSpec = tween(140))
+            enter = if (LocalMotion.current.animated) {
+                fadeIn(motion.colour()) +
+                    scaleIn(initialScale = 0.88f, animationSpec = motion.smallSpatial())
             } else {
                 EnterTransition.None
             },
@@ -438,7 +447,7 @@ private fun InputStatusPanel(
         ) {
             FlowIcons.Check(Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
         }
-        Text(
+        FlowStatusText(
             message,
             modifier = Modifier.weight(1f),
             maxLines = 1,
@@ -526,12 +535,13 @@ private fun CaptureRow(
             modifier = Modifier.weight(1f).fillMaxHeight().testTag("camera-gallery-slot"),
             contentAlignment = Alignment.CenterStart,
         ) {
-            CaptureActionButton(
-                enabled = enabled,
-                operationGate = operationGate,
-                onClick = onOpenGallery,
+            FlowCircleSurface(
+                onClick = { if (enabled && !operationGate.isActive) onOpenGallery() },
+                enabled = enabled && !operationGate.isActive,
                 contentDescription = stringResource(R.string.legacy_capture_choose_photo_from_device),
-                modifier = Modifier.testTag("camera-gallery-button"),
+                modifier = Modifier.size(CAMERA_SIDE_SLOT_SIZE_DP.dp).testTag("camera-gallery-button"),
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
             ) { FlowIcons.Gallery(Modifier.size(24.dp)) }
         }
 
@@ -561,24 +571,18 @@ private fun CaptureRow(
             contentAlignment = Alignment.CenterEnd,
         ) {
             if (hasTorch) {
-                Surface(
+                FlowCircleSurface(
                     onClick = { if (enabled && !operationGate.isActive) onToggleTorch() },
                     enabled = enabled && !operationGate.isActive,
-                    modifier = Modifier.size(CAMERA_SIDE_SLOT_SIZE_DP.dp)
-                        .semantics {
-                            contentDescription = torchLabel
-                            stateDescription = torchState
-                        }
-                        .testTag("camera-torch-toggle"),
-                    shape = CircleShape,
-                    color = if (torchOn) MaterialTheme.colorScheme.secondaryContainer
+                    modifier = Modifier.size(CAMERA_SIDE_SLOT_SIZE_DP.dp).testTag("camera-torch-toggle"),
+                    contentDescription = torchLabel,
+                    stateDescription = torchState,
+                    containerColor = if (torchOn) MaterialTheme.colorScheme.secondaryContainer
                     else MaterialTheme.colorScheme.surfaceVariant,
                     contentColor = if (torchOn) MaterialTheme.colorScheme.onSecondaryContainer
                     else MaterialTheme.colorScheme.onSurfaceVariant,
                     border = if (torchOn) BorderStroke(1.dp, MaterialTheme.colorScheme.outline) else null,
-                ) {
-                    Box(contentAlignment = Alignment.Center) { FlowIcons.Torch(Modifier.size(24.dp)) }
-                }
+                ) { FlowIcons.Torch(Modifier.size(24.dp)) }
             }
         }
     }
@@ -602,27 +606,6 @@ private fun CameraPermissionShutter(
                 role = Role.Button
             },
     )
-}
-
-@Composable
-private fun CaptureActionButton(
-    enabled: Boolean,
-    operationGate: CaptureOperationGate,
-    onClick: () -> Unit,
-    contentDescription: String,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    Surface(
-        onClick = { if (enabled && !operationGate.isActive) onClick() },
-        enabled = enabled && !operationGate.isActive,
-        modifier = modifier.size(CAMERA_SIDE_SLOT_SIZE_DP.dp).semantics { this.contentDescription = contentDescription },
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-    ) {
-        Box(contentAlignment = Alignment.Center) { content() }
-    }
 }
 
 @Composable
