@@ -74,7 +74,7 @@ class SentenceSelectionLayoutTest {
         composeRule.setContent {
             val current = scene.value
             CompositionLocalProvider(
-                LocalMotionEnabled provides false,
+                LocalMotion provides ReducedMotionTestPolicy,
                 LocalTouchFeedbackDispatcher provides dispatcher,
             ) {
                 MaterialTheme(colorScheme = lightColorScheme()) {
@@ -108,7 +108,7 @@ class SentenceSelectionLayoutTest {
         composeRule.setContent {
             val current = scene.value
             CompositionLocalProvider(
-                LocalMotionEnabled provides false,
+                LocalMotion provides ReducedMotionTestPolicy,
                 LocalTouchFeedbackDispatcher provides dispatcher,
             ) {
                 MaterialTheme(colorScheme = lightColorScheme()) {
@@ -133,7 +133,7 @@ class SentenceSelectionLayoutTest {
         val dispatcher = TouchFeedbackDispatcher { event -> events += event }
         composeRule.setContent {
             CompositionLocalProvider(
-                LocalMotionEnabled provides false,
+                LocalMotion provides ReducedMotionTestPolicy,
                 LocalTouchFeedbackDispatcher provides dispatcher,
             ) {
                 Box {

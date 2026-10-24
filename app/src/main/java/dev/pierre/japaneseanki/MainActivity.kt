@@ -78,6 +78,7 @@ import dev.pierre.japaneseanki.ui.reviewAudioSendBlocker
 import dev.pierre.japaneseanki.ui.FlowTheme
 import dev.pierre.japaneseanki.ui.FlowTopBar
 import dev.pierre.japaneseanki.ui.LocalTouchFeedbackDispatcher
+import dev.pierre.japaneseanki.ui.rememberChangeFeedback
 import dev.pierre.japaneseanki.ui.MotionAwareProgressIndicator
 import dev.pierre.japaneseanki.ui.TouchFeedbackEvent
 import dev.pierre.japaneseanki.ui.InputScreen
@@ -4310,16 +4311,18 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 val meaningChoices = DictionaryMeaningChoices.from(dictionaryEntries)
+                val meaningSelectionFeedback = rememberChangeFeedback(
+                    event = TouchFeedbackEvent.MEANING_SELECTION,
+                    key = listOf(selectedDictionaryEntryId, vocabulary, vocabularyReading, selectedSenseIndices),
+                    enabled = !submissionLocked,
+                )
                 if (showDictionarySheet && target?.textIn(editor.text) != null && meaningChoices.size > 1) {
                     DictionaryMeaningSheet(
                         choices = meaningChoices,
                         enabled = !submissionLocked,
                         onDismissRequest = { dismissDictionarySheet() },
                         onSelect = { choice ->
-                            val meaningChanged = selectedDictionaryEntryId != choice.entry.id ||
-                                vocabulary != choice.entry.expression || vocabularyReading != choice.entry.reading ||
-                                selectedSenseIndices != setOf(choice.senseIndex)
-                            if (meaningChanged) touchFeedbackDispatcher.dispatch(TouchFeedbackEvent.MEANING_SELECTION)
+                            meaningSelectionFeedback()
                             commitDictionaryChoice(choice)
                         },
                     )

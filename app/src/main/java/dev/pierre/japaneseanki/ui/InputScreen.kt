@@ -4,7 +4,6 @@ import androidx.camera.view.LifecycleCameraController
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.BorderStroke
@@ -122,6 +121,11 @@ internal fun InputScreen(
     var captureInProgress by remember { mutableStateOf(false) }
     val captureOperationGate = remember { CaptureOperationGate() }
     val actionsEnabled = captureActionsEnabled(enabled, captureInProgress || captureOperationGate.isActive)
+    val modeSelectionFeedback = rememberChangeFeedback(
+        event = TouchFeedbackEvent.MODE_SELECTION,
+        key = captureMode,
+        enabled = actionsEnabled && !captureOperationGate.isActive,
+    )
     val context = LocalContext.current
     val hasTorch = cameraPreviewState?.hasTorch
         ?: if (cameraController != null) rememberTorchAvailability(cameraController) else false
@@ -150,6 +154,7 @@ internal fun InputScreen(
                 captureMode = captureMode,
                 enabled = actionsEnabled && !captureOperationGate.isActive,
                 onCaptureModeChange = onCaptureModeChange,
+                onModeSelectionFeedback = modeSelectionFeedback,
                 onSettings = onSettings,
             )
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
@@ -235,6 +240,7 @@ internal fun InputScreen(
                 captureMode = captureMode,
                 enabled = actionsEnabled && !captureOperationGate.isActive,
                 onCaptureModeChange = onCaptureModeChange,
+                onModeSelectionFeedback = modeSelectionFeedback,
                 onSettings = onSettings,
             )
             WritingPane(
@@ -276,6 +282,7 @@ private fun CaptureTopBar(
     captureMode: String,
     enabled: Boolean,
     onCaptureModeChange: (String) -> Unit,
+    onModeSelectionFeedback: () -> Unit,
     onSettings: () -> Unit,
 ) {
     Box(
@@ -301,7 +308,10 @@ private fun CaptureTopBar(
                 enabled = enabled,
                 shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(),
                 modifier = Modifier.weight(1f),
-                onClick = { onCaptureModeChange("Photo") },
+                onClick = {
+                    onModeSelectionFeedback()
+                    onCaptureModeChange("Photo")
+                },
             )
             ModeSelectorOption(
                 label = stringResource(R.string.type),
@@ -312,7 +322,10 @@ private fun CaptureTopBar(
                 enabled = enabled,
                 shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
                 modifier = Modifier.weight(1f),
-                onClick = { onCaptureModeChange("Type") },
+                onClick = {
+                    onModeSelectionFeedback()
+                    onCaptureModeChange("Type")
+                },
             )
         }
         androidx.compose.material3.IconButton(
@@ -343,16 +356,12 @@ private fun ModeSelectorOption(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    val feedback = LocalTouchFeedbackDispatcher.current
     val selectedState = stringResource(R.string.card_word_selected_state)
     val unselectedState = stringResource(R.string.card_word_not_selected_state)
     ToggleButton(
         checked = selected,
         onCheckedChange = { checked ->
-            if (checked && !selected) {
-                feedback.dispatch(TouchFeedbackEvent.MODE_SELECTION)
-                onClick()
-            }
+            if (checked) onClick()
         },
         modifier = modifier
             .fillMaxHeight()
@@ -412,7 +421,7 @@ private fun InputStatusPanel(
         recoveryActions.reopenOcrChoices -> stringResource(R.string.legacy_capture_text_choices_are_ready)
         else -> null
     } ?: return
-    val motionEnabled = LocalMotionEnabled.current
+    val motion = rememberFlowMotion()
 
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(max = 48.dp)
@@ -428,8 +437,9 @@ private fun InputStatusPanel(
     ) {
         AnimatedVisibility(
             visible = confirmationMessage != null && message == confirmationMessage,
-            enter = if (motionEnabled) {
-                fadeIn(tween(140)) + scaleIn(initialScale = 0.88f, animationSpec = tween(140))
+            enter = if (LocalMotion.current.animated) {
+                fadeIn(motion.colour()) +
+                    scaleIn(initialScale = 0.88f, animationSpec = motion.smallSpatial())
             } else {
                 EnterTransition.None
             },

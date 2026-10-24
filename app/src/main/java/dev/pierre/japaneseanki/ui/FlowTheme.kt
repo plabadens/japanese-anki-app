@@ -182,7 +182,9 @@ internal val MaterialTheme.flow: FlowTokens
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun FlowTheme(darkTheme: Boolean, content: @Composable () -> Unit) {
-    val motionEnabled = rememberSystemMotionEnabled()
+    val durationScale = rememberSystemMotionDurationScale()
+    val motionScheme = if (durationScale > 0f) MotionScheme.expressive() else MotionScheme.standard()
+    val motionPolicy = MotionPolicy(durationScale, motionScheme)
     val view = LocalView.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val touchFeedback = remember(view, lifecycleOwner) {
@@ -192,13 +194,13 @@ internal fun FlowTheme(darkTheme: Boolean, content: @Composable () -> Unit) {
         colorScheme = if (darkTheme) FlowDarkColors else FlowLightColors,
         shapes = FlowShapes,
         typography = FlowTypography,
-        motionScheme = if (motionEnabled) MotionScheme.expressive() else MotionScheme.standard(),
+        motionScheme = motionScheme,
     ) {
         val flowTokens = FlowTokens(
             quietOutline = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
         )
         CompositionLocalProvider(
-            LocalMotionEnabled provides motionEnabled,
+            LocalMotion provides motionPolicy,
             LocalTouchFeedbackDispatcher provides touchFeedback,
             LocalFlowTokens provides flowTokens,
             content = content,
