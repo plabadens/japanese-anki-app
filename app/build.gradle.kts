@@ -20,6 +20,14 @@ val testTempDir = providers.environmentVariable("TMPDIR")
 val robolectricTestLauncher = javaToolchains.launcherFor {
     languageVersion = JavaLanguageVersion.of(21)
 }
+// Robolectric pays a fixed ~14 s per test JVM (sandbox, instrumented android-all, Compose
+// harness) and then runs classes back to back in that JVM, so a fork buys less than it looks
+// like: on an 8-core box, 58 classes took 71 s on one fork and 68 s on two, and a third fork
+// changed nothing. Keep the knob, default it to the machine, and remember that the real lever
+// for one screen's worth of work is running that class instead of the whole suite:
+//   scripts/dev.sh test 'dev.pierre.japaneseanki.ui.CardSurfaceBehaviorTest'
+val testForks = providers.gradleProperty("anki.testForks").map(String::toInt).orNull
+    ?: (Runtime.getRuntime().availableProcessors() / 4).coerceIn(1, 4)
 
 // Release signing material is read from the environment and never from the repository. Every
 // value is optional: when they are absent `assembleRelease` keeps producing the unsigned
@@ -204,6 +212,7 @@ dependencies {
 }
 
 tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    maxParallelForks = testForks
     maxHeapSize = "2g"
     failFast = true
     reports.junitXml.required.set(true)

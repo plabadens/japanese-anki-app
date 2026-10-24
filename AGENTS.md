@@ -37,17 +37,27 @@ Working rules for this repository. Deliberately short: **the code and its tests 
 
 ## Build, test, render
 
-The toolchain comes from Nix. There is no Gradle wrapper.
+The toolchain comes from Nix. There is no Gradle wrapper. Enter the flake's shell through
+`scripts/dev.sh` instead of wrapping every command in `nix develop`: it captures the dev-shell
+environment once (keyed on `flake.nix`/`flake.lock`), then runs Gradle with the daemon and both
+caches warm. A per-command `nix develop` costs ~12 s of evaluation and a cold Gradle context, and
+the flake no longer disables Gradle's native services in the shell, so the daemon is reusable.
 
 ```sh
-# fast gate: JVM tests + Roborazzi, offline, no device
-gradle --offline -Pandroid.aapt2FromMavenOverride="$ANDROID_HOME/build-tools/36.0.0/aapt2" verifyFast
+scripts/dev.sh test                    # verifyFast: unit + JVM Compose assertions
+scripts/dev.sh test 'dev.pierre…Test'  # one class while iterating
+scripts/dev.sh render                  # design states -> build/design-states
+scripts/dev.sh apk                     # debug APK (both ABIs)
+scripts/dev.sh gradle <args…>          # anything else
+scripts/rebuild.sh                     # APK + reinstall on the running emulator
+```
 
+The test task runs in parallel forks (`-Panki.testForks=N` overrides the default). The hermetic
+path is unchanged and still what CI and releases use:
+
+```sh
 # full CI: fast gate + design render + debug APK
 nix develop --command ./scripts/ci-build-apk.sh
-
-# design states -> build/design-states, uploaded by CI as an artifact
-:app:renderDesignStates
 ```
 
 Design screenshots are **artifacts, not sources**. Do not commit PNGs; CI publishes them so the

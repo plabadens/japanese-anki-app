@@ -59,7 +59,6 @@
         ROBOLECTRIC_JAVA_HOME = "${robolectricJdk}";
         ROBOLECTRIC_DEPENDENCY_DIR = "${robolectricDependencyDir}";
         FONTCONFIG_FILE = "${cjkFontconfig}";
-        GRADLE_OPTS = "-Dorg.gradle.native=false";
       };
 
       emulatorAdb = pkgs.writeShellApplication {
@@ -118,6 +117,11 @@
           buildInputs = [ android.androidsdk ];
           env = toolchainEnv // {
             JAVA_HOME = "${jdk}";
+            # Only the hermetic derivation needs native services off: it runs unprivileged and
+            # writes nothing to a home directory. Leaving the flag in the dev shell made Gradle
+            # disable file-system watching and gave every command a different daemon context, so
+            # the warm daemon was never reusable. Keep the sandbox quiet, the loop fast.
+            GRADLE_OPTS = "-Dorg.gradle.native=false";
           };
 
           gradleBuildTask = task;
