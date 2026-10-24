@@ -2,7 +2,6 @@ package dev.pierre.japaneseanki
 
 import dev.pierre.japaneseanki.speech.CloudVoice
 import dev.pierre.japaneseanki.speech.encodeVoices
-import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -35,7 +34,7 @@ class PreferenceStorageTest {
     }
 
     @Test
-    fun failedPreferenceReadKeepsNamedDraftAndRecoveryDefaults() = runBlocking {
+    fun failedPreferenceReadKeepsNamedDraftAndRecoveryDefaults() = runSuspendTest {
         val unreadableDraft = PreferenceValues().changed(
             PreferenceChanges()
                 .putString("sentence", "must not leak through a failed read")

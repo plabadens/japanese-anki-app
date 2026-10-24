@@ -208,7 +208,7 @@ class SendCoordinatorTest {
 
     @Test
     fun frozenSendPhaseIsDurablyRecordedBeforeInsertSinkCall() = withFixture { fixture ->
-        val outcome = runBlocking { fixture.coordinator.submit(fixture.request()) {} }
+        val outcome = runSuspendTest { fixture.coordinator.submit(fixture.request()) {} }
         val durableMarker = fixture.eventIndex("persist:started")
         val insert = fixture.eventIndex("insert")
 
