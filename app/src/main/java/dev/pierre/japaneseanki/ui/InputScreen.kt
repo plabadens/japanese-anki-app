@@ -11,9 +11,11 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,14 +28,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.SingleChoiceSegmentedButtonRowScope
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonDefaults
+import androidx.compose.material3.ToggleButtonShapes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -46,9 +49,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -56,6 +61,7 @@ import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -265,6 +271,7 @@ internal fun InputScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun CaptureTopBar(
     captureMode: String,
@@ -275,29 +282,36 @@ private fun CaptureTopBar(
     Box(
         Modifier.fillMaxWidth().height(CAMERA_TOP_BAR_HEIGHT_DP.dp).testTag("capture-top-bar"),
     ) {
-        SingleChoiceSegmentedButtonRow(
+        // At large text scales the two labels need their whole half of the bar; the icons are
+        // decoration and step aside so neither label is squeezed.
+        val showIcons = LocalDensity.current.fontScale < 1.5f
+        Row(
             modifier = Modifier.align(Alignment.Center)
-                .width(176.dp)
+                .fillMaxWidth()
+                .padding(horizontal = 48.dp)
                 .height(CAMERA_MODE_SWITCH_HEIGHT_DP.dp)
                 .testTag("capture-mode-switch"),
+            horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
         ) {
             ModeSelectorOption(
                 label = stringResource(R.string.camera),
+                icon = MaterialSymbols.PhotoCamera,
+                showIcon = showIcons,
                 tag = "capture-mode-camera",
                 selected = captureMode == "Photo",
                 enabled = enabled,
-                index = 0,
-                count = 2,
+                shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(),
                 modifier = Modifier.weight(1f),
                 onClick = { onCaptureModeChange("Photo") },
             )
             ModeSelectorOption(
                 label = stringResource(R.string.type),
+                icon = MaterialSymbols.Keyboard,
+                showIcon = showIcons,
                 tag = "capture-mode-type",
                 selected = captureMode == "Type",
                 enabled = enabled,
-                index = 1,
-                count = 2,
+                shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
                 modifier = Modifier.weight(1f),
                 onClick = { onCaptureModeChange("Type") },
             )
@@ -316,42 +330,55 @@ private fun CaptureTopBar(
     }
 }
 
+/** One half of the connected capture-mode group: icon, label, shape morph and one tick per change. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun SingleChoiceSegmentedButtonRowScope.ModeSelectorOption(
+private fun ModeSelectorOption(
     label: String,
+    icon: ImageVector,
+    showIcon: Boolean,
     tag: String,
     selected: Boolean,
     enabled: Boolean,
-    index: Int,
-    count: Int,
+    shapes: ToggleButtonShapes,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val feedback = LocalTouchFeedbackDispatcher.current
-    SegmentedButton(
-        selected = selected,
-        onClick = {
-            if (!selected) {
+    val selectedState = stringResource(R.string.card_word_selected_state)
+    val unselectedState = stringResource(R.string.card_word_not_selected_state)
+    ToggleButton(
+        checked = selected,
+        onCheckedChange = { checked ->
+            if (checked && !selected) {
                 feedback.dispatch(TouchFeedbackEvent.MODE_SELECTION)
                 onClick()
             }
         },
-        shape = SegmentedButtonDefaults.itemShape(index, count),
-        modifier = modifier.fillMaxHeight().testTag(tag),
+        modifier = modifier
+            .fillMaxHeight()
+            .testTag(tag)
+            .semantics {
+                role = Role.RadioButton
+                this.selected = selected
+                stateDescription = if (selected) selectedState else unselectedState
+            },
         enabled = enabled,
-        colors = SegmentedButtonDefaults.colors(
-            activeContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-            activeContentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-            activeBorderColor = MaterialTheme.colorScheme.outline,
-            inactiveContainerColor = MaterialTheme.colorScheme.surface,
-            inactiveContentColor = MaterialTheme.colorScheme.onSurface,
-            inactiveBorderColor = MaterialTheme.colorScheme.outlineVariant,
-        ),
-        icon = {},
-        label = {
-            Text(label, maxLines = 1, style = MaterialTheme.typography.labelLarge)
-        },
-    )
+        shapes = shapes,
+        // The label is the information; keep the horizontal chrome tight so a 200 % font scale
+        // still fits both halves of the group on one line.
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+    ) {
+        if (showIcon) {
+            androidx.compose.material3.Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(ToggleButtonDefaults.IconSize).testTag("$tag-icon"),
+            )
+            Spacer(Modifier.width(ToggleButtonDefaults.IconSpacing))
+        }
+        Text(label, maxLines = 1, style = MaterialTheme.typography.labelLarge)
+    }
 }
 
 @Composable

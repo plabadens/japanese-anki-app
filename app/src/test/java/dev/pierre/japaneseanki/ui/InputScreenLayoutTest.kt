@@ -18,9 +18,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.Density
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -278,13 +282,13 @@ class InputScreenLayoutTest {
         val gapBelow = composeRule.onNodeWithTag("camera-gap-below-controls").fetchSemanticsNode().boundsInRoot
 
         assertEquals(56f * density, topBar.height, 1f)
-        assertEquals(38f * density, modeSwitchBefore.height, 1f)
+        assertEquals(48f * density, modeSwitchBefore.height, 1f)
         assertEquals(48f * density, settingsBefore.width, 1f)
         assertEquals(390f * density, previewBefore.width, 1f)
         assertEquals(520f * density, previewBefore.height, 2f)
-        assertEquals(48f * density, controlsBefore.height, 1f)
+        assertEquals(72f * density, controlsBefore.height, 1f)
         assertEquals(gapAbove.height, gapBelow.height, 1f)
-        assertEquals(86f * density, gapAbove.height, 1f)
+        assertEquals(74f * density, gapAbove.height, 1f)
         val galleryCenterX = composeRule.onNodeWithTag("camera-gallery-slot").fetchSemanticsNode().boundsInRoot.center.x
         val shutterCenterX = composeRule.onNodeWithTag("camera-shutter-slot").fetchSemanticsNode().boundsInRoot.center.x
         val torchCenterX = composeRule.onNodeWithTag("camera-torch-slot").fetchSemanticsNode().boundsInRoot.center.x
@@ -319,6 +323,108 @@ class InputScreenLayoutTest {
         composeRule.onNodeWithTag("capture-choose-word").assertIsNotEnabled()
     }
 
+    @OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+    @Test
+    fun captureModeGroupIsOneConnectedAccessibleChoiceWithIcons() {
+        val mode = mutableStateOf("Photo")
+        composeRule.setContent {
+            MaterialTheme {
+                Box(Modifier.width(390.dp).height(796.dp)) {
+                    InputScreen(
+                        captureMode = mode.value,
+                        onCaptureModeChange = { mode.value = it },
+                        editor = TextFieldValue(""),
+                        onEditorChange = {},
+                        onContinue = {},
+                        onOpenGallery = {},
+                        onChoosePhoto = {},
+                        onCaptured = {},
+                        onCameraError = {},
+                        outputDirectory = File("/unused-connected-mode-group-test"),
+                        modifier = Modifier.fillMaxSize(),
+                        cameraPermissionGranted = false,
+                    )
+                }
+            }
+        }
+
+        val density = composeRule.density.density
+        val camera = composeRule.onNodeWithTag("capture-mode-camera").fetchSemanticsNode()
+        val type = composeRule.onNodeWithTag("capture-mode-type").fetchSemanticsNode()
+        assertEquals("Each mode target must meet the 48 dp floor", 48f * density, camera.boundsInRoot.height, 1f)
+        assertEquals(
+            "The two modes must read as one connected group",
+            with(composeRule.density) {
+                androidx.compose.material3.ButtonGroupDefaults.ConnectedSpaceBetween.toPx()
+            },
+            type.boundsInRoot.left - camera.boundsInRoot.right,
+            1f,
+        )
+        assertEquals(
+            "A single-choice mode switch must expose radio semantics",
+            androidx.compose.ui.semantics.Role.RadioButton,
+            camera.config[SemanticsProperties.Role],
+        )
+        composeRule.onNodeWithTag("capture-mode-camera-icon", useUnmergedTree = true).assertExists()
+        composeRule.onNodeWithTag("capture-mode-type-icon", useUnmergedTree = true).assertExists()
+        composeRule.onNodeWithText("Camera").assertIsDisplayed()
+        composeRule.onNodeWithText("Type").assertIsDisplayed()
+        composeRule.onNodeWithTag("capture-mode-type").performClick()
+        assertEquals("Type", mode.value)
+        composeRule.onNodeWithTag("capture-mode-type").assertIsSelected()
+        composeRule.onNodeWithTag("capture-mode-camera").assertIsNotSelected()
+    }
+
+    @Test
+    fun captureModeGroupLabelsSurviveTwoHundredPercentFontScale() {
+        val screenWidth = mutableStateOf(360)
+        composeRule.setContent {
+            val density = composeRule.density
+            CompositionLocalProvider(LocalDensity provides Density(density.density, 2f)) {
+                MaterialTheme {
+                    Box(Modifier.width(screenWidth.value.dp).height(828.dp)) {
+                        InputScreen(
+                            captureMode = "Photo",
+                            onCaptureModeChange = {},
+                            editor = TextFieldValue(""),
+                            onEditorChange = {},
+                            onContinue = {},
+                            onOpenGallery = {},
+                            onChoosePhoto = {},
+                            onCaptured = {},
+                            onCameraError = {},
+                            outputDirectory = File("/unused-connected-mode-group-test"),
+                            modifier = Modifier.fillMaxSize(),
+                            cameraPermissionGranted = false,
+                        )
+                    }
+                }
+            }
+        }
+
+        listOf(360, 390).forEach { width ->
+            screenWidth.value = width
+            composeRule.waitForIdle()
+            listOf("Camera", "Type").forEach { label ->
+                val layouts = mutableListOf<TextLayoutResult>()
+                val node = composeRule.onNodeWithText(label, useUnmergedTree = true).fetchSemanticsNode()
+                val action = node.config[SemanticsActions.GetTextLayoutResult]
+                assertTrue("Could not inspect the $label mode label", action.action?.invoke(layouts) == true)
+                val layout = layouts.single()
+                assertEquals("The $label label must stay on one line at ${width}dp", 1, layout.lineCount)
+                assertTrue(
+                    "The $label label must not be squeezed at 200 % font scale on a ${width}dp screen",
+                    layout.multiParagraph.width + 1f >= layout.multiParagraph.maxIntrinsicWidth,
+                )
+            }
+        }
+        assertTrue(
+            "Decorative mode icons step aside at 200 % font scale so neither label is squeezed",
+            composeRule.onAllNodesWithTag("capture-mode-camera-icon", useUnmergedTree = true)
+                .fetchSemanticsNodes().isEmpty(),
+        )
+    }
+
     @Test
     fun shortScreenKeepsTheBarAndControlRowWhileThePreviewNarrows() {
         composeRule.setContent {
@@ -344,10 +450,10 @@ class InputScreenLayoutTest {
 
         val density = composeRule.density.density
         composeRule.onNodeWithTag("capture-top-bar").assertHeightIsEqualTo(56.dp)
-        composeRule.onNodeWithTag("camera-controls-row").assertHeightIsEqualTo(48.dp)
+        composeRule.onNodeWithTag("camera-controls-row").assertHeightIsEqualTo(72.dp)
         val preview = composeRule.onNodeWithTag("camera-preview-viewport").fetchSemanticsNode().boundsInRoot
-        assertEquals(333f * density, preview.width, 1f)
-        assertEquals(444f * density, preview.height, 1f)
+        assertEquals(315f * density, preview.width, 1f)
+        assertEquals(420f * density, preview.height, 1f)
         assertEquals(195f * density, preview.center.x, 1f)
         assertEquals(12f * density, composeRule.onNodeWithTag("camera-gap-above-controls").fetchSemanticsNode().boundsInRoot.height, 1f)
         assertEquals(12f * density, composeRule.onNodeWithTag("camera-gap-below-controls").fetchSemanticsNode().boundsInRoot.height, 1f)

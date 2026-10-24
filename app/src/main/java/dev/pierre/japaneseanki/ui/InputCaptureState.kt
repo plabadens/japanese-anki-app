@@ -32,11 +32,11 @@ internal fun cameraCaptureLayoutDp(availableWidth: Float, availableHeight: Float
 }
 
 internal const val CAMERA_TOP_BAR_HEIGHT_DP = 56
-internal const val CAMERA_CONTROL_ROW_HEIGHT_DP = 48
-internal const val CAMERA_SHUTTER_SIZE_DP = 48
+internal const val CAMERA_CONTROL_ROW_HEIGHT_DP = 72
+internal const val CAMERA_SHUTTER_SIZE_DP = 64
 internal const val CAMERA_SIDE_SLOT_SIZE_DP = 48
 internal const val CAMERA_CAPTURE_GAP_FLOOR_DP = 12
-internal const val CAMERA_MODE_SWITCH_HEIGHT_DP = 38
+internal const val CAMERA_MODE_SWITCH_HEIGHT_DP = 48
 
 internal fun captureActionsEnabled(screenEnabled: Boolean, captureInProgress: Boolean): Boolean =
     screenEnabled && !captureInProgress

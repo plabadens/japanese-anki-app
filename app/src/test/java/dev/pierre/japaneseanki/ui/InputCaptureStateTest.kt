@@ -17,7 +17,7 @@ class InputCaptureStateTest {
         val layout = cameraCaptureLayoutDp(390f, 740f)
 
         assertEquals(CameraPreviewSizeDp(390f, 520f), layout.preview)
-        assertEquals(86f, layout.equalGap, 0.001f)
+        assertEquals(74f, layout.equalGap, 0.001f)
         assertEquals(3f / 4f, layout.preview.width / layout.preview.height, 0.0001f)
     }
 
@@ -26,7 +26,7 @@ class InputCaptureStateTest {
         // 620 dp device height less 24 dp system insets and the fixed 56 dp bar.
         val layout = cameraCaptureLayoutDp(390f, 516f)
 
-        assertEquals(CameraPreviewSizeDp(333f, 444f), layout.preview)
+        assertEquals(CameraPreviewSizeDp(315f, 420f), layout.preview)
         assertEquals(CAMERA_CAPTURE_GAP_FLOOR_DP.toFloat(), layout.equalGap, 0.001f)
         assertEquals(3f / 4f, layout.preview.width / layout.preview.height, 0.0001f)
     }
@@ -46,10 +46,11 @@ class InputCaptureStateTest {
             presentations.map { cameraCaptureLayoutDp(393f, 740f).preview }.distinct(),
         )
         assertEquals(listOf(CAMERA_SHUTTER_SIZE_DP), presentations.map { it.diameterDp }.distinct())
-        assertEquals(48, CAMERA_CONTROL_ROW_HEIGHT_DP)
+        assertEquals(72, CAMERA_CONTROL_ROW_HEIGHT_DP)
+        assertEquals(64, CAMERA_SHUTTER_SIZE_DP)
         assertEquals(48, CAMERA_SIDE_SLOT_SIZE_DP)
         assertEquals(56, CAMERA_TOP_BAR_HEIGHT_DP)
-        assertEquals(38, CAMERA_MODE_SWITCH_HEIGHT_DP)
+        assertEquals(48, CAMERA_MODE_SWITCH_HEIGHT_DP)
         assertFalse(presentations[0].showProgress)
         assertTrue(presentations[1].showProgress)
         assertFalse(presentations[2].showProgress)

@@ -171,7 +171,7 @@ internal fun CameraShutterButton(
             .clip(CircleShape)
             .clickable(enabled = enabled && !capturing, onClick = takePhoto)
             .border(BorderStroke(4.dp, MaterialTheme.colorScheme.primary), CircleShape)
-            .padding(7.dp)
+            .padding(8.dp)
             .background(MaterialTheme.colorScheme.primary, CircleShape)
             .semantics {
                 contentDescription = shutterDescription
