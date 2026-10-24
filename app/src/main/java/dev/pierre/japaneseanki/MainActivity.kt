@@ -337,25 +337,6 @@ private fun DraftAudioState.toDraftAudio(item: AudioItem, context: Context): Dra
     }
 }
 
-enum class AppRoute { Capture, Card }
-
-internal fun visibleRouteForAnalyzer(
-    requestedRoute: AppRoute,
-    analyzerReady: Boolean,
-    frozenCardActive: Boolean,
-): AppRoute = when {
-    !analyzerReady -> AppRoute.Capture
-    frozenCardActive -> AppRoute.Card
-    else -> requestedRoute
-}
-
-internal fun shouldShowSetup(
-    showSetup: Boolean,
-    onboardingComplete: Boolean,
-    analyzerReady: Boolean,
-    showSettings: Boolean,
-): Boolean = !showSettings && (showSetup || !onboardingComplete || !analyzerReady)
-
 private data class SentenceAudioAuthorization(
     val revision: Long,
     val sentence: String,
@@ -461,96 +442,45 @@ class MainActivity : ComponentActivity() {
                     ),
                 )
             }
-            var target by remember {
+            val draftState = remember {
                 mutableStateOf(
-                    TargetSpan(
-                        preferences.getInt("target_start", -1),
-                        preferences.getInt("target_end", -1),
-                    ).takeIf { it.textIn(editor.text) != null },
+                    restoreDraftModel(
+                        preferences = preferences,
+                        sentence = editor.text,
+                        defaultTags = settings.getString(SettingsPreferenceKeys.DEFAULT_TAGS, "").orEmpty(),
+                    ),
                 )
             }
-            var vocabulary by remember { mutableStateOf(preferences.getString("vocabulary", "").orEmpty()) }
-            var vocabularyReading by remember { mutableStateOf(preferences.getString("vocabulary_reading", "").orEmpty()) }
+            var target by draftState.field(DraftModel::target, DraftModel::withTarget)
+            var vocabulary by draftState.field(DraftModel::vocabulary, DraftModel::withVocabulary)
+            var vocabularyReading by draftState.field(DraftModel::vocabularyReading, DraftModel::withVocabularyReading)
+            var pitchAccentText by draftState.field(DraftModel::pitchAccent, DraftModel::withPitchAccent)
+            var definition by draftState.field(DraftModel::definition, DraftModel::withDefinition)
+            var sentenceReading by draftState.field(DraftModel::sentenceReading, DraftModel::withSentenceReading)
+            var readingCorrections by draftState.field(DraftModel::readingCorrections, DraftModel::withReadingCorrections)
+            var notes by draftState.field(DraftModel::notes, DraftModel::withNotes)
+            var tags by draftState.field(DraftModel::tags, DraftModel::withTags)
+            val draft = draftState.value
             var vocabularyReadingError by remember { mutableStateOf<String?>(null) }
-            var pitchAccentText by remember { mutableStateOf(preferences.getString("pitch_accent", "").orEmpty()) }
             var pitchHtmlText by remember { mutableStateOf(preferences.getString("pitch_html", null)) }
             var pitchIndexError by remember { mutableStateOf<String?>(null) }
             val pitch = pitchAccentText.toIntOrNull()?.let {
                 PitchAccent.create(vocabularyReading, it, pitchHtmlText)
             }
-            var definition by remember { mutableStateOf(preferences.getString("definition", "").orEmpty()) }
             var definitionManuallyEdited by remember { mutableStateOf(preferences.getBoolean("definition_manual", false)) }
             var definitionProvenanceKnown by remember { mutableStateOf(preferences.contains("definition_manual")) }
-            var sentenceReading by remember { mutableStateOf(preferences.getString("sentence_reading", "").orEmpty()) }
-            var readingCorrections by remember {
-                mutableStateOf(
-                    SentenceReadings.decode(
-                        preferences.getString("sentence_reading_corrections", null),
-                        preferences.getString("sentence", "").orEmpty(),
-                    ),
-                )
-            }
-            var readingCorrectionError by remember { mutableStateOf<String?>(null) }
             var dependentFieldsStale by remember {
                 mutableStateOf(preferences.getBoolean("definition_manual_stale", false) &&
                     preferences.getBoolean("definition_manual", false))
             }
+            var readingCorrectionError by remember { mutableStateOf<String?>(null) }
             var showDictionarySheet by remember { mutableStateOf(false) }
             var definitionSheetText by remember { mutableStateOf<String?>(null) }
-            val restoredTranslationText = preferences.getString("translation", "").orEmpty()
-            val restoredTranslationSource = preferences.getString("translation_source", null)
-                ?.let { saved -> TranslationSource.entries.firstOrNull { it.name == saved } }
-            val restoredTranslationWasPending = preferences.getBoolean("translation_pending", false)
-            val restoredTranslationError = preferences.getString("translation_error", null)
-            val restoredSuggestionError = preferences.getString("translation_suggestion_error", null)
-            val restoredTranslationManual = preferences.getBoolean(
-                "translation_manual",
-                restoredTranslationSource == TranslationSource.MANUAL ||
-                    (restoredTranslationText.isNotBlank() && restoredTranslationSource == null),
-            )
-            val restoredTranslationStale = preferences.getBoolean("translation_stale", false)
-            val restoredSuggestionText = preferences.getString("translation_suggestion", null)
-            val restoredSuggestionSource = preferences.getString("translation_suggestion_source", null)
-                ?.let { saved -> TranslationSource.entries.firstOrNull { it.name == saved } }
-            val restoredCommittedSentence = preferences.getString("committed_sentence", null)
-            val committedTranslationWasNotAttempted = !restoredTranslationManual &&
-                restoredTranslationText.isBlank() && !restoredCommittedSentence.isNullOrBlank() &&
-                restoredCommittedSentence == preferences.getString("sentence", "").orEmpty() &&
-                preferences.getString("translation_attempted_sentence", null) != restoredCommittedSentence
-            val interruptedTranslation = TranslationResult.Failed("Translation was interrupted. Tap Retry to continue.")
-            var translationDraft by remember {
-                mutableStateOf(
-                    TranslationDraft(
-                        sentence = preferences.getString(
-                            "translation_sentence",
-                            preferences.getString("sentence", "").orEmpty(),
-                        ).orEmpty(),
-                        result = when {
-                            restoredTranslationManual -> TranslationResult.Ready(restoredTranslationText, TranslationSource.MANUAL)
-                            restoredTranslationSource != null && restoredTranslationText.isNotBlank() ->
-                                TranslationResult.Ready(restoredTranslationText, restoredTranslationSource)
-                            restoredTranslationText.isNotBlank() -> TranslationResult.Ready(restoredTranslationText, TranslationSource.MANUAL)
-                            restoredTranslationWasPending -> interruptedTranslation
-                            restoredTranslationError != null -> TranslationResult.Failed(restoredTranslationError)
-                            committedTranslationWasNotAttempted -> interruptedTranslation
-                            else -> TranslationResult.Pending
-                        },
-                        manuallyEdited = restoredTranslationManual,
-                        stale = restoredTranslationStale,
-                        suggestion = when {
-                            restoredSuggestionText != null && restoredSuggestionSource != null ->
-                                TranslationResult.Ready(restoredSuggestionText, restoredSuggestionSource)
-                            restoredTranslationWasPending && restoredTranslationManual && restoredTranslationStale ->
-                                interruptedTranslation
-                            restoredSuggestionError != null -> TranslationResult.Failed(restoredSuggestionError)
-                            else -> null
-                        },
-                    ),
-                )
-            }
+            val restoredTranslation = remember { restoreTranslationDraft(preferences) }
+            var translationDraft by remember { mutableStateOf(restoredTranslation.draft) }
             val translation = (translationDraft.result as? TranslationResult.Ready)?.text.orEmpty()
             var translationAttemptedSentence by remember {
-                mutableStateOf(preferences.getString("translation_attempted_sentence", null))
+                mutableStateOf(restoredTranslation.attemptedSentence)
             }
             var translationAutoAllowed by remember {
                 mutableStateOf(false)
@@ -572,15 +502,6 @@ class MainActivity : ComponentActivity() {
                 if (translationDraft.manuallyEdited && translationDraft.stale) {
                     translationDraft.suggestion ?: TranslationResult.Pending
                 } else translationDraft.result
-            }
-            var notes by remember { mutableStateOf(preferences.getString("notes", "").orEmpty()) }
-            var tags by remember {
-                mutableStateOf(
-                    seedFreshNoteTags(
-                        preferences.getString("tags", null),
-                        settings.getString(SettingsPreferenceKeys.DEFAULT_TAGS, "").orEmpty(),
-                    ),
-                )
             }
             val restoredPendingPhoto = preferences.getString("pending_replacement_image_path", null)
                 ?.let(::File)?.takeIf(File::isFile)
@@ -971,16 +892,20 @@ class MainActivity : ComponentActivity() {
             var cameraPermissionGranted by remember {
                 mutableStateOf(checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
             }
-            fun setupAudioReady(): Boolean =
-                (settingsScreenState.googleKey.isNotBlank() || settingsScreenState.credentialStored) &&
-                    settingsScreenState.values.voiceName.isNotBlank()
             fun compatibleSetupNoteTypes(): List<AnkiNoteType> = noteTypes.filter { model ->
                 AnkiFieldContract.mapToModelOrder(model.fields, emptyMap()).isValid
             }
-            fun setupAnkiReady(): Boolean =
-                ankiDroidInstalled && apiPermissionGranted && setupLoadedSuccessfully &&
-                    compatibleSetupNoteTypes().any { it.id == selectedModelId } &&
-                    decks.any { it.id == selectedDeckId }
+            val setupReadiness = SettingsCoordinator.setupReadiness(
+                audioCredentialAvailable = settingsScreenState.googleKey.isNotBlank() ||
+                    settingsScreenState.credentialStored,
+                selectedVoiceName = settingsScreenState.values.voiceName,
+                ankiDroidInstalled = ankiDroidInstalled,
+                ankiPermissionGranted = apiPermissionGranted,
+                ankiSetupLoaded = setupLoadedSuccessfully,
+                selectedCompatibleNoteType = compatibleSetupNoteTypes().any { it.id == selectedModelId },
+                selectedDeckAvailable = decks.any { it.id == selectedDeckId },
+                dictionaryReady = analyzerReady,
+            )
             fun markCameraStepDone() {
                 settings.edit()
                     .putBoolean("onboarding_camera_done", true)
@@ -1187,7 +1112,7 @@ class MainActivity : ComponentActivity() {
 
             fun finishSetup() {
                 if (settingsLoading || settingsSaving) return
-                if (!analyzerReady || !setupAudioReady() || !setupAnkiReady()) return
+                if (!setupReadiness.dictionaryReady || !setupReadiness.audioReady || !setupReadiness.ankiReady) return
                 val coordinator = settingsCoordinator
                 if (coordinator == null) {
                     setupAudioErrorResource = R.string.save_failed
@@ -1268,6 +1193,9 @@ class MainActivity : ComponentActivity() {
                 listOfNotNull(photoSourcePath, noteImagePath, processedImagePath).distinct().forEach { File(it).delete() }
                 editorInputRevision++
                 editor = TextFieldValue("")
+                draftState.value = draftState.value.cleared(
+                    normalizeTagInput(settings.getString(SettingsPreferenceKeys.DEFAULT_TAGS, "").orEmpty()),
+                )
                 route = AppRoute.Capture
                 photoSourcePath = null
                 noteImagePath = null
@@ -1294,12 +1222,6 @@ class MainActivity : ComponentActivity() {
                 pitchLookupLoading = false
                 japaneseTokens = emptyList()
                 tokenizationError = null
-                target = null
-                vocabulary = ""
-                vocabularyReading = ""
-                pitchAccentText = ""
-                definition = ""
-                sentenceReading = ""
                 definitionManuallyEdited = false
                 definitionProvenanceKnown = true
                 dependentFieldsStale = false
@@ -1318,8 +1240,6 @@ class MainActivity : ComponentActivity() {
                 pendingWordAudioAuthorization = null
                 handledSentenceAudioAuthorization = null
                 handledWordAudioAuthorization = null
-                notes = ""
-                tags = normalizeTagInput(settings.getString(SettingsPreferenceKeys.DEFAULT_TAGS, "").orEmpty())
                 selectedDictionaryEntry = null
                 selectedDictionaryEntryId = null
                 selectedSenseIndices = emptySet()
@@ -1357,6 +1277,7 @@ class MainActivity : ComponentActivity() {
                     cardInvalidated = true
                     generationStarted = false
                     if (sendState.locked) translationRequestRevision++ else updateTranslationSentence(text)
+                    draftState.value = draftState.value.withSentence(text)
                 }
                 editor = TextFieldValue(text, selection = TextRange(text.length))
             }
@@ -1398,16 +1319,13 @@ class MainActivity : ComponentActivity() {
                     dictionaryError = null
                     dictionaryHasMore = false
                     selectedSenseIndices = emptySet()
-                    vocabulary = ""
-                    vocabularyReading = ""
                     vocabularyReadingError = null
-                    definition = ""
                     definitionManuallyEdited = false
                     definitionProvenanceKnown = true
-                    pitchAccentText = ""
                     audioController.clear(AudioItem.VOCABULARY)
                     audioSnapshot = audioController.snapshot()
                 }
+                target = selected
                 if (selected != previousTarget) {
                     // The reading belongs to the selected occurrence; a new target must never
                     // inherit the previous target's reading.
@@ -1415,7 +1333,6 @@ class MainActivity : ComponentActivity() {
                         resolveSurfaceReading(editor.text, japaneseTokens, span)
                     }.orEmpty()
                 }
-                target = selected
                 if (selected != null) {
                     val surface = selected.textIn(editor.text).orEmpty()
                     val identity = "${selected.start}:${selected.end}:$surface"
@@ -1775,10 +1692,8 @@ class MainActivity : ComponentActivity() {
                 }
                 selectedDictionaryEntry = choice.entry
                 selectedDictionaryEntryId = choice.entry.id
-                vocabulary = choice.entry.expression
-                vocabularyReading = choice.entry.reading
+                draftState.value = draftState.value.withEntry(choice.entry, setOf(choice.senseIndex))
                 selectedSenseIndices = setOf(choice.senseIndex)
-                definition = choice.definition
                 definitionManuallyEdited = false
                 definitionProvenanceKnown = true
                 dictionaryError = null
@@ -1871,161 +1786,80 @@ class MainActivity : ComponentActivity() {
                 return true
             }
 
-            // Typing in the sentence can shift the spans a correction was stored against.
-            androidx.compose.runtime.LaunchedEffect(editor.text) {
-                val stale = readingCorrections.filter { it.span.textIn(editor.text) != it.surface }
-                if (stale.isNotEmpty()) {
-                    readingCorrections = readingCorrections.filter { it.span.textIn(editor.text) == it.surface }
-                }
-            }
+            DraftReadingCorrectionCleanupEffect(
+                sentence = draft.sentence,
+                corrections = draft.readingCorrections,
+                onCorrectionsChanged = { readingCorrections = it },
+            )
 
-            androidx.compose.runtime.LaunchedEffect(
-                editor.text, translationRequestRevision, translationRetry, translationAutoAllowed, sendState.locked,
-                generationStarted,
-            ) {
-                val sentence = editor.text
-                // Network work starts only after the deliberate Continue, never on typing or token taps.
-                if (sentence.isBlank() || sendState.locked || !generationStarted) return@LaunchedEffect
+            DraftTranslationEffect(
+                sentence = draft.sentence,
+                requestRevision = translationRequestRevision,
+                retry = translationRetry,
+                autoAllowed = translationAutoAllowed,
+                sendLocked = sendState.locked,
+                generationStarted = generationStarted,
+                lastHandledRetry = lastHandledTranslationRetry,
+                attemptedSentence = translationAttemptedSentence,
+                currentDraft = { translationDraft },
+                currentRequestRevision = currentTranslationRequestRevision,
+                currentSubmissionLocked = currentSubmissionLocked,
+                translationService = translationService,
+                preferences = preferences,
+                onDraftChanged = { translationDraft = it },
+                onLastHandledRetryChanged = { lastHandledTranslationRetry = it },
+                onAttemptedSentenceChanged = { translationAttemptedSentence = it },
+                retryNeededMessage = this@MainActivity.getString(
+                    R.string.card_translation_needs_retry_tap_retry_to_conti,
+                ),
+                notStartedMessage = this@MainActivity.getString(
+                    R.string.card_translation_was_not_started_tap_retry_to_c,
+                ),
+                requestRecordFailedMessage = this@MainActivity.getString(
+                    R.string.card_translation_request_could_not_be_recorded,
+                ),
+                unavailableMessage = this@MainActivity.getString(
+                    R.string.card_translation_is_unavailable_tap_retry_to_co,
+                ),
+            )
 
-                var requestDraft = translationDraft
-                if (requestDraft.sentence != sentence) {
-                    requestDraft = requestDraft.sentenceChanged(sentence)
-                    translationDraft = requestDraft
-                }
-                if (requestDraft.manuallyEdited && !requestDraft.stale) return@LaunchedEffect
-                if (!requestDraft.manuallyEdited && !requestDraft.stale && requestDraft.result is TranslationResult.Ready) {
-                    return@LaunchedEffect
-                }
+            DraftTokenizationEffect(
+                analyzerReady = analyzerReady,
+                sentence = draft.sentence,
+                analysisRetry = analysisRetry,
+                draftGeneration = draftGeneration,
+                sendLocked = sendState.locked,
+                dictionaryReady = dictionaryReady,
+                offlineAnalyzer = offlineAnalyzer,
+                offlineDictionary = offlineDictionary,
+                isDraftCurrent = ::asyncDraftIsCurrent,
+                onTokensChanged = { japaneseTokens = it },
+                onLoadingChanged = { tokenizationLoading = it },
+                onError = { tokenizationError = it.takeIf(String::isNotEmpty) },
+                errorMessage = this@MainActivity.getString(R.string.card_could_not_analyze_this_sentence_select_a_t),
+            )
 
-                val explicitRetry = translationRetry != lastHandledTranslationRetry
-                if (translationAttemptedSentence == sentence && !explicitRetry) {
-                    val active = if (requestDraft.manuallyEdited && requestDraft.stale) {
-                        requestDraft.suggestion ?: TranslationResult.Pending
-                    } else requestDraft.result
-                    if (active is TranslationResult.Pending) {
-                        translationDraft = requestDraft.requestFinished(
-                            TranslationResult.Failed(this@MainActivity.getString(R.string.card_translation_needs_retry_tap_retry_to_conti)),
-                        )
-                    }
-                    return@LaunchedEffect
-                }
-                if (!translationAutoAllowed && !explicitRetry) {
-                    translationDraft = requestDraft.requestFinished(
-                        TranslationResult.Failed(this@MainActivity.getString(R.string.card_translation_was_not_started_tap_retry_to_c)),
-                    )
-                    return@LaunchedEffect
-                }
+            DraftTargetVocabularyEffect(
+                target = draft.target,
+                sentence = draft.sentence,
+                tokens = japaneseTokens,
+                vocabulary = draft.vocabulary,
+                vocabularyReading = draft.vocabularyReading,
+                vocabularyReadingError = vocabularyReadingError,
+                dependentFieldsStale = dependentFieldsStale,
+                sendLocked = sendState.locked,
+                onVocabularyChanged = { vocabulary = it },
+                onVocabularyReadingChanged = { vocabularyReading = it },
+            )
 
-                lastHandledTranslationRetry = translationRetry
-                val requestRevision = translationRequestRevision
-                kotlinx.coroutines.delay(350)
-                if (!translationResponseIsCurrent(
-                        sentence, requestRevision, editor.text,
-                        currentTranslationRequestRevision.value, currentSubmissionLocked.value,
-                    )
-                ) return@LaunchedEffect
-
-                translationDraft = translationDraft.requestStarted()
-                translationAttemptedSentence = sentence
-                val requestRecorded = preferences.edit()
-                    .putString("translation_attempted_sentence", sentence)
-                    .putBoolean("translation_pending", true)
-                    .commit()
-                if (!requestRecorded) {
-                    translationDraft = translationDraft.requestFinished(
-                        TranslationResult.Failed(this@MainActivity.getString(R.string.card_translation_request_could_not_be_recorded)),
-                    )
-                    return@LaunchedEffect
-                }
-
-                val result = try {
-                    withContext(Dispatchers.IO) {
-                        translationService.translate(sentence)
-                    }
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) {
-                    TranslationResult.Failed(this@MainActivity.getString(R.string.card_translation_is_unavailable_tap_retry_to_co))
-                }
-                if (translationResponseIsCurrent(
-                        sentence, requestRevision, editor.text,
-                        currentTranslationRequestRevision.value, currentSubmissionLocked.value,
-                    )
-                ) {
-                    translationDraft = translationDraft.requestFinished(result)
-                }
-            }
-
-            androidx.compose.runtime.LaunchedEffect(
-                analyzerReady, editor.text, analysisRetry, draftGeneration, sendState.locked, dictionaryReady,
-            ) {
-                if (currentSubmissionLocked.value) return@LaunchedEffect
-                val callbackGeneration = draftGeneration
-                if (!analyzerReady || editor.text.isBlank()) {
-                    japaneseTokens = emptyList()
-                    tokenizationLoading = false
-                    return@LaunchedEffect
-                }
-                tokenizationLoading = true
-                tokenizationError = null
-                try {
-                    kotlinx.coroutines.delay(150)
-                    val analyzed = withContext(Dispatchers.IO) {
-                        val raw = offlineAnalyzer.analyze(editor.text)
-                        groupTokens(raw) { candidate ->
-                            dictionaryReady && runCatching {
-                                // One bound existence probe; the readiness gate and the
-                                // exception-to-false policy are unchanged.
-                                offlineDictionary.hasEntry(candidate)
-                            }.getOrDefault(false)
-                        }
-                    }
-                    if (!asyncDraftIsCurrent(callbackGeneration)) return@LaunchedEffect
-                    japaneseTokens = analyzed
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) {
-                    if (asyncDraftIsCurrent(callbackGeneration)) {
-                        japaneseTokens = emptyList()
-                        tokenizationError = this@MainActivity.getString(R.string.card_could_not_analyze_this_sentence_select_a_t)
-                    }
-                } finally {
-                    tokenizationLoading = false
-                }
-            }
-
-            androidx.compose.runtime.LaunchedEffect(
-                target, editor.text, japaneseTokens, vocabulary, vocabularyReading,
-                vocabularyReadingError, dependentFieldsStale,
-            ) {
-                if (sendState.locked) return@LaunchedEffect
-                val targetSpan = target ?: return@LaunchedEffect
-                val targetText = targetSpan.textIn(editor.text) ?: return@LaunchedEffect
-                val resolved = resolveAnalyzedLemma(japaneseTokens, targetSpan) ?: return@LaunchedEffect
-                val shouldResolveSurface = vocabulary.isBlank() ||
-                    (!dependentFieldsStale && vocabulary == targetText)
-                if (shouldResolveSurface) vocabulary = resolved.expression
-                // A rejected reading correction stays unresolved; do not silently restore a
-                // different pronunciation over the user's attempt.
-                if (vocabularyReadingError == null &&
-                    (shouldResolveSurface || vocabulary == resolved.expression) && vocabularyReading.isBlank() &&
-                    containsKanji(resolved.expression)
-                ) vocabularyReading = resolved.reading
-            }
-
-            androidx.compose.runtime.LaunchedEffect(
-                target, editor.text, japaneseTokens, sentenceReading,
-            ) {
-                if (sendState.locked) return@LaunchedEffect
-                val targetSpan = target ?: return@LaunchedEffect
-                val targetText = targetSpan.textIn(editor.text) ?: return@LaunchedEffect
-                if (sentenceReading.isNotBlank() || !containsKanji(targetText)) {
-                    return@LaunchedEffect
-                }
-                sentenceReading = resolveSurfaceReading(
-                    editor.text, japaneseTokens, targetSpan,
-                )?.takeIf(String::isNotBlank) ?: return@LaunchedEffect
-            }
+            DraftSentenceReadingEffect(
+                target = draft.target,
+                sentence = draft.sentence,
+                tokens = japaneseTokens,
+                sentenceReading = draft.sentenceReading,
+                sendLocked = sendState.locked,
+                onSentenceReadingChanged = { sentenceReading = it },
+            )
 
             fun playAudio(item: AudioItem, file: DraftAudioFile) {
                 stopAudioPlayback()
@@ -2271,115 +2105,58 @@ class MainActivity : ComponentActivity() {
             }
 
 
-            androidx.compose.runtime.LaunchedEffect(dictionaryReady, target, editor.text, dictionaryRetry, japaneseTokens, draftGeneration, sendState.locked) {
-                if (currentSubmissionLocked.value) return@LaunchedEffect
-                val callbackGeneration = draftGeneration
-                val targetText = target?.textIn(editor.text)
-                if (!dictionaryReady || targetText == null) {
-                    dictionaryEntries = emptyList()
-                    dictionaryHasMore = false
-                    selectedDictionaryEntry = null
-                } else {
-                    dictionarySearchLoading = true
-                    try {
-                        val entries = withContext(Dispatchers.IO) {
-                            offlineDictionary.search(targetText, analyzedTarget?.expression)
-                        }
-                        if (!asyncDraftIsCurrent(callbackGeneration)) return@LaunchedEffect
-                        dictionaryEntries = entries
-                        dictionaryError = null
-                        dictionaryHasMore = entries.size == 50
-                        val choices = DictionaryMeaningChoices.from(entries)
-                        val restoredEntry = entries.firstOrNull {
-                            it.id == selectedDictionaryEntryId &&
-                                it.expression == vocabulary && it.reading == vocabularyReading
-                        }
-                        val restoredSenseIndex = restoredEntry?.let { entry ->
-                            preferences.getStringSet("dictionary_sense_indices", null)
-                                ?.mapNotNull(String::toIntOrNull)
-                                ?.filter { it in entry.senses.indices }
-                                ?.minOrNull() ?: 0
-                        }
-                        val restoredChoice = DictionaryMeaningChoices.find(
-                            choices = choices,
-                            entryId = restoredEntry?.id,
-                            expression = vocabulary,
-                            reading = vocabularyReading,
-                            senseIndex = restoredSenseIndex,
-                        )
-                        when {
-                            restoredChoice != null -> commitDictionaryChoice(restoredChoice)
-                            choices.size == 1 -> commitDictionaryChoice(choices.single())
-                            choices.size > 1 -> {
-                                // Do not guess between viable readings/meanings. The selected
-                                // occurrence remains visible while the one combined sheet is open.
-                                clearUnresolvedVocabulary()
-                                showDictionarySheet = true
-                            }
-                            else -> {
-                                // No usable dictionary meaning is a card-local source miss, not a
-                                // chooser or an invitation to load more rows.
-                                clearUnresolvedVocabulary()
-                                showDictionarySheet = false
-                            }
-                        }
-                    } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (_: Exception) {
-                        if (asyncDraftIsCurrent(callbackGeneration)) {
-                            dictionaryError = this@MainActivity.getString(R.string.card_dictionary_lookup_failed_retry_before_sele)
-                        }
-                    } finally {
-                        dictionarySearchLoading = false
-                    }
-                }
-            }
+            DraftDictionarySearchEffect(
+                dictionaryReady = dictionaryReady,
+                target = draft.target,
+                sentence = draft.sentence,
+                dictionaryRetry = dictionaryRetry,
+                tokens = japaneseTokens,
+                draftGeneration = draftGeneration,
+                sendLocked = sendState.locked,
+                analyzedExpression = analyzedTarget?.expression,
+                selectedEntryId = selectedDictionaryEntryId,
+                vocabulary = draft.vocabulary,
+                vocabularyReading = draft.vocabularyReading,
+                preferences = preferences,
+                offlineDictionary = offlineDictionary,
+                isDraftCurrent = ::asyncDraftIsCurrent,
+                onEntriesChanged = { dictionaryEntries = it },
+                onHasMoreChanged = { dictionaryHasMore = it },
+                onSelectedEntryChanged = { selectedDictionaryEntry = it },
+                onLoadingChanged = { dictionarySearchLoading = it },
+                onError = { dictionaryError = it.takeIf(String::isNotEmpty) },
+                clearUnresolvedVocabulary = ::clearUnresolvedVocabulary,
+                commitChoice = ::commitDictionaryChoice,
+                onSheetChanged = { showDictionarySheet = it },
+                lookupFailedMessage = this@MainActivity.getString(
+                    R.string.card_dictionary_lookup_failed_retry_before_sele,
+                ),
+            )
 
-            androidx.compose.runtime.LaunchedEffect(
-                dictionaryReady, selectedDictionaryEntryId, selectedDictionaryEntry, vocabulary, vocabularyReading,
-                target, editor.text, dictionaryRetry, draftGeneration, sendState.locked, ajtAvailability,
-            ) {
-                if (currentSubmissionLocked.value) return@LaunchedEffect
-                val callbackGeneration = draftGeneration
-                val entry = selectedDictionaryEntry?.takeIf {
-                    it.id == selectedDictionaryEntryId && it.expression == vocabulary && it.reading == vocabularyReading
-                }
-                if (!dictionaryReady || entry == null || vocabulary.isBlank() || vocabularyReading.isBlank() ||
-                    ajtAvailability !is AjtPitchAvailability.Ready
-                ) {
-                    pitchCandidates = emptyList()
-                    pitchAccentText = ""
-                    pitchHtmlText = null
-                    pitchLookupLoading = false
-                    pitchIndexError = (ajtAvailability as? AjtPitchAvailability.Unavailable)
-                        ?.let { this@MainActivity.getString(pitchUnavailableMessage(it.failure)) }
-                    return@LaunchedEffect
-                }
-                pitchAccentText = ""
-                pitchHtmlText = null
-                pitchCandidates = emptyList()
-                pitchLookupLoading = true
-                try {
-                    val candidates = withContext(Dispatchers.IO) {
-                        ajtPitchRepository.pitch(entry.expression, entry.reading)
-                    }.filter { PitchAccent.create(entry.reading, it.accent, it.html) != null }
-                    if (!asyncDraftIsCurrent(callbackGeneration)) return@LaunchedEffect
-                    pitchCandidates = candidates
-                    pitchIndexError = if (candidates.isEmpty()) {
-                        this@MainActivity.getString(R.string.card_ajt_pitch_record_missing)
-                    } else null
-                    if (candidates.isNotEmpty()) {
-                        pitchAccentText = candidates.first().accent.toString()
-                        pitchHtmlText = candidates.first().html
-                    }
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) {
-                    if (asyncDraftIsCurrent(callbackGeneration)) pitchCandidates = emptyList()
-                } finally {
-                    pitchLookupLoading = false
-                }
-            }
+            DraftPitchLookupEffect(
+                dictionaryReady = dictionaryReady,
+                selectedEntryId = selectedDictionaryEntryId,
+                selectedEntry = selectedDictionaryEntry,
+                vocabulary = draft.vocabulary,
+                vocabularyReading = draft.vocabularyReading,
+                target = draft.target,
+                sentence = draft.sentence,
+                dictionaryRetry = dictionaryRetry,
+                draftGeneration = draftGeneration,
+                sendLocked = sendState.locked,
+                availability = ajtAvailability,
+                repository = ajtPitchRepository,
+                isDraftCurrent = ::asyncDraftIsCurrent,
+                onCandidatesChanged = { pitchCandidates = it },
+                onPitchAccentChanged = { pitchAccentText = it },
+                onPitchHtmlChanged = { pitchHtmlText = it },
+                onLoadingChanged = { pitchLookupLoading = it },
+                onError = { pitchIndexError = it },
+                unavailableMessage = { failure ->
+                    this@MainActivity.getString(pitchUnavailableMessage(failure))
+                },
+                missingMessage = this@MainActivity.getString(R.string.card_ajt_pitch_record_missing),
+            )
 
             androidx.compose.runtime.LaunchedEffect(incoming, sendState.locked) {
                 if (sendState.locked) {
@@ -2649,12 +2426,12 @@ class MainActivity : ComponentActivity() {
                                     ),
                                     cameraPermissionGranted = cameraPermissionGranted,
                                     cameraDenied = cameraDenied,
-                                    dictionaryPreparing = !analyzerReady && analyzerFailure == null,
+                                    dictionaryPreparing = !setupReadiness.dictionaryReady && analyzerFailure == null,
                                     dictionaryErrorResource = analyzerFailure,
-                                    audioReady = setupAudioReady(),
-                                    ankiReady = setupAnkiReady(),
+                                    audioReady = setupReadiness.audioReady,
+                                    ankiReady = setupReadiness.ankiReady,
                                 ),
-                                onBack = if (onboardingComplete && analyzerReady) ({ showSetup = false }) else null,
+                                onBack = if (onboardingComplete && setupReadiness.dictionaryReady) ({ showSetup = false }) else null,
                                 onKeyChange = { value ->
                                     settingsCoordinator?.let { coordinator ->
                                         val changed = value != coordinator.currentGoogleKey()
@@ -3249,59 +3026,29 @@ class MainActivity : ComponentActivity() {
             }
 
             androidx.compose.runtime.LaunchedEffect(
-                editor.text, editor.selection, target, vocabulary, vocabularyReading, pitchAccentText, pitchHtmlText, definition,
-                sentenceReading, readingCorrections, definitionManuallyEdited, dependentFieldsStale, translationDraft,
-                translationAttemptedSentence,
-                cardInvalidated,
-                notes, tags, selectedModelId, selectedDeckId, selectedDictionaryEntryId, selectedSenseIndices, completedSubmission,
+                draft, editor.selection, pitchHtmlText, definitionManuallyEdited, dependentFieldsStale,
+                translationDraft, translationAttemptedSentence, cardInvalidated,
+                selectedModelId, selectedDeckId, selectedDictionaryEntryId, selectedSenseIndices, completedSubmission,
             ) {
                 if (completedSubmission != null) return@LaunchedEffect
-                preferences.edit()
-                    .putString("sentence", editor.text)
-                    .putInt("selection_start", editor.selection.min)
-                    .putInt("selection_end", editor.selection.max)
-                    .putInt("target_start", target?.start ?: -1)
-                    .putInt("target_end", target?.end ?: -1)
-                    .putString("vocabulary", vocabulary)
-                    .putString("vocabulary_reading", vocabularyReading)
-                    .putString("pitch_accent", pitchAccentText)
-                    .putString("pitch_html", pitchHtmlText)
-                    .putString("definition", definition)
-                    .putBoolean("definition_manual", definitionManuallyEdited)
-                    .putBoolean("definition_manual_stale", dependentFieldsStale && definitionManuallyEdited)
-                    .remove("dependent_fields_stale")
-                    .putString("sentence_reading", sentenceReading)
-                    .putString("sentence_reading_corrections", SentenceReadings.encode(readingCorrections))
-                    .remove("leave_sentence_target_unannotated")
-                    .remove("leave_vocabulary_unannotated")
-                    .putString("translation", translation)
-                    .putString("translation_sentence", translationDraft.sentence)
-                    .putString("translation_source", (translationDraft.result as? TranslationResult.Ready)?.source?.name)
-                    .putBoolean("translation_manual", translationDraft.manuallyEdited)
-                    .putBoolean("translation_stale", translationDraft.stale)
-                    .putBoolean("translation_pending", activeTranslationResult() is TranslationResult.Pending)
-                    .putString("translation_error", (activeTranslationResult() as? TranslationResult.Failed)?.message)
-                    .putString(
-                        "translation_suggestion",
-                        (translationDraft.suggestion as? TranslationResult.Ready)?.text,
-                    )
-                    .putString(
-                        "translation_suggestion_source",
-                        (translationDraft.suggestion as? TranslationResult.Ready)?.source?.name,
-                    )
-                    .putString(
-                        "translation_suggestion_error",
-                        (translationDraft.suggestion as? TranslationResult.Failed)?.message,
-                    )
-                    .putString("translation_attempted_sentence", translationAttemptedSentence)
-                    .putBoolean("card_invalidated", cardInvalidated)
-                    .putString("notes", notes)
-                    .putString("tags", tags)
-                    .putLong("model_id", selectedModelId ?: -1)
-                    .putLong("deck_id", selectedDeckId ?: -1)
-                    .putLong("dictionary_entry_id", selectedDictionaryEntryId ?: -1)
-                    .putStringSet("dictionary_sense_indices", selectedSenseIndices.mapTo(mutableSetOf()) { it.toString() })
-                    .apply()
+                persistDraftPreferences(
+                    preferences = preferences,
+                    selectionStart = editor.selection.min,
+                    selectionEnd = editor.selection.max,
+                    draft = draft,
+                    pitchHtmlText = pitchHtmlText,
+                    definitionManuallyEdited = definitionManuallyEdited,
+                    dependentFieldsStale = dependentFieldsStale,
+                    translation = translation,
+                    translationDraft = translationDraft,
+                    activeTranslationResult = activeTranslationResult(),
+                    translationAttemptedSentence = translationAttemptedSentence,
+                    cardInvalidated = cardInvalidated,
+                    selectedModelId = selectedModelId,
+                    selectedDeckId = selectedDeckId,
+                    selectedDictionaryEntryId = selectedDictionaryEntryId,
+                    selectedSenseIndices = selectedSenseIndices,
+                )
             }
 
             val openKnownNote: (Long) -> Unit = { noteId ->
@@ -3532,6 +3279,7 @@ class MainActivity : ComponentActivity() {
                                 updateTranslationSentence(updated.text)
                                 if (hasManualDefinition) dependentFieldsStale = true
                                 selectTarget(null)
+                                draftState.value = draftState.value.withSentence(updated.text)
                                 japaneseTokens = emptyList()
                                 tokenizationError = null
                                 tokenizationLoading = analyzerReady
@@ -3539,7 +3287,7 @@ class MainActivity : ComponentActivity() {
                             editor = updated
                         }
                         val sendBlockers = buildList {
-                            if (!setupAudioReady()) {
+                            if (!setupReadiness.audioReady) {
                                 add(this@MainActivity.getString(R.string.audio_setup_needed))
                             }
                             if (imagePending) {
@@ -3613,7 +3361,7 @@ class MainActivity : ComponentActivity() {
                         } == true
                         val submitHintActionLabel = when {
                             translationNeedsSettings -> this@MainActivity.getString(R.string.card_open_settings_action)
-                            !setupAudioReady() -> this@MainActivity.getString(R.string.finish_setup)
+                            !setupReadiness.audioReady -> this@MainActivity.getString(R.string.finish_setup)
                             reviewTranslationError != null -> this@MainActivity.getString(R.string.retry)
                             !sentenceAudioReady -> this@MainActivity.getString(audioActionLabel(AudioItem.SENTENCE))
                             !wordAudioReady -> this@MainActivity.getString(audioActionLabel(AudioItem.VOCABULARY))
@@ -3624,7 +3372,7 @@ class MainActivity : ComponentActivity() {
 
                         val submitHintAction: (() -> Unit) = when {
                             translationNeedsSettings -> ({ openSettings() })
-                            !setupAudioReady() -> ({ enterSetup() })
+                            !setupReadiness.audioReady -> ({ enterSetup() })
                             reviewTranslationError != null -> ({
                                 if (committedSentence == editor.text) {
                                     generationStarted = true
