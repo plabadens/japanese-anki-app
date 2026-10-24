@@ -9,7 +9,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.Assert.assertThrows
 import org.junit.runner.RunWith
-import android.content.SharedPreferences
+
 import java.io.File
 import java.nio.file.Files
 
@@ -140,8 +140,8 @@ class SubmissionRecoveryTest {
             sentenceAudio = FrozenAudioItem(MediaIdentity("/draft/sentence.wav", 20L, 21L), "sentence.wav"),
             wordAudio = FrozenAudioItem(MediaIdentity("/draft/word.ogg", 30L, 31L), omitted = true),
         )
-        assertEquals(true, preferences.edit().putFrozenSubmission(snapshot, SubmissionPhase.MEDIA_IMPORTED).commit())
-        val restored = readFrozenSubmission(preferences)
+        preferences.update(PreferenceChanges().putFrozenSubmission(snapshot, SubmissionPhase.MEDIA_IMPORTED))
+        val restored = readFrozenSubmission(preferences.values)
         assertEquals(snapshot.sentenceAudio, restored?.sentenceAudio)
         assertEquals(snapshot.wordAudio, restored?.wordAudio)
         assertEquals(snapshot.media, restored?.media)
@@ -160,7 +160,7 @@ class SubmissionRecoveryTest {
             sentenceAudio = FrozenAudioItem(null, "sentence.wav"),
         )
         assertThrows(IllegalArgumentException::class.java) {
-            preferences.edit().putFrozenSubmission(snapshot, SubmissionPhase.MEDIA_IMPORTED)
+            PreferenceChanges().putFrozenSubmission(snapshot, SubmissionPhase.MEDIA_IMPORTED)
         }
     }
 
@@ -174,12 +174,12 @@ class SubmissionRecoveryTest {
             notes = "", tags = emptySet(), pitchAccentText = "", targetStart = 0, targetEnd = 3,
             media = null, importedFilename = null, noteId = null,
         )
-        preferences.edit().putFrozenSubmission(snapshot, SubmissionPhase.MEDIA_IMPORTED)
+        preferences.update(PreferenceChanges().putFrozenSubmission(snapshot, SubmissionPhase.MEDIA_IMPORTED)
             .putString(SubmissionRecoveryKeys.SENTENCE_AUDIO_IMPORTED_FILENAME, "sentence.wav")
             .putString(SubmissionRecoveryKeys.SENTENCE_AUDIO_PATH, "/tmp/source.wav")
             .putLong(SubmissionRecoveryKeys.SENTENCE_AUDIO_SIZE, -1L)
-            .putLong(SubmissionRecoveryKeys.SENTENCE_AUDIO_MODIFIED, 1L).commit()
-        val receipt = readFrozenSubmission(preferences)!!.sentenceAudio
+            .putLong(SubmissionRecoveryKeys.SENTENCE_AUDIO_MODIFIED, 1L))
+        val receipt = readFrozenSubmission(preferences.values)!!.sentenceAudio
         assertEquals(AudioReceiptValidation.INVALID_RECEIPT, validateAudioReceipt(receipt, File("/tmp/source.wav")))
     }
 
@@ -209,8 +209,8 @@ class SubmissionRecoveryTest {
             notes = "", tags = emptySet(), pitchAccentText = "", targetStart = 0, targetEnd = 3,
             media = MediaIdentity("/tmp/image.webp", 10L, 11L), importedFilename = "image.webp", noteId = null,
         )
-        preferences.edit().putFrozenSubmission(legacy, SubmissionPhase.MEDIA_IMPORTED).commit()
-        val restored = readFrozenSubmission(preferences)!!
+        preferences.update(PreferenceChanges().putFrozenSubmission(legacy, SubmissionPhase.MEDIA_IMPORTED))
+        val restored = readFrozenSubmission(preferences.values)!!
         assertEquals(legacy.media, restored.media)
         assertEquals("image.webp", restored.importedFilename)
         assertEquals(FrozenAudioItem(null), restored.sentenceAudio)
@@ -262,20 +262,19 @@ class SubmissionRecoveryTest {
         val preferences = MemoryPreferences()
         val keys = ImportedReceiptKeys("image_path", "image_filename", "image_size", "image_modified")
         val identity = MediaIdentity("/tmp/draft/image-2.webp", 512L, 99L)
-        assertNull(importedReceiptFromPreferences(preferences, keys, identity, AnkiMediaImporter::sanitizeFilename))
-        preferences.edit()
+        assertNull(importedReceiptFromPreferences(preferences.values, keys, identity, AnkiMediaImporter::sanitizeFilename))
+        preferences.update(PreferenceChanges()
             .putString(keys.path, identity.path)
             .putString(keys.filename, "image-2.webp")
             .putLong(keys.size, identity.size)
-            .putLong(keys.modified, identity.modified)
-            .commit()
+            .putLong(keys.modified, identity.modified))
         assertEquals(
             "image-2.webp",
-            importedReceiptFromPreferences(preferences, keys, identity, AnkiMediaImporter::sanitizeFilename),
+            importedReceiptFromPreferences(preferences.values, keys, identity, AnkiMediaImporter::sanitizeFilename),
         )
         // The audio slot's prefix is a different receipt entirely.
         val audioKeys = ImportedReceiptKeys("audio_path", "audio_filename", "audio_size", "audio_modified")
-        assertNull(importedReceiptFromPreferences(preferences, audioKeys, identity, AnkiMediaImporter::sanitizeFilename))
+        assertNull(importedReceiptFromPreferences(preferences.values, audioKeys, identity, AnkiMediaImporter::sanitizeFilename))
     }
 
     @Test
@@ -283,19 +282,18 @@ class SubmissionRecoveryTest {
         val preferences = MemoryPreferences()
         val keys = ImportedReceiptKeys("image_path", "image_filename", "image_size", "image_modified")
         val missing = MediaIdentity("/nonexistent-receipt/image-3.webp", 55L, 66L)
-        preferences.edit()
+        preferences.update(PreferenceChanges()
             .putString(keys.path, missing.path)
             .putString(keys.filename, "image-3.webp")
             .putLong(keys.size, missing.size)
-            .putLong(keys.modified, missing.modified)
-            .commit()
+            .putLong(keys.modified, missing.modified))
         // The identity is the caller's: nothing stats the nonexistent path.
         assertEquals(
             "image-3.webp",
-            importedReceiptFromPreferences(preferences, keys, missing, AnkiMediaImporter::sanitizeFilename),
+            importedReceiptFromPreferences(preferences.values, keys, missing, AnkiMediaImporter::sanitizeFilename),
         )
         // Without an identity there is no hidden fallback stat; the receipt simply does not match.
-        assertNull(importedReceiptFromPreferences(preferences, keys, null, AnkiMediaImporter::sanitizeFilename))
+        assertNull(importedReceiptFromPreferences(preferences.values, keys, null, AnkiMediaImporter::sanitizeFilename))
     }
 
     @Test
@@ -359,40 +357,11 @@ class SubmissionRecoveryTest {
         }
     }
 
-    private class MemoryPreferences : SharedPreferences {
-        private val values = mutableMapOf<String, Any>()
-        override fun getAll(): MutableMap<String, *> = values.toMutableMap()
-        override fun getString(key: String, defValue: String?): String? = values[key] as? String ?: defValue
-        @Suppress("UNCHECKED_CAST")
-        override fun getStringSet(key: String, defValues: MutableSet<String>?): MutableSet<String>? =
-            (values[key] as? Set<String>)?.toMutableSet() ?: defValues
-        override fun getInt(key: String, defValue: Int): Int = values[key] as? Int ?: defValue
-        override fun getLong(key: String, defValue: Long): Long = values[key] as? Long ?: defValue
-        override fun getFloat(key: String, defValue: Float): Float = values[key] as? Float ?: defValue
-        override fun getBoolean(key: String, defValue: Boolean): Boolean = values[key] as? Boolean ?: defValue
-        override fun contains(key: String): Boolean = key in values
-        override fun edit(): SharedPreferences.Editor = MemoryEditor()
-        override fun registerOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener?) = Unit
-        override fun unregisterOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener?) = Unit
-
-        private inner class MemoryEditor : SharedPreferences.Editor {
-            private val changes = mutableMapOf<String, Any?>()
-            private var clear = false
-            override fun putString(key: String, value: String?): SharedPreferences.Editor = set(key, value)
-            override fun putStringSet(key: String, values: MutableSet<String>?): SharedPreferences.Editor = set(key, values?.toSet())
-            override fun putInt(key: String, value: Int): SharedPreferences.Editor = set(key, value)
-            override fun putLong(key: String, value: Long): SharedPreferences.Editor = set(key, value)
-            override fun putFloat(key: String, value: Float): SharedPreferences.Editor = set(key, value)
-            override fun putBoolean(key: String, value: Boolean): SharedPreferences.Editor = set(key, value)
-            override fun remove(key: String): SharedPreferences.Editor = set(key, null)
-            override fun clear(): SharedPreferences.Editor { clear = true; return this }
-            override fun commit(): Boolean {
-                if (clear) values.clear()
-                changes.forEach { (key, value) -> if (value == null) values.remove(key) else values[key] = value }
-                return true
-            }
-            override fun apply() { commit() }
-            private fun set(key: String, value: Any?): SharedPreferences.Editor { changes[key] = value; return this }
+    private class MemoryPreferences {
+        var values = PreferenceValues()
+            private set
+        fun update(changes: PreferenceChanges) {
+            values = values.changed(changes)
         }
     }
 
