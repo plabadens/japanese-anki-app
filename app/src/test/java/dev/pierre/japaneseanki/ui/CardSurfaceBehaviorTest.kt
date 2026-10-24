@@ -44,6 +44,7 @@ import dev.pierre.japaneseanki.R
 import dev.pierre.japaneseanki.TargetSpan
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -181,11 +182,18 @@ class CardSurfaceBehaviorTest {
         statusMessage.value = audioFailure
         composeRule.waitForIdle()
         val hintNodes = composeRule.onAllNodesWithText(failureHint).fetchSemanticsNodes()
-        assertEquals("The footer owns one hint line", 1, hintNodes.size)
+        assertEquals("The card carries one instruction at a time", 1, hintNodes.size)
         val hintLayouts = mutableListOf<TextLayoutResult>()
         val hintLayoutAction = hintNodes.single().config[SemanticsActions.GetTextLayoutResult]
-        assertTrue("Could not inspect the footer hint layout", hintLayoutAction.action?.invoke(hintLayouts) == true)
-        assertEquals("The footer hint must remain a single line", 1, hintLayouts.single().lineCount)
+        assertTrue("Could not inspect the card instruction layout", hintLayoutAction.action?.invoke(hintLayouts) == true)
+        assertFalse(
+            "The card instruction must wrap inside the scroll content instead of clipping",
+            hintLayouts.single().hasVisualOverflow,
+        )
+        assertTrue(
+            "The instruction belongs above the action, at the end of the scrolled card",
+            hintNodes.single().boundsInRoot.bottom <= actionBounds.top,
+        )
         composeRule.onNodeWithContentDescription(retrySentenceAudio).assertIsEnabled().assertIsDisplayed().performClick()
         composeRule.onNodeWithText(failureHint).assertIsDisplayed()
         composeRule.onNodeWithText(audioFailure).assertExists()

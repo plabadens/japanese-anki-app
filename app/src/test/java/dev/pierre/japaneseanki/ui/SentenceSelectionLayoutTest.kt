@@ -99,6 +99,35 @@ class SentenceSelectionLayoutTest {
     }
 
     @Test
+    fun aPressThatRepaintsTheWordBeforeReleaseStillSelectsIt() {
+        // A real finger stays down across several frames while the pressed highlight repaints the
+        // word. The tap must survive that recomposition; keyed gestures used to cancel themselves.
+        val scene = mutableStateOf(regularScene())
+        val events = mutableListOf<TouchFeedbackEvent>()
+        val dispatcher = TouchFeedbackDispatcher { event -> events += event }
+        composeRule.setContent {
+            val current = scene.value
+            CompositionLocalProvider(
+                LocalMotionEnabled provides false,
+                LocalTouchFeedbackDispatcher provides dispatcher,
+            ) {
+                MaterialTheme(colorScheme = lightColorScheme()) {
+                    sentencePane(current) { span -> scene.value = scene.value.copy(selected = span) }
+                }
+            }
+        }
+
+        val word = composeRule.onNodeWithTag("sentence-word-text-4-5", useUnmergedTree = true)
+        word.performTouchInput { down(center) }
+        composeRule.waitForIdle()
+        word.performTouchInput { up() }
+        composeRule.waitForIdle()
+
+        assertEquals("A finger-down must survive the press highlight", TargetSpan(4, 5), scene.value.selected)
+        assertEquals(listOf(TouchFeedbackEvent.WORD_SELECTION), events)
+    }
+
+    @Test
     fun reducedMotionProgressRemainsStaticAccessibleAndSilent() {
         val events = mutableListOf<TouchFeedbackEvent>()
         val dispatcher = TouchFeedbackDispatcher { event -> events += event }

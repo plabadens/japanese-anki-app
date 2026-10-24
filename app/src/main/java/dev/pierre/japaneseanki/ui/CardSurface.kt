@@ -44,10 +44,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -77,7 +77,6 @@ import androidx.compose.ui.semantics.traversalIndex
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -93,7 +92,6 @@ import dev.pierre.japaneseanki.R
 import dev.pierre.japaneseanki.TargetSpan
 import java.io.File
 import kotlin.math.max
-import kotlinx.coroutines.delay
 
 internal data class ResourceCopy(@StringRes val resourceId: Int, val formatArgs: List<Any> = emptyList()) {
     fun resolve(context: Context): String = context.getString(resourceId, *formatArgs.toTypedArray())
@@ -247,18 +245,8 @@ internal fun CardScreen(
     var photoExpanded by remember { mutableStateOf(false) }
     var editingNotes by remember { mutableStateOf(false) }
     var editingTags by remember { mutableStateOf(false) }
-    var audioHintLoading by remember { mutableStateOf(false) }
-    LaunchedEffect(selectedSpan, wordAudio, hintPreparing) {
-        audioHintLoading = false
-        if (hintPreparing || (selectedSpan != null && wordAudio == ReviewAudioPresentation.Generating)) {
-            delay(200)
-            audioHintLoading = true
-        }
-    }
     val fontScale = LocalConfiguration.current.fontScale
-    val density = LocalDensity.current
     val motionEnabled = LocalMotionEnabled.current
-    val hintHeight = with(density) { MaterialTheme.typography.bodySmall.lineHeight.toDp().coerceAtLeast(24.dp) }
 
     BoxWithConstraints(modifier) {
         val bandHeight = cardPhotoBandHeight(maxWidth, maxHeight, fontScale)
@@ -440,15 +428,14 @@ internal fun CardScreen(
                         )
                         statusContent()
                     }
+                    CardInstruction(
+                        hint = hint,
+                        loading = hintPreparing || wordAudio == ReviewAudioPresentation.Generating,
+                    )
                 }
             }
 
             CardFooter(
-                hint = if (
-                    (wordAudio == ReviewAudioPresentation.Generating || hintPreparing) && !audioHintLoading
-                ) null else hint,
-                hintLoading = audioHintLoading,
-                hintHeight = hintHeight,
                 actionLabel = actionLabel,
                 actionEnabled = actionEnabled,
                 actionLoading = actionLoading,
@@ -518,10 +505,16 @@ internal fun SelectableSentence(
                 append(pill.suffix)
             }
             val layoutResult = remember(token.span, display.text) { mutableStateOf<TextLayoutResult?>(null) }
+            // A real press repaints the word, which re-lays out the text and recomposes this item.
+            // Reading the selection state at gesture time (instead of capturing it in the gesture
+            // keys) keeps a finger-down from cancelling its own tap half way through.
+            val currentSelectionEnabled by rememberUpdatedState(selectionEnabled)
+            val currentSelectedSpan by rememberUpdatedState(selectedSpan)
+            val currentOnSelectSpan by rememberUpdatedState(onSelectSpan)
             val selectSpanIfChanged = {
-                if (selectionEnabled && token.span != selectedSpan) {
+                if (currentSelectionEnabled && token.span != currentSelectedSpan) {
                     feedback.dispatch(TouchFeedbackEvent.WORD_SELECTION)
-                    onSelectSpan(token.span)
+                    currentOnSelectSpan(token.span)
                 }
             }
             Column(
@@ -562,7 +555,7 @@ internal fun SelectableSentence(
                     modifier = Modifier
                         .heightIn(min = 48.dp)
                         .testTag("sentence-word-text-${token.span.start}-${token.span.end}")
-                        .pointerInput(selectionEnabled, baseStart, baseEnd, layoutResult.value) {
+                        .pointerInput(selectionEnabled, baseStart, baseEnd) {
                             if (selectionEnabled) {
                                 detectTapGestures(
                                     onPress = { position ->
@@ -752,47 +745,49 @@ private fun AudioControlGlyph(playing: Boolean, color: Color, modifier: Modifier
     }
 }
 
+/**
+ * The next-step instruction is content, not chrome: it closes the scrolled card so the reader
+ * reaches it while reading, and the footer keeps only the primary action.
+ */
+@Composable
+private fun CardInstruction(hint: String?, loading: Boolean) {
+    if (hint.isNullOrBlank() && !loading) return
+    val progressLabel = hint?.takeIf(String::isNotBlank) ?: stringResource(R.string.card_hint_preparing)
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 12.dp).testTag("card-instruction"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (loading) {
+            MotionAwareProgressIndicator(
+                modifier = Modifier.size(16.dp),
+                color = MaterialTheme.colorScheme.primary,
+                diameter = 16.dp,
+                strokeWidth = 2.dp,
+                stateDescription = progressLabel,
+            )
+        }
+        Text(
+            hint.orEmpty(),
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun CardFooter(
-    hint: String?,
-    hintLoading: Boolean,
-    hintHeight: Dp,
     actionLabel: String,
     actionEnabled: Boolean,
     actionLoading: Boolean,
     onAction: () -> Unit,
 ) {
-    val progressLabel = hint?.takeIf(String::isNotBlank) ?: stringResource(R.string.card_hint_preparing)
     Column(
         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)
             .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
-        Row(
-            Modifier.fillMaxWidth().height(hintHeight),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            if (hintLoading) {
-                MotionAwareProgressIndicator(
-                    modifier = Modifier.size(16.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    diameter = 16.dp,
-                    strokeWidth = 2.dp,
-                    stateDescription = progressLabel,
-                )
-            }
-            Text(
-                hint.orEmpty(),
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        Spacer(Modifier.height(8.dp))
         FlowPrimaryButton(
             text = actionLabel,
             onClick = onAction,

@@ -2938,18 +2938,14 @@ class MainActivity : ComponentActivity() {
                 setupLoadedSuccessfully && !setupLoading && setupError == null && !recoveryRequired &&
                 !isSubmitting && !duplicateBlocked
 
-            fun updateCard() {
-                if (!cardNeedsUpdate || submissionLocked || committedSentence != editor.text) return
-                val attempts = buildList {
-                    if (!sentenceAudioReady) audioController.confirm(AudioItem.SENTENCE)?.let(::add)
-                    if (!wordAudioReady) audioController.confirm(AudioItem.VOCABULARY)?.let(::add)
-                }
-                attempts.forEach(::runAudioAttempt)
-                audioSnapshot = audioController.snapshot()
-                if (attempts.isEmpty() && cardPreparationReady) {
-                    cardInvalidated = false
-                    preferences.edit().putBoolean("card_invalidated", false).apply()
-                }
+            // The card has one action: Send. Preparation is automatic, so an invalidated card only
+            // greys Send out until every prepared artifact matches the committed sentence again.
+            androidx.compose.runtime.LaunchedEffect(
+                cardInvalidated, cardPreparationReady, committedSentence, editor.text,
+            ) {
+                if (!cardInvalidated || !cardPreparationReady || committedSentence != editor.text) return@LaunchedEffect
+                cardInvalidated = false
+                preferences.edit().putBoolean("card_invalidated", false).apply()
             }
 
             val applyFrozenSubmissionToDraft: (FrozenSubmission) -> Unit = { snapshot ->
@@ -3654,7 +3650,6 @@ class MainActivity : ComponentActivity() {
                                 )
                                 val cardAnalyzerError = tokenizationError
                                 val cardAnalyzing = tokenizationLoading
-                                val cardUpdating = reviewTarget != null && cardNeedsUpdate
                                 val sendBlockedStatus = submitMessage?.startsWith(blockedStatusPrefix) == true
                                 val recoveryActionLabel = submitHintActionLabel.takeIf {
                                     submitHint != null && it != this@MainActivity.getString(R.string.card_edit_preparation)
@@ -3669,7 +3664,6 @@ class MainActivity : ComponentActivity() {
                                     cardAnalyzerError != null -> cardAnalyzerError
                                     cardAnalyzing -> stringResource(R.string.card_analyzing_the_sentence)
                                     target == null -> stringResource(R.string.card_hint_word)
-                                    cardUpdating -> null
                                     completedSubmission != null -> cardStatus
                                     duplicateBlocked -> cardStatus
                                     recoveryRequired -> cardStatus
@@ -3689,7 +3683,6 @@ class MainActivity : ComponentActivity() {
                                 val cardActionLabel = when {
                                     cardNoWordAction -> stringResource(R.string.send)
                                     cardAnalyzerError != null -> stringResource(R.string.retry)
-                                    cardUpdating -> stringResource(R.string.update_card)
                                     recoveryRequired || duplicateBlocked || completedSubmission != null || isSubmitting ->
                                         stringResource(R.string.send)
                                     submitMessage != null && !sendBlockedStatus -> stringResource(R.string.card_retry_send)
@@ -3700,7 +3693,6 @@ class MainActivity : ComponentActivity() {
                                     cardNoWordAction -> false
                                     isSubmitting || cardAnalyzing || completedSubmission != null || duplicateBlocked || recoveryRequired -> false
                                     cardAnalyzerError != null -> !submissionLocked
-                                    cardUpdating -> !submissionLocked && committedSentence == editor.text
                                     submitMessage != null && !sendBlockedStatus -> canSend
                                     recoveryActionLabel != null -> !submissionLocked
                                     else -> canSend && reviewTarget != null
@@ -3708,7 +3700,6 @@ class MainActivity : ComponentActivity() {
                                 val cardAction: () -> Unit = when {
                                     cardNoWordAction -> ({})
                                     cardAnalyzerError != null -> ({ analysisRetry++ })
-                                    cardUpdating -> ({ updateCard() })
                                     submitMessage != null && !sendBlockedStatus -> ({ submitAction() })
                                     recoveryActionLabel != null -> submitHintAction
                                     else -> submitAction

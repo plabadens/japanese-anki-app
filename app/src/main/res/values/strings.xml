@@ -117,7 +117,6 @@
     <string name="card_word_not_selected_state">Not selected</string>
     <string name="card_hint_word">Tap a word to build this card.</string>
     <string name="card_hint_preparing">Preparing pronunciation…</string>
-    <string name="update_card">Update card</string>
     <string name="torch">Torch</string>
 
     <string name="camera_denied">Camera access is off.</string>
