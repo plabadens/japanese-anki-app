@@ -462,7 +462,6 @@ internal fun SelectableSentence(
     val unselectedLabel = stringResource(R.string.card_word_not_selected_state)
     val feedback = rememberChangeFeedback(
         event = TouchFeedbackEvent.WORD_SELECTION,
-        key = selectedSpan,
         enabled = selectionEnabled,
     )
     val motion = rememberFlowMotion()
@@ -509,10 +508,11 @@ internal fun SelectableSentence(
             val layoutResult = remember(token.span, display.text) { mutableStateOf<TextLayoutResult?>(null) }
             // Read the latest enabled state at gesture time so a press highlight cannot cancel its tap.
             val currentSelectionEnabled by rememberUpdatedState(selectionEnabled)
+            val currentSelectedSpan by rememberUpdatedState(selectedSpan)
             val currentOnSelectSpan by rememberUpdatedState(onSelectSpan)
             val selectSpan = {
-                if (currentSelectionEnabled) {
-                    feedback()
+                if (currentSelectionEnabled && token.span != currentSelectedSpan) {
+                    feedback(token.span)
                     currentOnSelectSpan(token.span)
                 }
             }

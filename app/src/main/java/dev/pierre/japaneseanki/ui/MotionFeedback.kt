@@ -14,15 +14,11 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -75,45 +71,22 @@ internal fun hapticConstantFor(event: TouchFeedbackEvent, sdkInt: Int): Int = wh
 @Composable
 internal fun rememberChangeFeedback(
     event: TouchFeedbackEvent,
-    key: Any?,
     enabled: Boolean = true,
-): () -> Unit {
+): (Any?) -> Unit {
     val dispatcher = LocalTouchFeedbackDispatcher.current
-    val state = remember(event) { ChangeFeedbackState(lastKey = key) }
-    val requestVersion = remember(event) { mutableStateOf(0) }
-    val version = requestVersion.value
-    val scope = rememberCoroutineScope()
-    SideEffect {
-        val pending = state.pending
-        if (pending != null && key != pending.key) {
-            if (enabled) dispatcher.dispatch(event)
-            state.pending = null
-        }
-        state.lastKey = key
-    }
-    return remember(event, dispatcher, scope, version) {
-        {
-            val pending = PendingChange(key = state.lastKey, id = ++state.nextRequestId)
-            state.pending = pending
-            requestVersion.value = pending.id
-            scope.launch {
-                delay(250)
-                if (state.pending?.id == pending.id) {
-                    state.pending = null
-                    requestVersion.value++
-                }
+    val state = remember(event) { ChangeFeedbackState() }
+    return remember(event, dispatcher, enabled, state) {
+        { key ->
+            if (enabled && (!state.hasLastKey || state.lastKey != key)) {
+                state.lastKey = key
+                state.hasLastKey = true
+                dispatcher.dispatch(event)
             }
         }
     }
 }
 
-private data class PendingChange(val key: Any?, val id: Int)
-
-private class ChangeFeedbackState(
-    var lastKey: Any?,
-    var pending: PendingChange? = null,
-    var nextRequestId: Int = 0,
-)
+private class ChangeFeedbackState(var lastKey: Any? = null, var hasLastKey: Boolean = false)
 
 @Immutable
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)

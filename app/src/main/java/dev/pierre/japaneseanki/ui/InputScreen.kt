@@ -123,7 +123,6 @@ internal fun InputScreen(
     val actionsEnabled = captureActionsEnabled(enabled, captureInProgress || captureOperationGate.isActive)
     val modeSelectionFeedback = rememberChangeFeedback(
         event = TouchFeedbackEvent.MODE_SELECTION,
-        key = captureMode,
         enabled = actionsEnabled && !captureOperationGate.isActive,
     )
     val context = LocalContext.current
@@ -282,7 +281,7 @@ private fun CaptureTopBar(
     captureMode: String,
     enabled: Boolean,
     onCaptureModeChange: (String) -> Unit,
-    onModeSelectionFeedback: () -> Unit,
+    onModeSelectionFeedback: (String) -> Unit,
     onSettings: () -> Unit,
 ) {
     Box(
@@ -309,7 +308,7 @@ private fun CaptureTopBar(
                 shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(),
                 modifier = Modifier.weight(1f),
                 onClick = {
-                    onModeSelectionFeedback()
+                    onModeSelectionFeedback("Photo")
                     onCaptureModeChange("Photo")
                 },
             )
@@ -323,7 +322,7 @@ private fun CaptureTopBar(
                 shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
                 modifier = Modifier.weight(1f),
                 onClick = {
-                    onModeSelectionFeedback()
+                    onModeSelectionFeedback("Type")
                     onCaptureModeChange("Type")
                 },
             )

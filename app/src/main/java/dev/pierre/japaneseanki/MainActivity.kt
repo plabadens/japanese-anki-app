@@ -3832,7 +3832,6 @@ class MainActivity : ComponentActivity() {
                 val meaningChoices = DictionaryMeaningChoices.from(dictionaryEntries)
                 val meaningSelectionFeedback = rememberChangeFeedback(
                     event = TouchFeedbackEvent.MEANING_SELECTION,
-                    key = listOf(selectedDictionaryEntryId, vocabulary, vocabularyReading, selectedSenseIndices),
                     enabled = !sendState.locked,
                 )
                 if (showDictionarySheet && target?.textIn(editor.text) != null && meaningChoices.size > 1) {
@@ -3841,7 +3840,20 @@ class MainActivity : ComponentActivity() {
                         enabled = !sendState.locked,
                         onDismissRequest = { dismissDictionarySheet() },
                         onSelect = { choice ->
-                            meaningSelectionFeedback()
+                            val meaningChanged = selectedDictionaryEntryId != choice.entry.id ||
+                                vocabulary != choice.entry.expression ||
+                                vocabularyReading != choice.entry.reading ||
+                                selectedSenseIndices != setOf(choice.senseIndex)
+                            if (meaningChanged) {
+                                meaningSelectionFeedback(
+                                    listOf(
+                                        choice.entry.id,
+                                        choice.entry.expression,
+                                        choice.entry.reading,
+                                        choice.senseIndex,
+                                    ),
+                                )
+                            }
                             commitDictionaryChoice(choice)
                         },
                     )
