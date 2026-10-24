@@ -1,6 +1,6 @@
 package dev.pierre.japaneseanki.send
 
-import android.content.SharedPreferences
+
 import dev.pierre.japaneseanki.AnkiCardLocation
 import dev.pierre.japaneseanki.AnkiDeck
 import dev.pierre.japaneseanki.AnkiFieldContract
@@ -50,10 +50,14 @@ import dev.pierre.japaneseanki.nextSubmissionRevision
 import dev.pierre.japaneseanki.putFrozenSubmission
 import dev.pierre.japaneseanki.putMediaReceipt
 import dev.pierre.japaneseanki.readFrozenSubmission
+import dev.pierre.japaneseanki.AppPreferenceStorage
+import dev.pierre.japaneseanki.PreferenceChanges
+import dev.pierre.japaneseanki.PreferenceFile
 import dev.pierre.japaneseanki.receiptIdentity
 import dev.pierre.japaneseanki.ui.CardAction
 import dev.pierre.japaneseanki.ui.SendPhase
 import dev.pierre.japaneseanki.ui.SendState
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -75,16 +79,6 @@ internal interface FrozenSubmissionStore {
     fun clearDraft()
 }
 
-internal class SharedPreferencesFrozenSubmissionStore(
-    private val preferences: SharedPreferences,
-    private val settings: SharedPreferences,
-    private val draftDirectory: File,
-) : FrozenSubmissionStore {
-    override fun persistLastSentTags(tags: Set<String>): Boolean =
-        settings.edit().putString("last_note_tags", tags.joinToString(" ")).commit()
-
-    override fun clearDraft() = clearPersistedDraft(preferences, draftDirectory)
-}
 
 internal data class SendRequest(
     val draft: ManualNoteDraft,
@@ -131,19 +125,22 @@ internal sealed interface SendOutcome {
  */
 internal class SendCoordinator(
     private val gateway: AnkiNoteSink,
-    private val preferences: SharedPreferences,
+    private val storage: AppPreferenceStorage,
     private val audio: DraftAudioController,
     private val repository: FrozenSubmissionStore,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
+    private val preferences get() = storage.draft.value
+
     suspend fun submit(request: SendRequest, onState: (SendState) -> Unit): SendOutcome {
-        val result = withContext(Dispatchers.IO) { submitBlocking(request) }
+        val result = withContext(ioDispatcher) { submitBlocking(request) }
         result.frozen?.let { snapshot ->
             onState(SendState(phase = SendPhase.Submitting, frozen = snapshot))
         }
         return result.outcome
     }
 
-    suspend fun recover(state: SendState): SendOutcome = withContext(Dispatchers.IO) {
+    suspend fun recover(state: SendState): SendOutcome = withContext(ioDispatcher) {
         recoverBlocking(state)
     }
 
@@ -186,9 +183,12 @@ internal class SendCoordinator(
             }
             val duplicateId = gateway.hasDuplicate(request.model, request.deck, fields)
             if (duplicateId != null) {
-                preferences.edit().putString(SubmissionRecoveryKeys.STATUS, "blocked").commit()
+                storage.persistBlocking(
+                    PreferenceFile.DRAFT,
+                    PreferenceChanges().putString(SubmissionRecoveryKeys.STATUS, "blocked"),
+                )
                 audio.releaseFreeze(retainFiles = false)
-                if (restored != null) clearFrozenSubmission(preferences)
+                if (restored != null) storage.persistBlocking(PreferenceFile.DRAFT, clearFrozenSubmission())
                 return SubmissionRun(SendOutcome.Duplicate(duplicateId), frozen)
             }
 
@@ -212,10 +212,11 @@ internal class SendCoordinator(
                     ),
                 ) { "Frozen image receipt is unavailable." }
             } else {
-                check(preferences.edit()
+                check(storage.persistBlocking(PreferenceFile.DRAFT, PreferenceChanges()
                     .putLong(SubmissionRecoveryKeys.REVISION_SEQUENCE, startingSnapshot.revision)
-                    .putFrozenSubmission(startingSnapshot, SubmissionPhase.MEDIA_IMPORTING)
-                    .commit()) { "Could not save frozen submission for recovery." }
+                    .putFrozenSubmission(startingSnapshot, SubmissionPhase.MEDIA_IMPORTING))) {
+                    "Could not save frozen submission for recovery."
+                }
             }
 
             var snapshot = startingSnapshot
@@ -226,14 +227,14 @@ internal class SendCoordinator(
                     return false
                 }
                 val saved = runCatching {
-                    preferences.edit()
+                    storage.persistBlocking(PreferenceFile.DRAFT, PreferenceChanges()
                         .putFrozenSubmission(updated, SubmissionPhase.MEDIA_IMPORTED)
-                        .apply { putMediaReceipt(this, receipt) }
+                        .apply { putMediaReceipt(receipt) }
                         .remove(SubmissionRecoveryKeys.MEDIA_OPERATION)
                         .remove(SubmissionRecoveryKeys.MEDIA_SOURCE_PATH)
                         .remove(SubmissionRecoveryKeys.MEDIA_SOURCE_SIZE)
                         .remove(SubmissionRecoveryKeys.MEDIA_SOURCE_MODIFIED)
-                        .commit()
+                    )
                 }.getOrDefault(false)
                 if (saved) snapshot = updated
                 return saved
@@ -270,13 +271,13 @@ internal class SendCoordinator(
                     )
                 },
                 markImporting = { operation, source ->
-                    preferences.edit()
+                    storage.persistBlocking(PreferenceFile.DRAFT, PreferenceChanges()
                         .putFrozenSubmission(snapshot, SubmissionPhase.MEDIA_IMPORTING)
                         .putString(SubmissionRecoveryKeys.MEDIA_OPERATION, operation.name)
                         .putString(SubmissionRecoveryKeys.MEDIA_SOURCE_PATH, source.path)
                         .putLong(SubmissionRecoveryKeys.MEDIA_SOURCE_SIZE, source.size)
                         .putLong(SubmissionRecoveryKeys.MEDIA_SOURCE_MODIFIED, source.modified)
-                        .commit()
+                    )
                 },
                 import = { operation, identity ->
                     val file = File(identity.path)
@@ -295,27 +296,30 @@ internal class SendCoordinator(
             }
             frozen = snapshot
             durableSnapshot = snapshot
-            check(preferences.edit()
+            check(storage.persistBlocking(PreferenceFile.DRAFT, PreferenceChanges()
                 .putFrozenSubmission(snapshot, SubmissionPhase.MEDIA_IMPORTED)
                 .remove(SubmissionRecoveryKeys.MEDIA_OPERATION)
                 .remove(SubmissionRecoveryKeys.MEDIA_SOURCE_PATH)
                 .remove(SubmissionRecoveryKeys.MEDIA_SOURCE_SIZE)
                 .remove(SubmissionRecoveryKeys.MEDIA_SOURCE_MODIFIED)
-                .commit()) { "Could not save completed media recovery state." }
+            )) { "Could not save completed media recovery state." }
 
             val frozenFields = snapshot.modelFields.zip(snapshot.orderedFields).toMap()
             val frozenMapping = AnkiFieldContract.mapToModelOrder(request.model.fields, frozenFields)
             check(frozenMapping.isValid) { frozenMapping.errors.joinToString() }
-            check(preferences.edit().putFrozenSubmission(snapshot, SubmissionPhase.NOTE_INSERTING).commit()) {
+            check(storage.persistBlocking(
+                PreferenceFile.DRAFT,
+                PreferenceChanges().putFrozenSubmission(snapshot, SubmissionPhase.NOTE_INSERTING),
+            )) {
                 "Could not save frozen submission before note insertion."
             }
             // No insert retry is safe after this point until recovery reconciles NOTE_INSERTING.
             val insertedNoteId = gateway.insertNote(request.model, frozenMapping.values, tagSet)
             val insertedSnapshot = snapshot.copy(noteId = insertedNoteId)
-            check(preferences.edit().putFrozenSubmission(
-                insertedSnapshot,
-                SubmissionPhase.NOTE_INSERTED,
-            ).commit()) { "Could not save the inserted note ID." }
+            check(storage.persistBlocking(
+                PreferenceFile.DRAFT,
+                PreferenceChanges().putFrozenSubmission(insertedSnapshot, SubmissionPhase.NOTE_INSERTED),
+            )) { "Could not save the inserted note ID." }
             frozen = insertedSnapshot
             durableSnapshot = insertedSnapshot
 
@@ -323,12 +327,15 @@ internal class SendCoordinator(
                 audio.releaseFreeze(retainFiles = true)
                 return SubmissionRun(SendOutcome.DestinationUnverified(insertedNoteId), insertedSnapshot)
             }
-            check(preferences.edit().putFrozenSubmission(
-                insertedSnapshot,
-                SubmissionPhase.DESTINATION_VERIFIED,
-            ).commit()) { "Could not save the verified destination." }
+            check(storage.persistBlocking(
+                PreferenceFile.DRAFT,
+                PreferenceChanges().putFrozenSubmission(insertedSnapshot, SubmissionPhase.DESTINATION_VERIFIED),
+            )) { "Could not save the verified destination." }
             check(repository.persistLastSentTags(insertedSnapshot.tags)) { "Could not save tags from the verified note." }
-            check(preferences.edit().putString(SubmissionRecoveryKeys.STATUS, "done").commit())
+            check(storage.persistBlocking(
+                PreferenceFile.DRAFT,
+                PreferenceChanges().putString(SubmissionRecoveryKeys.STATUS, "done"),
+            ))
             repository.clearDraft()
             audio.releaseFreeze(retainFiles = false)
             return SubmissionRun(SendOutcome.Created(insertedNoteId), insertedSnapshot)
@@ -338,7 +345,7 @@ internal class SendCoordinator(
             throw cancelled
         } catch (error: AnkiProviderDefiniteInsertException) {
             audio.releaseFreeze(retainFiles = false)
-            clearFrozenSubmission(preferences)
+            storage.persistBlocking(PreferenceFile.DRAFT, clearFrozenSubmission())
             return SubmissionRun(SendOutcome.InsertFailed(error.message.orEmpty()), frozen)
         } catch (error: MediaImportException) {
             audio.releaseFreeze(retainFiles = true)
@@ -475,12 +482,18 @@ internal class SendCoordinator(
                     ?: return SendOutcome.Indeterminate(phase, "Saved note ID is missing.", IndeterminateReason.MISSING_NOTE_ID)
                 when (noteInsertedRecoveryDecision(noteId, gateway.noteCards(noteId), snapshot.deckId)) {
                     NoteInsertedRecoveryDecision.COMPLETE -> {
-                        check(preferences.edit().putString(
-                            SubmissionRecoveryKeys.STATUS,
-                            SubmissionPhase.DESTINATION_VERIFIED.persisted,
-                        ).commit())
+                        check(storage.persistBlocking(
+                            PreferenceFile.DRAFT,
+                            PreferenceChanges().putString(
+                                SubmissionRecoveryKeys.STATUS,
+                                SubmissionPhase.DESTINATION_VERIFIED.persisted,
+                            ),
+                        ))
                         check(repository.persistLastSentTags(snapshot.tags))
-                        check(preferences.edit().putString(SubmissionRecoveryKeys.STATUS, "done").commit())
+                        check(storage.persistBlocking(
+                            PreferenceFile.DRAFT,
+                            PreferenceChanges().putString(SubmissionRecoveryKeys.STATUS, "done"),
+                        ))
                         SendOutcome.Created(noteId)
                     }
                     NoteInsertedRecoveryDecision.NEEDS_REVIEW -> SendOutcome.DestinationUnverified(noteId)
@@ -527,62 +540,4 @@ internal fun cardActionClickHandler(
     CardAction.RetrySend -> ({ if (!sendState.locked || frozenRetryReady) onSubmit() })
     CardAction.Recovery -> onRecovery
     CardAction.Submit -> ({ if (!sendState.locked || frozenRetryReady) onSubmit() })
-}
-
-private fun draftAudioPreferenceKeys(): List<String> = buildList {
-    add(dev.pierre.japaneseanki.DraftAudioPreferences.VERSION)
-    add(dev.pierre.japaneseanki.DraftAudioPreferences.EPOCH)
-    for (item in AudioItem.entries) {
-        add(dev.pierre.japaneseanki.DraftAudioPreferences.identity(item))
-        add(dev.pierre.japaneseanki.DraftAudioPreferences.status(item))
-        add(dev.pierre.japaneseanki.DraftAudioPreferences.path(item))
-        add(dev.pierre.japaneseanki.DraftAudioPreferences.format(item))
-        add(dev.pierre.japaneseanki.DraftAudioPreferences.size(item))
-        add(dev.pierre.japaneseanki.DraftAudioPreferences.modified(item))
-        add(dev.pierre.japaneseanki.DraftAudioPreferences.frozenPath(item))
-    }
-}
-
-internal fun clearPersistedDraft(preferences: SharedPreferences, draftDirectory: File? = null) {
-    val ownedDirectory = draftDirectory?.canonicalFile
-    val ownedPaths = listOfNotNull(
-        preferences.getString("photo_source_path", null),
-        preferences.getString("note_image_path", null),
-        preferences.getString("processed_image_path", null),
-        preferences.getString("pending_replacement_image_path", null),
-    )
-    ownedPaths.distinct().forEach { path ->
-        val file = File(path)
-        if (ownedDirectory != null && file.exists() && file.canonicalFile.parentFile == ownedDirectory) file.delete()
-    }
-    val draftKeys = listOf(
-        "sentence", "selection_start", "selection_end", "target_start", "target_end",
-        "vocabulary", "vocabulary_reading", "pitch_accent", "definition", "definition_manual_stale", "sentence_reading",
-        "sentence_reading_corrections",
-        "leave_sentence_target_unannotated", "leave_vocabulary_unannotated", "dependent_fields_stale",
-        "definition_manual", "definition_manual_stale", "translation", "translation_sentence", "translation_source",
-        "translation_manual", "translation_stale", "translation_pending", "translation_error",
-        "translation_suggestion", "translation_suggestion_source", "translation_suggestion_error",
-        "translation_attempted_sentence", "notes", "tags", "submission_status", "pending_model_id", "pending_deck_id",
-        "pending_sentence", "pending_lemma", "dictionary_entry_id", "dictionary_sense_indices",
-        "sentence_furigana_corrections", "photo_source_path", "note_image_path", "processed_image_path",
-        dev.pierre.japaneseanki.IMAGE_RECEIPT_PATH, dev.pierre.japaneseanki.IMAGE_RECEIPT_FILENAME,
-        dev.pierre.japaneseanki.IMAGE_RECEIPT_SIZE, dev.pierre.japaneseanki.IMAGE_RECEIPT_MODIFIED,
-        dev.pierre.japaneseanki.SENTENCE_AUDIO_RECEIPT_PATH, dev.pierre.japaneseanki.SENTENCE_AUDIO_RECEIPT_FILENAME,
-        dev.pierre.japaneseanki.SENTENCE_AUDIO_RECEIPT_SIZE, dev.pierre.japaneseanki.SENTENCE_AUDIO_RECEIPT_MODIFIED,
-        dev.pierre.japaneseanki.WORD_AUDIO_RECEIPT_PATH, dev.pierre.japaneseanki.WORD_AUDIO_RECEIPT_FILENAME,
-        dev.pierre.japaneseanki.WORD_AUDIO_RECEIPT_SIZE, dev.pierre.japaneseanki.WORD_AUDIO_RECEIPT_MODIFIED,
-        SubmissionRecoveryKeys.MEDIA_OPERATION, SubmissionRecoveryKeys.MEDIA_SOURCE_PATH,
-        SubmissionRecoveryKeys.MEDIA_SOURCE_SIZE, SubmissionRecoveryKeys.MEDIA_SOURCE_MODIFIED,
-        "pending_replacement_image_path", "draft_origin",
-        SubmissionRecoveryKeys.REVISION, SubmissionRecoveryKeys.MODEL_FIELDS,
-        SubmissionRecoveryKeys.ORDERED_FIELDS, SubmissionRecoveryKeys.VOCABULARY_READING,
-        SubmissionRecoveryKeys.SENTENCE_READING, SubmissionRecoveryKeys.DEFINITION,
-        SubmissionRecoveryKeys.TRANSLATION, SubmissionRecoveryKeys.NOTES, SubmissionRecoveryKeys.TAGS,
-        SubmissionRecoveryKeys.PITCH, SubmissionRecoveryKeys.TARGET_START, SubmissionRecoveryKeys.TARGET_END,
-        SubmissionRecoveryKeys.MEDIA_PATH, SubmissionRecoveryKeys.MEDIA_SIZE,
-        SubmissionRecoveryKeys.MEDIA_MODIFIED, SubmissionRecoveryKeys.IMPORTED_FILENAME,
-        SubmissionRecoveryKeys.NOTE_ID,
-    ) + draftAudioPreferenceKeys()
-    preferences.edit().also { editor -> draftKeys.forEach(editor::remove) }.commit()
 }

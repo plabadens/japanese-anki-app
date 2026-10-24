@@ -5,7 +5,7 @@ import androidx.compose.ui.res.stringResource
 import android.Manifest
 import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
+
 import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -28,6 +28,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -92,9 +93,7 @@ import dev.pierre.japaneseanki.send.IndeterminateReason
 import dev.pierre.japaneseanki.send.SendCoordinator
 import dev.pierre.japaneseanki.send.SendOutcome
 import dev.pierre.japaneseanki.send.SendRequest
-import dev.pierre.japaneseanki.send.SharedPreferencesFrozenSubmissionStore
 import dev.pierre.japaneseanki.send.cardActionClickHandler
-import dev.pierre.japaneseanki.send.clearPersistedDraft
 import dev.pierre.japaneseanki.send.toUiUpdate
 import dev.pierre.japaneseanki.ui.InputScreen
 import dev.pierre.japaneseanki.ui.SettingsScreen
@@ -177,20 +176,6 @@ internal const val WORD_AUDIO_RECEIPT_FILENAME = "word_audio_receipt_filename"
 internal const val WORD_AUDIO_RECEIPT_SIZE = "word_audio_receipt_size"
 internal const val WORD_AUDIO_RECEIPT_MODIFIED = "word_audio_receipt_modified"
 
-/** SharedPreferences adapter for [DraftAudioController]: commit, never apply. */
-private class SharedPreferencesDraftAudioPersistence(
-    private val preferences: SharedPreferences,
-) : DraftAudioPersistence {
-    override fun read(key: String): String? = preferences.getString(key, null)
-
-    override fun write(changes: Map<String, String?>): Boolean {
-        val editor = preferences.edit()
-        for ((key, value) in changes) {
-            if (value == null) editor.remove(key) else editor.putString(key, value)
-        }
-        return editor.commit()
-    }
-}
 
 internal val IMAGE_RECEIPT_KEYS = ImportedReceiptKeys(
     path = IMAGE_RECEIPT_PATH,
@@ -213,76 +198,6 @@ internal val WORD_AUDIO_RECEIPT_KEYS = ImportedReceiptKeys(
     modified = WORD_AUDIO_RECEIPT_MODIFIED,
 )
 
-/** Persisted receipt identity, read without touching the file system. */
-internal fun receiptIdentity(preferences: SharedPreferences, keys: ImportedReceiptKeys): MediaIdentity? =
-    preferences.getString(keys.path, null)?.let { path ->
-        MediaIdentity(path, preferences.getLong(keys.size, -1L), preferences.getLong(keys.modified, -1L))
-    }
-
-internal fun mediaImportRequest(
-    preferences: SharedPreferences,
-    keys: ImportedReceiptKeys,
-    operation: MediaImportOperation,
-    source: MediaIdentity,
-    frozenFilename: String?,
-): MediaImportRequest {
-    val hasSavedReceipt = listOf(keys.path, keys.filename, keys.size, keys.modified).any(preferences::contains)
-    val savedReceipt = when {
-        hasSavedReceipt -> ImportedMediaReceipt(
-            operation = operation,
-            source = receiptIdentity(preferences, keys) ?: MediaIdentity("", -1L, -1L),
-            filename = preferences.getString(keys.filename, null).orEmpty(),
-        )
-        frozenFilename != null -> ImportedMediaReceipt(operation, source, frozenFilename)
-        else -> null
-    }
-    val receipt = if (frozenFilename != null && savedReceipt != null && savedReceipt.filename != frozenFilename) {
-        savedReceipt.copy(source = MediaIdentity("", -1L, -1L))
-    } else {
-        savedReceipt
-    }
-    return MediaImportRequest(source, receipt)
-}
-
-internal fun applyImportedReceipt(snapshot: FrozenSubmission, receipt: ImportedMediaReceipt): FrozenSubmission {
-    val (fieldName, serialized, updatedSnapshot) = when (receipt.operation) {
-        MediaImportOperation.IMAGE -> Triple(
-            "Image",
-            AnkiFieldSerializer.imageReference(receipt.filename),
-            snapshot.copy(importedFilename = receipt.filename),
-        )
-        MediaImportOperation.SENTENCE_AUDIO -> Triple(
-            "SentAudio",
-            AnkiFieldSerializer.audioReference(receipt.filename),
-            snapshot.copy(sentenceAudio = snapshot.sentenceAudio.copy(importedFilename = receipt.filename)),
-        )
-        MediaImportOperation.WORD_AUDIO -> Triple(
-            "VocabAudio",
-            AnkiFieldSerializer.audioReference(receipt.filename),
-            snapshot.copy(wordAudio = snapshot.wordAudio.copy(importedFilename = receipt.filename)),
-        )
-        MediaImportOperation.AUDIO -> throw IllegalArgumentException("Generic audio is not a Send operation.")
-    }
-    val valuesByName = snapshot.modelFields.zip(snapshot.orderedFields).toMap().toMutableMap()
-    require(fieldName in valuesByName && serialized != null) { "The imported media reference cannot be serialized." }
-    valuesByName[fieldName] = serialized
-    val mapping = AnkiFieldContract.mapToModelOrder(snapshot.modelFields, valuesByName)
-    require(mapping.isValid) { mapping.errors.joinToString() }
-    return updatedSnapshot.copy(orderedFields = mapping.values)
-}
-
-internal fun putMediaReceipt(editor: SharedPreferences.Editor, receipt: ImportedMediaReceipt): SharedPreferences.Editor {
-    val keys = when (receipt.operation) {
-        MediaImportOperation.IMAGE -> IMAGE_RECEIPT_KEYS
-        MediaImportOperation.SENTENCE_AUDIO -> SENTENCE_AUDIO_RECEIPT_KEYS
-        MediaImportOperation.WORD_AUDIO -> WORD_AUDIO_RECEIPT_KEYS
-        MediaImportOperation.AUDIO -> throw IllegalArgumentException("Generic audio is not a Send operation.")
-    }
-    return editor.putString(keys.path, receipt.source.path)
-        .putLong(keys.size, receipt.source.size)
-        .putLong(keys.modified, receipt.source.modified)
-        .putString(keys.filename, receipt.filename)
-}
 
 /** Every preference key the draft-audio controller owns, for a full draft reset. */
 private fun pitchUnavailableMessage(failure: AjtPitchFailure): Int = when (failure) {
@@ -418,12 +333,25 @@ class MainActivity : ComponentActivity() {
         offlineAnalyzer = OfflineJapaneseAnalyzer.shared(this)
         japaneseOcr = JapaneseOcr()
         ajtPitchRepository = AjtPitchRepository.shared(this)
-        val preferences = getSharedPreferences("draft", MODE_PRIVATE)
-        val settings = getSharedPreferences("settings", MODE_PRIVATE)
-        if (preferences.getString(SubmissionRecoveryKeys.STATUS, null) == "done") {
-            clearPersistedDraft(preferences, File(filesDir, "draft"))
-        }
-        setContent {
+        val preferenceStorage = AndroidPreferenceStorage(this)
+        lifecycleScope.launch {
+            preferenceStorage.load()
+            if (preferenceStorage.draft.value.getString(SubmissionRecoveryKeys.STATUS, null) == "done") {
+                withContext(Dispatchers.IO) {
+                    clearPersistedDraftBlocking(preferenceStorage, File(filesDir, "draft"))
+                }
+            }
+            setContent {
+            val preferences by preferenceStorage.draft.collectAsState()
+            val settings by preferenceStorage.settings.collectAsState()
+            fun updateDraft(changes: PreferenceChanges): Boolean {
+                preferenceStorage.update(PreferenceFile.DRAFT, changes)
+                return true
+            }
+            fun updateSettings(changes: PreferenceChanges): Boolean {
+                preferenceStorage.update(PreferenceFile.SETTINGS, changes)
+                return true
+            }
             val coroutineScope = rememberCoroutineScope()
             val touchFeedbackDispatcher = LocalTouchFeedbackDispatcher.current
             var captureConfirmationMessage by remember { mutableStateOf<String?>(null) }
@@ -679,7 +607,7 @@ class MainActivity : ComponentActivity() {
                     stagingDirectory = File(filesDir, "audio-staging"),
                 )
             }
-            val audioPersistence = remember { SharedPreferencesDraftAudioPersistence(preferences) }
+            val audioPersistence = remember { PreferenceDraftAudioPersistence(preferenceStorage) }
             val audioController = remember(audioControllerGeneration) {
                 DraftAudioController(
                     store = draftAudioStore,
@@ -704,11 +632,10 @@ class MainActivity : ComponentActivity() {
             val sendCoordinator = remember(audioController) {
                 SendCoordinator(
                     gateway = AnkiDroidGateway(contentResolver, applicationContext),
-                    preferences = preferences,
+                    storage = preferenceStorage,
                     audio = audioController,
-                    repository = SharedPreferencesFrozenSubmissionStore(
-                        preferences = preferences,
-                        settings = settings,
+                    repository = PreferenceFrozenSubmissionStore(
+                        storage = preferenceStorage,
                         draftDirectory = File(filesDir, "draft"),
                     ),
                 )
@@ -719,12 +646,12 @@ class MainActivity : ComponentActivity() {
                     persistSentenceCommit = { sentence ->
                         val nextRevision = runCatching { Math.addExact(reviewAuthorizationSequence, 1L) }
                             .getOrNull() ?: return@PreparationAuthorization false
-                        val saved = preferences.edit()
+                        val saved = updateDraft(PreferenceChanges()
                             .putString("committed_sentence", sentence)
                             .putString("sentence", sentence)
                             .putString("committed_sentence_voice", selectedVoiceName)
                             .putLong("review_authorization_sequence", nextRevision)
-                            .commit()
+                            )
                         if (saved) {
                             committedSentence = sentence
                             committedSentenceVoice = selectedVoiceName
@@ -749,7 +676,7 @@ class MainActivity : ComponentActivity() {
                         if (identity.isBlank()) return@PreparationAuthorization false
                         val nextRevision = runCatching { Math.addExact(reviewAuthorizationSequence, 1L) }
                             .getOrNull() ?: return@PreparationAuthorization false
-                        if (!preferences.edit().putLong("review_authorization_sequence", nextRevision).commit()) {
+                        if (!updateDraft(PreferenceChanges().putLong("review_authorization_sequence", nextRevision))) {
                             false
                         } else {
                             reviewAuthorizationSequence = nextRevision
@@ -907,10 +834,10 @@ class MainActivity : ComponentActivity() {
                 dictionaryReady = analyzerReady,
             )
             fun markCameraStepDone() {
-                settings.edit()
+                updateSettings(PreferenceChanges()
                     .putBoolean("onboarding_camera_done", true)
                     .putBoolean("onboarding_camera_denied", false)
-                    .commit()
+                    )
                 cameraDenied = false
             }
             fun enterSetup() {
@@ -1140,11 +1067,11 @@ class MainActivity : ComponentActivity() {
                         }
                         return@launch
                     }
-                    val persisted = settings.edit()
+                    val persisted = updateSettings(PreferenceChanges()
                         .putBoolean("onboarding_anki_done", true)
                         .putBoolean("onboarding_anki_deferred", false)
                         .putBoolean("onboarding_complete", true)
-                        .commit()
+                        )
                     if (!persisted) {
                         setupAudioErrorResource = R.string.save_failed
                         return@launch
@@ -1174,7 +1101,7 @@ class MainActivity : ComponentActivity() {
 
             val hasManualDefinition = definitionManuallyEdited && definition.isNotBlank()
             val persistLastSentTags: (FrozenSubmission) -> Unit = { snapshot ->
-                check(settings.edit().putString("last_note_tags", snapshot.tags.joinToString(" ")).commit()) {
+                check(updateSettings(PreferenceChanges().putString("last_note_tags", snapshot.tags.joinToString(" ")))) {
                     this@MainActivity.getString(R.string.card_tags_from_confirmed_note_save_failed)
                 }
             }
@@ -1187,7 +1114,7 @@ class MainActivity : ComponentActivity() {
                 }
                 if (showDeliveryConfirmation) {
                     captureMode = "Photo"
-                    preferences.edit().putString("capture_mode", "Photo").apply()
+                    updateDraft(PreferenceChanges().putString("capture_mode", "Photo"))
                 }
                 verifiedDelivery = false
                 listOfNotNull(photoSourcePath, noteImagePath, processedImagePath).distinct().forEach { File(it).delete() }
@@ -1200,7 +1127,7 @@ class MainActivity : ComponentActivity() {
                 photoSourcePath = null
                 noteImagePath = null
                 processedImagePath = null
-                clearPersistedDraft(preferences, File(filesDir, "draft"))
+                preferenceStorage.update(PreferenceFile.DRAFT, draftClearChanges())
                 sendState = SendState(message = sendState.message)
                 submitMessage = null
                 frozenSnapshotAppliedRevision = -1L
@@ -1253,7 +1180,7 @@ class MainActivity : ComponentActivity() {
                 audioController.discard()
                 audioControllerGeneration++
                 audioSnapshot = audioController.snapshot()
-                preferences.edit()
+                updateDraft(PreferenceChanges()
                     .remove(SENTENCE_AUDIO_RECEIPT_PATH)
                     .remove(SENTENCE_AUDIO_RECEIPT_FILENAME)
                     .remove(SENTENCE_AUDIO_RECEIPT_SIZE)
@@ -1268,7 +1195,7 @@ class MainActivity : ComponentActivity() {
                     .remove("committed_sentence_voice")
                     .remove("card_invalidated")
                     .remove("review_authorization_sequence")
-                    .apply()
+                    )
             }
             val replaceEditorText: (String, Boolean) -> Unit = { text, invalidateDraftGeneration ->
                 editorInputRevision++
@@ -1362,7 +1289,7 @@ class MainActivity : ComponentActivity() {
             val setDraftOrigin: (String) -> Unit = { origin ->
                 if (draftOrigin != origin) {
                     draftOrigin = origin
-                    preferences.edit().putString("draft_origin", origin).apply()
+                    updateDraft(PreferenceChanges().putString("draft_origin", origin))
                 }
             }
             val processImage: (File, Boolean) -> Unit = processImage@{ file, runOcr ->
@@ -1381,7 +1308,7 @@ class MainActivity : ComponentActivity() {
                 noteImagePath = file.absolutePath
                 processedImagePath = null
                 check(
-                    preferences.edit()
+                    updateDraft(PreferenceChanges()
                         .remove(IMAGE_RECEIPT_PATH)
                         .remove(IMAGE_RECEIPT_FILENAME)
                         .remove(IMAGE_RECEIPT_SIZE)
@@ -1390,7 +1317,7 @@ class MainActivity : ComponentActivity() {
                         .putString("note_image_path", noteImagePath)
                         .putString("draft_origin", draftOrigin)
                         .remove("processed_image_path")
-                        .commit(),
+                        ),
                 ) { this@MainActivity.getString(R.string.legacy_capture_draft_image_source_save_failed) }
                 imageError = null
                 imageProcessing = true
@@ -1487,7 +1414,7 @@ class MainActivity : ComponentActivity() {
                 imageProcessing = false
                 ocrLoading = false
                 imageError = null
-                preferences.edit()
+                updateDraft(PreferenceChanges()
                     .remove("photo_source_path")
                     .remove("note_image_path")
                     .remove("processed_image_path")
@@ -1495,14 +1422,14 @@ class MainActivity : ComponentActivity() {
                     .remove(IMAGE_RECEIPT_FILENAME)
                     .remove(IMAGE_RECEIPT_SIZE)
                     .remove(IMAGE_RECEIPT_MODIFIED)
-                    .commit()
+                    )
                 }
                 Unit
             }
             val stagePhotoReplacement: (File) -> Unit = stagePhotoReplacement@{ file ->
                 if (sendState.locked) return@stagePhotoReplacement
                 check(
-                    preferences.edit().putString("pending_replacement_image_path", file.absolutePath).commit(),
+                    updateDraft(PreferenceChanges().putString("pending_replacement_image_path", file.absolutePath)),
                 ) { this@MainActivity.getString(R.string.legacy_capture_pending_photo_replacement_save_failed) }
                 pendingPhotoFile = file
                 pendingSharedImageUri = null
@@ -1524,7 +1451,7 @@ class MainActivity : ComponentActivity() {
                     markCameraStepDone()
                 } else {
                     cameraDenied = true
-                    settings.edit().putBoolean("onboarding_camera_denied", true).commit()
+                    updateSettings(PreferenceChanges().putBoolean("onboarding_camera_denied", true))
                 }
             }
             val photoPicker = rememberLauncherForActivityResult(
@@ -1639,7 +1566,7 @@ class MainActivity : ComponentActivity() {
                 analyzerLoading = false
                 if (!analyzerReady && onboardingComplete) {
                     onboardingComplete = false
-                    settings.edit().putBoolean("onboarding_complete", false).commit()
+                    updateSettings(PreferenceChanges().putBoolean("onboarding_complete", false))
                     showSetup = true
                 }
             }
@@ -1805,7 +1732,7 @@ class MainActivity : ComponentActivity() {
                 currentRequestRevision = currentTranslationRequestRevision,
                 currentSubmissionLocked = currentSubmissionLocked,
                 translationService = translationService,
-                preferences = preferences,
+                storage = preferenceStorage,
                 onDraftChanged = { translationDraft = it },
                 onLastHandledRetryChanged = { lastHandledTranslationRetry = it },
                 onAttemptedSentenceChanged = { translationAttemptedSentence = it },
@@ -2117,7 +2044,7 @@ class MainActivity : ComponentActivity() {
                 selectedEntryId = selectedDictionaryEntryId,
                 vocabulary = draft.vocabulary,
                 vocabularyReading = draft.vocabularyReading,
-                preferences = preferences,
+                storage = preferenceStorage,
                 offlineDictionary = offlineDictionary,
                 isDraftCurrent = ::asyncDraftIsCurrent,
                 onEntriesChanged = { dictionaryEntries = it },
@@ -2285,10 +2212,10 @@ class MainActivity : ComponentActivity() {
                                     val changed = value != coordinator.currentGoogleKey()
                                     coordinator.updateGoogleKey(value)
                                     if (changed) {
-                                        settings.edit()
+                                        updateSettings(PreferenceChanges()
                                             .putBoolean("onboarding_audio_validated", false)
                                             .putBoolean("onboarding_complete", false)
-                                            .commit()
+                                            )
                                         onboardingComplete = false
                                         audioSetupInvalidated = true
                                         setupAudioErrorResource = null
@@ -2302,10 +2229,10 @@ class MainActivity : ComponentActivity() {
                                     coordinator.updateValues(coordinator.currentValues().copy(voiceName = voice))
                                     audioInputRevision++
                                     if (changed) {
-                                        settings.edit()
+                                        updateSettings(PreferenceChanges()
                                             .putBoolean("onboarding_audio_validated", false)
                                             .putBoolean("onboarding_complete", false)
-                                            .commit()
+                                            )
                                         onboardingComplete = false
                                         audioSetupInvalidated = true
                                         setupAudioErrorResource = null
@@ -2437,7 +2364,7 @@ class MainActivity : ComponentActivity() {
                                         val changed = value != coordinator.currentGoogleKey()
                                         coordinator.updateGoogleKey(value)
                                         if (changed) {
-                                            settings.edit().putBoolean("onboarding_complete", false).commit()
+                                            updateSettings(PreferenceChanges().putBoolean("onboarding_complete", false))
                                             onboardingComplete = false
                                             setupAudioErrorResource = null
                                         }
@@ -2449,7 +2376,7 @@ class MainActivity : ComponentActivity() {
                                         val changed = voice != coordinator.currentValues().voiceName
                                         coordinator.updateValues(coordinator.currentValues().copy(voiceName = voice))
                                         if (changed) {
-                                            settings.edit().putBoolean("onboarding_complete", false).commit()
+                                            updateSettings(PreferenceChanges().putBoolean("onboarding_complete", false))
                                             onboardingComplete = false
                                             setupAudioErrorResource = null
                                         }
@@ -2478,14 +2405,14 @@ class MainActivity : ComponentActivity() {
                                     }
                                 },
                                 onSelectNoteType = { modelId ->
-                                    if (settings.edit().putLong(SettingsPreferenceKeys.MODEL_ID, modelId).commit()) {
+                                    if (updateSettings(PreferenceChanges().putLong(SettingsPreferenceKeys.MODEL_ID, modelId))) {
                                         selectedModelId = modelId
                                     } else {
                                         settingsError = this@MainActivity.getString(R.string.save_failed)
                                     }
                                 },
                                 onSelectDeck = { deckId ->
-                                    if (settings.edit().putLong(SettingsPreferenceKeys.DECK_ID, deckId).commit()) {
+                                    if (updateSettings(PreferenceChanges().putLong(SettingsPreferenceKeys.DECK_ID, deckId))) {
                                         selectedDeckId = deckId
                                     } else {
                                         settingsError = this@MainActivity.getString(R.string.save_failed)
@@ -2505,7 +2432,7 @@ class MainActivity : ComponentActivity() {
                         sharedText.value = null
                         pendingPhotoFile?.delete()
                         pendingPhotoFile = null
-                        preferences.edit().remove("pending_replacement_image_path").commit()
+                        updateDraft(PreferenceChanges().remove("pending_replacement_image_path"))
                         pendingSharedImageUri = null
                     },
                     title = { Text(stringResource(R.string.replace_title)) },
@@ -2524,7 +2451,7 @@ class MainActivity : ComponentActivity() {
                                 pendingPhotoFile != null -> {
                                     val file = pendingPhotoFile!!
                                     pendingPhotoFile = null
-                                    preferences.edit().remove("pending_replacement_image_path").commit()
+                                    updateDraft(PreferenceChanges().remove("pending_replacement_image_path"))
                                     clearDraft()
                                     captureMode = "Photo"
                                     processImage(file, true)
@@ -2562,7 +2489,7 @@ class MainActivity : ComponentActivity() {
                             sharedText.value = null
                             pendingPhotoFile?.delete()
                             pendingPhotoFile = null
-                            preferences.edit().remove("pending_replacement_image_path").commit()
+                            updateDraft(PreferenceChanges().remove("pending_replacement_image_path"))
                             pendingSharedImageUri = null
                         }) { Text(stringResource(R.string.keep_draft)) }
                     },
@@ -2754,7 +2681,7 @@ class MainActivity : ComponentActivity() {
             ) {
                 if (!cardInvalidated || !cardPreparationReady || committedSentence != editor.text) return@LaunchedEffect
                 cardInvalidated = false
-                preferences.edit().putBoolean("card_invalidated", false).apply()
+                updateDraft(PreferenceChanges().putBoolean("card_invalidated", false))
             }
 
             val applyFrozenSubmissionToDraft: (FrozenSubmission) -> Unit = { snapshot ->
@@ -2961,7 +2888,7 @@ class MainActivity : ComponentActivity() {
                 if (!setupLoadedSuccessfully || !ankiDroidInstalled || !apiPermissionGranted) return@LaunchedEffect
                 val onlyCompatibleModel = compatibleSetupNoteTypes().singleOrNull() ?: return@LaunchedEffect
                 if (selectedModelId == onlyCompatibleModel.id) return@LaunchedEffect
-                if (settings.edit().putLong(SettingsPreferenceKeys.MODEL_ID, onlyCompatibleModel.id).commit()) {
+                if (updateSettings(PreferenceChanges().putLong(SettingsPreferenceKeys.MODEL_ID, onlyCompatibleModel.id))) {
                     selectedModelId = onlyCompatibleModel.id
                     settingsCoordinator?.let { coordinator ->
                         coordinator.updateValues(coordinator.currentValues().copy(modelId = onlyCompatibleModel.id))
@@ -2986,7 +2913,7 @@ class MainActivity : ComponentActivity() {
                 translationTestResult = null
                 translationTestRunning = false
                 val coordinator = SettingsCoordinator(
-                    persistence = SharedPreferencesSettingsPersistence(settings),
+                    persistence = PreferenceBackedSettingsPersistence(preferenceStorage),
                     onSaveResult = { result ->
                         coroutineScope.launch(Dispatchers.Main.immediate) {
                             settingsError = if (result.isSuccess) null else this@MainActivity.getString(R.string.save_failed)
@@ -3014,15 +2941,15 @@ class MainActivity : ComponentActivity() {
             // Obsolete pre-shared-key OpenRouter ciphertext is deleted once per launch. It is never
             // read as a Google key; the shared key, drafts, and media are untouched.
             androidx.compose.runtime.LaunchedEffect(Unit) {
-                withContext(Dispatchers.IO) { GoogleCloudCredential.removeObsoleteOpenRouterStorage(settings) }
+                withContext(Dispatchers.IO) { GoogleCloudCredential.removeObsoleteOpenRouterStorage(preferenceStorage) }
             }
 
             androidx.compose.runtime.LaunchedEffect(photoSourcePath, noteImagePath, processedImagePath) {
-                preferences.edit()
+                updateDraft(PreferenceChanges()
                     .putString("photo_source_path", photoSourcePath)
                     .putString("note_image_path", noteImagePath)
                     .putString("processed_image_path", processedImagePath)
-                    .apply()
+                    )
             }
 
             androidx.compose.runtime.LaunchedEffect(
@@ -3032,7 +2959,7 @@ class MainActivity : ComponentActivity() {
             ) {
                 if (completedSubmission != null) return@LaunchedEffect
                 persistDraftPreferences(
-                    preferences = preferences,
+                    storage = preferenceStorage,
                     selectionStart = editor.selection.min,
                     selectionEnd = editor.selection.max,
                     draft = draft,
@@ -3069,7 +2996,7 @@ class MainActivity : ComponentActivity() {
                 if (duplicateBlocked) TextButton(onClick = {
                     val blockedSnapshot = sendState.frozen ?: readFrozenSubmission(preferences)
                     if (blockedSnapshot != null) applyFrozenSubmissionToDraft(blockedSnapshot)
-                    clearPendingSubmission(preferences)
+                    clearPendingSubmission(preferenceStorage)
                     sendState = SendState()
                     frozenSnapshotAppliedRevision = -1L
                     submitMessage = null
@@ -3092,7 +3019,7 @@ class MainActivity : ComponentActivity() {
                             return@TextButton
                         }
                         persistLastSentTags(confirmedSnapshot)
-                        check(preferences.edit().putString(SubmissionRecoveryKeys.STATUS, "done").commit()) {
+                        check(updateDraft(PreferenceChanges().putString(SubmissionRecoveryKeys.STATUS, "done"))) {
                             this@MainActivity.getString(R.string.card_resolved_send_state_save_failed)
                         }
                         sendState = sendState.copy(
@@ -3116,7 +3043,7 @@ class MainActivity : ComponentActivity() {
                     }) { Text(stringResource(R.string.card_retry_media_import_may_duplicate)) }
                     if (pendingOperation == MediaImportOperation.IMAGE) {
                         TextButton(onClick = {
-                            clearPendingSubmission(preferences)
+                            clearPendingSubmission(preferenceStorage)
                             removeDraftImage()
                             updateRecoveryMessage(
                                 this@MainActivity.getString(R.string.card_the_interrupted_image_was_discarded_the_re),
@@ -3126,7 +3053,7 @@ class MainActivity : ComponentActivity() {
                         }) { Text(stringResource(R.string.card_remove_interrupted_image)) }
                     } else {
                         TextButton(onClick = {
-                            clearPendingSubmission(preferences)
+                            clearPendingSubmission(preferenceStorage)
                             audioController.releaseFreeze(retainFiles = true)
                             audioSnapshot = audioController.snapshot()
                             updateRecoveryMessage(
@@ -3146,7 +3073,7 @@ class MainActivity : ComponentActivity() {
                         )
                     }) { Text(stringResource(R.string.card_resume_frozen_send)) }
                     TextButton(onClick = {
-                        clearPendingSubmission(preferences)
+                        clearPendingSubmission(preferenceStorage)
                         removeDraftImage()
                         updateRecoveryMessage(
                             this@MainActivity.getString(R.string.card_pending_send_cleared_after_review_configur),
@@ -3167,7 +3094,7 @@ class MainActivity : ComponentActivity() {
                                 }) { Text(stringResource(R.string.card_retry_frozen_send)) }
                             } else {
                                 TextButton(onClick = {
-                                    clearPendingSubmission(preferences)
+                                    clearPendingSubmission(preferenceStorage)
                                     updateRecoveryMessage(
                                         this@MainActivity.getString(R.string.card_outcome_acknowledged_choose_a_valid_destin),
                                         RecoveryReason.None,
@@ -3184,7 +3111,7 @@ class MainActivity : ComponentActivity() {
                                     color = MaterialTheme.colorScheme.onSurface,
                                 )
                                 TextButton(onClick = {
-                                    clearPendingSubmission(preferences)
+                                    clearPendingSubmission(preferenceStorage)
                                     updateRecoveryMessage(
                                         this@MainActivity.getString(R.string.card_the_missing_saved_note_outcome_was_explici),
                                         RecoveryReason.None,
@@ -3193,7 +3120,7 @@ class MainActivity : ComponentActivity() {
                                 }) { Text(stringResource(R.string.card_i_checked_resolve_outcome)) }
                             } else {
                                 TextButton(onClick = {
-                                    clearPendingSubmission(preferences)
+                                    clearPendingSubmission(preferenceStorage)
                                     updateRecoveryMessage(
                                         this@MainActivity.getString(R.string.card_pending_send_held_for_manual_resolution_co),
                                         RecoveryReason.None,
@@ -3208,7 +3135,7 @@ class MainActivity : ComponentActivity() {
                         RecoveryReason.MediaInterrupted,
                         RecoveryReason.MediaImported,
                         RecoveryReason.None -> TextButton(onClick = {
-                            clearPendingSubmission(preferences)
+                            clearPendingSubmission(preferenceStorage)
                             updateRecoveryMessage(
                                 this@MainActivity.getString(R.string.card_pending_send_held_for_manual_resolution_co),
                                 RecoveryReason.None,
@@ -3503,7 +3430,7 @@ class MainActivity : ComponentActivity() {
                                 captureMode = captureMode,
                                 onCaptureModeChange = { mode ->
                                     captureMode = mode
-                                    preferences.edit().putString("capture_mode", mode).apply()
+                                    updateDraft(PreferenceChanges().putString("capture_mode", mode))
                                 },
                                 editor = editor,
                                 onEditorChange = updateEditor,
@@ -3800,7 +3727,7 @@ class MainActivity : ComponentActivity() {
                                         TextButton(
                                             onClick = {
                                                 selectedDeckId = deck.id
-                                                preferences.edit().putLong("deck_id", deck.id).apply()
+                                                updateDraft(PreferenceChanges().putLong("deck_id", deck.id))
                                                 showDeckSheet = false
                                             },
                                             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
@@ -3871,6 +3798,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
         }
     }
 
@@ -3962,8 +3890,8 @@ internal fun formatCacheSize(bytes: Long): String = when {
 }
 
 
-private fun clearPendingSubmission(preferences: SharedPreferences) {
-    clearFrozenSubmission(preferences)
+private fun clearPendingSubmission(storage: AppPreferenceStorage) {
+    storage.update(PreferenceFile.DRAFT, clearFrozenSubmission())
 }
 
 private fun TextRange.coerceIn(min: Int, max: Int): TextRange =

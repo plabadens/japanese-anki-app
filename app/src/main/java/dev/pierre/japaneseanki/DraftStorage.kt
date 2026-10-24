@@ -1,13 +1,12 @@
 package dev.pierre.japaneseanki
 
-import android.content.SharedPreferences
 
 internal data class RestoredTranslationDraft(
     val draft: TranslationDraft,
     val attemptedSentence: String?,
 )
 
-internal fun restoreTranslationDraft(preferences: SharedPreferences): RestoredTranslationDraft {
+internal fun restoreTranslationDraft(preferences: PreferenceValues): RestoredTranslationDraft {
     val text = preferences.getString("translation", "").orEmpty()
     val source = preferences.getString("translation_source", null)
         ?.let { saved -> TranslationSource.entries.firstOrNull { it.name == saved } }
@@ -58,7 +57,7 @@ internal fun restoreTranslationDraft(preferences: SharedPreferences): RestoredTr
 }
 
 internal fun restoreDraftModel(
-    preferences: SharedPreferences,
+    preferences: PreferenceValues,
     sentence: String,
     defaultTags: String,
 ): DraftModel = DraftModel(
@@ -81,7 +80,7 @@ internal fun restoreDraftModel(
 )
 
 internal fun persistDraftPreferences(
-    preferences: SharedPreferences,
+    storage: AppPreferenceStorage,
     selectionStart: Int,
     selectionEnd: Int,
     draft: DraftModel,
@@ -98,7 +97,7 @@ internal fun persistDraftPreferences(
     selectedDictionaryEntryId: Long?,
     selectedSenseIndices: Set<Int>,
 ) {
-    preferences.edit()
+    storage.update(PreferenceFile.DRAFT, PreferenceChanges()
         .putString("sentence", draft.sentence)
         .putInt("selection_start", selectionStart)
         .putInt("selection_end", selectionEnd)
@@ -137,5 +136,5 @@ internal fun persistDraftPreferences(
         .putLong("deck_id", selectedDeckId ?: -1)
         .putLong("dictionary_entry_id", selectedDictionaryEntryId ?: -1)
         .putStringSet("dictionary_sense_indices", selectedSenseIndices.mapTo(mutableSetOf()) { it.toString() })
-        .apply()
+    )
 }
