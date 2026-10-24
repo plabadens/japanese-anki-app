@@ -501,16 +501,50 @@ class InputScreenLayoutTest {
     private fun captureMotionEvidence(name: String) {
         composeRule.waitForIdle()
         InstrumentationRegistry.getInstrumentation().waitForIdleSync()
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
         val directory = File("build/robolectric-evidence/motion-feedback")
-        if (!directory.isDirectory) assertTrue("Could not create motion-feedback evidence directory", directory.mkdirs())
-        val bitmap = composeRule.onRoot().captureToImage().asAndroidBitmap()
-        val screenshot = File(directory, name)
-        screenshot.outputStream().use { output ->
-            assertTrue("Could not encode motion evidence $name", bitmap.compress(Bitmap.CompressFormat.PNG, 100, output))
+        if (!directory.isDirectory) directory.mkdirs()
+        if (!directory.isDirectory) {
+            throw AssertionError(
+                "Could not create motion-feedback evidence directory: " +
+                    "${directory.absolutePath}; canWrite=${directory.canWrite()}"
+            )
         }
-        bitmap.recycle()
-        assertTrue("Motion evidence was not written: $screenshot", screenshot.isFile && screenshot.length() > 0L)
+
+        val screenshot = File(directory, name)
+        var bitmapDimensions = "unavailable"
+        var lastFailure: Throwable? = null
+        repeat(2) { attempt ->
+            if (attempt > 0) {
+                composeRule.waitForIdle()
+                InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            }
+
+            var bitmap: Bitmap? = null
+            try {
+                val capturedBitmap = composeRule.onRoot().captureToImage().asAndroidBitmap()
+                bitmap = capturedBitmap
+                bitmapDimensions = "${capturedBitmap.width}x${capturedBitmap.height}"
+                val encoded = screenshot.outputStream().use { output ->
+                    capturedBitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+                }
+                if (encoded && screenshot.isFile && screenshot.length() > 0L) return
+                lastFailure = AssertionError("PNG encoding or file verification failed on attempt ${attempt + 1}")
+            } catch (failure: Exception) {
+                lastFailure = failure
+            } catch (failure: AssertionError) {
+                lastFailure = failure
+            } finally {
+                bitmap?.recycle()
+            }
+        }
+
+        val failure = AssertionError(
+            "Motion evidence was not written: ${screenshot.absolutePath}; " +
+                "exists=${screenshot.exists()}; length=${screenshot.length()}; " +
+                "bitmap=$bitmapDimensions"
+        )
+        lastFailure?.let { failure.initCause(it) }
+        throw failure
     }
 
 }
