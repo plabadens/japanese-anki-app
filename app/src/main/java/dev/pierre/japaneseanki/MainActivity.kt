@@ -70,7 +70,6 @@ import dev.pierre.japaneseanki.ui.AppContentMaxWidth
 import dev.pierre.japaneseanki.ui.ReviewAudioPresentation
 import dev.pierre.japaneseanki.ui.CardAction
 import dev.pierre.japaneseanki.card.CardDeckSheet
-import dev.pierre.japaneseanki.card.CardDiscardConfirmationDialog
 import dev.pierre.japaneseanki.card.CardHintActionEffects
 import dev.pierre.japaneseanki.card.CardHintActionSignals
 import dev.pierre.japaneseanki.card.CardScreenContent
@@ -91,7 +90,6 @@ import dev.pierre.japaneseanki.card.cardHintAction
 import dev.pierre.japaneseanki.card.cardSendBlockers
 import dev.pierre.japaneseanki.card.cardScreenPresentationContext
 import dev.pierre.japaneseanki.card.loadMoreDictionaryMatches
-import dev.pierre.japaneseanki.card.CardSendBlockerSignals
 import dev.pierre.japaneseanki.card.CardSentenceEditorSheet
 import dev.pierre.japaneseanki.card.commitCardSentenceEdit
 import dev.pierre.japaneseanki.card.useCardSentenceSelectionAsTarget
@@ -99,7 +97,6 @@ import dev.pierre.japaneseanki.card.CardMeaningPicker
 import dev.pierre.japaneseanki.ui.reviewTranslationFailureStatus
 import dev.pierre.japaneseanki.ui.reviewAudioGenerationFailureMessage
 import dev.pierre.japaneseanki.ui.reviewAudioPlaybackFailureMessage
-import dev.pierre.japaneseanki.ui.reviewAudioSendBlocker
 import dev.pierre.japaneseanki.ui.RecoveryReason
 import dev.pierre.japaneseanki.ui.SendPhase
 import dev.pierre.japaneseanki.ui.SendState
@@ -2505,21 +2502,32 @@ class MainActivity : ComponentActivity() {
                 },
             )
 
-            CardDiscardConfirmationDialog(
-                visible = showDiscardConfirm,
-                hasWork = editor.text.isNotBlank() || noteImagePath != null || target != null,
-                enabled = !sendState.locked,
-                title = stringResource(R.string.legacy_capture_discard_this_draft),
-                workMessage = stringResource(R.string.legacy_capture_the_sentence_target_photo_and_any_generate),
-                emptyMessage = stringResource(R.string.legacy_capture_this_draft_is_already_empty),
-                discardLabel = stringResource(R.string.legacy_capture_discard_draft),
-                keepWorkingLabel = stringResource(R.string.legacy_capture_keep_working),
-                onDismiss = { showDiscardConfirm = false },
-                onConfirm = {
-                    showDiscardConfirm = false
-                    clearDraft()
-                },
-            )
+            if (showDiscardConfirm) {
+                FlowDialog(
+                    onDismissRequest = { showDiscardConfirm = false },
+                    title = { Text(stringResource(R.string.legacy_capture_discard_this_draft)) },
+                    text = {
+                        Text(
+                            if (editor.text.isNotBlank() || noteImagePath != null || target != null) {
+                                stringResource(R.string.legacy_capture_the_sentence_target_photo_and_any_generate)
+                            } else {
+                                stringResource(R.string.legacy_capture_this_draft_is_already_empty)
+                            },
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(enabled = !sendState.locked, onClick = {
+                            showDiscardConfirm = false
+                            clearDraft()
+                        }) { Text(stringResource(R.string.legacy_capture_discard_draft)) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDiscardConfirm = false }) {
+                            Text(stringResource(R.string.legacy_capture_keep_working))
+                        }
+                    },
+                )
+            }
 
             val processedImageIdentity = liveMediaIdentity(processedImagePath?.let(::File))
             val imageReceiptFilename = importedReceiptFromPreferences(
@@ -3186,45 +3194,37 @@ class MainActivity : ComponentActivity() {
                             editor = updated
                             cardScreenHolderRef[0]?.onSentenceChanged(updated.text)
                         }
-                        val sentenceAudioField = this@MainActivity.getString(R.string.card_sentence_audio_field)
-                        val wordAudioField = this@MainActivity.getString(R.string.card_word_audio_field)
+                        val sentenceAudioPresentation = sentenceAudio.presentation(
+                            this@MainActivity.getString(audioActionLabel(AudioItem.SENTENCE)),
+                        )
+                        val wordAudioPresentation = wordAudio.presentation(
+                            this@MainActivity.getString(audioActionLabel(AudioItem.VOCABULARY)),
+                        )
+                        // This precedes holder creation: submitHint below is an input to its state.
                         val sendBlockers = cardSendBlockers(
-                            CardSendBlockerSignals(
-                                audioSetupReady = setupReadiness.audioReady,
-                                imagePending = imagePending,
-                                imageAttached = imageAttached,
-                                imageProcessing = imageProcessing,
-                                imageError = imageError,
-                                imageReady = imageReady,
-                                sendImageReady = sendImageReady,
-                                frozenRetryReady = frozenRetryReady,
-                                sentenceAudioReady = sentenceAudioReady,
-                                sentenceAudioField = sentenceAudioField,
-                                sentenceAudioBlocker = reviewAudioSendBlocker(
-                                    sentenceAudioField,
-                                    sentenceAudio.presentation(this@MainActivity.getString(audioActionLabel(AudioItem.SENTENCE))),
-                                )?.resolve(this@MainActivity),
-                                wordAudioReady = wordAudioReady,
-                                wordAudioField = wordAudioField,
-                                wordAudioBlocker = reviewAudioSendBlocker(
-                                    wordAudioField,
-                                    wordAudio.presentation(this@MainActivity.getString(audioActionLabel(AudioItem.VOCABULARY))),
-                                )?.resolve(this@MainActivity),
-                                apiPermissionGranted = apiPermissionGranted,
-                                modelSelected = selectedModel != null,
-                                deckSelected = selectedDeck != null,
-                                fieldsAvailable = fieldsByName != null,
-                                validationError = validationErrors.firstOrNull(),
-                                mappingValid = effectiveMapping?.isValid == true,
-                                mappingError = effectiveMapping?.errors?.firstOrNull(),
-                                frozenDestinationReady = frozenDestinationReady,
-                                pitchAvailable = pitch != null,
-                                dictionaryLoading = dictionaryLoading,
-                                dictionarySearchLoading = dictionarySearchLoading,
-                                setupError = setupError,
-                                setupLoaded = setupLoadedSuccessfully,
-                                setupLoading = setupLoading,
-                            ),
+                            setupReadiness = setupReadiness,
+                            sendState = sendState,
+                            noteDraft = noteDraft,
+                            imageAttached = imageAttached,
+                            imageProcessing = imageProcessing,
+                            imageError = imageError,
+                            imageReady = imageReady,
+                            frozenReceiptReady = frozenReceiptReady,
+                            sentenceAudioReady = sentenceAudioReady,
+                            sentenceAudio = sentenceAudioPresentation,
+                            wordAudioReady = wordAudioReady,
+                            wordAudio = wordAudioPresentation,
+                            apiPermissionGranted = apiPermissionGranted,
+                            selectedModel = selectedModel,
+                            selectedDeck = selectedDeck,
+                            effectiveMapping = effectiveMapping,
+                            frozenDestinationReady = frozenDestinationReady,
+                            pitchAvailable = pitch != null,
+                            dictionaryLoading = dictionaryLoading,
+                            dictionarySearchLoading = dictionarySearchLoading,
+                            setupError = setupError,
+                            setupLoaded = setupLoadedSuccessfully,
+                            setupLoading = setupLoading,
                         )
                         val submitHint = when {
                             completedSubmission != null || duplicateBlocked || recoveryRequired -> null
@@ -3375,9 +3375,6 @@ class MainActivity : ComponentActivity() {
                             reading = vocabularyReading,
                             senseIndex = selectedSenseIndices.singleOrNull(),
                         )
-                        val wordAudioPresentation = wordAudio.presentation(
-                            this@MainActivity.getString(audioActionLabel(AudioItem.VOCABULARY)),
-                        )
                         val cardScreenPresentationContext = cardScreenPresentationContext(
                             analyzerError = tokenizationError,
                             analyzing = tokenizationLoading,
@@ -3486,9 +3483,6 @@ class MainActivity : ComponentActivity() {
                                 onSettings = { openSettings() },
                             )
                             AppRoute.Card -> {
-                                val sentenceAudioPresentation = sentenceAudio.presentation(
-                                    this@MainActivity.getString(audioActionLabel(AudioItem.SENTENCE)),
-                                )
                                 val cardDetails = CardScreenDetailInput(
                                     selectedSpan = reviewTarget,
                                     dictionaryLoading = dictionaryLoading,
