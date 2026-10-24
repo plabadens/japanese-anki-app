@@ -45,7 +45,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -55,16 +54,17 @@ import androidx.compose.material3.InputChip
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.semantics.semantics
+import dev.pierre.japaneseanki.ui.FlowDialog
+import dev.pierre.japaneseanki.ui.FlowSheet
+import dev.pierre.japaneseanki.ui.FlowStatusText
+import dev.pierre.japaneseanki.ui.flow
 import dev.pierre.japaneseanki.ui.AppContentMaxWidth
 
 import dev.pierre.japaneseanki.ui.ReviewAudioPresentation
@@ -2405,8 +2405,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
             if (showSettings) {
-                FlowTheme(darkTheme = isSystemInDarkTheme()) {
-                    Dialog(
+                FlowDialog(
                     onDismissRequest = { closeSettings() },
                     properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
                 ) {
@@ -2525,12 +2524,10 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
-                    }
                 }
             }
             if (showSources) {
-                FlowTheme(darkTheme = isSystemInDarkTheme()) {
-                    Dialog(
+                FlowDialog(
                     onDismissRequest = { showSources = false },
                     properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
                 ) {
@@ -2569,14 +2566,11 @@ class MainActivity : ComponentActivity() {
                                 Text(licenseDocuments)
                             }
                         }
-                    }
-                    }
                 }
             }
             if (setupVisible) {
-                FlowTheme(darkTheme = isSystemInDarkTheme()) {
-                    Dialog(
-                        onDismissRequest = { if (onboardingComplete && analyzerReady) showSetup = false },
+                FlowDialog(
+                    onDismissRequest = { if (onboardingComplete && analyzerReady) showSetup = false },
                         properties = DialogProperties(
                             usePlatformDefaultWidth = false,
                             decorFitsSystemWindows = false,
@@ -2678,12 +2672,10 @@ class MainActivity : ComponentActivity() {
                                 onFinish = { finishSetup() },
                             )
                         }
-                    }
                 }
             }
             if (!submissionLocked && showReplace && (incoming != null || pendingPhotoFile != null || pendingSharedImageUri != null)) {
-                FlowTheme(darkTheme = isSystemInDarkTheme()) {
-                    AlertDialog(
+                FlowDialog(
                     onDismissRequest = {
                         discardSharePayload()
                         showReplace = false
@@ -2752,41 +2744,35 @@ class MainActivity : ComponentActivity() {
                         }) { Text(stringResource(R.string.keep_draft)) }
                     },
                     )
-                }
             }
 
             if (showOcrSheet && ocrChoices.size > 1) {
-                FlowTheme(darkTheme = isSystemInDarkTheme()) {
-                    ModalBottomSheet(onDismissRequest = { showOcrSheet = false }) {
-                    Column(
-                        Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState())
-                            .padding(horizontal = 20.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Text(stringResource(R.string.choose_sentence), style = MaterialTheme.typography.titleLarge)
-                        ocrChoices.forEach { block ->
-                            OutlinedButton(
-                                enabled = !submissionLocked,
-                                onClick = {
-                                    showOcrSheet = false
-                                    ocrChoices = emptyList()
-                                    applyOcrText(block.text, ocrFocusFraction(block.bounds, ocrImageHeight))
-                                },
-                                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                            ) { Text(block.text.trim()) }
-                        }
-                        TextButton(
-                            onClick = { showOcrSheet = false },
+                FlowSheet(
+                    onDismissRequest = { showOcrSheet = false },
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(stringResource(R.string.choose_sentence), style = MaterialTheme.typography.titleLarge)
+                    ocrChoices.forEach { block ->
+                        OutlinedButton(
+                            enabled = !submissionLocked,
+                            onClick = {
+                                showOcrSheet = false
+                                ocrChoices = emptyList()
+                                applyOcrText(block.text, ocrFocusFraction(block.bounds, ocrImageHeight))
+                            },
                             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                        ) { Text(stringResource(R.string.cancel)) }
+                        ) { Text(block.text.trim()) }
                     }
-                    }
+                    TextButton(
+                        onClick = { showOcrSheet = false },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    ) { Text(stringResource(R.string.cancel)) }
                 }
             }
 
             if (showDiscardConfirm) {
                 val hasWork = editor.text.isNotBlank() || noteImagePath != null || target != null
-                AlertDialog(
+                FlowDialog(
                     onDismissRequest = { showDiscardConfirm = false },
                     title = { Text(stringResource(R.string.legacy_capture_discard_this_draft)) },
                     text = {
@@ -3353,7 +3339,11 @@ class MainActivity : ComponentActivity() {
                         recoveryMessage = this@MainActivity.getString(R.string.card_retrying_the_frozen_send_the_draft_remains)
                     }) { Text(stringResource(R.string.card_retry_frozen_send)) }
                 } else if (recoveryRequired && knownNoteId != null && recoveryMessage?.contains("no longer") == true) {
-                    Text(stringResource(R.string.card_the_saved_note_id_cannot_be_found_no_autom), style = MaterialTheme.typography.bodyMedium)
+                    FlowStatusText(
+                        stringResource(R.string.card_the_saved_note_id_cannot_be_found_no_autom),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
                     TextButton(onClick = {
                         clearPendingSubmission(preferences)
                         recoveryRequired = false
@@ -3811,15 +3801,15 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         if (showSentenceEditor) {
-                            ModalBottomSheet(onDismissRequest = {
-                                sentenceEditorDraft = null
-                                showSentenceEditor = false
-                            }) {
-                                Column(
-                                    Modifier.fillMaxWidth().heightIn(max = 620.dp).verticalScroll(rememberScrollState())
-                                        .padding(horizontal = 24.dp, vertical = 8.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                                ) {
+                            FlowSheet(
+                                onDismissRequest = {
+                                    sentenceEditorDraft = null
+                                    showSentenceEditor = false
+                                },
+                                maxHeight = MaterialTheme.flow.tallSheetMaxHeight,
+                                horizontalPadding = MaterialTheme.flow.sheetWidePadding,
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
                                     Text(stringResource(R.string.edit_sentence), style = MaterialTheme.typography.titleLarge)
                                     OutlinedTextField(
                                         value = sentenceEditorDraft ?: editor,
@@ -3867,16 +3857,14 @@ class MainActivity : ComponentActivity() {
                                             modifier = Modifier.heightIn(min = 48.dp),
                                         ) { Text(stringResource(R.string.done)) }
                                     }
-                                }
                             }
                         }
                         if (showDeckSheet) {
-                            ModalBottomSheet(onDismissRequest = { showDeckSheet = false }) {
-                                Column(
-                                    Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState())
-                                        .padding(horizontal = 24.dp, vertical = 8.dp),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                                ) {
+                            FlowSheet(
+                                onDismissRequest = { showDeckSheet = false },
+                                horizontalPadding = MaterialTheme.flow.sheetWidePadding,
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
                                     Text(stringResource(R.string.legacy_settings_destination_deck), style = MaterialTheme.typography.titleLarge)
                                     if (decks.isEmpty()) {
                                         Text(
@@ -3894,12 +3882,23 @@ class MainActivity : ComponentActivity() {
                                             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                                         ) { Text(deck.name) }
                                     }
-                                }
                             }
                         }
                         if (visibleRoute == AppRoute.Card && reviewTarget == null) {
-                            submitMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
-                            recoveryMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                            submitMessage?.let {
+                                FlowStatusText(
+                                    it,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
+                            recoveryMessage?.let {
+                                FlowStatusText(
+                                    it,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
                             sendRecoveryContent()
                         }
                         submitAction = submitAction@{
@@ -4326,17 +4325,14 @@ class MainActivity : ComponentActivity() {
                     )
                 }
                 if (definitionSheetText != null) {
-                    ModalBottomSheet(
+                    FlowSheet(
                         onDismissRequest = {
                             definitionSheetText = null
                             showDictionarySheet = true
                         },
+                        horizontalPadding = MaterialTheme.flow.sheetWidePadding,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Column(
-                            Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState())
-                                .padding(horizontal = 24.dp, vertical = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
                         }
                     }
                 }

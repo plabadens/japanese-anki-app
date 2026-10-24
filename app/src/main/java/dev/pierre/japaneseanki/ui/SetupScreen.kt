@@ -3,7 +3,6 @@ package dev.pierre.japaneseanki.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,23 +11,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,7 +38,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -230,9 +226,9 @@ private fun AudioCard(
 ) {
     var listOpen by remember { mutableStateOf(false) }
     val selected = state.voices.firstOrNull { it.name == state.selectedVoice }
-    FlowCard {
+    FlowCard(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 18.dp)) {
         Column(
-            Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+            Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(stringResource(R.string.sentence_audio), style = MaterialTheme.typography.titleLarge)
@@ -300,15 +296,14 @@ private fun AudioCard(
 
 @Composable
 private fun VoiceField(voice: CloudVoice?, onClick: () -> Unit) {
-    Surface(
+    FlowCard(
+        variant = FlowCardVariant.Outlined,
+        shape = MaterialTheme.shapes.small,
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
     ) {
         Row(
-            Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -346,26 +341,14 @@ private fun VoiceList(
 ) {
     Column(Modifier.fillMaxWidth()) {
         voices.forEach { voice ->
-            Row(
-                Modifier.fillMaxWidth()
-                    .heightIn(min = 48.dp)
-                    .clickable(role = Role.RadioButton) { onSelect(voice.name) }
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                RadioButton(selected = voice.name == selectedName, onClick = null)
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                    Text(voice.displayName, style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        voice.name,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
+            FlowPickerField(
+                label = voice.displayName,
+                supportingText = voice.name,
+                supportingTextColor = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f),
+                selected = voice.name == selectedName,
+                onSelect = { onSelect(voice.name) },
+                modifier = Modifier.padding(vertical = 4.dp),
+            )
         }
         TextButton(onClick = onReload) { Text(stringResource(R.string.reload_voices)) }
     }
@@ -383,14 +366,12 @@ private fun AnkiCard(
     val selectedNoteType = state.noteTypes.firstOrNull { it.id == state.selectedNoteTypeId }
     val selectedDeck = state.decks.firstOrNull { it.id == state.selectedDeckId }
 
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+    FlowCard(
+        variant = FlowCardVariant.Outlined,
+        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
     ) {
         Column(
-            Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
+            Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -474,11 +455,14 @@ private fun AnkiCard(
 
 @Composable
 private fun PickerRow(label: String, value: String, interactive: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(14.dp)
-    val border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
-    val content: @Composable () -> Unit = {
+    FlowCard(
+        variant = FlowCardVariant.Outlined,
+        shape = MaterialTheme.shapes.small,
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+        onClick = onClick.takeIf { interactive },
+    ) {
         Row(
-            Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -503,24 +487,6 @@ private fun PickerRow(label: String, value: String, interactive: Boolean, onClic
             }
         }
     }
-    if (interactive) {
-        Surface(
-            onClick = onClick,
-            modifier = Modifier.fillMaxWidth(),
-            shape = shape,
-            color = MaterialTheme.colorScheme.surface,
-            border = border,
-            content = content,
-        )
-    } else {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = shape,
-            color = MaterialTheme.colorScheme.surface,
-            border = border,
-            content = content,
-        )
-    }
 }
 
 @Composable
@@ -537,11 +503,10 @@ private fun CameraRow(granted: Boolean, denied: Boolean, onRequest: () -> Unit) 
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        FlowCircleSurface(
             modifier = Modifier.size(40.dp),
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
         ) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 FlowIcons.Gallery(Modifier.size(20.dp), MaterialTheme.colorScheme.onSecondaryContainer)
@@ -623,7 +588,7 @@ private fun SelectionDialog(
     onSelect: (Long) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
+    FlowDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(titleResource)) },
         text = {
@@ -631,15 +596,11 @@ private fun SelectionDialog(
                 Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState()),
             ) {
                 options.forEach { (id, label) ->
-                    Row(
-                        Modifier.fillMaxWidth()
-                            .heightIn(min = 48.dp)
-                            .clickable(role = Role.RadioButton) { onSelect(id) },
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(selected = id == selectedId, onClick = null)
-                        Text(label, modifier = Modifier.padding(start = 4.dp))
-                    }
+                    FlowPickerField(
+                        label = label,
+                        selected = id == selectedId,
+                        onSelect = { onSelect(id) },
+                    )
                 }
             }
         },

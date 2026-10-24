@@ -140,7 +140,7 @@ class SentenceSelectionLayoutTest {
                     MotionAwareProgressIndicator(
                         modifier = Modifier.testTag("reduced-motion-progress"),
                         color = Color.Blue,
-                        diameter = 24.dp,
+                        progressSize = ProgressSize.Medium,
                         stateDescription = "Working",
                     )
                 }

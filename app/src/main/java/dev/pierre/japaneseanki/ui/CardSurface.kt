@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -40,7 +41,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -81,7 +81,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import dev.pierre.japaneseanki.FuriganaSpan
 import dev.pierre.japaneseanki.JapaneseToken
@@ -318,9 +317,9 @@ internal fun CardScreen(
                         },
                         exit = ExitTransition.None,
                     ) {
-                        FlowCard {
+                        FlowCard(contentPadding = PaddingValues(16.dp)) {
                                 Column(
-                                    Modifier.fillMaxWidth().padding(16.dp),
+                                    Modifier.fillMaxWidth(),
                                     verticalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
                                     Row(verticalAlignment = Alignment.Top) {
@@ -364,7 +363,7 @@ internal fun CardScreen(
                                         Text(definition, style = MaterialTheme.typography.bodyLarge)
                                     }
                                     wordStatus?.let {
-                                        Text(
+                                        FlowStatusText(
                                             it,
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -420,7 +419,7 @@ internal fun CardScreen(
                     }
 
                     if (statusMessage != null) {
-                        Text(
+                        FlowStatusText(
                             statusMessage,
                             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                             style = MaterialTheme.typography.bodySmall,
@@ -654,7 +653,7 @@ private fun CardPhotoBand(imagePath: String, height: Dp, focusY: Float, onOpen: 
 private fun FullPhotoDialog(imagePath: String, onDismiss: () -> Unit) {
     val description = stringResource(R.string.card_full_photo)
     val closeDescription = stringResource(R.string.card_close_photo)
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    FlowDialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(
             Modifier.fillMaxSize().background(Color.Black).semantics { contentDescription = description },
         ) {
@@ -760,14 +759,12 @@ private fun CardInstruction(hint: String?, loading: Boolean) {
     ) {
         if (loading) {
             MotionAwareProgressIndicator(
-                modifier = Modifier.size(16.dp),
                 color = MaterialTheme.colorScheme.primary,
-                diameter = 16.dp,
-                strokeWidth = 2.dp,
+                progressSize = ProgressSize.Small,
                 stateDescription = progressLabel,
             )
         }
-        Text(
+        FlowStatusText(
             hint.orEmpty(),
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.bodyMedium,

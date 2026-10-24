@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -21,7 +20,6 @@ import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -164,6 +162,11 @@ internal data class FlowTokens(
     val touchTarget: Dp = 48.dp,
     val hairline: Dp = 1.dp,
     val primaryButtonHeight: Dp = 56.dp,
+    val disabledAlpha: Float = 0.38f,
+    val sheetMaxHeight: Dp = 560.dp,
+    val tallSheetMaxHeight: Dp = 620.dp,
+    val sheetWidePadding: Dp = 24.dp,
+    val sheetVerticalPadding: Dp = 8.dp,
     val quietOutline: Color,
 )
 
@@ -282,38 +285,6 @@ internal fun FlowPrimaryButton(
     }
 }
 
-@Composable
-internal fun FlowCard(
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        content = content,
-    )
-}
-
-@Composable
-internal fun FlowRoundIconButton(
-    onClick: () -> Unit,
-    contentDescription: String,
-    modifier: Modifier = Modifier,
-    filled: Boolean = true,
-    content: @Composable () -> Unit,
-) {
-    Surface(
-        onClick = onClick,
-        modifier = modifier.size(48.dp).semantics { this.contentDescription = contentDescription },
-        shape = CircleShape,
-        color = if (filled) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-        contentColor = if (filled) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-    ) {
-        Box(contentAlignment = Alignment.Center) { content() }
-    }
-}
 
 /** Minimal geometric icons for controls the study uses but MaterialSymbols does not carry. */
 internal object FlowIcons {

@@ -31,7 +31,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
@@ -438,7 +437,7 @@ private fun InputStatusPanel(
         ) {
             FlowIcons.Check(Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
         }
-        Text(
+        FlowStatusText(
             message,
             modifier = Modifier.weight(1f),
             maxLines = 1,
@@ -526,12 +525,13 @@ private fun CaptureRow(
             modifier = Modifier.weight(1f).fillMaxHeight().testTag("camera-gallery-slot"),
             contentAlignment = Alignment.CenterStart,
         ) {
-            CaptureActionButton(
-                enabled = enabled,
-                operationGate = operationGate,
-                onClick = onOpenGallery,
+            FlowCircleSurface(
+                onClick = { if (enabled && !operationGate.isActive) onOpenGallery() },
+                enabled = enabled && !operationGate.isActive,
                 contentDescription = stringResource(R.string.legacy_capture_choose_photo_from_device),
-                modifier = Modifier.testTag("camera-gallery-button"),
+                modifier = Modifier.size(CAMERA_SIDE_SLOT_SIZE_DP.dp).testTag("camera-gallery-button"),
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
             ) { FlowIcons.Gallery(Modifier.size(24.dp)) }
         }
 
@@ -561,24 +561,18 @@ private fun CaptureRow(
             contentAlignment = Alignment.CenterEnd,
         ) {
             if (hasTorch) {
-                Surface(
+                FlowCircleSurface(
                     onClick = { if (enabled && !operationGate.isActive) onToggleTorch() },
                     enabled = enabled && !operationGate.isActive,
-                    modifier = Modifier.size(CAMERA_SIDE_SLOT_SIZE_DP.dp)
-                        .semantics {
-                            contentDescription = torchLabel
-                            stateDescription = torchState
-                        }
-                        .testTag("camera-torch-toggle"),
-                    shape = CircleShape,
-                    color = if (torchOn) MaterialTheme.colorScheme.secondaryContainer
+                    modifier = Modifier.size(CAMERA_SIDE_SLOT_SIZE_DP.dp).testTag("camera-torch-toggle"),
+                    contentDescription = torchLabel,
+                    stateDescription = torchState,
+                    containerColor = if (torchOn) MaterialTheme.colorScheme.secondaryContainer
                     else MaterialTheme.colorScheme.surfaceVariant,
                     contentColor = if (torchOn) MaterialTheme.colorScheme.onSecondaryContainer
                     else MaterialTheme.colorScheme.onSurfaceVariant,
                     border = if (torchOn) BorderStroke(1.dp, MaterialTheme.colorScheme.outline) else null,
-                ) {
-                    Box(contentAlignment = Alignment.Center) { FlowIcons.Torch(Modifier.size(24.dp)) }
-                }
+                ) { FlowIcons.Torch(Modifier.size(24.dp)) }
             }
         }
     }
@@ -602,27 +596,6 @@ private fun CameraPermissionShutter(
                 role = Role.Button
             },
     )
-}
-
-@Composable
-private fun CaptureActionButton(
-    enabled: Boolean,
-    operationGate: CaptureOperationGate,
-    onClick: () -> Unit,
-    contentDescription: String,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    Surface(
-        onClick = { if (enabled && !operationGate.isActive) onClick() },
-        enabled = enabled && !operationGate.isActive,
-        modifier = modifier.size(CAMERA_SIDE_SLOT_SIZE_DP.dp).semantics { this.contentDescription = contentDescription },
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-    ) {
-        Box(contentAlignment = Alignment.Center) { content() }
-    }
 }
 
 @Composable

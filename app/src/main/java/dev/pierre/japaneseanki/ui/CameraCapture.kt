@@ -181,10 +181,8 @@ internal fun CameraShutterButton(
     ) {
         if (presentation.showProgress) {
             MotionAwareProgressIndicator(
-                modifier = Modifier.size(32.dp),
                 color = MaterialTheme.colorScheme.onPrimary,
-                diameter = 32.dp,
-                strokeWidth = 2.dp,
+                progressSize = ProgressSize.Medium,
                 stateDescription = shutterStateDescription,
             )
         }

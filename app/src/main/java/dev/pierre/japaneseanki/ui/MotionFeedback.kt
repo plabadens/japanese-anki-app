@@ -91,22 +91,27 @@ internal fun rememberSystemMotionEnabled(): Boolean {
 private fun readSystemMotionEnabled(): Boolean =
     Build.VERSION.SDK_INT < 26 || ValueAnimator.areAnimatorsEnabled()
 
+internal enum class ProgressSize(val diameter: Dp, val strokeWidth: Dp) {
+    Small(16.dp, 2.dp),
+    Medium(32.dp, 2.dp),
+    Large(40.dp, 2.dp),
+}
+
 /** A non-animated indeterminate indicator that retains progress semantics. */
 @Composable
 internal fun StaticProgressIndicator(
     modifier: Modifier = Modifier,
     color: Color,
-    diameter: Dp,
-    strokeWidth: Dp = 2.dp,
+    progressSize: ProgressSize,
     stateDescription: String,
 ) {
     Canvas(
-        modifier = modifier.size(diameter).semantics {
+        modifier = modifier.size(progressSize.diameter).semantics {
             progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
             this.stateDescription = stateDescription
         },
     ) {
-        val stroke = strokeWidth.toPx()
+        val stroke = progressSize.strokeWidth.toPx()
         val radius = (size.minDimension - stroke) / 2f
         val topLeft = Offset((size.width - radius * 2f) / 2f, (size.height - radius * 2f) / 2f)
         val ringSize = androidx.compose.ui.geometry.Size(radius * 2f, radius * 2f)
@@ -136,25 +141,23 @@ internal fun StaticProgressIndicator(
 internal fun MotionAwareProgressIndicator(
     modifier: Modifier = Modifier,
     color: Color,
-    diameter: Dp,
-    strokeWidth: Dp = 2.dp,
+    progressSize: ProgressSize,
     stateDescription: String,
 ) {
     if (LocalMotionEnabled.current) {
         CircularProgressIndicator(
-            modifier = modifier.size(diameter).semantics {
+            modifier = modifier.size(progressSize.diameter).semantics {
                 progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
                 this.stateDescription = stateDescription
             },
             color = color,
-            strokeWidth = strokeWidth,
+            strokeWidth = progressSize.strokeWidth,
         )
     } else {
         StaticProgressIndicator(
             modifier = modifier,
             color = color,
-            diameter = diameter,
-            strokeWidth = strokeWidth,
+            progressSize = progressSize,
             stateDescription = stateDescription,
         )
     }
