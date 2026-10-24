@@ -79,6 +79,9 @@ import dev.pierre.japaneseanki.ui.reviewTranslationFailureStatus
 import dev.pierre.japaneseanki.ui.reviewAudioGenerationFailureMessage
 import dev.pierre.japaneseanki.ui.reviewAudioPlaybackFailureMessage
 import dev.pierre.japaneseanki.ui.reviewAudioSendBlocker
+import dev.pierre.japaneseanki.ui.RecoveryReason
+import dev.pierre.japaneseanki.ui.SendPhase
+import dev.pierre.japaneseanki.ui.SendState
 import dev.pierre.japaneseanki.ui.FlowTheme
 import dev.pierre.japaneseanki.ui.FlowTopBar
 import dev.pierre.japaneseanki.ui.LocalTouchFeedbackDispatcher
@@ -385,16 +388,16 @@ internal fun ankiBrowserIntent(noteId: Long): Intent =
 internal fun draftCallbackIsCurrent(
     callbackGeneration: Long,
     currentGeneration: Long,
-    submissionLocked: Boolean,
-): Boolean = !submissionLocked && callbackGeneration == currentGeneration
+    locked: Boolean,
+): Boolean = !locked && callbackGeneration == currentGeneration
 
 internal fun ocrResultIsCurrent(
     callbackGeneration: Long,
     currentGeneration: Long,
     callbackEditorRevision: Long,
     currentEditorRevision: Long,
-    submissionLocked: Boolean,
-): Boolean = draftCallbackIsCurrent(callbackGeneration, currentGeneration, submissionLocked) &&
+    locked: Boolean,
+): Boolean = draftCallbackIsCurrent(callbackGeneration, currentGeneration, locked) &&
     callbackEditorRevision == currentEditorRevision
 
 internal fun intentPayloadMatches(
@@ -986,17 +989,25 @@ class MainActivity : ComponentActivity() {
             var captureInProgress by remember { mutableStateOf(false) }
             var showModelMenu by remember { mutableStateOf(false) }
             var showDeckMenu by remember { mutableStateOf(false) }
-            var isSubmitting by remember { mutableStateOf(false) }
-            var duplicateBlocked by remember { mutableStateOf(false) }
             var submitMessage by remember { mutableStateOf<String?>(null) }
             val restoredPhase = SubmissionPhase.fromPersisted(
                 preferences.getString(SubmissionRecoveryKeys.STATUS, null),
             )
-            var recoveryRequired by remember { mutableStateOf(restoredPhase != null) }
-            var recoveryPhase by remember { mutableStateOf(restoredPhase) }
-            var frozenRetryReady by remember { mutableStateOf(false) }
-            var recoveryMessage by remember {
+            var sendState by remember {
                 mutableStateOf(
+                    SendState(
+                        phase = when (restoredPhase) {
+                            null -> SendPhase.Idle
+                            SubmissionPhase.DESTINATION_VERIFIED -> SendPhase.Verified
+                            else -> SendPhase.Inserted
+                        },
+                        frozen = if (restoredPhase != null) readFrozenSubmission(preferences) else null,
+                        recovery = when (restoredPhase) {
+                            SubmissionPhase.MEDIA_IMPORTING -> RecoveryReason.MediaInterrupted
+                            SubmissionPhase.MEDIA_IMPORTED -> RecoveryReason.MediaImported
+                            else -> RecoveryReason.None
+                        },
+                        message =
                     when (restoredPhase) {
                         SubmissionPhase.MEDIA_IMPORTING -> {
                             val operation = preferences.getString(SubmissionRecoveryKeys.MEDIA_OPERATION, null)
@@ -1013,12 +1024,44 @@ class MainActivity : ComponentActivity() {
                         SubmissionPhase.DESTINATION_VERIFIED -> this@MainActivity.getString(R.string.card_send_recovery_destination_verified_initial)
                         null -> null
                     },
+                    ),
                 )
             }
-            var recoveryDuplicate by remember { mutableStateOf(false) }
-            var knownNoteId by remember { mutableStateOf<Long?>(null) }
-            var publishedFrozenSnapshot by remember { mutableStateOf<FrozenSubmission?>(null) }
-            var completedSubmission by remember { mutableStateOf<FrozenSubmission?>(null) }
+            fun updateRecoveryMessage(
+                message: String?,
+                reason: RecoveryReason = sendState.recovery,
+                phase: SendPhase = sendState.phase,
+            ) {
+                sendState = sendState.copy(message = message, recovery = reason, phase = phase)
+            }
+            val isSubmitting = sendState.submitting
+            val duplicateBlocked = sendState.duplicateBlocked
+            val recoveryRequired = sendState.recoveryRequired
+            val frozenRetryReady = sendState.retryReady
+            val recoveryDuplicate = sendState.recovery == RecoveryReason.MatchingNoteExists && sendState.phase != SendPhase.Idle
+            val recoveryMessage = sendState.message
+            val completedSubmission = sendState.completedSubmission
+            val knownNoteId = sendState.duplicateNoteId ?: sendState.frozen?.noteId.takeIf { sendState.recoveryRequired }
+            val recoveryPhase = when (sendState.recovery) {
+                RecoveryReason.MediaInterrupted -> SubmissionPhase.MEDIA_IMPORTING
+                RecoveryReason.MediaImported -> SubmissionPhase.MEDIA_IMPORTED
+                RecoveryReason.MatchingNoteExists -> SubmissionPhase.NOTE_INSERTING
+                RecoveryReason.SavedNoteMissing,
+                RecoveryReason.DestinationUnavailable,
+                RecoveryReason.Unverifiable -> when {
+                    sendState.phase == SendPhase.Verified -> SubmissionPhase.DESTINATION_VERIFIED
+                    sendState.frozen?.noteId != null -> SubmissionPhase.NOTE_INSERTED
+                    else -> restoredPhase ?: SubmissionPhase.NOTE_INSERTING
+                }
+                RecoveryReason.None -> when {
+                    sendState.phase == SendPhase.Verified && sendState.completedNoteId == null ->
+                        SubmissionPhase.DESTINATION_VERIFIED
+                    sendState.phase == SendPhase.Inserted && sendState.frozen?.noteId != null ->
+                        SubmissionPhase.NOTE_INSERTED
+                    sendState.phase == SendPhase.Inserted -> restoredPhase ?: SubmissionPhase.NOTE_INSERTING
+                    else -> null
+                }
+            }
             var pitchInfoExpanded by remember { mutableStateOf(false) }
             var frozenSnapshotAppliedRevision by remember { mutableStateOf(-1L) }
             var draftGeneration by remember { mutableStateOf(0L) }
@@ -1027,10 +1070,9 @@ class MainActivity : ComponentActivity() {
             val selectedModel = noteTypes.firstOrNull { it.id == selectedModelId }
             val selectedDeck = decks.firstOrNull { it.id == selectedDeckId }
             val incoming = sharedText.value
-            val submissionLocked = isSubmitting || recoveryRequired || frozenRetryReady || duplicateBlocked
             val blockedStatusPrefix = stringResource(R.string.card_blocked)
-            val navigationLocked = submissionLocked || captureInProgress
-            val currentSubmissionLocked = rememberUpdatedState(submissionLocked)
+            val navigationLocked = sendState.locked || captureInProgress
+            val currentSubmissionLocked = rememberUpdatedState(sendState.locked)
             val currentDraftGeneration = rememberUpdatedState(draftGeneration)
             val currentEditorInputRevision = rememberUpdatedState(editorInputRevision)
             val currentSetupGeneration = rememberUpdatedState(setupGeneration)
@@ -1225,17 +1267,10 @@ class MainActivity : ComponentActivity() {
                 noteImagePath = null
                 processedImagePath = null
                 clearPersistedDraft(preferences, File(filesDir, "draft"))
-                publishedFrozenSnapshot = null
-                completedSubmission = null
-                duplicateBlocked = false
+                sendState = SendState(message = sendState.message)
                 submitMessage = null
                 frozenSnapshotAppliedRevision = -1L
                 draftGeneration++
-                frozenRetryReady = false
-                recoveryRequired = false
-                recoveryPhase = null
-                recoveryDuplicate = false
-                knownNoteId = null
                 imageProcessingRevision++
                 imageProcessing = false
                 imageError = null
@@ -1315,7 +1350,7 @@ class MainActivity : ComponentActivity() {
                 if (text != editor.text) {
                     cardInvalidated = true
                     generationStarted = false
-                    if (submissionLocked) translationRequestRevision++ else updateTranslationSentence(text)
+                    if (sendState.locked) translationRequestRevision++ else updateTranslationSentence(text)
                 }
                 editor = TextFieldValue(text, selection = TextRange(text.length))
             }
@@ -1542,7 +1577,7 @@ class MainActivity : ComponentActivity() {
                 Unit
             }
             val stagePhotoReplacement: (File) -> Unit = stagePhotoReplacement@{ file ->
-                if (submissionLocked) return@stagePhotoReplacement
+                if (sendState.locked) return@stagePhotoReplacement
                 check(
                     preferences.edit().putString("pending_replacement_image_path", file.absolutePath).commit(),
                 ) { this@MainActivity.getString(R.string.legacy_capture_pending_photo_replacement_save_failed) }
@@ -1612,8 +1647,8 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            androidx.compose.runtime.LaunchedEffect(Unit, draftGeneration, submissionLocked) {
-                if (submissionLocked) return@LaunchedEffect
+            androidx.compose.runtime.LaunchedEffect(Unit, draftGeneration, sendState.locked) {
+                if (sendState.locked) return@LaunchedEffect
                 val source = noteImagePath?.let(::File)?.takeIf(File::isFile)
                 if (source != null && processedImagePath?.let(::File)?.isFile != true) {
                     processImage(source, photoSourcePath == source.absolutePath && editor.text.isBlank())
@@ -1622,7 +1657,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            androidx.compose.runtime.LaunchedEffect(dictionaryRetry, setupGeneration, submissionLocked) {
+            androidx.compose.runtime.LaunchedEffect(dictionaryRetry, setupGeneration, sendState.locked) {
                 if (currentSubmissionLocked.value) return@LaunchedEffect
                 val callbackGeneration = setupGeneration
                 dictionaryLoading = true
@@ -1715,7 +1750,7 @@ class MainActivity : ComponentActivity() {
             }
 
             fun commitDictionaryChoice(choice: DictionaryMeaningChoice) {
-                if (submissionLocked) return
+                if (sendState.locked) return
                 val previousIsResolved = selectedDictionaryEntry?.let {
                     it.id == selectedDictionaryEntryId && it.expression == vocabulary && it.reading == vocabularyReading
                 } == true
@@ -1747,7 +1782,7 @@ class MainActivity : ComponentActivity() {
 
             /** A corrected vocabulary reading re-resolves entry, pitch and recording identity. */
             fun applyVocabularyReading(raw: String): Boolean {
-                if (submissionLocked) return false
+                if (sendState.locked) return false
                 val corrected = VocabularyReadings.normalize(raw)
                 val match = VocabularyReadings.selectEntry(
                     dictionaryEntries.map { ReadingCandidate(it.id, it.expression, it.reading) },
@@ -1810,7 +1845,7 @@ class MainActivity : ComponentActivity() {
 
             /** Correct one kanji span's reading without editing the sentence (SPEC §4.5). */
             fun applyReadingCorrection(span: TargetSpan, reading: String): Boolean {
-                if (submissionLocked) return false
+                if (sendState.locked) return false
                 val rejection = SentenceReadings.rejection(editor.text, span, reading)
                 if (rejection != null) {
                     readingCorrectionError = rejection
@@ -1839,12 +1874,12 @@ class MainActivity : ComponentActivity() {
             }
 
             androidx.compose.runtime.LaunchedEffect(
-                editor.text, translationRequestRevision, translationRetry, translationAutoAllowed, submissionLocked,
+                editor.text, translationRequestRevision, translationRetry, translationAutoAllowed, sendState.locked,
                 generationStarted,
             ) {
                 val sentence = editor.text
                 // Network work starts only after the deliberate Continue, never on typing or token taps.
-                if (sentence.isBlank() || submissionLocked || !generationStarted) return@LaunchedEffect
+                if (sentence.isBlank() || sendState.locked || !generationStarted) return@LaunchedEffect
 
                 var requestDraft = translationDraft
                 if (requestDraft.sentence != sentence) {
@@ -1916,7 +1951,7 @@ class MainActivity : ComponentActivity() {
             }
 
             androidx.compose.runtime.LaunchedEffect(
-                analyzerReady, editor.text, analysisRetry, draftGeneration, submissionLocked, dictionaryReady,
+                analyzerReady, editor.text, analysisRetry, draftGeneration, sendState.locked, dictionaryReady,
             ) {
                 if (currentSubmissionLocked.value) return@LaunchedEffect
                 val callbackGeneration = draftGeneration
@@ -1957,7 +1992,7 @@ class MainActivity : ComponentActivity() {
                 target, editor.text, japaneseTokens, vocabulary, vocabularyReading,
                 vocabularyReadingError, dependentFieldsStale,
             ) {
-                if (submissionLocked) return@LaunchedEffect
+                if (sendState.locked) return@LaunchedEffect
                 val targetSpan = target ?: return@LaunchedEffect
                 val targetText = targetSpan.textIn(editor.text) ?: return@LaunchedEffect
                 val resolved = resolveAnalyzedLemma(japaneseTokens, targetSpan) ?: return@LaunchedEffect
@@ -1975,7 +2010,7 @@ class MainActivity : ComponentActivity() {
             androidx.compose.runtime.LaunchedEffect(
                 target, editor.text, japaneseTokens, sentenceReading,
             ) {
-                if (submissionLocked) return@LaunchedEffect
+                if (sendState.locked) return@LaunchedEffect
                 val targetSpan = target ?: return@LaunchedEffect
                 val targetText = targetSpan.textIn(editor.text) ?: return@LaunchedEffect
                 if (sentenceReading.isNotBlank() || !containsKanji(targetText)) {
@@ -2070,11 +2105,11 @@ class MainActivity : ComponentActivity() {
             // Inputs are cheap to declare. Provider work is started only by the matching
             // sentence-commit or word-selection authorization token.
             androidx.compose.runtime.LaunchedEffect(
-                route, submissionLocked, audioInputRevision, reviewAuthorizationSequence,
+                route, sendState.locked, audioInputRevision, reviewAuthorizationSequence,
                 pendingSentenceAudioAuthorization, pendingWordAudioAuthorization,
                 currentSentenceIdentity.value, currentWordIdentity.value,
             ) {
-                if (submissionLocked) return@LaunchedEffect
+                if (sendState.locked) return@LaunchedEffect
 
                 val declaredAudioRevision = reviewAuthorizationSequence
                 val sentenceText = editor.text
@@ -2230,7 +2265,7 @@ class MainActivity : ComponentActivity() {
             }
 
 
-            androidx.compose.runtime.LaunchedEffect(dictionaryReady, target, editor.text, dictionaryRetry, japaneseTokens, draftGeneration, submissionLocked) {
+            androidx.compose.runtime.LaunchedEffect(dictionaryReady, target, editor.text, dictionaryRetry, japaneseTokens, draftGeneration, sendState.locked) {
                 if (currentSubmissionLocked.value) return@LaunchedEffect
                 val callbackGeneration = draftGeneration
                 val targetText = target?.textIn(editor.text)
@@ -2296,7 +2331,7 @@ class MainActivity : ComponentActivity() {
 
             androidx.compose.runtime.LaunchedEffect(
                 dictionaryReady, selectedDictionaryEntryId, selectedDictionaryEntry, vocabulary, vocabularyReading,
-                target, editor.text, dictionaryRetry, draftGeneration, submissionLocked, ajtAvailability,
+                target, editor.text, dictionaryRetry, draftGeneration, sendState.locked, ajtAvailability,
             ) {
                 if (currentSubmissionLocked.value) return@LaunchedEffect
                 val callbackGeneration = draftGeneration
@@ -2340,8 +2375,8 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            androidx.compose.runtime.LaunchedEffect(incoming, submissionLocked) {
-                if (submissionLocked) {
+            androidx.compose.runtime.LaunchedEffect(incoming, sendState.locked) {
+                if (sendState.locked) {
                     incoming?.let {
                         val rawImage = imageFromIntent(intent)
                         if (clearConsumedShareIntent(expectedText = it, expectedImage = rawImage)) {
@@ -2366,8 +2401,8 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            androidx.compose.runtime.LaunchedEffect(sharedImage.value, submissionLocked) {
-                if (submissionLocked) {
+            androidx.compose.runtime.LaunchedEffect(sharedImage.value, sendState.locked) {
+                if (sendState.locked) {
                     sharedImage.value?.let {
                         val rawText = textFromIntent(intent)
                         val rawImage = imageFromIntent(intent)
@@ -2679,7 +2714,7 @@ class MainActivity : ComponentActivity() {
                         }
                 }
             }
-            if (!submissionLocked && showReplace && (incoming != null || pendingPhotoFile != null || pendingSharedImageUri != null)) {
+            if (!sendState.locked && showReplace && (incoming != null || pendingPhotoFile != null || pendingSharedImageUri != null)) {
                 FlowDialog(
                     onDismissRequest = {
                         discardSharePayload()
@@ -2759,7 +2794,7 @@ class MainActivity : ComponentActivity() {
                     Text(stringResource(R.string.choose_sentence), style = MaterialTheme.typography.titleLarge)
                     ocrChoices.forEach { block ->
                         OutlinedButton(
-                            enabled = !submissionLocked,
+                            enabled = !sendState.locked,
                             onClick = {
                                 showOcrSheet = false
                                 ocrChoices = emptyList()
@@ -2791,7 +2826,7 @@ class MainActivity : ComponentActivity() {
                     },
                     confirmButton = {
                         TextButton(
-                            enabled = !submissionLocked,
+                            enabled = !sendState.locked,
                             onClick = {
                                 showDiscardConfirm = false
                                 clearDraft()
@@ -2868,8 +2903,8 @@ class MainActivity : ComponentActivity() {
             val modelMapping = selectedModel?.let {
                 AnkiFieldContract.mapToModelOrder(it.fields, fieldsByName.orEmpty())
             }
-            val frozenForDisplay = completedSubmission ?: if (submissionLocked) {
-                publishedFrozenSnapshot ?: readFrozenSubmission(preferences)
+            val frozenForDisplay = completedSubmission ?: if (sendState.locked) {
+                sendState.frozen ?: readFrozenSubmission(preferences)
             } else null
             val restoredFrozenForUi = if (frozenRetryReady) frozenForDisplay else null
             val displaySentence = frozenForDisplay?.sentence ?: editor.text
@@ -2926,8 +2961,8 @@ class MainActivity : ComponentActivity() {
                 (frozenRetryReady || pitch != null) &&
                 (frozenRetryReady || (sentenceAudioReady && wordAudioReady)) &&
                 (frozenRetryReady || (!dictionaryLoading && !dictionarySearchLoading)) &&
-                setupLoadedSuccessfully && !setupLoading && setupError == null && !recoveryRequired &&
-                !isSubmitting && !duplicateBlocked
+                setupLoadedSuccessfully && !setupLoading && setupError == null &&
+                (sendState.editingEnabled || frozenRetryReady)
 
             // The card has one action: Send. Preparation is automatic, so an invalidated card only
             // greys Send out until every prepared artifact matches the committed sentence again.
@@ -2971,9 +3006,9 @@ class MainActivity : ComponentActivity() {
                 frozenSnapshotAppliedRevision = snapshot.revision
             }
 
-            androidx.compose.runtime.LaunchedEffect(submissionLocked, publishedFrozenSnapshot) {
-                if (!submissionLocked) return@LaunchedEffect
-                val snapshot = publishedFrozenSnapshot ?: readFrozenSubmission(preferences) ?: return@LaunchedEffect
+            androidx.compose.runtime.LaunchedEffect(sendState.locked, sendState.frozen) {
+                if (!sendState.locked) return@LaunchedEffect
+                val snapshot = sendState.frozen ?: readFrozenSubmission(preferences) ?: return@LaunchedEffect
                 if (frozenSnapshotAppliedRevision == snapshot.revision) return@LaunchedEffect
                 applyFrozenSubmissionToDraft(snapshot)
             }
@@ -2988,9 +3023,12 @@ class MainActivity : ComponentActivity() {
                 ) ?: return@LaunchedEffect
                 val snapshot = readFrozenSubmission(preferences)
                 if (snapshot == null) {
-                    recoveryMessage = this@MainActivity.getString(R.string.card_the_frozen_send_record_is_incomplete_keep)
+                    updateRecoveryMessage(
+                        this@MainActivity.getString(R.string.card_the_frozen_send_record_is_incomplete_keep),
+                    )
                     return@LaunchedEffect
                 }
+                sendState = sendState.copy(frozen = snapshot)
                 if (selectedModelId != snapshot.modelId) {
                     selectedModelId = snapshot.modelId
                     return@LaunchedEffect
@@ -3001,22 +3039,29 @@ class MainActivity : ComponentActivity() {
                 }
                 val model = noteTypes.firstOrNull { it.id == snapshot.modelId }
                 if (model == null) {
-                    recoveryMessage = this@MainActivity.getString(R.string.card_the_frozen_note_type_is_unavailable_confir)
+                    updateRecoveryMessage(
+                        this@MainActivity.getString(R.string.card_the_frozen_note_type_is_unavailable_confir),
+                        RecoveryReason.DestinationUnavailable,
+                    )
                     return@LaunchedEffect
                 }
                 if (model.fields != snapshot.modelFields) {
-                    recoveryMessage = this@MainActivity.getString(R.string.card_the_frozen_note_type_fields_changed_confir)
+                    updateRecoveryMessage(
+                        this@MainActivity.getString(R.string.card_the_frozen_note_type_fields_changed_confir),
+                    )
                     return@LaunchedEffect
                 }
                 val values = snapshot.modelFields.zip(snapshot.orderedFields).toMap()
                 if (phase == SubmissionPhase.NOTE_INSERTED || phase == SubmissionPhase.DESTINATION_VERIFIED) {
                     val noteId = snapshot.noteId
                     if (noteId == null) {
-                        recoveryMessage = this@MainActivity.getString(R.string.card_the_inserted_note_id_was_not_saved_the_out)
+                        updateRecoveryMessage(
+                            this@MainActivity.getString(R.string.card_the_inserted_note_id_was_not_saved_the_out),
+                            RecoveryReason.SavedNoteMissing,
+                        )
                         return@LaunchedEffect
                     }
-                    knownNoteId = noteId
-                    recoveryMessage = this@MainActivity.getString(R.string.card_checking_the_saved_note_id_and_destination)
+                    updateRecoveryMessage(this@MainActivity.getString(R.string.card_checking_the_saved_note_id_and_destination))
                     try {
                         val decision = withContext(Dispatchers.IO) {
                             val gateway = AnkiDroidGateway(contentResolver)
@@ -3027,52 +3072,69 @@ class MainActivity : ComponentActivity() {
                                 check(preferences.edit().putString(SubmissionRecoveryKeys.STATUS, SubmissionPhase.DESTINATION_VERIFIED.persisted).commit())
                                 persistLastSentTags(snapshot)
                                 check(preferences.edit().putString(SubmissionRecoveryKeys.STATUS, "done").commit())
-                                recoveryRequired = false
-                                recoveryPhase = null
-                                frozenRetryReady = false
+                                sendState = sendState.copy(
+                                    phase = SendPhase.Verified,
+                                    frozen = snapshot,
+                                    completedNoteId = noteId,
+                                    duplicateNoteId = null,
+                                    recovery = RecoveryReason.None,
+                                )
                                 verifiedDelivery = true
                                 touchFeedbackDispatcher.dispatch(TouchFeedbackEvent.DELIVERY_VERIFIED)
-                                completedSubmission = snapshot
-                                knownNoteId = null
                                 submitMessage = this@MainActivity.getString(R.string.card_note_1_d_recovered_in_the_selected_deck, noteId.toString())
                             }
-                            NoteInsertedRecoveryDecision.NEEDS_REVIEW -> recoveryMessage =
-                                this@MainActivity.getString(R.string.card_the_saved_note_has_cards_in_another_or_mix)
-                            NoteInsertedRecoveryDecision.INDETERMINATE -> recoveryMessage =
-                                this@MainActivity.getString(R.string.card_the_saved_note_id_has_no_verifiable_cards)
+                            NoteInsertedRecoveryDecision.NEEDS_REVIEW -> updateRecoveryMessage(
+                                this@MainActivity.getString(R.string.card_the_saved_note_has_cards_in_another_or_mix),
+                            )
+                            NoteInsertedRecoveryDecision.INDETERMINATE -> updateRecoveryMessage(
+                                this@MainActivity.getString(R.string.card_the_saved_note_id_has_no_verifiable_cards),
+                            )
                             NoteInsertedRecoveryDecision.FAIL -> error(this@MainActivity.getString(R.string.card_frozen_note_destination_invalid))
                         }
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
-                        recoveryMessage = this@MainActivity.getString(R.string.card_could_not_verify_the_saved_note_id_retry_t)
+                        updateRecoveryMessage(
+                            this@MainActivity.getString(R.string.card_could_not_verify_the_saved_note_id_retry_t),
+                            RecoveryReason.Unverifiable,
+                        )
                     }
                     return@LaunchedEffect
                 }
                 if (phase != SubmissionPhase.NOTE_INSERTING) return@LaunchedEffect
-                recoveryMessage = this@MainActivity.getString(R.string.card_checking_the_frozen_send_revision_in_ankid)
+                updateRecoveryMessage(this@MainActivity.getString(R.string.card_checking_the_frozen_send_revision_in_ankid))
                 try {
                     val duplicateId = withContext(Dispatchers.IO) {
                         AnkiDroidGateway(contentResolver).hasMatchingNoteInAnyDeck(model, values)
                     }
                     if (duplicateId != null) {
-                        recoveryDuplicate = true
-                        knownNoteId = duplicateId
-                        recoveryMessage = this@MainActivity.getString(R.string.card_a_matching_note_exists_for_the_frozen_revi)
+                        updateRecoveryMessage(
+                            this@MainActivity.getString(R.string.card_a_matching_note_exists_for_the_frozen_revi),
+                            RecoveryReason.MatchingNoteExists,
+                            SendPhase.Inserted,
+                        )
+                        sendState = sendState.copy(duplicateNoteId = duplicateId)
                     } else if (decks.none { it.id == snapshot.deckId }) {
-                        recoveryDuplicate = false
-                        recoveryMessage = this@MainActivity.getString(R.string.card_no_matching_note_was_found_but_the_frozen)
+                        updateRecoveryMessage(
+                            this@MainActivity.getString(R.string.card_no_matching_note_was_found_but_the_frozen),
+                            RecoveryReason.DestinationUnavailable,
+                            SendPhase.Preparing,
+                        )
                     } else {
-                        recoveryRequired = false
-                        frozenRetryReady = true
-                        recoveryDuplicate = false
-                        knownNoteId = null
-                        recoveryMessage = this@MainActivity.getString(R.string.card_no_matching_note_was_found_for_the_frozen)
+                        updateRecoveryMessage(
+                            this@MainActivity.getString(R.string.card_no_matching_note_was_found_for_the_frozen),
+                            RecoveryReason.None,
+                            SendPhase.Preparing,
+                        )
                     }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
-                    recoveryMessage = this@MainActivity.getString(R.string.card_could_not_verify_the_frozen_send_retry_the)
+                    updateRecoveryMessage(
+                        this@MainActivity.getString(R.string.card_could_not_verify_the_frozen_send_retry_the),
+                        RecoveryReason.Unverifiable,
+                        SendPhase.Inserted,
+                    )
                 }
             }
 
@@ -3258,18 +3320,12 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 if (duplicateBlocked) TextButton(onClick = {
-                    val blockedSnapshot = publishedFrozenSnapshot ?: readFrozenSubmission(preferences)
+                    val blockedSnapshot = sendState.frozen ?: readFrozenSubmission(preferences)
                     if (blockedSnapshot != null) applyFrozenSubmissionToDraft(blockedSnapshot)
                     clearPendingSubmission(preferences)
-                    duplicateBlocked = false
-                    recoveryRequired = false
-                    recoveryPhase = null
-                    frozenRetryReady = false
-                    publishedFrozenSnapshot = null
+                    sendState = SendState()
                     frozenSnapshotAppliedRevision = -1L
-                    knownNoteId = null
                     submitMessage = null
-                    recoveryMessage = null
                     route = AppRoute.Card
                     draftGeneration++
                 }, modifier = Modifier.heightIn(min = 48.dp)) {
@@ -3280,100 +3336,139 @@ class MainActivity : ComponentActivity() {
                     Text(stringResource(R.string.card_recovery_is_held_until_ankidroid_setup_suc), style = MaterialTheme.typography.bodyMedium)
                 } else if (recoveryRequired && recoveryDuplicate) {
                     TextButton(onClick = {
-                        val confirmedSnapshot = publishedFrozenSnapshot ?: readFrozenSubmission(preferences)
+                        val confirmedSnapshot = sendState.frozen ?: readFrozenSubmission(preferences)
                         if (confirmedSnapshot == null) {
-                            recoveryMessage = this@MainActivity.getString(R.string.card_the_frozen_send_is_unavailable_keep_the_dr)
+                            updateRecoveryMessage(
+                                this@MainActivity.getString(R.string.card_the_frozen_send_is_unavailable_keep_the_dr),
+                                RecoveryReason.MatchingNoteExists,
+                            )
                             return@TextButton
                         }
                         persistLastSentTags(confirmedSnapshot)
                         check(preferences.edit().putString(SubmissionRecoveryKeys.STATUS, "done").commit()) {
                             this@MainActivity.getString(R.string.card_resolved_send_state_save_failed)
                         }
-                        completedSubmission = confirmedSnapshot
-                        recoveryRequired = false
-                        recoveryPhase = null
-                        recoveryDuplicate = false
-                        knownNoteId = null
+                        sendState = sendState.copy(
+                            phase = SendPhase.Verified,
+                            frozen = confirmedSnapshot,
+                            completedNoteId = sendState.duplicateNoteId ?: confirmedSnapshot.noteId,
+                            duplicateNoteId = null,
+                            recovery = RecoveryReason.None,
+                        )
                         submitMessage = this@MainActivity.getString(R.string.card_pending_send_marked_complete)
                     }) { Text(stringResource(R.string.card_treat_pending_send_as_complete)) }
                 } else if (recoveryRequired && recoveryPhase == SubmissionPhase.MEDIA_IMPORTING) {
                     val pendingOperation = preferences.getString(SubmissionRecoveryKeys.MEDIA_OPERATION, null)
                         ?.let { name -> runCatching { MediaImportOperation.valueOf(name) }.getOrNull() }
                     TextButton(onClick = {
-                        recoveryRequired = false
-                        frozenRetryReady = true
-                        recoveryMessage = this@MainActivity.getString(R.string.card_retrying_the_frozen_media_sequence_may_dup)
+                        updateRecoveryMessage(
+                            this@MainActivity.getString(R.string.card_retrying_the_frozen_media_sequence_may_dup),
+                            RecoveryReason.None,
+                            SendPhase.Preparing,
+                        )
                     }) { Text(stringResource(R.string.card_retry_media_import_may_duplicate)) }
                     if (pendingOperation == MediaImportOperation.IMAGE) {
                         TextButton(onClick = {
                             clearPendingSubmission(preferences)
                             removeDraftImage()
-                            recoveryRequired = false
-                            recoveryPhase = null
-                            recoveryMessage = this@MainActivity.getString(R.string.card_the_interrupted_image_was_discarded_the_re)
+                            updateRecoveryMessage(
+                                this@MainActivity.getString(R.string.card_the_interrupted_image_was_discarded_the_re),
+                                RecoveryReason.None,
+                                SendPhase.Idle,
+                            )
                         }) { Text(stringResource(R.string.card_remove_interrupted_image)) }
                     } else {
                         TextButton(onClick = {
                             clearPendingSubmission(preferences)
                             audioController.releaseFreeze(retainFiles = true)
                             audioSnapshot = audioController.snapshot()
-                            publishedFrozenSnapshot = null
-                            recoveryRequired = false
-                            recoveryPhase = null
-                            frozenRetryReady = false
-                            recoveryMessage = this@MainActivity.getString(R.string.card_frozen_recovery_cleared_after_review_the_d)
+                            updateRecoveryMessage(
+                                this@MainActivity.getString(R.string.card_frozen_recovery_cleared_after_review_the_d),
+                                RecoveryReason.None,
+                                SendPhase.Idle,
+                            )
+                            sendState = sendState.copy(frozen = null, duplicateNoteId = null)
                         }) { Text(stringResource(R.string.card_i_checked_clear_frozen_recovery)) }
                     }
                 } else if (recoveryRequired && recoveryPhase == SubmissionPhase.MEDIA_IMPORTED) {
                     TextButton(onClick = {
-                        recoveryRequired = false
-                        frozenRetryReady = true
-                        recoveryMessage = this@MainActivity.getString(R.string.card_resuming_the_frozen_send_will_reuse_the_sa)
+                        updateRecoveryMessage(
+                            this@MainActivity.getString(R.string.card_resuming_the_frozen_send_will_reuse_the_sa),
+                            RecoveryReason.None,
+                            SendPhase.Preparing,
+                        )
                     }) { Text(stringResource(R.string.card_resume_frozen_send)) }
                     TextButton(onClick = {
                         clearPendingSubmission(preferences)
                         removeDraftImage()
-                        recoveryRequired = false
-                        recoveryPhase = null
-                        recoveryMessage = this@MainActivity.getString(R.string.card_pending_send_cleared_after_review_configur)
+                        updateRecoveryMessage(
+                            this@MainActivity.getString(R.string.card_pending_send_cleared_after_review_configur),
+                            RecoveryReason.None,
+                            SendPhase.Idle,
+                        )
                     }) { Text(stringResource(R.string.card_i_checked_configure_destination)) }
-                } else if (recoveryRequired && recoveryMessage?.contains("No matching note") == true) {
-                    TextButton(onClick = {
-                        recoveryRequired = false
-                        frozenRetryReady = true
-                        recoveryMessage = this@MainActivity.getString(R.string.card_retrying_the_frozen_send_the_draft_remains)
-                    }) { Text(stringResource(R.string.card_retry_frozen_send)) }
-                } else if (recoveryRequired && knownNoteId != null && recoveryMessage?.contains("no longer") == true) {
-                    FlowStatusText(
-                        stringResource(R.string.card_the_saved_note_id_cannot_be_found_no_autom),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    TextButton(onClick = {
-                        clearPendingSubmission(preferences)
-                        recoveryRequired = false
-                        recoveryPhase = null
-                        frozenRetryReady = false
-                        knownNoteId = null
-                        recoveryMessage = this@MainActivity.getString(R.string.card_the_missing_saved_note_outcome_was_explici)
-                    }) { Text(stringResource(R.string.card_i_checked_resolve_outcome)) }
-                } else if (recoveryRequired && recoveryMessage?.contains("unavailable") == true) {
-                    TextButton(onClick = {
-                        clearPendingSubmission(preferences)
-                        recoveryRequired = false
-                        recoveryPhase = null
-                        recoveryMessage = this@MainActivity.getString(R.string.card_outcome_acknowledged_choose_a_valid_destin)
-                    }) { Text(stringResource(R.string.card_i_checked_configure_destination)) }
-                } else if (recoveryRequired && recoveryMessage?.startsWith("Could not verify") == true) {
-                    TextButton(onClick = { setupReload++ }) { Text(stringResource(R.string.card_retry_pending_send_check)) }
                 } else if (recoveryRequired) {
-                    TextButton(onClick = {
-                        clearPendingSubmission(preferences)
-                        recoveryRequired = false
-                        recoveryPhase = null
-                        recoveryDuplicate = false
-                        recoveryMessage = this@MainActivity.getString(R.string.card_pending_send_held_for_manual_resolution_co)
-                    }) { Text(stringResource(R.string.card_i_checked_configure_destination)) }
+                    when (sendState.recovery) {
+                        RecoveryReason.DestinationUnavailable -> {
+                            if (sendState.phase == SendPhase.Preparing) {
+                                TextButton(onClick = {
+                                    updateRecoveryMessage(
+                                        this@MainActivity.getString(R.string.card_retrying_the_frozen_send_the_draft_remains),
+                                        RecoveryReason.None,
+                                        SendPhase.Preparing,
+                                    )
+                                }) { Text(stringResource(R.string.card_retry_frozen_send)) }
+                            } else {
+                                TextButton(onClick = {
+                                    clearPendingSubmission(preferences)
+                                    updateRecoveryMessage(
+                                        this@MainActivity.getString(R.string.card_outcome_acknowledged_choose_a_valid_destin),
+                                        RecoveryReason.None,
+                                        SendPhase.Idle,
+                                    )
+                                }) { Text(stringResource(R.string.card_i_checked_configure_destination)) }
+                            }
+                        }
+                        RecoveryReason.SavedNoteMissing -> {
+                            if (knownNoteId != null) {
+                                FlowStatusText(
+                                    stringResource(R.string.card_the_saved_note_id_cannot_be_found_no_autom),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                TextButton(onClick = {
+                                    clearPendingSubmission(preferences)
+                                    updateRecoveryMessage(
+                                        this@MainActivity.getString(R.string.card_the_missing_saved_note_outcome_was_explici),
+                                        RecoveryReason.None,
+                                        SendPhase.Idle,
+                                    )
+                                }) { Text(stringResource(R.string.card_i_checked_resolve_outcome)) }
+                            } else {
+                                TextButton(onClick = {
+                                    clearPendingSubmission(preferences)
+                                    updateRecoveryMessage(
+                                        this@MainActivity.getString(R.string.card_pending_send_held_for_manual_resolution_co),
+                                        RecoveryReason.None,
+                                        SendPhase.Idle,
+                                    )
+                                }) { Text(stringResource(R.string.card_i_checked_configure_destination)) }
+                            }
+                        }
+                        RecoveryReason.Unverifiable ->
+                            TextButton(onClick = { setupReload++ }) { Text(stringResource(R.string.card_retry_pending_send_check)) }
+                        RecoveryReason.MatchingNoteExists,
+                        RecoveryReason.MediaInterrupted,
+                        RecoveryReason.MediaImported,
+                        RecoveryReason.None -> TextButton(onClick = {
+                            clearPendingSubmission(preferences)
+                            updateRecoveryMessage(
+                                this@MainActivity.getString(R.string.card_pending_send_held_for_manual_resolution_co),
+                                RecoveryReason.None,
+                                SendPhase.Idle,
+                            )
+                        }) { Text(stringResource(R.string.card_i_checked_configure_destination)) }
+                    }
                 }
             }
 
@@ -3429,7 +3524,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         val updateEditor: (TextFieldValue) -> Unit = updateEditor@{ updated ->
-                            if (submissionLocked) return@updateEditor
+                            if (sendState.locked) return@updateEditor
                             if (updated.text != editor.text) {
                                 if (photoSourcePath == null) setDraftOrigin("Type")
                                 draftGeneration++
@@ -3606,7 +3701,7 @@ class MainActivity : ComponentActivity() {
                                 onReopenOcrChooser = { showOcrSheet = ocrChoices.size > 1 },
                                 outputDirectory = File(filesDir, "draft").apply { mkdirs() },
                                 modifier = Modifier.weight(1f).fillMaxWidth(),
-                                enabled = !submissionLocked,
+                                enabled = !sendState.locked,
                                 cameraPermissionGranted = cameraPermissionGranted,
                                 onRequestCamera = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) },
                                 cameraError = cameraError,
@@ -3667,9 +3762,9 @@ class MainActivity : ComponentActivity() {
                                         wordAudioGenerating = wordAudioPresentation == ReviewAudioPresentation.Generating,
                                         submitHint = submitHint,
                                         noWordAction = reviewTarget == null && cardAnalyzerError == null && !cardAnalyzing &&
-                                            !recoveryRequired && !duplicateBlocked && completedSubmission == null && submitMessage == null,
+                                            (sendState.editingEnabled || frozenRetryReady) && submitMessage == null,
                                         canSend = canSend,
-                                        submissionLocked = submissionLocked,
+                                        submissionLocked = sendState.locked,
                                         actionHasTarget = reviewTarget != null,
                                         recoveryMessage = recoveryMessage,
                                         copy = CardPresentationCopy(
@@ -3730,16 +3825,15 @@ class MainActivity : ComponentActivity() {
                                     sentence = displaySentence,
                                     tokens = japaneseTokens,
                                     selectedSpan = reviewTarget,
-                                    selectionEnabled = !submissionLocked && completedSubmission == null &&
-                                        !duplicateBlocked && !recoveryRequired,
+                                    selectionEnabled = sendState.editingEnabled,
                                     onSelectSpan = { span ->
-                                        if (!submissionLocked && completedSubmission == null && !duplicateBlocked && !recoveryRequired) {
+                                        if (sendState.editingEnabled) {
                                             selectTarget(span)
                                             editor = editor.copy(selection = TextRange(span.start, span.end))
                                         }
                                     },
                                     furigana = if (frozenForDisplay == null) sentenceFurigana else emptyList(),
-                                    onEditSentence = { if (!submissionLocked) showSentenceEditor = true },
+                                    onEditSentence = { if (!sendState.locked) showSentenceEditor = true },
                                     translation = displayTranslation,
                                     vocabulary = displayVocabulary,
                                     vocabularyReading = displayVocabularyReading,
@@ -3751,20 +3845,20 @@ class MainActivity : ComponentActivity() {
                                     pitchStatus = cardPitchStatus,
                                     pitchPending = cardPitchPending,
                                     wordStatus = cardWordStatus,
-                                    wordAudioEnabled = selectedEntryIsResolved && !submissionLocked,
+                                    wordAudioEnabled = selectedEntryIsResolved && !sendState.locked,
                                     meaningAvailable = DictionaryMeaningChoices.hasAlternative(
                                         cardMeaningChoices,
                                         selectedMeaningChoice,
-                                    ) && !submissionLocked,
+                                    ) && !sendState.locked,
                                     onChangeMeaning = {
-                                        if (!submissionLocked && cardMeaningChoices.size > 1) showDictionarySheet = true
+                                        if (!sendState.locked && cardMeaningChoices.size > 1) showDictionarySheet = true
                                     },
                                     imagePath = frozenForDisplay?.media?.path ?: processedImagePath.takeIf { imageReady },
                                     imageFocusY = photoFocusY,
                                     notes = displayNotes,
                                     tags = displayTags,
-                                    onNotesChange = { text -> if (!submissionLocked && completedSubmission == null) notes = text },
-                                    onTagsChange = { text -> if (!submissionLocked && completedSubmission == null) tags = text },
+                                    onNotesChange = { text -> if (sendState.editingEnabled) notes = text },
+                                    onTagsChange = { text -> if (sendState.editingEnabled) tags = text },
                                     sentenceAudio = sentenceAudioPresentation,
                                     wordAudio = wordAudioPresentation,
                                     onToggleSentenceAudio = {
@@ -3901,7 +3995,7 @@ class MainActivity : ComponentActivity() {
                             sendRecoveryContent()
                         }
                         submitAction = submitAction@{
-                            if (!canSend || isSubmitting || recoveryRequired || duplicateBlocked || completedSubmission != null ||
+                            if (!canSend || (sendState.locked && !frozenRetryReady) || sendState.completedNoteId != null ||
                                 submitMessage?.startsWith(blockedStatusPrefix) == true
                             ) {
                                 return@submitAction
@@ -3933,7 +4027,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             audioSnapshot = audioController.snapshot()
-                            publishedFrozenSnapshot = restoredFrozen ?: modelMapping?.takeIf { it.isValid }?.let { mapping ->
+                            val initialFrozen = restoredFrozen ?: modelMapping?.takeIf { it.isValid }?.let { mapping ->
                                 FrozenSubmission(
                                     revision = nextSubmissionRevision(
                                         preferences.getLong(SubmissionRecoveryKeys.REVISION_SEQUENCE, 0L),
@@ -3973,13 +4067,18 @@ class MainActivity : ComponentActivity() {
                             tokenizationLoading = false
                             pitchLookupLoading = false
                             ocrLoading = false
-                            isSubmitting = true
-                            knownNoteId = null
+                            sendState = sendState.copy(
+                                phase = SendPhase.Submitting,
+                                frozen = initialFrozen,
+                                completedNoteId = null,
+                                duplicateNoteId = null,
+                                recovery = RecoveryReason.None,
+                            )
                             submitMessage = null
                             coroutineScope.launch {
                                 suspend fun publishFrozen(snapshot: FrozenSubmission) {
                                     withContext(Dispatchers.Main.immediate) {
-                                        publishedFrozenSnapshot = snapshot
+                                        sendState = sendState.copy(frozen = snapshot)
                                     }
                                 }
                                 try {
@@ -4162,7 +4261,7 @@ class MainActivity : ComponentActivity() {
                                                 throw cancelled
                                             } catch (error: Exception) {
                                                 withContext(Dispatchers.Main.immediate) {
-                                                    publishedFrozenSnapshot = durableSnapshot
+                                                    sendState = sendState.copy(frozen = durableSnapshot)
                                                 }
                                                 throw error
                                             }
@@ -4215,10 +4314,12 @@ class MainActivity : ComponentActivity() {
                                         "duplicate" -> {
                                             audioController.releaseFreeze(retainFiles = false)
                                             audioSnapshot = audioController.snapshot()
-                                            frozenRetryReady = false
-                                            recoveryPhase = null
-                                            duplicateBlocked = true
-                                            knownNoteId = outcome.noteId
+                                            sendState = sendState.copy(
+                                                phase = SendPhase.Idle,
+                                                recovery = RecoveryReason.MatchingNoteExists,
+                                                duplicateNoteId = outcome.noteId,
+                                                completedNoteId = null,
+                                            )
                                             if (restoredFrozen != null) clearPendingSubmission(preferences)
                                             submitMessage = this@MainActivity.getString(R.string.card_blocked_a_note_with_this_sentence_and_voca)
                                         }
@@ -4229,19 +4330,24 @@ class MainActivity : ComponentActivity() {
                                             audioSnapshot = audioController.snapshot()
                                             verifiedDelivery = true
                                             touchFeedbackDispatcher.dispatch(TouchFeedbackEvent.DELIVERY_VERIFIED)
-                                            completedSubmission = publishedFrozenSnapshot ?: readFrozenSubmission(preferences)
-                                            frozenRetryReady = false
-                                            recoveryRequired = false
-                                            recoveryPhase = null
-                                            recoveryDuplicate = false
-                                            knownNoteId = null
+                                            val completed = sendState.frozen ?: readFrozenSubmission(preferences)
+                                            sendState = sendState.copy(
+                                                phase = SendPhase.Verified,
+                                                frozen = completed,
+                                                completedNoteId = completed?.noteId,
+                                                duplicateNoteId = null,
+                                                recovery = RecoveryReason.None,
+                                            )
                                             submitMessage = this@MainActivity.getString(R.string.card_note_sent_to_ankidroid)
                                         }
                                         else -> {
                                             audioController.releaseFreeze(retainFiles = false)
                                             audioSnapshot = audioController.snapshot()
-                                            frozenRetryReady = false
-                                            recoveryPhase = null
+                                            sendState = sendState.copy(
+                                                phase = SendPhase.Idle,
+                                                duplicateNoteId = null,
+                                                recovery = RecoveryReason.None,
+                                            )
                                             submitMessage = this@MainActivity.getString(R.string.card_ankidroid_did_not_add_the_note_you_can_saf)
                                         }
                                     }
@@ -4251,11 +4357,13 @@ class MainActivity : ComponentActivity() {
                                     audioController.releaseFreeze(retainFiles = false)
                                     audioSnapshot = audioController.snapshot()
                                     clearPendingSubmission(preferences)
-                                    publishedFrozenSnapshot = null
-                                    recoveryRequired = false
-                                    recoveryPhase = null
-                                    frozenRetryReady = false
-                                    knownNoteId = null
+                                    sendState = sendState.copy(
+                                        phase = SendPhase.Idle,
+                                        frozen = null,
+                                        completedNoteId = null,
+                                        duplicateNoteId = null,
+                                        recovery = RecoveryReason.None,
+                                    )
                                     submitMessage = this@MainActivity.getString(
                                         R.string.card_send_retry_suffix,
                                         error.message.orEmpty(),
@@ -4273,10 +4381,14 @@ class MainActivity : ComponentActivity() {
                                         // recovery can still see the audio this draft promised.
                                         audioController.releaseFreeze(retainFiles = true)
                                         audioSnapshot = audioController.snapshot()
-                                        recoveryPhase = phase
-                                        recoveryRequired = true
-                                        frozenRetryReady = false
-                                        recoveryMessage = when (phase) {
+                                        val reason = when (phase) {
+                                            SubmissionPhase.MEDIA_IMPORTING -> RecoveryReason.MediaInterrupted
+                                            SubmissionPhase.MEDIA_IMPORTED -> RecoveryReason.MediaImported
+                                            SubmissionPhase.NOTE_INSERTING,
+                                            SubmissionPhase.NOTE_INSERTED,
+                                            SubmissionPhase.DESTINATION_VERIFIED -> RecoveryReason.None
+                                        }
+                                        val message = when (phase) {
                                             SubmissionPhase.MEDIA_IMPORTING -> {
                                                 val label = mediaOperation?.label ?: this@MainActivity.getString(R.string.card_media_label)
                                                 val stage = mediaFailure?.stage?.name?.lowercase()?.replace('_', ' ')
@@ -4291,6 +4403,7 @@ class MainActivity : ComponentActivity() {
                                             SubmissionPhase.NOTE_INSERTED -> this@MainActivity.getString(R.string.card_send_recovery_note_assignment_interrupted)
                                             SubmissionPhase.DESTINATION_VERIFIED -> this@MainActivity.getString(R.string.card_send_recovery_destination_verified)
                                         }
+                                        updateRecoveryMessage(message, reason, SendPhase.Inserted)
                                     } else if (imageAttached) {
                                         audioController.releaseFreeze(retainFiles = false)
                                         audioSnapshot = audioController.snapshot()
@@ -4301,7 +4414,9 @@ class MainActivity : ComponentActivity() {
                                         submitMessage = this@MainActivity.getString(R.string.card_could_not_send_the_note_check_ankidroid_ap)
                                     }
                                 } finally {
-                                    isSubmitting = false
+                                    if (sendState.phase == SendPhase.Submitting) {
+                                        sendState = sendState.copy(phase = SendPhase.Idle)
+                                    }
                                 }
                             }
                         }
@@ -4312,12 +4427,12 @@ class MainActivity : ComponentActivity() {
                 val meaningSelectionFeedback = rememberChangeFeedback(
                     event = TouchFeedbackEvent.MEANING_SELECTION,
                     key = listOf(selectedDictionaryEntryId, vocabulary, vocabularyReading, selectedSenseIndices),
-                    enabled = !submissionLocked,
+                    enabled = !sendState.locked,
                 )
                 if (showDictionarySheet && target?.textIn(editor.text) != null && meaningChoices.size > 1) {
                     DictionaryMeaningSheet(
                         choices = meaningChoices,
-                        enabled = !submissionLocked,
+                        enabled = !sendState.locked,
                         onDismissRequest = { dismissDictionarySheet() },
                         onSelect = { choice ->
                             meaningSelectionFeedback()
