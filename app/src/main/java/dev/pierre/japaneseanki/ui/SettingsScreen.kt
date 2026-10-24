@@ -348,10 +348,12 @@ private fun PickerDialog(
                 emptyMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                 rows.forEach { row ->
                     Row(
-                        modifier = Modifier.fillMaxWidth().clickable { onSelect(row.id) },
+                        modifier = Modifier.fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .clickable(role = Role.RadioButton) { onSelect(row.id) },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        RadioButton(selected = row.id == selectedId, onClick = { onSelect(row.id) })
+                        RadioButton(selected = row.id == selectedId, onClick = null)
                         Text(row.label, modifier = Modifier.weight(1f))
                     }
                 }
