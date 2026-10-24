@@ -1,8 +1,5 @@
 package dev.pierre.japaneseanki.send
 
-import android.content.Context
-import android.content.SharedPreferences
-import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.pierre.japaneseanki.AnkiCardLocation
 import dev.pierre.japaneseanki.AnkiDeck
@@ -18,10 +15,12 @@ import dev.pierre.japaneseanki.DraftAudioFileStore
 import dev.pierre.japaneseanki.DraftAudioInput
 import dev.pierre.japaneseanki.DraftAudioPersistence
 import dev.pierre.japaneseanki.ManualNoteDraft
+import dev.pierre.japaneseanki.MemoryAppPreferenceStorage
 import dev.pierre.japaneseanki.MediaImportException
 import dev.pierre.japaneseanki.MediaImportFailureStage
 import dev.pierre.japaneseanki.MediaImportOperation
 import dev.pierre.japaneseanki.PitchAccent
+import dev.pierre.japaneseanki.PreferenceFrozenSubmissionStore
 import dev.pierre.japaneseanki.TargetSpan
 import dev.pierre.japaneseanki.liveMediaIdentity
 import dev.pierre.japaneseanki.runAttemptForTest
@@ -53,7 +52,7 @@ class SendCoordinatorTest {
         }
     }
 
-    private class FakeSink : AnkiNoteSink {
+    private class FakeSink(private val events: MutableList<String>) : AnkiNoteSink {
         val mediaOperations = mutableListOf<MediaImportOperation>()
         var duplicateId: Long? = null
         var failureOperation: MediaImportOperation? = null
@@ -69,6 +68,7 @@ class SendCoordinatorTest {
         override fun hasMatchingNoteInAnyDeck(model: AnkiNoteType, fieldsByName: Map<String, String>): Long? = duplicateId
 
         override fun insertNote(model: AnkiNoteType, orderedFields: List<String>, tags: Set<String>): Long {
+            events += "insert"
             insertCalls++
             insertFailure?.let { throw it }
             return insertedNoteId
@@ -104,12 +104,11 @@ class SendCoordinatorTest {
     }
 
     private class Fixture {
-        private val context: Context = ApplicationProvider.getApplicationContext()
+        private val events = mutableListOf<String>()
         val root = kotlin.io.path.createTempDirectory("send-coordinator").toFile()
         val draftDirectory = File(root, "draft").apply { mkdirs() }
         private val stagingDirectory = File(root, "audio-staging").apply { mkdirs() }
-        val preferences: SharedPreferences = context.getSharedPreferences("send-${System.nanoTime()}", Context.MODE_PRIVATE)
-        private val settings: SharedPreferences = context.getSharedPreferences("send-settings-${System.nanoTime()}", Context.MODE_PRIVATE)
+        val storage = MemoryAppPreferenceStorage(events)
         private val persistence = MapPersistence()
         val audio = DraftAudioController(
             store = DraftAudioFileStore(
@@ -126,12 +125,12 @@ class SendCoordinatorTest {
                 }
             },
         )
-        val sink = FakeSink()
+        val sink = FakeSink(events)
         val coordinator = SendCoordinator(
             gateway = sink,
-            preferences = preferences,
+            storage = storage,
             audio = audio,
-            repository = SharedPreferencesFrozenSubmissionStore(preferences, settings, draftDirectory),
+            repository = PreferenceFrozenSubmissionStore(storage, draftDirectory),
         )
 
         init {
@@ -190,10 +189,10 @@ class SendCoordinatorTest {
 
         fun close() {
             audio.dispose()
-            preferences.edit().clear().commit()
-            settings.edit().clear().commit()
             root.deleteRecursively()
         }
+
+        fun eventIndex(event: String): Int = events.indexOf(event)
     }
 
     @Test
@@ -205,6 +204,18 @@ class SendCoordinatorTest {
         assertEquals(SendOutcome.Duplicate(812L), outcome)
         assertEquals(0, fixture.sink.insertCalls)
         assertEquals(0, fixture.sink.verifyCalls)
+    }
+
+    @Test
+    fun frozenSendPhaseIsDurablyRecordedBeforeInsertSinkCall() = withFixture { fixture ->
+        val outcome = runBlocking { fixture.coordinator.submit(fixture.request()) {} }
+        val durableMarker = fixture.eventIndex("persist:started")
+        val insert = fixture.eventIndex("insert")
+
+        assertTrue(outcome is SendOutcome.Created)
+        assertTrue(durableMarker >= 0)
+        assertTrue(insert >= 0)
+        assertTrue(durableMarker < insert)
     }
 
     @Test

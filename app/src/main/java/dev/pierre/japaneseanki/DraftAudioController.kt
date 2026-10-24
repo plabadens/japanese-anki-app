@@ -9,12 +9,9 @@ import dev.pierre.japaneseanki.speech.SpeechException
 import dev.pierre.japaneseanki.speech.SpeechFailure
 
 /**
- * Synchronous string persistence for draft audio state.
- *
- * The app adapter is a SharedPreferences editor that commits: `read` is
- * `getString(key, null)` and `write` applies every entry (`null` removes it) then returns
- * `commit()`. Tests use an in-memory map. No Android type appears here, so the controller is
- * exercised by the standalone Kotlin harness.
+ * Synchronous facade for draft-audio state. The production adapter updates the in-memory view and
+ * schedules persistence on the storage dispatcher; tests use an in-memory map. No Android type
+ * appears here, so the controller is exercised by the standalone Kotlin harness.
  */
 interface DraftAudioPersistence {
     fun read(key: String): String?

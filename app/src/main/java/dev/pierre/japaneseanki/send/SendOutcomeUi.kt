@@ -1,8 +1,9 @@
 package dev.pierre.japaneseanki.send
 
 import android.content.Context
-import android.content.SharedPreferences
+
 import dev.pierre.japaneseanki.MediaImportOperation
+import dev.pierre.japaneseanki.PreferenceValues
 import dev.pierre.japaneseanki.R
 import dev.pierre.japaneseanki.SubmissionPhase
 import dev.pierre.japaneseanki.SubmissionRecoveryKeys
@@ -22,7 +23,7 @@ internal data class SendOutcomeUiUpdate(
 internal fun SendOutcome.toUiUpdate(
     current: SendState,
     context: Context,
-    preferences: SharedPreferences,
+    preferences: PreferenceValues,
     imageAttached: Boolean,
 ): SendOutcomeUiUpdate {
     var state = current

@@ -5,7 +5,7 @@ import androidx.compose.ui.res.stringResource
 import android.Manifest
 import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
+
 import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -28,6 +28,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -62,39 +63,53 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.semantics.semantics
 import dev.pierre.japaneseanki.ui.FlowDialog
-import dev.pierre.japaneseanki.ui.FlowSheet
 import dev.pierre.japaneseanki.ui.FlowStatusText
 import dev.pierre.japaneseanki.ui.flow
 import dev.pierre.japaneseanki.ui.AppContentMaxWidth
 
 import dev.pierre.japaneseanki.ui.ReviewAudioPresentation
-import dev.pierre.japaneseanki.ui.CardScreen
 import dev.pierre.japaneseanki.ui.CardAction
-import dev.pierre.japaneseanki.ui.CardPresentationCopy
-import dev.pierre.japaneseanki.ui.CardPresentationInput
-import dev.pierre.japaneseanki.ui.cardPresentation
-import dev.pierre.japaneseanki.ui.DictionaryMeaningSheet
-import dev.pierre.japaneseanki.ui.englishPartOfSpeechLabel
+import dev.pierre.japaneseanki.card.CardDeckSheet
+import dev.pierre.japaneseanki.card.CardHintActionEffects
+import dev.pierre.japaneseanki.card.CardHintActionSignals
+import dev.pierre.japaneseanki.card.CardScreenContent
+import dev.pierre.japaneseanki.card.CardNoTargetRecoveryContent
+import dev.pierre.japaneseanki.card.CardScreenContentModel
+import dev.pierre.japaneseanki.card.CardScreenDetailInput
+import dev.pierre.japaneseanki.card.CardScreenStateHolder
+import dev.pierre.japaneseanki.card.rememberCardScreenStateHolder
+import dev.pierre.japaneseanki.card.CardTargetSelectionCoordinator
+import dev.pierre.japaneseanki.card.SentenceOcrChoicesSheet
+import dev.pierre.japaneseanki.card.CardTargetSelectionSnapshot
+import dev.pierre.japaneseanki.card.CardVocabularyEffects
+import dev.pierre.japaneseanki.card.CardVocabularyErrorCopy
+import dev.pierre.japaneseanki.card.CardVocabularyReadingCoordinator
+import dev.pierre.japaneseanki.card.CardVocabularySnapshot
+import dev.pierre.japaneseanki.card.DictionaryMatchPageRequest
+import dev.pierre.japaneseanki.card.cardHintAction
+import dev.pierre.japaneseanki.card.cardSendBlockers
+import dev.pierre.japaneseanki.card.cardScreenPresentationContext
+import dev.pierre.japaneseanki.card.loadMoreDictionaryMatches
+import dev.pierre.japaneseanki.card.CardSentenceEditorSheet
+import dev.pierre.japaneseanki.card.commitCardSentenceEdit
+import dev.pierre.japaneseanki.card.useCardSentenceSelectionAsTarget
+import dev.pierre.japaneseanki.card.CardMeaningPicker
 import dev.pierre.japaneseanki.ui.reviewTranslationFailureStatus
 import dev.pierre.japaneseanki.ui.reviewAudioGenerationFailureMessage
 import dev.pierre.japaneseanki.ui.reviewAudioPlaybackFailureMessage
-import dev.pierre.japaneseanki.ui.reviewAudioSendBlocker
 import dev.pierre.japaneseanki.ui.RecoveryReason
 import dev.pierre.japaneseanki.ui.SendPhase
 import dev.pierre.japaneseanki.ui.SendState
 import dev.pierre.japaneseanki.ui.FlowTheme
 import dev.pierre.japaneseanki.ui.FlowTopBar
 import dev.pierre.japaneseanki.ui.LocalTouchFeedbackDispatcher
-import dev.pierre.japaneseanki.ui.rememberChangeFeedback
 import dev.pierre.japaneseanki.ui.MotionAwareProgressIndicator
 import dev.pierre.japaneseanki.ui.TouchFeedbackEvent
 import dev.pierre.japaneseanki.send.IndeterminateReason
 import dev.pierre.japaneseanki.send.SendCoordinator
 import dev.pierre.japaneseanki.send.SendOutcome
 import dev.pierre.japaneseanki.send.SendRequest
-import dev.pierre.japaneseanki.send.SharedPreferencesFrozenSubmissionStore
 import dev.pierre.japaneseanki.send.cardActionClickHandler
-import dev.pierre.japaneseanki.send.clearPersistedDraft
 import dev.pierre.japaneseanki.send.toUiUpdate
 import dev.pierre.japaneseanki.ui.InputScreen
 import dev.pierre.japaneseanki.ui.SettingsScreen
@@ -177,20 +192,6 @@ internal const val WORD_AUDIO_RECEIPT_FILENAME = "word_audio_receipt_filename"
 internal const val WORD_AUDIO_RECEIPT_SIZE = "word_audio_receipt_size"
 internal const val WORD_AUDIO_RECEIPT_MODIFIED = "word_audio_receipt_modified"
 
-/** SharedPreferences adapter for [DraftAudioController]: commit, never apply. */
-private class SharedPreferencesDraftAudioPersistence(
-    private val preferences: SharedPreferences,
-) : DraftAudioPersistence {
-    override fun read(key: String): String? = preferences.getString(key, null)
-
-    override fun write(changes: Map<String, String?>): Boolean {
-        val editor = preferences.edit()
-        for ((key, value) in changes) {
-            if (value == null) editor.remove(key) else editor.putString(key, value)
-        }
-        return editor.commit()
-    }
-}
 
 internal val IMAGE_RECEIPT_KEYS = ImportedReceiptKeys(
     path = IMAGE_RECEIPT_PATH,
@@ -213,76 +214,6 @@ internal val WORD_AUDIO_RECEIPT_KEYS = ImportedReceiptKeys(
     modified = WORD_AUDIO_RECEIPT_MODIFIED,
 )
 
-/** Persisted receipt identity, read without touching the file system. */
-internal fun receiptIdentity(preferences: SharedPreferences, keys: ImportedReceiptKeys): MediaIdentity? =
-    preferences.getString(keys.path, null)?.let { path ->
-        MediaIdentity(path, preferences.getLong(keys.size, -1L), preferences.getLong(keys.modified, -1L))
-    }
-
-internal fun mediaImportRequest(
-    preferences: SharedPreferences,
-    keys: ImportedReceiptKeys,
-    operation: MediaImportOperation,
-    source: MediaIdentity,
-    frozenFilename: String?,
-): MediaImportRequest {
-    val hasSavedReceipt = listOf(keys.path, keys.filename, keys.size, keys.modified).any(preferences::contains)
-    val savedReceipt = when {
-        hasSavedReceipt -> ImportedMediaReceipt(
-            operation = operation,
-            source = receiptIdentity(preferences, keys) ?: MediaIdentity("", -1L, -1L),
-            filename = preferences.getString(keys.filename, null).orEmpty(),
-        )
-        frozenFilename != null -> ImportedMediaReceipt(operation, source, frozenFilename)
-        else -> null
-    }
-    val receipt = if (frozenFilename != null && savedReceipt != null && savedReceipt.filename != frozenFilename) {
-        savedReceipt.copy(source = MediaIdentity("", -1L, -1L))
-    } else {
-        savedReceipt
-    }
-    return MediaImportRequest(source, receipt)
-}
-
-internal fun applyImportedReceipt(snapshot: FrozenSubmission, receipt: ImportedMediaReceipt): FrozenSubmission {
-    val (fieldName, serialized, updatedSnapshot) = when (receipt.operation) {
-        MediaImportOperation.IMAGE -> Triple(
-            "Image",
-            AnkiFieldSerializer.imageReference(receipt.filename),
-            snapshot.copy(importedFilename = receipt.filename),
-        )
-        MediaImportOperation.SENTENCE_AUDIO -> Triple(
-            "SentAudio",
-            AnkiFieldSerializer.audioReference(receipt.filename),
-            snapshot.copy(sentenceAudio = snapshot.sentenceAudio.copy(importedFilename = receipt.filename)),
-        )
-        MediaImportOperation.WORD_AUDIO -> Triple(
-            "VocabAudio",
-            AnkiFieldSerializer.audioReference(receipt.filename),
-            snapshot.copy(wordAudio = snapshot.wordAudio.copy(importedFilename = receipt.filename)),
-        )
-        MediaImportOperation.AUDIO -> throw IllegalArgumentException("Generic audio is not a Send operation.")
-    }
-    val valuesByName = snapshot.modelFields.zip(snapshot.orderedFields).toMap().toMutableMap()
-    require(fieldName in valuesByName && serialized != null) { "The imported media reference cannot be serialized." }
-    valuesByName[fieldName] = serialized
-    val mapping = AnkiFieldContract.mapToModelOrder(snapshot.modelFields, valuesByName)
-    require(mapping.isValid) { mapping.errors.joinToString() }
-    return updatedSnapshot.copy(orderedFields = mapping.values)
-}
-
-internal fun putMediaReceipt(editor: SharedPreferences.Editor, receipt: ImportedMediaReceipt): SharedPreferences.Editor {
-    val keys = when (receipt.operation) {
-        MediaImportOperation.IMAGE -> IMAGE_RECEIPT_KEYS
-        MediaImportOperation.SENTENCE_AUDIO -> SENTENCE_AUDIO_RECEIPT_KEYS
-        MediaImportOperation.WORD_AUDIO -> WORD_AUDIO_RECEIPT_KEYS
-        MediaImportOperation.AUDIO -> throw IllegalArgumentException("Generic audio is not a Send operation.")
-    }
-    return editor.putString(keys.path, receipt.source.path)
-        .putLong(keys.size, receipt.source.size)
-        .putLong(keys.modified, receipt.source.modified)
-        .putString(keys.filename, receipt.filename)
-}
 
 /** Every preference key the draft-audio controller owns, for a full draft reset. */
 private fun pitchUnavailableMessage(failure: AjtPitchFailure): Int = when (failure) {
@@ -418,13 +349,27 @@ class MainActivity : ComponentActivity() {
         offlineAnalyzer = OfflineJapaneseAnalyzer.shared(this)
         japaneseOcr = JapaneseOcr()
         ajtPitchRepository = AjtPitchRepository.shared(this)
-        val preferences = getSharedPreferences("draft", MODE_PRIVATE)
-        val settings = getSharedPreferences("settings", MODE_PRIVATE)
-        if (preferences.getString(SubmissionRecoveryKeys.STATUS, null) == "done") {
-            clearPersistedDraft(preferences, File(filesDir, "draft"))
-        }
-        setContent {
+        val preferenceStorage = AndroidPreferenceStorage(this)
+        lifecycleScope.launch {
+            preferenceStorage.load()
+            if (preferenceStorage.draft.value.getString(SubmissionRecoveryKeys.STATUS, null) == "done") {
+                withContext(Dispatchers.IO) {
+                    clearPersistedDraftBlocking(preferenceStorage, File(filesDir, "draft"))
+                }
+            }
+            setContent {
+            val preferences by preferenceStorage.draft.collectAsState()
+            val settings by preferenceStorage.settings.collectAsState()
+            fun updateDraft(changes: PreferenceChanges): Boolean {
+                preferenceStorage.update(PreferenceFile.DRAFT, changes)
+                return true
+            }
+            fun updateSettings(changes: PreferenceChanges): Boolean {
+                preferenceStorage.update(PreferenceFile.SETTINGS, changes)
+                return true
+            }
             val coroutineScope = rememberCoroutineScope()
+            val cardScreenHolderRef = remember { arrayOfNulls<CardScreenStateHolder>(1) }
             val touchFeedbackDispatcher = LocalTouchFeedbackDispatcher.current
             var captureConfirmationMessage by remember { mutableStateOf<String?>(null) }
             var verifiedDelivery by remember { mutableStateOf(false) }
@@ -475,7 +420,6 @@ class MainActivity : ComponentActivity() {
             }
             var readingCorrectionError by remember { mutableStateOf<String?>(null) }
             var showDictionarySheet by remember { mutableStateOf(false) }
-            var definitionSheetText by remember { mutableStateOf<String?>(null) }
             val restoredTranslation = remember { restoreTranslationDraft(preferences) }
             var translationDraft by remember { mutableStateOf(restoredTranslation.draft) }
             val translation = (translationDraft.result as? TranslationResult.Ready)?.text.orEmpty()
@@ -679,7 +623,7 @@ class MainActivity : ComponentActivity() {
                     stagingDirectory = File(filesDir, "audio-staging"),
                 )
             }
-            val audioPersistence = remember { SharedPreferencesDraftAudioPersistence(preferences) }
+            val audioPersistence = remember { PreferenceDraftAudioPersistence(preferenceStorage) }
             val audioController = remember(audioControllerGeneration) {
                 DraftAudioController(
                     store = draftAudioStore,
@@ -704,11 +648,10 @@ class MainActivity : ComponentActivity() {
             val sendCoordinator = remember(audioController) {
                 SendCoordinator(
                     gateway = AnkiDroidGateway(contentResolver, applicationContext),
-                    preferences = preferences,
+                    storage = preferenceStorage,
                     audio = audioController,
-                    repository = SharedPreferencesFrozenSubmissionStore(
-                        preferences = preferences,
-                        settings = settings,
+                    repository = PreferenceFrozenSubmissionStore(
+                        storage = preferenceStorage,
                         draftDirectory = File(filesDir, "draft"),
                     ),
                 )
@@ -719,12 +662,12 @@ class MainActivity : ComponentActivity() {
                     persistSentenceCommit = { sentence ->
                         val nextRevision = runCatching { Math.addExact(reviewAuthorizationSequence, 1L) }
                             .getOrNull() ?: return@PreparationAuthorization false
-                        val saved = preferences.edit()
+                        val saved = updateDraft(PreferenceChanges()
                             .putString("committed_sentence", sentence)
                             .putString("sentence", sentence)
                             .putString("committed_sentence_voice", selectedVoiceName)
                             .putLong("review_authorization_sequence", nextRevision)
-                            .commit()
+                            )
                         if (saved) {
                             committedSentence = sentence
                             committedSentenceVoice = selectedVoiceName
@@ -749,7 +692,7 @@ class MainActivity : ComponentActivity() {
                         if (identity.isBlank()) return@PreparationAuthorization false
                         val nextRevision = runCatching { Math.addExact(reviewAuthorizationSequence, 1L) }
                             .getOrNull() ?: return@PreparationAuthorization false
-                        if (!preferences.edit().putLong("review_authorization_sequence", nextRevision).commit()) {
+                        if (!updateDraft(PreferenceChanges().putLong("review_authorization_sequence", nextRevision))) {
                             false
                         } else {
                             reviewAuthorizationSequence = nextRevision
@@ -907,10 +850,10 @@ class MainActivity : ComponentActivity() {
                 dictionaryReady = analyzerReady,
             )
             fun markCameraStepDone() {
-                settings.edit()
+                updateSettings(PreferenceChanges()
                     .putBoolean("onboarding_camera_done", true)
                     .putBoolean("onboarding_camera_denied", false)
-                    .commit()
+                    )
                 cameraDenied = false
             }
             fun enterSetup() {
@@ -1140,11 +1083,11 @@ class MainActivity : ComponentActivity() {
                         }
                         return@launch
                     }
-                    val persisted = settings.edit()
+                    val persisted = updateSettings(PreferenceChanges()
                         .putBoolean("onboarding_anki_done", true)
                         .putBoolean("onboarding_anki_deferred", false)
                         .putBoolean("onboarding_complete", true)
-                        .commit()
+                        )
                     if (!persisted) {
                         setupAudioErrorResource = R.string.save_failed
                         return@launch
@@ -1174,7 +1117,7 @@ class MainActivity : ComponentActivity() {
 
             val hasManualDefinition = definitionManuallyEdited && definition.isNotBlank()
             val persistLastSentTags: (FrozenSubmission) -> Unit = { snapshot ->
-                check(settings.edit().putString("last_note_tags", snapshot.tags.joinToString(" ")).commit()) {
+                check(updateSettings(PreferenceChanges().putString("last_note_tags", snapshot.tags.joinToString(" ")))) {
                     this@MainActivity.getString(R.string.card_tags_from_confirmed_note_save_failed)
                 }
             }
@@ -1187,7 +1130,7 @@ class MainActivity : ComponentActivity() {
                 }
                 if (showDeliveryConfirmation) {
                     captureMode = "Photo"
-                    preferences.edit().putString("capture_mode", "Photo").apply()
+                    updateDraft(PreferenceChanges().putString("capture_mode", "Photo"))
                 }
                 verifiedDelivery = false
                 listOfNotNull(photoSourcePath, noteImagePath, processedImagePath).distinct().forEach { File(it).delete() }
@@ -1200,7 +1143,7 @@ class MainActivity : ComponentActivity() {
                 photoSourcePath = null
                 noteImagePath = null
                 processedImagePath = null
-                clearPersistedDraft(preferences, File(filesDir, "draft"))
+                preferenceStorage.update(PreferenceFile.DRAFT, draftClearChanges())
                 sendState = SendState(message = sendState.message)
                 submitMessage = null
                 frozenSnapshotAppliedRevision = -1L
@@ -1253,7 +1196,7 @@ class MainActivity : ComponentActivity() {
                 audioController.discard()
                 audioControllerGeneration++
                 audioSnapshot = audioController.snapshot()
-                preferences.edit()
+                updateDraft(PreferenceChanges()
                     .remove(SENTENCE_AUDIO_RECEIPT_PATH)
                     .remove(SENTENCE_AUDIO_RECEIPT_FILENAME)
                     .remove(SENTENCE_AUDIO_RECEIPT_SIZE)
@@ -1268,7 +1211,7 @@ class MainActivity : ComponentActivity() {
                     .remove("committed_sentence_voice")
                     .remove("card_invalidated")
                     .remove("review_authorization_sequence")
-                    .apply()
+                    )
             }
             val replaceEditorText: (String, Boolean) -> Unit = { text, invalidateDraftGeneration ->
                 editorInputRevision++
@@ -1306,12 +1249,21 @@ class MainActivity : ComponentActivity() {
                 if (captureConfirmationMessage == message) captureConfirmationMessage = null
             }
 
-            val selectTarget: (TargetSpan?) -> Unit = selectTarget@{ selected ->
-                if (currentSubmissionLocked.value) return@selectTarget
-                val previousTarget = target
-                if (selected != previousTarget) {
-                    cardInvalidated = true
-                    if (hasManualDefinition) dependentFieldsStale = true
+            val targetSelectionCoordinator = CardTargetSelectionCoordinator(
+                snapshot = {
+                    CardTargetSelectionSnapshot(
+                        target = target,
+                        sentence = editor.text,
+                        tokens = japaneseTokens,
+                        vocabulary = vocabulary,
+                        vocabularyReading = vocabularyReading,
+                        locked = currentSubmissionLocked.value,
+                        hasManualDefinition = hasManualDefinition,
+                    )
+                },
+                invalidateCard = { cardInvalidated = true },
+                markDefinitionStale = { dependentFieldsStale = true },
+                resetDictionarySelection = {
                     selectedDictionaryEntry = null
                     selectedDictionaryEntryId = null
                     dictionaryEntries = emptyList()
@@ -1324,29 +1276,17 @@ class MainActivity : ComponentActivity() {
                     definitionProvenanceKnown = true
                     audioController.clear(AudioItem.VOCABULARY)
                     audioSnapshot = audioController.snapshot()
-                }
-                target = selected
-                if (selected != previousTarget) {
-                    // The reading belongs to the selected occurrence; a new target must never
-                    // inherit the previous target's reading.
-                    sentenceReading = selected?.let { span ->
-                        resolveSurfaceReading(editor.text, japaneseTokens, span)
-                    }.orEmpty()
-                }
-                if (selected != null) {
-                    val surface = selected.textIn(editor.text).orEmpty()
-                    val identity = "${selected.start}:${selected.end}:$surface"
-                    preparationAuthorization.selectWord(identity, selected)
-                }
-                if (selected != null && vocabulary.isBlank()) {
-                    val surface = selected.textIn(editor.text).orEmpty()
-                    val lemma = resolveAnalyzedLemma(japaneseTokens, selected)
-                    vocabulary = lemma?.expression ?: surface
-                    if (lemma != null && vocabularyReading.isBlank() && containsKanji(lemma.expression)) {
-                        vocabularyReading = lemma.reading
-                    }
-                }
-            }
+                },
+                setTarget = { target = it },
+                setSentenceReading = { sentenceReading = it },
+                authorizeWord = { identity, span -> preparationAuthorization.selectWord(identity, span) },
+                setVocabulary = { vocabulary = it },
+                setVocabularyReading = { vocabularyReading = it },
+                resolveSurfaceReading = ::resolveSurfaceReading,
+                resolveAnalyzedLemma = ::resolveAnalyzedLemma,
+                containsKanji = ::containsKanji,
+            )
+            val selectTarget: (TargetSpan?) -> Unit = targetSelectionCoordinator::select
             val applyOcrText: (String, Float) -> Unit = applyOcrText@{ text, focusY ->
                 if (currentSubmissionLocked.value) return@applyOcrText
                 selectTarget(null)
@@ -1362,7 +1302,7 @@ class MainActivity : ComponentActivity() {
             val setDraftOrigin: (String) -> Unit = { origin ->
                 if (draftOrigin != origin) {
                     draftOrigin = origin
-                    preferences.edit().putString("draft_origin", origin).apply()
+                    updateDraft(PreferenceChanges().putString("draft_origin", origin))
                 }
             }
             val processImage: (File, Boolean) -> Unit = processImage@{ file, runOcr ->
@@ -1381,7 +1321,7 @@ class MainActivity : ComponentActivity() {
                 noteImagePath = file.absolutePath
                 processedImagePath = null
                 check(
-                    preferences.edit()
+                    updateDraft(PreferenceChanges()
                         .remove(IMAGE_RECEIPT_PATH)
                         .remove(IMAGE_RECEIPT_FILENAME)
                         .remove(IMAGE_RECEIPT_SIZE)
@@ -1390,7 +1330,7 @@ class MainActivity : ComponentActivity() {
                         .putString("note_image_path", noteImagePath)
                         .putString("draft_origin", draftOrigin)
                         .remove("processed_image_path")
-                        .commit(),
+                        ),
                 ) { this@MainActivity.getString(R.string.legacy_capture_draft_image_source_save_failed) }
                 imageError = null
                 imageProcessing = true
@@ -1487,7 +1427,7 @@ class MainActivity : ComponentActivity() {
                 imageProcessing = false
                 ocrLoading = false
                 imageError = null
-                preferences.edit()
+                updateDraft(PreferenceChanges()
                     .remove("photo_source_path")
                     .remove("note_image_path")
                     .remove("processed_image_path")
@@ -1495,14 +1435,14 @@ class MainActivity : ComponentActivity() {
                     .remove(IMAGE_RECEIPT_FILENAME)
                     .remove(IMAGE_RECEIPT_SIZE)
                     .remove(IMAGE_RECEIPT_MODIFIED)
-                    .commit()
+                    )
                 }
                 Unit
             }
             val stagePhotoReplacement: (File) -> Unit = stagePhotoReplacement@{ file ->
                 if (sendState.locked) return@stagePhotoReplacement
                 check(
-                    preferences.edit().putString("pending_replacement_image_path", file.absolutePath).commit(),
+                    updateDraft(PreferenceChanges().putString("pending_replacement_image_path", file.absolutePath)),
                 ) { this@MainActivity.getString(R.string.legacy_capture_pending_photo_replacement_save_failed) }
                 pendingPhotoFile = file
                 pendingSharedImageUri = null
@@ -1524,7 +1464,7 @@ class MainActivity : ComponentActivity() {
                     markCameraStepDone()
                 } else {
                     cameraDenied = true
-                    settings.edit().putBoolean("onboarding_camera_denied", true).commit()
+                    updateSettings(PreferenceChanges().putBoolean("onboarding_camera_denied", true))
                 }
             }
             val photoPicker = rememberLauncherForActivityResult(
@@ -1639,7 +1579,7 @@ class MainActivity : ComponentActivity() {
                 analyzerLoading = false
                 if (!analyzerReady && onboardingComplete) {
                     onboardingComplete = false
-                    settings.edit().putBoolean("onboarding_complete", false).commit()
+                    updateSettings(PreferenceChanges().putBoolean("onboarding_complete", false))
                     showSetup = true
                 }
             }
@@ -1701,68 +1641,49 @@ class MainActivity : ComponentActivity() {
                 showDictionarySheet = false
             }
 
-            /** A corrected vocabulary reading re-resolves entry, pitch and recording identity. */
-            fun applyVocabularyReading(raw: String): Boolean {
-                if (sendState.locked) return false
-                val corrected = VocabularyReadings.normalize(raw)
-                val match = VocabularyReadings.selectEntry(
-                    dictionaryEntries.map { ReadingCandidate(it.id, it.expression, it.reading) },
-                    vocabulary,
-                    corrected,
-                )
-                if (match == null) {
-                    audioController.clear(AudioItem.VOCABULARY)
-                    audioSnapshot = audioController.snapshot()
-                    pitchAccentText = ""
-                    pitchHtmlText = null
-                    pitchCandidates = emptyList()
-                    // Never display a pronunciation that no dictionary entry supports.
-                    vocabularyReading = ""
-                    vocabularyReadingError = if (corrected.isEmpty()) {
-                        this@MainActivity.getString(R.string.card_vocabulary_reading_kana_required)
-                    } else if (dictionaryEntries.isEmpty()) {
-                        this@MainActivity.getString(R.string.card_no_dictionary_entry_loaded)
-                    } else {
-                        this@MainActivity.getString(
-                            R.string.card_reading_not_listed_for_word,
-                            vocabulary.ifBlank { this@MainActivity.getString(R.string.card_this_word) },
-                            corrected,
-                        )
-                    }
-                    selectedDictionaryEntry = null
-                    selectedDictionaryEntryId = null
-                    selectedSenseIndices = emptySet()
-                    pitchIndexError = this@MainActivity.getString(R.string.card_no_pitch_pattern_can_be_resolved_for_this)
-                    return false
-                }
-                val entry = dictionaryEntries.first { it.id == match.id }
-                vocabularyReadingError = null
-                if (vocabularyReading == entry.reading && selectedDictionaryEntry?.id == entry.id) {
-                    // Already resolved to this entry and reading: nothing to invalidate.
-                    return true
-                }
-                // The recording belongs to the previous reading/entry; re-resolve it.
-                cardInvalidated = true
-                audioController.clear(AudioItem.VOCABULARY)
-                audioSnapshot = audioController.snapshot()
-                pitchAccentText = ""
-                pitchHtmlText = null
-                pitchCandidates = emptyList()
-                pitchIndexError = null
-                vocabularyReading = entry.reading
-                if (selectedDictionaryEntry?.id != entry.id) {
-                    selectedDictionaryEntry = entry
-                    selectedDictionaryEntryId = entry.id
-                    val senses = if (entry.senses.isEmpty()) emptySet() else setOf(0)
-                    selectedSenseIndices = senses
-                    definition = senses.sorted().mapNotNull { index ->
-                        entry.senses.getOrNull(index)?.glosses?.joinToString("; ")
-                    }.joinToString("\n")
-                    definitionManuallyEdited = false
-                    definitionProvenanceKnown = true
-                }
-                return true
-            }
+            val vocabularyReadingCoordinator = CardVocabularyReadingCoordinator(
+                snapshot = {
+                    CardVocabularySnapshot(
+                        locked = sendState.locked,
+                        entries = dictionaryEntries,
+                        vocabulary = vocabulary,
+                        vocabularyReading = vocabularyReading,
+                        selectedEntry = selectedDictionaryEntry,
+                    )
+                },
+                effects = CardVocabularyEffects(
+                    clearAudio = {
+                        audioController.clear(AudioItem.VOCABULARY)
+                        audioSnapshot = audioController.snapshot()
+                    },
+                    clearPitch = {
+                        pitchAccentText = ""
+                        pitchHtmlText = null
+                        pitchCandidates = emptyList()
+                    },
+                    invalidateCard = { cardInvalidated = true },
+                    setVocabularyReading = { vocabularyReading = it },
+                    setVocabularyReadingError = { vocabularyReadingError = it },
+                    setSelectedEntry = { selectedDictionaryEntry = it },
+                    setSelectedEntryId = { selectedDictionaryEntryId = it },
+                    setSelectedSenses = { selectedSenseIndices = it },
+                    setPitchError = { pitchIndexError = it },
+                    setDefinition = { definition = it },
+                    setDefinitionManuallyEdited = { definitionManuallyEdited = it },
+                    setDefinitionProvenanceKnown = { definitionProvenanceKnown = it },
+                ),
+                errorCopy = CardVocabularyErrorCopy(
+                    kanaRequired = this@MainActivity.getString(R.string.card_vocabulary_reading_kana_required),
+                    noDictionaryEntry = this@MainActivity.getString(R.string.card_no_dictionary_entry_loaded),
+                    noPitchPattern = this@MainActivity.getString(R.string.card_no_pitch_pattern_can_be_resolved_for_this),
+                    readingNotListed = { word, reading ->
+                        this@MainActivity.getString(R.string.card_reading_not_listed_for_word, word, reading)
+                    },
+                    thisWord = this@MainActivity.getString(R.string.card_this_word),
+                ),
+            )
+            val applyVocabularyReading: (String) -> Boolean = vocabularyReadingCoordinator::apply
+
 
             /** Correct one kanji span's reading without editing the sentence (SPEC §4.5). */
             fun applyReadingCorrection(span: TargetSpan, reading: String): Boolean {
@@ -1805,7 +1726,7 @@ class MainActivity : ComponentActivity() {
                 currentRequestRevision = currentTranslationRequestRevision,
                 currentSubmissionLocked = currentSubmissionLocked,
                 translationService = translationService,
-                preferences = preferences,
+                storage = preferenceStorage,
                 onDraftChanged = { translationDraft = it },
                 onLastHandledRetryChanged = { lastHandledTranslationRetry = it },
                 onAttemptedSentenceChanged = { translationAttemptedSentence = it },
@@ -2117,7 +2038,7 @@ class MainActivity : ComponentActivity() {
                 selectedEntryId = selectedDictionaryEntryId,
                 vocabulary = draft.vocabulary,
                 vocabularyReading = draft.vocabularyReading,
-                preferences = preferences,
+                storage = preferenceStorage,
                 offlineDictionary = offlineDictionary,
                 isDraftCurrent = ::asyncDraftIsCurrent,
                 onEntriesChanged = { dictionaryEntries = it },
@@ -2285,10 +2206,10 @@ class MainActivity : ComponentActivity() {
                                     val changed = value != coordinator.currentGoogleKey()
                                     coordinator.updateGoogleKey(value)
                                     if (changed) {
-                                        settings.edit()
+                                        updateSettings(PreferenceChanges()
                                             .putBoolean("onboarding_audio_validated", false)
                                             .putBoolean("onboarding_complete", false)
-                                            .commit()
+                                            )
                                         onboardingComplete = false
                                         audioSetupInvalidated = true
                                         setupAudioErrorResource = null
@@ -2302,10 +2223,10 @@ class MainActivity : ComponentActivity() {
                                     coordinator.updateValues(coordinator.currentValues().copy(voiceName = voice))
                                     audioInputRevision++
                                     if (changed) {
-                                        settings.edit()
+                                        updateSettings(PreferenceChanges()
                                             .putBoolean("onboarding_audio_validated", false)
                                             .putBoolean("onboarding_complete", false)
-                                            .commit()
+                                            )
                                         onboardingComplete = false
                                         audioSetupInvalidated = true
                                         setupAudioErrorResource = null
@@ -2437,7 +2358,7 @@ class MainActivity : ComponentActivity() {
                                         val changed = value != coordinator.currentGoogleKey()
                                         coordinator.updateGoogleKey(value)
                                         if (changed) {
-                                            settings.edit().putBoolean("onboarding_complete", false).commit()
+                                            updateSettings(PreferenceChanges().putBoolean("onboarding_complete", false))
                                             onboardingComplete = false
                                             setupAudioErrorResource = null
                                         }
@@ -2449,7 +2370,7 @@ class MainActivity : ComponentActivity() {
                                         val changed = voice != coordinator.currentValues().voiceName
                                         coordinator.updateValues(coordinator.currentValues().copy(voiceName = voice))
                                         if (changed) {
-                                            settings.edit().putBoolean("onboarding_complete", false).commit()
+                                            updateSettings(PreferenceChanges().putBoolean("onboarding_complete", false))
                                             onboardingComplete = false
                                             setupAudioErrorResource = null
                                         }
@@ -2478,14 +2399,14 @@ class MainActivity : ComponentActivity() {
                                     }
                                 },
                                 onSelectNoteType = { modelId ->
-                                    if (settings.edit().putLong(SettingsPreferenceKeys.MODEL_ID, modelId).commit()) {
+                                    if (updateSettings(PreferenceChanges().putLong(SettingsPreferenceKeys.MODEL_ID, modelId))) {
                                         selectedModelId = modelId
                                     } else {
                                         settingsError = this@MainActivity.getString(R.string.save_failed)
                                     }
                                 },
                                 onSelectDeck = { deckId ->
-                                    if (settings.edit().putLong(SettingsPreferenceKeys.DECK_ID, deckId).commit()) {
+                                    if (updateSettings(PreferenceChanges().putLong(SettingsPreferenceKeys.DECK_ID, deckId))) {
                                         selectedDeckId = deckId
                                     } else {
                                         settingsError = this@MainActivity.getString(R.string.save_failed)
@@ -2505,7 +2426,7 @@ class MainActivity : ComponentActivity() {
                         sharedText.value = null
                         pendingPhotoFile?.delete()
                         pendingPhotoFile = null
-                        preferences.edit().remove("pending_replacement_image_path").commit()
+                        updateDraft(PreferenceChanges().remove("pending_replacement_image_path"))
                         pendingSharedImageUri = null
                     },
                     title = { Text(stringResource(R.string.replace_title)) },
@@ -2524,7 +2445,7 @@ class MainActivity : ComponentActivity() {
                                 pendingPhotoFile != null -> {
                                     val file = pendingPhotoFile!!
                                     pendingPhotoFile = null
-                                    preferences.edit().remove("pending_replacement_image_path").commit()
+                                    updateDraft(PreferenceChanges().remove("pending_replacement_image_path"))
                                     clearDraft()
                                     captureMode = "Photo"
                                     processImage(file, true)
@@ -2562,45 +2483,32 @@ class MainActivity : ComponentActivity() {
                             sharedText.value = null
                             pendingPhotoFile?.delete()
                             pendingPhotoFile = null
-                            preferences.edit().remove("pending_replacement_image_path").commit()
+                            updateDraft(PreferenceChanges().remove("pending_replacement_image_path"))
                             pendingSharedImageUri = null
                         }) { Text(stringResource(R.string.keep_draft)) }
                     },
                     )
             }
 
-            if (showOcrSheet && ocrChoices.size > 1) {
-                FlowSheet(
-                    onDismissRequest = { showOcrSheet = false },
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(stringResource(R.string.choose_sentence), style = MaterialTheme.typography.titleLarge)
-                    ocrChoices.forEach { block ->
-                        OutlinedButton(
-                            enabled = !sendState.locked,
-                            onClick = {
-                                showOcrSheet = false
-                                ocrChoices = emptyList()
-                                applyOcrText(block.text, ocrFocusFraction(block.bounds, ocrImageHeight))
-                            },
-                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                        ) { Text(block.text.trim()) }
-                    }
-                    TextButton(
-                        onClick = { showOcrSheet = false },
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                    ) { Text(stringResource(R.string.cancel)) }
-                }
-            }
+            SentenceOcrChoicesSheet(
+                visible = showOcrSheet,
+                choices = ocrChoices,
+                enabled = !sendState.locked,
+                onDismiss = { showOcrSheet = false },
+                onChoose = { block ->
+                    showOcrSheet = false
+                    ocrChoices = emptyList()
+                    applyOcrText(block.text, ocrFocusFraction(block.bounds, ocrImageHeight))
+                },
+            )
 
             if (showDiscardConfirm) {
-                val hasWork = editor.text.isNotBlank() || noteImagePath != null || target != null
                 FlowDialog(
                     onDismissRequest = { showDiscardConfirm = false },
                     title = { Text(stringResource(R.string.legacy_capture_discard_this_draft)) },
                     text = {
                         Text(
-                            if (hasWork) {
+                            if (editor.text.isNotBlank() || noteImagePath != null || target != null) {
                                 stringResource(R.string.legacy_capture_the_sentence_target_photo_and_any_generate)
                             } else {
                                 stringResource(R.string.legacy_capture_this_draft_is_already_empty)
@@ -2608,16 +2516,15 @@ class MainActivity : ComponentActivity() {
                         )
                     },
                     confirmButton = {
-                        TextButton(
-                            enabled = !sendState.locked,
-                            onClick = {
-                                showDiscardConfirm = false
-                                clearDraft()
-                            },
-                        ) { Text(stringResource(R.string.legacy_capture_discard_draft)) }
+                        TextButton(enabled = !sendState.locked, onClick = {
+                            showDiscardConfirm = false
+                            clearDraft()
+                        }) { Text(stringResource(R.string.legacy_capture_discard_draft)) }
                     },
                     dismissButton = {
-                        TextButton(onClick = { showDiscardConfirm = false }) { Text(stringResource(R.string.legacy_capture_keep_working)) }
+                        TextButton(onClick = { showDiscardConfirm = false }) {
+                            Text(stringResource(R.string.legacy_capture_keep_working))
+                        }
                     },
                 )
             }
@@ -2754,7 +2661,7 @@ class MainActivity : ComponentActivity() {
             ) {
                 if (!cardInvalidated || !cardPreparationReady || committedSentence != editor.text) return@LaunchedEffect
                 cardInvalidated = false
-                preferences.edit().putBoolean("card_invalidated", false).apply()
+                updateDraft(PreferenceChanges().putBoolean("card_invalidated", false))
             }
 
             val applyFrozenSubmissionToDraft: (FrozenSubmission) -> Unit = { snapshot ->
@@ -2961,7 +2868,7 @@ class MainActivity : ComponentActivity() {
                 if (!setupLoadedSuccessfully || !ankiDroidInstalled || !apiPermissionGranted) return@LaunchedEffect
                 val onlyCompatibleModel = compatibleSetupNoteTypes().singleOrNull() ?: return@LaunchedEffect
                 if (selectedModelId == onlyCompatibleModel.id) return@LaunchedEffect
-                if (settings.edit().putLong(SettingsPreferenceKeys.MODEL_ID, onlyCompatibleModel.id).commit()) {
+                if (updateSettings(PreferenceChanges().putLong(SettingsPreferenceKeys.MODEL_ID, onlyCompatibleModel.id))) {
                     selectedModelId = onlyCompatibleModel.id
                     settingsCoordinator?.let { coordinator ->
                         coordinator.updateValues(coordinator.currentValues().copy(modelId = onlyCompatibleModel.id))
@@ -2986,7 +2893,7 @@ class MainActivity : ComponentActivity() {
                 translationTestResult = null
                 translationTestRunning = false
                 val coordinator = SettingsCoordinator(
-                    persistence = SharedPreferencesSettingsPersistence(settings),
+                    persistence = PreferenceBackedSettingsPersistence(preferenceStorage),
                     onSaveResult = { result ->
                         coroutineScope.launch(Dispatchers.Main.immediate) {
                             settingsError = if (result.isSuccess) null else this@MainActivity.getString(R.string.save_failed)
@@ -3014,15 +2921,15 @@ class MainActivity : ComponentActivity() {
             // Obsolete pre-shared-key OpenRouter ciphertext is deleted once per launch. It is never
             // read as a Google key; the shared key, drafts, and media are untouched.
             androidx.compose.runtime.LaunchedEffect(Unit) {
-                withContext(Dispatchers.IO) { GoogleCloudCredential.removeObsoleteOpenRouterStorage(settings) }
+                withContext(Dispatchers.IO) { GoogleCloudCredential.removeObsoleteOpenRouterStorage(preferenceStorage) }
             }
 
             androidx.compose.runtime.LaunchedEffect(photoSourcePath, noteImagePath, processedImagePath) {
-                preferences.edit()
+                updateDraft(PreferenceChanges()
                     .putString("photo_source_path", photoSourcePath)
                     .putString("note_image_path", noteImagePath)
                     .putString("processed_image_path", processedImagePath)
-                    .apply()
+                    )
             }
 
             androidx.compose.runtime.LaunchedEffect(
@@ -3032,7 +2939,7 @@ class MainActivity : ComponentActivity() {
             ) {
                 if (completedSubmission != null) return@LaunchedEffect
                 persistDraftPreferences(
-                    preferences = preferences,
+                    storage = preferenceStorage,
                     selectionStart = editor.selection.min,
                     selectionEnd = editor.selection.max,
                     draft = draft,
@@ -3069,7 +2976,7 @@ class MainActivity : ComponentActivity() {
                 if (duplicateBlocked) TextButton(onClick = {
                     val blockedSnapshot = sendState.frozen ?: readFrozenSubmission(preferences)
                     if (blockedSnapshot != null) applyFrozenSubmissionToDraft(blockedSnapshot)
-                    clearPendingSubmission(preferences)
+                    clearPendingSubmission(preferenceStorage)
                     sendState = SendState()
                     frozenSnapshotAppliedRevision = -1L
                     submitMessage = null
@@ -3092,7 +2999,7 @@ class MainActivity : ComponentActivity() {
                             return@TextButton
                         }
                         persistLastSentTags(confirmedSnapshot)
-                        check(preferences.edit().putString(SubmissionRecoveryKeys.STATUS, "done").commit()) {
+                        check(updateDraft(PreferenceChanges().putString(SubmissionRecoveryKeys.STATUS, "done"))) {
                             this@MainActivity.getString(R.string.card_resolved_send_state_save_failed)
                         }
                         sendState = sendState.copy(
@@ -3116,7 +3023,7 @@ class MainActivity : ComponentActivity() {
                     }) { Text(stringResource(R.string.card_retry_media_import_may_duplicate)) }
                     if (pendingOperation == MediaImportOperation.IMAGE) {
                         TextButton(onClick = {
-                            clearPendingSubmission(preferences)
+                            clearPendingSubmission(preferenceStorage)
                             removeDraftImage()
                             updateRecoveryMessage(
                                 this@MainActivity.getString(R.string.card_the_interrupted_image_was_discarded_the_re),
@@ -3126,7 +3033,7 @@ class MainActivity : ComponentActivity() {
                         }) { Text(stringResource(R.string.card_remove_interrupted_image)) }
                     } else {
                         TextButton(onClick = {
-                            clearPendingSubmission(preferences)
+                            clearPendingSubmission(preferenceStorage)
                             audioController.releaseFreeze(retainFiles = true)
                             audioSnapshot = audioController.snapshot()
                             updateRecoveryMessage(
@@ -3146,7 +3053,7 @@ class MainActivity : ComponentActivity() {
                         )
                     }) { Text(stringResource(R.string.card_resume_frozen_send)) }
                     TextButton(onClick = {
-                        clearPendingSubmission(preferences)
+                        clearPendingSubmission(preferenceStorage)
                         removeDraftImage()
                         updateRecoveryMessage(
                             this@MainActivity.getString(R.string.card_pending_send_cleared_after_review_configur),
@@ -3167,7 +3074,7 @@ class MainActivity : ComponentActivity() {
                                 }) { Text(stringResource(R.string.card_retry_frozen_send)) }
                             } else {
                                 TextButton(onClick = {
-                                    clearPendingSubmission(preferences)
+                                    clearPendingSubmission(preferenceStorage)
                                     updateRecoveryMessage(
                                         this@MainActivity.getString(R.string.card_outcome_acknowledged_choose_a_valid_destin),
                                         RecoveryReason.None,
@@ -3184,7 +3091,7 @@ class MainActivity : ComponentActivity() {
                                     color = MaterialTheme.colorScheme.onSurface,
                                 )
                                 TextButton(onClick = {
-                                    clearPendingSubmission(preferences)
+                                    clearPendingSubmission(preferenceStorage)
                                     updateRecoveryMessage(
                                         this@MainActivity.getString(R.string.card_the_missing_saved_note_outcome_was_explici),
                                         RecoveryReason.None,
@@ -3193,7 +3100,7 @@ class MainActivity : ComponentActivity() {
                                 }) { Text(stringResource(R.string.card_i_checked_resolve_outcome)) }
                             } else {
                                 TextButton(onClick = {
-                                    clearPendingSubmission(preferences)
+                                    clearPendingSubmission(preferenceStorage)
                                     updateRecoveryMessage(
                                         this@MainActivity.getString(R.string.card_pending_send_held_for_manual_resolution_co),
                                         RecoveryReason.None,
@@ -3208,7 +3115,7 @@ class MainActivity : ComponentActivity() {
                         RecoveryReason.MediaInterrupted,
                         RecoveryReason.MediaImported,
                         RecoveryReason.None -> TextButton(onClick = {
-                            clearPendingSubmission(preferences)
+                            clearPendingSubmission(preferenceStorage)
                             updateRecoveryMessage(
                                 this@MainActivity.getString(R.string.card_pending_send_held_for_manual_resolution_co),
                                 RecoveryReason.None,
@@ -3285,68 +3192,40 @@ class MainActivity : ComponentActivity() {
                                 tokenizationLoading = analyzerReady
                             }
                             editor = updated
+                            cardScreenHolderRef[0]?.onSentenceChanged(updated.text)
                         }
-                        val sendBlockers = buildList {
-                            if (!setupReadiness.audioReady) {
-                                add(this@MainActivity.getString(R.string.audio_setup_needed))
-                            }
-                            if (imagePending) {
-                                add(this@MainActivity.getString(R.string.card_the_image_is_still_being_prepared_send_bec))
-                            } else if (imageAttached && !imageProcessing && imageError == null && !imageReady) {
-                                add(this@MainActivity.getString(R.string.card_the_selected_image_is_not_ready_to_send))
-                            } else if (!sendImageReady) {
-                                add(this@MainActivity.getString(R.string.card_the_selected_image_is_missing_or_not_ready))
-                            }
-                            if (!frozenRetryReady && !sentenceAudioReady) {
-                                val field = this@MainActivity.getString(R.string.card_sentence_audio_field)
-                                val blocker = reviewAudioSendBlocker(
-                                    field,
-                                    sentenceAudio.presentation(this@MainActivity.getString(audioActionLabel(AudioItem.SENTENCE))),
-                                )
-                                add(blocker?.resolve(this@MainActivity)
-                                    ?: this@MainActivity.getString(R.string.card_audio_not_ready_to_send, field))
-                            }
-                            if (!frozenRetryReady && !wordAudioReady) {
-                                val field = this@MainActivity.getString(R.string.card_word_audio_field)
-                                val blocker = reviewAudioSendBlocker(
-                                    field,
-                                    wordAudio.presentation(this@MainActivity.getString(audioActionLabel(AudioItem.VOCABULARY))),
-                                )
-                                add(blocker?.resolve(this@MainActivity)
-                                    ?: this@MainActivity.getString(R.string.card_audio_not_ready_to_send, field))
-                            }
-                            if (!apiPermissionGranted) {
-                                add(this@MainActivity.getString(R.string.card_allow_ankidroid_api_access_in_settings_bef))
-                            }
-                            if (selectedModel == null) add(this@MainActivity.getString(R.string.card_choose_an_ankidroid_note_type_in_settings))
-                            if (selectedDeck == null) add(this@MainActivity.getString(R.string.card_choose_an_ankidroid_destination_deck_in_se))
-                            if (fieldsByName == null && !frozenRetryReady) {
-                                add(this@MainActivity.getString(R.string.card_the_note_fields_are_incomplete_return_to_p))
-                            }
-                            validationErrors.firstOrNull()?.let { add(this@MainActivity.getString(R.string.card_still_needed_1_s, it)) }
-                            if (effectiveMapping?.isValid != true) {
-                                add(
-                                    effectiveMapping?.errors?.firstOrNull()?.let {
-                                        this@MainActivity.getString(R.string.card_ankidroid_field_mapping, it)
-                                    } ?: this@MainActivity.getString(R.string.card_note_fields_do_not_match_note_type),
-                                )
-                            }
-                            if (!frozenDestinationReady) {
-                                add(this@MainActivity.getString(R.string.card_restore_the_frozen_note_s_ankidroid_note_t))
-                            }
-                            if (!frozenRetryReady && pitch == null) {
-                                add(this@MainActivity.getString(R.string.card_choose_a_source_listed_pitch_pattern_befor))
-                            }
-                            if (!frozenRetryReady && (dictionaryLoading || dictionarySearchLoading)) {
-                                add(this@MainActivity.getString(R.string.card_the_offline_dictionary_is_still_loading_wa))
-                            }
-                            if (setupError != null) {
-                                add(setupError)
-                            } else if (!setupLoadedSuccessfully) {
-                                add(this@MainActivity.getString(R.string.card_ankidroid_setup_could_not_be_loaded_open_s))
-                            }
-                            if (setupLoading) add(this@MainActivity.getString(R.string.card_ankidroid_setup_is_still_loading_wait_for))
-                        }
+                        val sentenceAudioPresentation = sentenceAudio.presentation(
+                            this@MainActivity.getString(audioActionLabel(AudioItem.SENTENCE)),
+                        )
+                        val wordAudioPresentation = wordAudio.presentation(
+                            this@MainActivity.getString(audioActionLabel(AudioItem.VOCABULARY)),
+                        )
+                        // This precedes holder creation: submitHint below is an input to its state.
+                        val sendBlockers = cardSendBlockers(
+                            setupReadiness = setupReadiness,
+                            sendState = sendState,
+                            noteDraft = noteDraft,
+                            imageAttached = imageAttached,
+                            imageProcessing = imageProcessing,
+                            imageError = imageError,
+                            imageReady = imageReady,
+                            frozenReceiptReady = frozenReceiptReady,
+                            sentenceAudioReady = sentenceAudioReady,
+                            sentenceAudio = sentenceAudioPresentation,
+                            wordAudioReady = wordAudioReady,
+                            wordAudio = wordAudioPresentation,
+                            apiPermissionGranted = apiPermissionGranted,
+                            selectedModel = selectedModel,
+                            selectedDeck = selectedDeck,
+                            effectiveMapping = effectiveMapping,
+                            frozenDestinationReady = frozenDestinationReady,
+                            pitchAvailable = pitch != null,
+                            dictionaryLoading = dictionaryLoading,
+                            dictionarySearchLoading = dictionarySearchLoading,
+                            setupError = setupError,
+                            setupLoaded = setupLoadedSuccessfully,
+                            setupLoading = setupLoading,
+                        )
                         val submitHint = when {
                             completedSubmission != null || duplicateBlocked || recoveryRequired -> null
                             isSubmitting -> null
@@ -3355,67 +3234,57 @@ class MainActivity : ComponentActivity() {
                         }
                         val reviewTranslationError =
                             (activeTranslationResult() as? TranslationResult.Failed)?.message
-                        val translationNeedsSettings = reviewTranslationError?.let {
-                            it.contains("Google Cloud API key", ignoreCase = true) ||
-                                it.contains("credential", ignoreCase = true)
-                        } == true
-                        val submitHintActionLabel = when {
-                            translationNeedsSettings -> this@MainActivity.getString(R.string.card_open_settings_action)
-                            !setupReadiness.audioReady -> this@MainActivity.getString(R.string.finish_setup)
-                            reviewTranslationError != null -> this@MainActivity.getString(R.string.retry)
-                            !sentenceAudioReady -> this@MainActivity.getString(audioActionLabel(AudioItem.SENTENCE))
-                            !wordAudioReady -> this@MainActivity.getString(audioActionLabel(AudioItem.VOCABULARY))
-                            !apiPermissionGranted || selectedModel == null || selectedDeck == null || setupError != null ->
-                                this@MainActivity.getString(R.string.card_open_settings_action)
-                            else -> this@MainActivity.getString(R.string.card_edit_preparation)
-                        }
-
-                        val submitHintAction: (() -> Unit) = when {
-                            translationNeedsSettings -> ({ openSettings() })
-                            !setupReadiness.audioReady -> ({ enterSetup() })
-                            reviewTranslationError != null -> ({
-                                if (committedSentence == editor.text) {
-                                    generationStarted = true
-                                    translationAutoAllowed = true
-                                    translationRetry++
-                                }
-                            })
-                            !sentenceAudioReady -> ({ onAudioAction(AudioItem.SENTENCE) })
-                            !wordAudioReady -> ({ onAudioAction(AudioItem.VOCABULARY) })
-                            !apiPermissionGranted || selectedModel == null || selectedDeck == null || setupError != null -> ({ openSettings() })
-                            else -> ({
-                                route = AppRoute.Card
-                            })
-                        }
-                        val loadMoreMatches: () -> Unit = {
-                            val query = target?.textIn(editor.text)
-                            if (query != null) {
-                                val callbackGeneration = draftGeneration
-                                coroutineScope.launch {
-                                    if (!asyncDraftIsCurrent(callbackGeneration)) return@launch
-                                    dictionarySearchLoading = true
-                                    try {
-                                        val more = withContext(Dispatchers.IO) {
-                                            offlineDictionary.search(
-                                                query,
-                                                analyzedTarget?.expression,
-                                                offset = dictionaryEntries.size,
-                                            )
-                                        }
-                                        if (!asyncDraftIsCurrent(callbackGeneration)) return@launch
-                                        dictionaryEntries = dictionaryEntries + more
-                                        dictionaryHasMore = more.size == 50
-                                    } catch (cancelled: CancellationException) {
-                                        throw cancelled
-                                    } catch (_: Exception) {
-                                        if (asyncDraftIsCurrent(callbackGeneration)) {
-                                            dictionaryError = this@MainActivity.getString(R.string.card_could_not_load_more_dictionary_matches)
-                                        }
-                                    } finally {
-                                        dictionarySearchLoading = false
+                        val hintAction = cardHintAction(
+                            signals = CardHintActionSignals(
+                                translationError = reviewTranslationError,
+                                audioSetupReady = setupReadiness.audioReady,
+                                sentenceAudioReady = sentenceAudioReady,
+                                wordAudioReady = wordAudioReady,
+                                apiPermissionGranted = apiPermissionGranted,
+                                modelSelected = selectedModel != null,
+                                deckSelected = selectedDeck != null,
+                                setupError = setupError != null,
+                            ),
+                            sentenceAudioLabel = this@MainActivity.getString(audioActionLabel(AudioItem.SENTENCE)),
+                            wordAudioLabel = this@MainActivity.getString(audioActionLabel(AudioItem.VOCABULARY)),
+                            effects = CardHintActionEffects(
+                                openSettings = { openSettings() },
+                                enterSetup = { enterSetup() },
+                                retryTranslation = {
+                                    if (committedSentence == editor.text) {
+                                        generationStarted = true
+                                        translationAutoAllowed = true
+                                        translationRetry++
                                     }
-                                }
-                            }
+                                },
+                                retrySentenceAudio = { onAudioAction(AudioItem.SENTENCE) },
+                                retryWordAudio = { onAudioAction(AudioItem.VOCABULARY) },
+                                editPreparation = { route = AppRoute.Card },
+                            ),
+                        )
+                        val submitHintActionLabel = hintAction.label
+                        val submitHintAction = hintAction.invoke
+                        val loadMoreMatches: () -> Unit = {
+                            loadMoreDictionaryMatches(
+                                DictionaryMatchPageRequest(
+                                    query = target?.textIn(editor.text),
+                                    generation = draftGeneration,
+                                    expression = analyzedTarget?.expression,
+                                    offset = dictionaryEntries.size,
+                                    scope = coroutineScope,
+                                    isCurrent = ::asyncDraftIsCurrent,
+                                    search = { query, expression, offset ->
+                                        offlineDictionary.search(query, expression, offset = offset)
+                                    },
+                                    setLoading = { dictionarySearchLoading = it },
+                                    append = { dictionaryEntries = dictionaryEntries + it },
+                                    setHasMore = { dictionaryHasMore = it },
+                                    setError = { dictionaryError = it },
+                                    errorMessage = this@MainActivity.getString(
+                                        R.string.card_could_not_load_more_dictionary_matches,
+                                    ),
+                                ),
+                            )
                         }
                         val submitAtClick: () -> Unit = submitAtClick@{
                             if (!canSend || (sendState.locked && !frozenRetryReady) || sendState.completedNoteId != null ||
@@ -3498,12 +3367,66 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
+                        val cardMeaningChoices = DictionaryMeaningChoices.from(dictionaryEntries)
+                        val selectedMeaningChoice = DictionaryMeaningChoices.find(
+                            choices = cardMeaningChoices,
+                            entryId = selectedDictionaryEntryId,
+                            expression = vocabulary,
+                            reading = vocabularyReading,
+                            senseIndex = selectedSenseIndices.singleOrNull(),
+                        )
+                        val cardScreenPresentationContext = cardScreenPresentationContext(
+                            analyzerError = tokenizationError,
+                            analyzing = tokenizationLoading,
+                            completed = completedSubmission != null,
+                            duplicateBlocked = duplicateBlocked,
+                            recoveryRequired = recoveryRequired,
+                            submitting = isSubmitting,
+                            sendBlocked = submitMessage?.startsWith(blockedStatusPrefix) == true,
+                            submitMessage = submitMessage,
+                            submitHint = submitHint,
+                            submitHintActionLabel = submitHintActionLabel,
+                            editPreparationLabel = this@MainActivity.getString(R.string.card_edit_preparation),
+                            translationFailure = reviewTranslationError?.let {
+                                this@MainActivity.getString(reviewTranslationFailureStatus(it).headlineResource)
+                            },
+                            wordAudioGenerating = wordAudioPresentation == ReviewAudioPresentation.Generating,
+                            hasTarget = target != null,
+                            actionHasTarget = reviewTarget != null,
+                            canSend = canSend,
+                            submissionLocked = sendState.locked,
+                            editingEnabled = sendState.editingEnabled,
+                            frozenRetryReady = frozenRetryReady,
+                            recoveryMessage = recoveryMessage,
+                        )
+                        val cardScreenHolder = rememberCardScreenStateHolder(
+                            sentence = displaySentence,
+                            selectedSpan = reviewTarget,
+                            meaningChoice = selectedMeaningChoice,
+                            committedSentence = committedSentence,
+                            presentationContext = cardScreenPresentationContext,
+                            canSelectWords = { sendState.editingEnabled },
+                            isSubmissionLocked = { sendState.locked },
+                            onWordTapped = { span -> selectTarget(span) },
+                            onMeaningChosen = { choice -> commitDictionaryChoice(choice) },
+                            dispatchPrimaryAction = { action ->
+                                cardActionClickHandler(
+                                    action = action,
+                                    sendState = sendState,
+                                    frozenRetryReady = frozenRetryReady,
+                                    onSubmit = submitAtClick,
+                                    onRetryAnalysis = { analysisRetry++ },
+                                    onRecovery = submitHintAction,
+                                ).invoke()
+                            },
+                        )
+                        cardScreenHolderRef[0] = cardScreenHolder
                         when (visibleRoute) {
                             AppRoute.Capture -> InputScreen(
                                 captureMode = captureMode,
                                 onCaptureModeChange = { mode ->
                                     captureMode = mode
-                                    preferences.edit().putString("capture_mode", mode).apply()
+                                    updateDraft(PreferenceChanges().putString("capture_mode", mode))
                                 },
                                 editor = editor,
                                 onEditorChange = updateEditor,
@@ -3560,318 +3483,163 @@ class MainActivity : ComponentActivity() {
                                 onSettings = { openSettings() },
                             )
                             AppRoute.Card -> {
-                                val sentenceAudioPresentation = sentenceAudio.presentation(
-                                    this@MainActivity.getString(audioActionLabel(AudioItem.SENTENCE)),
-                                )
-                                val wordAudioPresentation = wordAudio.presentation(
-                                    this@MainActivity.getString(audioActionLabel(AudioItem.VOCABULARY)),
-                                )
-                                val cardAnalyzerError = tokenizationError
-                                val cardAnalyzing = tokenizationLoading
-                                val sendBlockedStatus = submitMessage?.startsWith(blockedStatusPrefix) == true
-                                val recoveryActionLabel = submitHintActionLabel.takeIf {
-                                    submitHint != null && it != this@MainActivity.getString(R.string.card_edit_preparation)
-                                }
-                                val presentation = cardPresentation(
-                                    CardPresentationInput(
-                                        hasTarget = target != null,
-                                        analyzerError = cardAnalyzerError,
-                                        analyzing = cardAnalyzing,
-                                        completed = completedSubmission != null,
-                                        duplicateBlocked = duplicateBlocked,
-                                        recoveryRequired = recoveryRequired,
-                                        submitting = isSubmitting,
-                                        sendBlocked = sendBlockedStatus,
-                                        submitMessage = submitMessage,
-                                        recoveryActionLabel = recoveryActionLabel,
-                                        translationFailure = reviewTranslationError?.let {
-                                            this@MainActivity.getString(reviewTranslationFailureStatus(it).headlineResource)
-                                        },
-                                        wordAudioGenerating = wordAudioPresentation == ReviewAudioPresentation.Generating,
-                                        submitHint = submitHint,
-                                        noWordAction = reviewTarget == null && cardAnalyzerError == null && !cardAnalyzing &&
-                                            (sendState.editingEnabled || frozenRetryReady) && submitMessage == null,
-                                        canSend = canSend,
-                                        submissionLocked = sendState.locked,
-                                        actionHasTarget = reviewTarget != null,
-                                        recoveryMessage = recoveryMessage,
-                                        copy = CardPresentationCopy(
-                                            noTargetHint = stringResource(R.string.card_hint_word),
-                                            analyzingHint = stringResource(R.string.card_analyzing_the_sentence),
-                                            sendingHint = stringResource(R.string.sending),
-                                            wordAudioPreparingHint = stringResource(R.string.card_hint_preparing),
-                                            completedStatusFallback = stringResource(R.string.card_note_sent_to_ankidroid),
-                                            duplicateStatusFallback = stringResource(R.string.card_matching_note_exists),
-                                            recoveryStatusFallback = stringResource(R.string.card_pending_send_needs_review),
-                                            sendActionLabel = stringResource(R.string.send),
-                                            retryActionLabel = stringResource(R.string.retry),
-                                            retrySendActionLabel = stringResource(R.string.card_retry_send),
-                                        ),
-                                    ),
-                                )
-                                // The click handler is ready before the Card is built; it invokes the
-                                // coordinator when clicked rather than capturing a later assignment.
-                                val cardAction = cardActionClickHandler(
-                                    action = presentation.action,
-                                    sendState = sendState,
-                                    frozenRetryReady = frozenRetryReady,
-                                    onSubmit = submitAtClick,
-                                    onRetryAnalysis = { analysisRetry++ },
-                                    onRecovery = submitHintAction,
-                                )
-                                val cardMeaningChoices = DictionaryMeaningChoices.from(dictionaryEntries)
-                                val selectedMeaningChoice = DictionaryMeaningChoices.find(
-                                    choices = cardMeaningChoices,
-                                    entryId = selectedDictionaryEntryId,
-                                    expression = vocabulary,
-                                    reading = vocabularyReading,
-                                    senseIndex = selectedSenseIndices.singleOrNull(),
-                                )
-                                val selectedEntryIsResolved = selectedDictionaryEntry?.let {
-                                    it.id == selectedDictionaryEntryId && it.expression == vocabulary && it.reading == vocabularyReading
-                                } == true
-                                val cardWordStatus = when {
-                                    reviewTarget == null -> null
-                                    dictionaryLoading || dictionarySearchLoading -> stringResource(R.string.card_dictionary_searching)
-                                    dictionaryError != null -> dictionaryError
-                                    selectedDictionaryEntry == null && cardMeaningChoices.size > 1 ->
-                                        stringResource(R.string.card_choose_dictionary_entry_hint)
-                                    selectedDictionaryEntry == null && dictionaryReady ->
-                                        stringResource(R.string.no_entry)
-                                    vocabularyReadingError != null -> vocabularyReadingError
-                                    wordAudioPresentation == ReviewAudioPresentation.SourceMissing ->
-                                        stringResource(R.string.no_recording)
-                                    else -> null
-                                }
-                                val cardPitchPending = reviewTarget != null && displayPitch == null && (
-                                    dictionaryLoading || dictionarySearchLoading || !selectedEntryIsResolved || pitchLookupLoading
-                                )
-                                val cardPitchStatus = when {
-                                    reviewTarget == null || displayPitch != null || cardPitchPending -> null
-                                    !selectedEntryIsResolved -> null
-                                    pitchIndexError != null -> pitchIndexError
-                                    else -> stringResource(R.string.no_pitch)
-                                }
-                                CardScreen(
-                                    sentence = displaySentence,
-                                    tokens = japaneseTokens,
+                                val cardDetails = CardScreenDetailInput(
                                     selectedSpan = reviewTarget,
-                                    selectionEnabled = sendState.editingEnabled,
-                                    onSelectSpan = { span ->
-                                        if (sendState.editingEnabled) {
-                                            selectTarget(span)
-                                            editor = editor.copy(selection = TextRange(span.start, span.end))
-                                        }
-                                    },
-                                    furigana = if (frozenForDisplay == null) sentenceFurigana else emptyList(),
-                                    onEditSentence = { if (!sendState.locked) showSentenceEditor = true },
-                                    translation = displayTranslation,
-                                    vocabulary = displayVocabulary,
-                                    vocabularyReading = displayVocabularyReading,
-                                    partOfSpeech = englishPartOfSpeechLabel(
-                                        VocabularyPartOfSpeech.forSelectedSenses(selectedDictionaryEntry, selectedSenseIndices),
-                                    ),
-                                    definition = displayDefinition,
-                                    pitch = displayPitch,
-                                    pitchStatus = cardPitchStatus,
-                                    pitchPending = cardPitchPending,
-                                    wordStatus = cardWordStatus,
-                                    wordAudioEnabled = selectedEntryIsResolved && !sendState.locked,
-                                    meaningAvailable = DictionaryMeaningChoices.hasAlternative(
-                                        cardMeaningChoices,
-                                        selectedMeaningChoice,
-                                    ) && !sendState.locked,
-                                    onChangeMeaning = {
-                                        if (!sendState.locked && cardMeaningChoices.size > 1) showDictionarySheet = true
-                                    },
-                                    imagePath = frozenForDisplay?.media?.path ?: processedImagePath.takeIf { imageReady },
-                                    imageFocusY = photoFocusY,
-                                    notes = displayNotes,
-                                    tags = displayTags,
-                                    onNotesChange = { text -> if (sendState.editingEnabled) notes = text },
-                                    onTagsChange = { text -> if (sendState.editingEnabled) tags = text },
-                                    sentenceAudio = sentenceAudioPresentation,
+                                    dictionaryLoading = dictionaryLoading,
+                                    dictionarySearchLoading = dictionarySearchLoading,
+                                    dictionaryError = dictionaryError,
+                                    selectedEntry = selectedDictionaryEntry,
+                                    selectedEntryId = selectedDictionaryEntryId,
+                                    vocabulary = vocabulary,
+                                    vocabularyReading = vocabularyReading,
+                                    meaningChoices = cardMeaningChoices,
+                                    selectedMeaning = selectedMeaningChoice,
+                                    dictionaryReady = dictionaryReady,
+                                    vocabularyReadingError = vocabularyReadingError,
                                     wordAudio = wordAudioPresentation,
-                                    onToggleSentenceAudio = {
-                                        if (playingAudio == AudioItem.SENTENCE) {
-                                            stopAudioPlayback()
-                                            playingAudio = null
-                                        } else {
-                                            audioReadyFile(AudioItem.SENTENCE)?.let { playAudio(AudioItem.SENTENCE, it) }
-                                        }
-                                    },
-                                    onRetrySentenceAudio = { onAudioAction(AudioItem.SENTENCE) },
-                                    onToggleWordAudio = {
-                                        if (playingAudio == AudioItem.VOCABULARY) {
-                                            stopAudioPlayback()
-                                            playingAudio = null
-                                        } else {
-                                            audioReadyFile(AudioItem.VOCABULARY)?.let { playAudio(AudioItem.VOCABULARY, it) }
-                                        }
-                                    },
-                                    onRetryWordAudio = { onAudioAction(AudioItem.VOCABULARY) },
-                                    hint = presentation.hint,
-                                    hintPreparing = presentation.hintPreparing,
-                                    actionLabel = presentation.actionLabel,
-                                    actionEnabled = presentation.actionEnabled,
-                                    actionLoading = isSubmitting,
-                                    onAction = cardAction,
-                                    statusMessage = presentation.status?.takeIf { it != presentation.hint },
-                                    statusContent = {
-                                        if (duplicateBlocked || recoveryRequired) sendRecoveryContent()
-                                    },
-                                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                                    pitch = displayPitch,
+                                    pitchLookupLoading = pitchLookupLoading,
+                                    pitchIndexError = pitchIndexError,
+                                    selectedSenseIndices = selectedSenseIndices,
+                                    sendLocked = sendState.locked,
+                                )
+                                CardScreenContent(
+                                    holder = cardScreenHolder,
+                                    model = CardScreenContentModel(
+                                        sentence = displaySentence,
+                                        tokens = japaneseTokens,
+                                        selectionEnabled = sendState.editingEnabled,
+                                        onSelectSpan = { span ->
+                                            if (sendState.editingEnabled) {
+                                                cardScreenHolder.onWordTapped(span)
+                                                editor = editor.copy(selection = TextRange(span.start, span.end))
+                                            }
+                                        },
+                                        furigana = if (frozenForDisplay == null) sentenceFurigana else emptyList(),
+                                        onEditSentence = { if (!sendState.locked) showSentenceEditor = true },
+                                        translation = displayTranslation,
+                                        vocabulary = displayVocabulary,
+                                        vocabularyReading = displayVocabularyReading,
+                                        details = cardDetails,
+                                        definition = displayDefinition,
+                                        pitch = displayPitch,
+                                        onChangeMeaning = {
+                                            if (!sendState.locked && cardMeaningChoices.size > 1) showDictionarySheet = true
+                                        },
+                                        imagePath = frozenForDisplay?.media?.path ?: processedImagePath.takeIf { imageReady },
+                                        imageFocusY = photoFocusY,
+                                        notes = displayNotes,
+                                        tags = displayTags,
+                                        onNotesChange = { text -> if (sendState.editingEnabled) notes = text },
+                                        onTagsChange = { text -> if (sendState.editingEnabled) tags = text },
+                                        sentenceAudio = sentenceAudioPresentation,
+                                        wordAudio = wordAudioPresentation,
+                                        onToggleSentenceAudio = {
+                                            if (playingAudio == AudioItem.SENTENCE) {
+                                                stopAudioPlayback()
+                                                playingAudio = null
+                                            } else {
+                                                audioReadyFile(AudioItem.SENTENCE)?.let { playAudio(AudioItem.SENTENCE, it) }
+                                            }
+                                        },
+                                        onRetrySentenceAudio = { onAudioAction(AudioItem.SENTENCE) },
+                                        onToggleWordAudio = {
+                                            if (playingAudio == AudioItem.VOCABULARY) {
+                                                stopAudioPlayback()
+                                                playingAudio = null
+                                            } else {
+                                                audioReadyFile(AudioItem.VOCABULARY)?.let { playAudio(AudioItem.VOCABULARY, it) }
+                                            }
+                                        },
+                                        onRetryWordAudio = { onAudioAction(AudioItem.VOCABULARY) },
+                                        actionLoading = isSubmitting,
+                                        statusContent = {
+                                            if (duplicateBlocked || recoveryRequired) sendRecoveryContent()
+                                        },
+                                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                                    ),
                                 )
                             }
                         }
                         if (showSentenceEditor) {
-                            FlowSheet(
-                                onDismissRequest = {
+                            CardSentenceEditorSheet(
+                                draft = sentenceEditorDraft,
+                                editor = editor,
+                                onDraftChanged = { sentenceEditorDraft = it },
+                                onDismiss = {
                                     sentenceEditorDraft = null
                                     showSentenceEditor = false
                                 },
-                                maxHeight = MaterialTheme.flow.tallSheetMaxHeight,
-                                horizontalPadding = MaterialTheme.flow.sheetWidePadding,
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                    Text(stringResource(R.string.edit_sentence), style = MaterialTheme.typography.titleLarge)
-                                    OutlinedTextField(
-                                        value = sentenceEditorDraft ?: editor,
-                                        onValueChange = { sentenceEditorDraft = it },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        label = { Text(stringResource(R.string.sentence)) },
-                                        minLines = 3,
-                                    )
-                                    Text(
-                                        stringResource(R.string.legacy_settings_select_part_of_the_sentence_then_use_it_as),
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        OutlinedButton(
-                                            enabled = (sentenceEditorDraft ?: editor).let {
-                                                it.selection.start != it.selection.end
-                                            },
-                                            onClick = {
-                                                val edited = sentenceEditorDraft ?: editor
-                                                val selected = TargetSpan.fromSelection(
-                                                    edited.text,
-                                                    edited.selection.start,
-                                                    edited.selection.end,
-                                                )
-                                                updateEditor(edited)
-                                                if (commitSentence(edited.text)) {
-                                                    selectTarget(
-                                                        selected,
-                                                    )
-                                                    sentenceEditorDraft = null
-                                                    showSentenceEditor = false
-                                                }
-                                            },
-                                            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                                        ) { Text(stringResource(R.string.legacy_settings_use_selection_as_target)) }
-                                        Button(
-                                            onClick = {
-                                                val edited = sentenceEditorDraft ?: editor
-                                                updateEditor(edited)
-                                                if (commitSentence(edited.text)) {
-                                                    sentenceEditorDraft = null
-                                                    showSentenceEditor = false
-                                                }
-                                            },
-                                            modifier = Modifier.heightIn(min = 48.dp),
-                                        ) { Text(stringResource(R.string.done)) }
+                                onUseSelection = { edited ->
+                                    useCardSentenceSelectionAsTarget(
+                                        edited,
+                                        updateEditor,
+                                        { sentence -> commitSentence(sentence) },
+                                        selectTarget,
+                                    ) {
+                                        sentenceEditorDraft = null
+                                        showSentenceEditor = false
                                     }
-                            }
-                        }
-                        if (showDeckSheet) {
-                            FlowSheet(
-                                onDismissRequest = { showDeckSheet = false },
-                                horizontalPadding = MaterialTheme.flow.sheetWidePadding,
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                    Text(stringResource(R.string.legacy_settings_destination_deck), style = MaterialTheme.typography.titleLarge)
-                                    if (decks.isEmpty()) {
-                                        Text(
-                                            stringResource(R.string.legacy_settings_no_decks_are_available_check_ankidroid_set),
-                                            style = MaterialTheme.typography.bodyMedium,
-                                        )
+                                },
+                                onDone = { edited ->
+                                    commitCardSentenceEdit(
+                                        edited,
+                                        updateEditor,
+                                        { sentence -> commitSentence(sentence) },
+                                    ) {
+                                        sentenceEditorDraft = null
+                                        showSentenceEditor = false
                                     }
-                                    decks.forEach { deck ->
-                                        TextButton(
-                                            onClick = {
-                                                selectedDeckId = deck.id
-                                                preferences.edit().putLong("deck_id", deck.id).apply()
-                                                showDeckSheet = false
-                                            },
-                                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                                        ) { Text(deck.name) }
-                                    }
-                            }
+                                },
+                                selectionHint = stringResource(
+                                    R.string.legacy_settings_select_part_of_the_sentence_then_use_it_as,
+                                ),
+                                useSelectionLabel = stringResource(
+                                    R.string.legacy_settings_use_selection_as_target,
+                                ),
+                            )
                         }
-                        if (visibleRoute == AppRoute.Card && reviewTarget == null) {
-                            submitMessage?.let {
-                                FlowStatusText(
-                                    it,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                )
-                            }
-                            recoveryMessage?.let {
-                                FlowStatusText(
-                                    it,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                )
-                            }
-                            sendRecoveryContent()
-                        }
+                        CardDeckSheet(
+                            visible = showDeckSheet,
+                            decks = decks,
+                            title = stringResource(R.string.legacy_settings_destination_deck),
+                            emptyMessage = stringResource(
+                                R.string.legacy_settings_no_decks_are_available_check_ankidroid_set,
+                            ),
+                            onDismiss = { showDeckSheet = false },
+                            onSelect = { deck ->
+                                selectedDeckId = deck.id
+                                updateDraft(PreferenceChanges().putLong("deck_id", deck.id))
+                                showDeckSheet = false
+                            },
+                        )
+                        CardNoTargetRecoveryContent(
+                            visible = visibleRoute == AppRoute.Card && reviewTarget == null,
+                            submitMessage = submitMessage,
+                            recoveryMessage = recoveryMessage,
+                            recoveryContent = { sendRecoveryContent() },
+                        )
 
 
                     }
                 }
                 val meaningChoices = DictionaryMeaningChoices.from(dictionaryEntries)
-                val meaningSelectionFeedback = rememberChangeFeedback(
-                    event = TouchFeedbackEvent.MEANING_SELECTION,
+                CardMeaningPicker(
+                    visible = showDictionarySheet,
+                    targetAvailable = target?.textIn(editor.text) != null,
+                    choices = meaningChoices,
                     enabled = !sendState.locked,
+                    selectedEntryId = selectedDictionaryEntryId,
+                    vocabulary = vocabulary,
+                    vocabularyReading = vocabularyReading,
+                    selectedSenseIndices = selectedSenseIndices,
+                    onDismiss = { dismissDictionarySheet() },
+                    onChoose = { choice -> checkNotNull(cardScreenHolderRef[0]).onMeaningChosen(choice) },
                 )
-                if (showDictionarySheet && target?.textIn(editor.text) != null && meaningChoices.size > 1) {
-                    DictionaryMeaningSheet(
-                        choices = meaningChoices,
-                        enabled = !sendState.locked,
-                        onDismissRequest = { dismissDictionarySheet() },
-                        onSelect = { choice ->
-                            val meaningChanged = selectedDictionaryEntryId != choice.entry.id ||
-                                vocabulary != choice.entry.expression ||
-                                vocabularyReading != choice.entry.reading ||
-                                selectedSenseIndices != setOf(choice.senseIndex)
-                            if (meaningChanged) {
-                                meaningSelectionFeedback(
-                                    listOf(
-                                        choice.entry.id,
-                                        choice.entry.expression,
-                                        choice.entry.reading,
-                                        choice.senseIndex,
-                                    ),
-                                )
-                            }
-                            commitDictionaryChoice(choice)
-                        },
-                    )
-                }
-                if (definitionSheetText != null) {
-                    FlowSheet(
-                        onDismissRequest = {
-                            definitionSheetText = null
-                            showDictionarySheet = true
-                        },
-                        horizontalPadding = MaterialTheme.flow.sheetWidePadding,
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        }
-                    }
-                }
             }
         }
+        }
+    }
     }
 
     override fun onResume() {
@@ -3962,8 +3730,8 @@ internal fun formatCacheSize(bytes: Long): String = when {
 }
 
 
-private fun clearPendingSubmission(preferences: SharedPreferences) {
-    clearFrozenSubmission(preferences)
+private fun clearPendingSubmission(storage: AppPreferenceStorage) {
+    storage.update(PreferenceFile.DRAFT, clearFrozenSubmission())
 }
 
 private fun TextRange.coerceIn(min: Int, max: Int): TextRange =
