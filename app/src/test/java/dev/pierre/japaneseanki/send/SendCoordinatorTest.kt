@@ -24,13 +24,14 @@ import dev.pierre.japaneseanki.MediaImportOperation
 import dev.pierre.japaneseanki.PitchAccent
 import dev.pierre.japaneseanki.TargetSpan
 import dev.pierre.japaneseanki.liveMediaIdentity
+import dev.pierre.japaneseanki.runAttemptForTest
 import dev.pierre.japaneseanki.ui.CardAction
 import dev.pierre.japaneseanki.ui.CardPresentationCopy
 import dev.pierre.japaneseanki.ui.CardPresentationInput
 import dev.pierre.japaneseanki.ui.SendPhase
 import dev.pierre.japaneseanki.ui.SendState
 import dev.pierre.japaneseanki.ui.cardPresentation
-import kotlinx.coroutines.runBlocking
+import dev.pierre.japaneseanki.runSuspendTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -150,7 +151,7 @@ class SendCoordinatorTest {
                 ),
             )
             val attempt = requireNotNull(audio.confirm(item))
-            audio.runAttempt(attempt)
+            audio.runAttemptForTest(attempt)
         }
 
         fun request(withImage: Boolean = false): SendRequest {
@@ -199,7 +200,7 @@ class SendCoordinatorTest {
     fun duplicateReturnsDuplicateWithoutInserting() = withFixture { fixture ->
         fixture.sink.duplicateId = 812L
 
-        val outcome = runBlocking { fixture.coordinator.submit(fixture.request()) {} }
+        val outcome = runSuspendTest { fixture.coordinator.submit(fixture.request()) {} }
 
         assertEquals(SendOutcome.Duplicate(812L), outcome)
         assertEquals(0, fixture.sink.insertCalls)
@@ -211,7 +212,7 @@ class SendCoordinatorTest {
         fixture.sink.failureOperation = MediaImportOperation.WORD_AUDIO
         fixture.sink.failureStage = MediaImportFailureStage.PROVIDER_IMPORT
 
-        val outcome = runBlocking { fixture.coordinator.submit(fixture.request(withImage = true)) {} }
+        val outcome = runSuspendTest { fixture.coordinator.submit(fixture.request(withImage = true)) {} }
 
         assertEquals(
             SendOutcome.MediaFailed(
@@ -229,7 +230,7 @@ class SendCoordinatorTest {
     fun insertExceptionIsIndeterminateAndNeverCreated() = withFixture { fixture ->
         fixture.sink.insertFailure = IllegalStateException("provider outcome uncertain")
 
-        val outcome = runBlocking { fixture.coordinator.submit(fixture.request()) {} }
+        val outcome = runSuspendTest { fixture.coordinator.submit(fixture.request()) {} }
 
         assertTrue(outcome is SendOutcome.Indeterminate)
         assertEquals(0, fixture.sink.verifyCalls)
@@ -241,7 +242,7 @@ class SendCoordinatorTest {
     fun destinationVerificationFailureIsNotCreated() = withFixture { fixture ->
         fixture.sink.verificationResult = false
 
-        val outcome = runBlocking { fixture.coordinator.submit(fixture.request()) {} }
+        val outcome = runSuspendTest { fixture.coordinator.submit(fixture.request()) {} }
 
         assertEquals(SendOutcome.DestinationUnverified(501L), outcome)
         assertEquals(1, fixture.sink.insertCalls)
@@ -251,7 +252,7 @@ class SendCoordinatorTest {
 
     @Test
     fun happyPathInsertsOnceAndVerifiesDestination() = withFixture { fixture ->
-        val outcome = runBlocking { fixture.coordinator.submit(fixture.request()) {} }
+        val outcome = runSuspendTest { fixture.coordinator.submit(fixture.request()) {} }
 
         assertEquals(SendOutcome.Created(501L), outcome)
         assertEquals(1, fixture.sink.insertCalls)
@@ -261,7 +262,7 @@ class SendCoordinatorTest {
 
     @Test
     fun mediaOrderIsSentenceWordImageAndFailureStopsTheSequence() = withFixture { fixture ->
-        val outcome = runBlocking { fixture.coordinator.submit(fixture.request(withImage = true)) {} }
+        val outcome = runSuspendTest { fixture.coordinator.submit(fixture.request(withImage = true)) {} }
 
         assertEquals(SendOutcome.Created(501L), outcome)
         assertEquals(
@@ -276,7 +277,7 @@ class SendCoordinatorTest {
         val request = fixture.request()
         val result = AtomicReference<SendOutcome?>()
         val clickSubmit = {
-            result.set(runBlocking { fixture.coordinator.submit(request) {} })
+            result.set(runSuspendTest { fixture.coordinator.submit(request) {} })
         }
         val nominalAction = cardPresentation(cardInput(locked = false)).action
         assertEquals(CardAction.Submit, nominalAction)

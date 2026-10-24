@@ -72,7 +72,7 @@ class DraftAudioPlaybackTest {
                         expectedFormat = format,
                     ),
                 )
-                val result = controller.runAttempt(controller.confirm(item)!!)
+                val result = controller.runAttemptForTest(controller.confirm(item)!!)
                 assertTrue("${format.extension} attempt failed: $result", result is DraftAudioAttemptResult.Accepted)
                 val ready = controller.state(item) as DraftAudioState.Ready
                 assertEquals(format.extension, ready.file.format)
@@ -112,7 +112,7 @@ class DraftAudioPlaybackTest {
                     expectedFormat = AudioFormat.WAV,
                 ),
             )
-            controller.runAttempt(controller.confirm(AudioItem.SENTENCE)!!)
+            controller.runAttemptForTest(controller.confirm(AudioItem.SENTENCE)!!)
             val ready = controller.state(AudioItem.SENTENCE) as DraftAudioState.Ready
 
             val player = MediaPlayer()

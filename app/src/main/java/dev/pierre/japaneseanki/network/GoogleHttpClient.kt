@@ -1,15 +1,18 @@
 package dev.pierre.japaneseanki.network
 
-import dev.pierre.japaneseanki.GoogleHttpResponse
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.util.concurrent.TimeUnit
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+import okhttp3.Callback
+import okhttp3.Call
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import okhttp3.RequestBody.Companion.toRequestBody
 
 private val googleHttpClient = OkHttpClient.Builder()
@@ -19,13 +22,15 @@ private val googleHttpClient = OkHttpClient.Builder()
     .retryOnConnectionFailure(false)
     .build()
 
+internal data class GoogleHttpResponse(val code: Int, val body: ByteArray)
+
 internal suspend fun request(
     url: String,
     apiKey: String,
     timeoutMillis: Int,
     maxResponseBytes: Int,
     body: ByteArray? = null,
-): GoogleHttpResponse = withContext(Dispatchers.IO) {
+): GoogleHttpResponse {
     require(timeoutMillis > 0) { "timeoutMillis must be positive" }
     require(maxResponseBytes >= 0) { "maxResponseBytes must not be negative" }
 
@@ -46,10 +51,28 @@ internal suspend fun request(
         }
         .build()
 
-    client.newCall(request).execute().use { response ->
-        val responseBody = response.body?.byteStream()?.use { readBounded(it, maxResponseBytes) }
-            ?: ByteArray(0)
-        GoogleHttpResponse(response.code, responseBody)
+    val call = client.newCall(request)
+    return suspendCancellableCoroutine { continuation ->
+        continuation.invokeOnCancellation { call.cancel() }
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                continuation.resumeWithException(e)
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                try {
+                    val result = response.use {
+                        val responseBody = it.body?.byteStream()?.use { stream ->
+                            readBounded(stream, maxResponseBytes)
+                        } ?: ByteArray(0)
+                        GoogleHttpResponse(it.code, responseBody)
+                    }
+                    continuation.resume(result)
+                } catch (error: IOException) {
+                    continuation.resumeWithException(error)
+                }
+            }
+        })
     }
 }
 

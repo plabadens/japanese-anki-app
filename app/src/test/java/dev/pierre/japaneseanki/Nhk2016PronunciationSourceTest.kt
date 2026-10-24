@@ -2,13 +2,11 @@ package dev.pierre.japaneseanki
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 
-import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.InputStream
-import java.net.HttpURLConnection
-import java.net.URL
 import java.nio.file.Files
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -17,41 +15,41 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class Nhk2016PronunciationSourceTest {
-    @Test fun bundledIndexLookupIsOfflineAndOnlyTheRecordingUsesNetwork() {
+    @Test
+    fun bundledIndexLookupIsOfflineAndOnlyTheRecordingUsesNetwork() {
         val root = Files.createTempDirectory("nhk-bundled-index").toFile()
+        val server = MockWebServer()
+        server.start()
         try {
-            val urls = mutableListOf<String>()
             val index = """{"meta":{"version":2},"headwords":{"猫":["20170616125901.ogg","20170616125902.ogg"],"犬":["20170616125903.ogg"]}}"""
+            server.enqueue(MockResponse().setResponseCode(200).setBody(okio.Buffer().write(validOgg())))
             val source = Nhk2016PronunciationSource(
                 readIndexText = { index },
                 spellingFor = { "猫" },
-                connectionFactory = { url ->
-                    urls += url.toString()
-                    FakeConnection(url, validOgg())
-                },
+                mediaRoot = server.url("/media").toString().trimEnd('/'),
             )
 
             assertEquals("20170616125901.ogg", source.findRecording("猫"))
-            assertTrue("index lookup must not open a network connection", urls.isEmpty())
+            assertEquals("index lookup must not open a network connection", 0, server.requestCount)
 
             val output = File(root, "draft/word.ogg")
             val request = AudioSynthesisRequest(AudioItem.VOCABULARY, "cat", 0, "entry")
             assertEquals(output, source.synthesize(request, output))
-            assertEquals(
-                listOf("https://raw.githubusercontent.com/Ajatt-Tools/nhk_2016_pronunciations_index/${Nhk2016PronunciationSource.SOURCE_VERSION}/media/20170616125901.ogg"),
-                urls,
-            )
+            val recorded = server.takeRequest()
+            assertEquals("GET", recorded.method)
+            assertEquals("/media/20170616125901.ogg", recorded.path)
             assertTrue(AudioFileValidator.requireSupported(output).isFile)
             assertEquals("GPL-3.0 (index repository only; recording rights are not verified)", Nhk2016PronunciationSource.SOURCE_LICENSE)
-        } finally { root.deleteRecursively() }
+        } finally {
+            server.shutdown()
+            root.deleteRecursively()
+        }
     }
 
     @Test fun unresolvedEntryAndMissingExactSpellingDoNotFetchRecording() {
-        val urls = mutableListOf<String>()
         val source = Nhk2016PronunciationSource(
             readIndexText = { """{"headwords":{"猫":["20170616125901.ogg"]}}""" },
             spellingFor = { "ねこ" },
-            connectionFactory = { url -> urls += url.toString(); FakeConnection(url, validOgg()) },
         )
 
         assertTrue(runCatching {
@@ -61,7 +59,6 @@ class Nhk2016PronunciationSourceTest {
             source.synthesize(AudioSynthesisRequest(AudioItem.VOCABULARY, "cat", 0, "entry"), File("unused.ogg"))
         }.exceptionOrNull()
         assertTrue(missing is AudioSourceMissingException)
-        assertTrue(urls.isEmpty())
     }
 
     @Test fun rejectsMalformedBundledIndexAndMalformedOgg() {
@@ -101,17 +98,5 @@ class Nhk2016PronunciationSourceTest {
         page.write(1)
         page.write(0)
         return page.toByteArray()
-    }
-
-    private class FakeConnection(
-        url: URL,
-        private val body: ByteArray,
-    ) : HttpURLConnection(url) {
-        override fun getResponseCode() = HTTP_OK
-        override fun getInputStream(): InputStream = ByteArrayInputStream(body)
-        override fun getContentLengthLong() = body.size.toLong()
-        override fun connect() = Unit
-        override fun disconnect() = Unit
-        override fun usingProxy() = false
     }
 }

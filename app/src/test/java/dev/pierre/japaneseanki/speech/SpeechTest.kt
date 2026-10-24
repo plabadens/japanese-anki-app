@@ -5,6 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.pierre.japaneseanki.JapaneseToken
 import dev.pierre.japaneseanki.ReadingCorrection
 import dev.pierre.japaneseanki.TargetSpan
+import dev.pierre.japaneseanki.runSuspendTest
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -99,14 +100,14 @@ class GoogleSpeechProviderTest {
         var json: String? = null
         var calls = 0
 
-        override fun get(url: String, apiKey: String, timeoutMillis: Int): SpeechHttpResponse {
+        override suspend fun get(url: String, apiKey: String, timeoutMillis: Int): SpeechHttpResponse {
             this.url = url
             this.apiKey = apiKey
             calls++
             return SpeechHttpResponse(status, body)
         }
 
-        override fun post(url: String, apiKey: String, json: ByteArray, timeoutMillis: Int): SpeechHttpResponse {
+        override suspend fun post(url: String, apiKey: String, json: ByteArray, timeoutMillis: Int): SpeechHttpResponse {
             this.url = url
             this.apiKey = apiKey
             this.json = json.toString(Charsets.UTF_8)
@@ -154,7 +155,7 @@ class GoogleSpeechProviderTest {
         val output = File.createTempFile("speech-", ".mp3")
         try {
             val request = SentenceSpeechRequest("悪逆", voice, listOf(ReadingHint("悪逆", "アクギャク")))
-            provider.synthesize(request, output)
+            runSuspendTest { provider.synthesize(request, output) }
             assertEquals("google-key", transport.apiKey)
             assertEquals("https://texttospeech.googleapis.com/v1/text:synthesize", transport.url)
             assertTrue(transport.json.orEmpty().contains("アクギャク"))
@@ -170,12 +171,14 @@ class GoogleSpeechProviderTest {
         val provider = GoogleChirpSpeechProvider({ "k" }, transport, 1_000)
         val output = File.createTempFile("speech-", ".mp3")
         try {
-            val error = runCatching {
-                provider.synthesize(
-                    SentenceSpeechRequest("悪逆", voice, listOf(ReadingHint("悪逆", "アクギャク"))),
-                    output,
-                )
-            }.exceptionOrNull()
+            val error = runSuspendTest {
+                runCatching {
+                    provider.synthesize(
+                        SentenceSpeechRequest("悪逆", voice, listOf(ReadingHint("悪逆", "アクギャク"))),
+                        output,
+                    )
+                }.exceptionOrNull()
+            }
             assertTrue(error is SpeechException)
             assertEquals(SpeechFailure.INVALID_REQUEST, (error as SpeechException).failure)
             assertEquals(1, transport.calls)
@@ -188,12 +191,24 @@ class GoogleSpeechProviderTest {
     @Test
     fun redirectsAndMissingCredentialsFailClosed() {
         val redirect = GoogleChirpSpeechProvider({ "k" }, FakeTransport(302, ByteArray(0)), 1_000)
-        val error = runCatching { redirect.listVoices() }.exceptionOrNull()
+        val error = runSuspendTest { runCatching { redirect.listVoices() }.exceptionOrNull() }
         assertEquals(SpeechFailure.AUTHORIZATION, (error as SpeechException).failure)
 
         val noKey = GoogleChirpSpeechProvider({ "" }, FakeTransport(), 1_000)
-        val missing = runCatching { noKey.listVoices() }.exceptionOrNull()
+        val missing = runSuspendTest { runCatching { noKey.listVoices() }.exceptionOrNull() }
         assertEquals(SpeechFailure.AUTHORIZATION, (missing as SpeechException).failure)
+    }
+
+    @Test
+    fun malformedSynthesisPayloadFailsClosed() {
+        val provider = GoogleChirpSpeechProvider({ "k" }, FakeTransport(200, "{".toByteArray()), 1_000)
+        val error = runSuspendTest {
+            runCatching {
+                provider.synthesize(SentenceSpeechRequest("猫", voice, emptyList()), File("unused.mp3"))
+            }.exceptionOrNull()
+        }
+
+        assertEquals(SpeechFailure.INVALID_RESPONSE, (error as SpeechException).failure)
     }
 
     @Test
@@ -202,9 +217,11 @@ class GoogleSpeechProviderTest {
             .toByteArray(Charsets.UTF_8)
         val transport = FakeTransport(400, errorBody)
         val provider = GoogleChirpSpeechProvider({ "never-in-diagnostics" }, transport, 1_000)
-        val error = runCatching {
-            provider.synthesize(SentenceSpeechRequest("悪逆", voice, listOf(ReadingHint("悪逆", "アクギャク"))), File("unused.mp3"))
-        }.exceptionOrNull() as SpeechException
+        val error = runSuspendTest {
+            runCatching {
+                provider.synthesize(SentenceSpeechRequest("悪逆", voice, listOf(ReadingHint("悪逆", "アクギャク"))), File("unused.mp3"))
+            }.exceptionOrNull()
+        } as SpeechException
 
         assertEquals(SpeechFailure.INVALID_REQUEST, error.failure)
         assertFalse("invalid request must not be retried unchanged", error.retryable)
@@ -227,10 +244,12 @@ class GoogleSpeechProviderTest {
         val response = """{"error":{"status":"NOT_FOUND","message":"private provider detail"}}"""
             .toByteArray(Charsets.UTF_8)
         val transport = FakeTransport(404, response)
-        val error = runCatching {
-            GoogleChirpSpeechProvider({ "k" }, transport, 1_000)
-                .synthesize(SentenceSpeechRequest("猫", voice, emptyList()), File("unused.mp3"))
-        }.exceptionOrNull() as SpeechException
+        val error = runSuspendTest {
+            runCatching {
+                GoogleChirpSpeechProvider({ "k" }, transport, 1_000)
+                    .synthesize(SentenceSpeechRequest("猫", voice, emptyList()), File("unused.mp3"))
+            }.exceptionOrNull()
+        } as SpeechException
 
         assertEquals(SpeechFailure.INVALID_REQUEST, error.failure)
         assertFalse(error.retryable)
@@ -242,21 +261,25 @@ class GoogleSpeechProviderTest {
     @Test
     fun timeoutAndServiceUnavailableRemainDistinctAndRetryable() {
         val timeoutTransport = object : GoogleSpeechTransport {
-            override fun get(url: String, apiKey: String, timeoutMillis: Int): SpeechHttpResponse =
+            override suspend fun get(url: String, apiKey: String, timeoutMillis: Int): SpeechHttpResponse =
                 throw SocketTimeoutException("read timed out")
 
-            override fun post(url: String, apiKey: String, json: ByteArray, timeoutMillis: Int): SpeechHttpResponse =
+            override suspend fun post(url: String, apiKey: String, json: ByteArray, timeoutMillis: Int): SpeechHttpResponse =
                 throw SocketTimeoutException("read timed out")
         }
-        val timeout = runCatching {
-            GoogleChirpSpeechProvider({ "k" }, timeoutTransport, 1_000)
-                .synthesize(SentenceSpeechRequest("猫", voice, emptyList()), File("unused.mp3"))
-        }.exceptionOrNull() as SpeechException
+        val timeout = runSuspendTest {
+            runCatching {
+                GoogleChirpSpeechProvider({ "k" }, timeoutTransport, 1_000)
+                    .synthesize(SentenceSpeechRequest("猫", voice, emptyList()), File("unused.mp3"))
+            }.exceptionOrNull()
+        } as SpeechException
 
-        val unavailable = runCatching {
-            GoogleChirpSpeechProvider({ "k" }, FakeTransport(503, ByteArray(0)), 1_000)
-                .synthesize(SentenceSpeechRequest("猫", voice, emptyList()), File("unused.mp3"))
-        }.exceptionOrNull() as SpeechException
+        val unavailable = runSuspendTest {
+            runCatching {
+                GoogleChirpSpeechProvider({ "k" }, FakeTransport(503, ByteArray(0)), 1_000)
+                    .synthesize(SentenceSpeechRequest("猫", voice, emptyList()), File("unused.mp3"))
+            }.exceptionOrNull()
+        } as SpeechException
 
         assertEquals(SpeechFailure.TIMEOUT, timeout.failure)
         assertEquals("SocketTimeoutException", timeout.diagnostic?.exceptionClass)
@@ -273,10 +296,12 @@ class GoogleSpeechProviderTest {
     fun synthesisEnforcesUtf8ContentLimitWithoutCallingTransport() {
         val transport = FakeTransport()
         val oversized = "猫".repeat(1_668) // 5,004 UTF-8 bytes; UTF-16 length alone would miss this.
-        val error = runCatching {
-            GoogleChirpSpeechProvider({ "k" }, transport, 1_000)
-                .synthesize(SentenceSpeechRequest(oversized, voice, emptyList()), File("unused.mp3"))
-        }.exceptionOrNull() as SpeechException
+        val error = runSuspendTest {
+            runCatching {
+                GoogleChirpSpeechProvider({ "k" }, transport, 1_000)
+                    .synthesize(SentenceSpeechRequest(oversized, voice, emptyList()), File("unused.mp3"))
+            }.exceptionOrNull()
+        } as SpeechException
 
         assertEquals(SpeechFailure.INVALID_REQUEST, error.failure)
         assertFalse(error.retryable)
