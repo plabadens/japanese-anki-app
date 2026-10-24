@@ -51,10 +51,12 @@ class SendStateTest {
 
     @Test
     fun eachRecoveryReasonIsAssignedAtItsOutcomeScenario() {
-        val source = read(projectRoot().resolve("app/src/main/java/dev/pierre/japaneseanki/MainActivity.kt"))
+        val root = projectRoot()
+        val source = read(root.resolve("app/src/main/java/dev/pierre/japaneseanki/MainActivity.kt")) +
+            read(root.resolve("app/src/main/java/dev/pierre/japaneseanki/send/SendOutcomeUi.kt"))
         val scenarios = listOf(
-            Triple("if (duplicateId != null) {", "RecoveryReason.MatchingNoteExists", 900),
-            Triple("if (noteId == null) {", "RecoveryReason.SavedNoteMissing", 300),
+            Triple("is SendOutcome.Duplicate ->", "RecoveryReason.MatchingNoteExists", 700),
+            Triple("IndeterminateReason.MISSING_NOTE_ID ->", "RecoveryReason.SavedNoteMissing", 300),
             Triple("if (model == null) {", "RecoveryReason.DestinationUnavailable", 400),
             Triple("card_could_not_verify_the_saved_note_id_retry_t", "RecoveryReason.Unverifiable", 300),
             Triple(
