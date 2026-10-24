@@ -1,10 +1,11 @@
 package dev.pierre.japaneseanki.speech
 
 import dev.pierre.japaneseanki.GoogleApiProblem
-import dev.pierre.japaneseanki.DefaultGoogleHttpConnectionFactory
 import dev.pierre.japaneseanki.GoogleHttp
 import dev.pierre.japaneseanki.GoogleHttpConnectionFactory
 import dev.pierre.japaneseanki.classifyGoogleApiError
+import dev.pierre.japaneseanki.network.GoogleJson
+import dev.pierre.japaneseanki.network.request as googleHttpRequest
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
@@ -13,6 +14,7 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.util.Base64
 import javax.net.ssl.SSLException
+import kotlinx.coroutines.runBlocking
 
 /** Minimal HTTP result; headers are not needed and response bodies stay in memory. */
 data class SpeechHttpResponse(val code: Int, val body: ByteArray)
@@ -27,12 +29,14 @@ interface GoogleSpeechTransport {
 }
 
 class HttpGoogleSpeechTransport : GoogleSpeechTransport {
-    private val connectionFactory: GoogleHttpConnectionFactory
+    private val legacyConnectionFactory: GoogleHttpConnectionFactory?
 
-    constructor() : this(DefaultGoogleHttpConnectionFactory)
+    constructor() {
+        legacyConnectionFactory = null
+    }
 
     internal constructor(connectionFactory: GoogleHttpConnectionFactory) {
-        this.connectionFactory = connectionFactory
+        legacyConnectionFactory = connectionFactory
     }
 
     override fun get(url: String, apiKey: String, timeoutMillis: Int): SpeechHttpResponse =
@@ -42,14 +46,24 @@ class HttpGoogleSpeechTransport : GoogleSpeechTransport {
         request(url, apiKey, timeoutMillis, body = json)
 
     private fun request(url: String, apiKey: String, timeoutMillis: Int, body: ByteArray?): SpeechHttpResponse {
-        val response = GoogleHttp.request(
-            url = url,
-            apiKey = apiKey,
-            timeoutMillis = timeoutMillis,
-            maxResponseBytes = MAX_RESPONSE_BYTES,
-            body = body,
-            connectionFactory = connectionFactory,
-        )
+        val response = legacyConnectionFactory?.let { factory ->
+            GoogleHttp.request(
+                url = url,
+                apiKey = apiKey,
+                timeoutMillis = timeoutMillis,
+                maxResponseBytes = MAX_RESPONSE_BYTES,
+                body = body,
+                connectionFactory = factory,
+            )
+        } ?: runBlocking {
+            googleHttpRequest(
+                url = url,
+                apiKey = apiKey,
+                timeoutMillis = timeoutMillis,
+                maxResponseBytes = MAX_RESPONSE_BYTES,
+                body = body,
+            )
+        }
         return SpeechHttpResponse(response.code, response.body)
     }
 
@@ -242,9 +256,11 @@ class GoogleChirpSpeechProvider(
     }
 
     private fun decodeAudioResponse(body: ByteArray): ByteArray {
-        val json = runCatching { MiniJson.parse(body.toString(Charsets.UTF_8)) as? Map<*, *> }.getOrNull()
+        val response = runCatching {
+            GoogleJson.decodeFromString<GoogleSpeechSynthesisResponseDto>(body.toString(Charsets.UTF_8))
+        }.getOrNull()
             ?: throw SpeechException(SpeechFailure.INVALID_RESPONSE, "Speech response was not JSON.")
-        val encoded = (json["audioContent"] as? String)?.takeIf(String::isNotBlank)
+        val encoded = response.audioContent?.takeIf(String::isNotBlank)
             ?: throw SpeechException(SpeechFailure.INVALID_RESPONSE, "Speech response contained no audio.")
         val audio = runCatching { Base64.getDecoder().decode(encoded) }.getOrNull()
             ?: throw SpeechException(SpeechFailure.INVALID_RESPONSE, "Speech audio could not be decoded.")
@@ -274,30 +290,27 @@ fun buildSynthesisJson(request: SentenceSpeechRequest): String {
             ),
         )
     }
-    val input = StringBuilder()
-    input.append("{\"text\":").append(MiniJson.quote(request.text))
-    if (request.hints.isNotEmpty()) {
-        val hints = request.hints.joinToString(separator = ",", prefix = "[", postfix = "]") { hint ->
-            buildString {
-                append("{\"phrase\":").append(MiniJson.quote(hint.phrase))
-                append(",\"phoneticEncoding\":\"PHONETIC_ENCODING_JAPANESE_YOMIGANA\"")
-                append(",\"pronunciation\":").append(MiniJson.quote(hint.reading))
-                append('}')
-            }
-        }
-        input.append(",\"customPronunciations\":{\"pronunciations\":").append(hints).append('}')
-    }
-    input.append('}')
-    val serialized = buildString {
-        append("{\"input\":").append(input)
-        append(",\"voice\":{\"languageCode\":").append(MiniJson.quote(request.languageCode))
-        append(",\"name\":").append(MiniJson.quote(request.voice.name)).append('}')
-        append(",\"audioConfig\":{\"audioEncoding\":\"MP3\",\"speakingRate\":")
-        append(java.lang.Double.toString(request.speakingRate))
-        append('}')
-        append('}')
-    }
-    return serialized
+    val input = GoogleSpeechInputDto(
+        text = request.text,
+        customPronunciations = request.hints.takeIf { it.isNotEmpty() }?.let { hints ->
+            GoogleSpeechCustomPronunciationsDto(
+                pronunciations = hints.map { hint ->
+                    GoogleSpeechPronunciationDto(
+                        phrase = hint.phrase,
+                        phoneticEncoding = "PHONETIC_ENCODING_JAPANESE_YOMIGANA",
+                        pronunciation = hint.reading,
+                    )
+                },
+            )
+        },
+    )
+    return GoogleJson.encodeToString(
+        GoogleSpeechSynthesisRequestDto(
+            input = input,
+            voice = GoogleSpeechVoiceConfigDto(request.languageCode, request.voice.name),
+            audioConfig = GoogleSpeechAudioConfigDto("MP3", request.speakingRate),
+        ),
+    )
 }
 
 private fun synthesisContentBytes(request: SentenceSpeechRequest): Int {
@@ -326,22 +339,21 @@ private fun isSafeVoiceId(value: String): Boolean =
 
 /** Parses `GET /v1/voices` and keeps only Japanese-capable Chirp 3 HD entries. */
 fun parseJapaneseChirpVoices(json: String): List<CloudVoice> {
-    val root = runCatching { MiniJson.parse(json) as? Map<*, *> }.getOrNull()
+    val root = runCatching { GoogleJson.decodeFromString<GoogleSpeechVoiceListDto>(json) }.getOrNull()
         ?: throw SpeechException(SpeechFailure.INVALID_RESPONSE, "Voice list was not JSON.")
-    val voices = root["voices"] as? List<*> ?: return emptyList()
-    return voices.mapNotNull { entry ->
-        val voice = entry as? Map<*, *> ?: return@mapNotNull null
-        val name = voice["name"] as? String ?: return@mapNotNull null
-        val codes = (voice["languageCodes"] as? List<*>)?.mapNotNull { it as? String }.orEmpty()
+    return root.voices.orEmpty().mapNotNull { voice ->
+        voice ?: return@mapNotNull null
+        val name = voice.name ?: return@mapNotNull null
+        val codes = voice.languageCodes.orEmpty()
         if (codes.none { it.equals("ja-JP", ignoreCase = true) }) return@mapNotNull null
         if (!name.contains(CHIRP3_HD_MARKER, ignoreCase = true)) return@mapNotNull null
-        val provided = (voice["ssmlGender"] as? String)?.trim().orEmpty()
+        val provided = voice.ssmlGender?.trim().orEmpty()
         val display = name.substringAfterLast('-').ifBlank { name }
         CloudVoice(
             name = name,
             displayName = if (provided.isEmpty()) display else "$display · $provided",
             languageCodes = codes,
-            naturalSampleRateHz = (voice["naturalSampleRateHertz"] as? Double)?.toInt(),
+            naturalSampleRateHz = voice.naturalSampleRateHertz,
         )
     }.distinctBy(CloudVoice::name).sortedBy(CloudVoice::name)
 }
