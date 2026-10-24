@@ -173,7 +173,7 @@ data class DraftAudioSnapshot(
 class DraftAudioController(
     private val store: DraftAudioFileStore,
     private val persistence: DraftAudioPersistence,
-    private val synthesize: (DraftAudioInput, File) -> Unit,
+    private val synthesize: suspend (DraftAudioInput, File) -> Unit,
     private val cache: AudioCacheSource = AudioCacheSource.disabled,
     private val diagnose: (String) -> Unit = {},
     legacyPaths: Map<AudioItem, String?> = emptyMap(),
@@ -284,10 +284,10 @@ class DraftAudioController(
     }
 
     /**
-     * Runs one authorized attempt on the calling (blocking) thread: cache copy or exactly one
+     * Runs one authorized attempt on the calling coroutine: cache copy or exactly one
      * provider call, validated staging, atomic publication, token-checked acceptance.
      */
-    fun runAttempt(attempt: DraftAudioAttempt): DraftAudioAttemptResult {
+    suspend fun runAttempt(attempt: DraftAudioAttempt): DraftAudioAttemptResult {
         val staging = attempt.staging
         val startedAt = System.nanoTime()
         try {

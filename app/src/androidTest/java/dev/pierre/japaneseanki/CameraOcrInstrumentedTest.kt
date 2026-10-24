@@ -31,7 +31,7 @@ import dev.pierre.japaneseanki.ui.CaptureOperationGate
 import dev.pierre.japaneseanki.ui.rememberCameraController
 import java.io.File
 import java.util.concurrent.atomic.AtomicReference
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -47,7 +47,7 @@ class CameraOcrInstrumentedTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun bundledJapaneseOcrRecognizesLocalFixtureWithoutNetwork() = runBlocking {
+    fun bundledJapaneseOcrRecognizesLocalFixtureWithoutNetwork() = runTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val image = File.createTempFile("offline-japanese-ocr-", ".jpg", context.cacheDir)

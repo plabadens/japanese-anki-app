@@ -1,7 +1,6 @@
 package dev.pierre.japaneseanki
 
 import dev.pierre.japaneseanki.network.GoogleJson
-import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.decodeFromString
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -49,7 +48,7 @@ class TranslationServiceDtoTest {
         }
         val service = TranslationService(GoogleTranslationClient(transport), credential = { "key" })
 
-        val result = runBlocking { service.translate("文") }
+        val result = runSuspendTest { service.translate("文") }
 
         assertEquals(
             TranslationResult.Failed("Translation did not return exactly one result."),

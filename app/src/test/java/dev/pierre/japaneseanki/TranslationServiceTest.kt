@@ -2,10 +2,10 @@ package dev.pierre.japaneseanki
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 
+import dev.pierre.japaneseanki.network.GoogleJson
 import dev.pierre.japaneseanki.speech.CloudVoice
 import dev.pierre.japaneseanki.speech.GoogleChirpSpeechProvider
 import dev.pierre.japaneseanki.speech.GoogleSpeechTransport
-import dev.pierre.japaneseanki.speech.MiniJson
 import dev.pierre.japaneseanki.speech.SpeechException
 import dev.pierre.japaneseanki.speech.SpeechFailure
 import dev.pierre.japaneseanki.speech.SpeechHttpResponse
@@ -20,7 +20,7 @@ import org.junit.runner.RunWith
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.util.concurrent.CancellationException
-import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.decodeFromString
 
 @RunWith(AndroidJUnit4::class)
 class TranslationServiceTest {
@@ -55,14 +55,14 @@ class TranslationServiceTest {
         var json: String? = null
         var calls = 0
 
-        override fun get(url: String, apiKey: String, timeoutMillis: Int): SpeechHttpResponse {
+        override suspend fun get(url: String, apiKey: String, timeoutMillis: Int): SpeechHttpResponse {
             calls++
             this.url = url
             this.apiKey = apiKey
             return SpeechHttpResponse(status, body.toByteArray(Charsets.UTF_8))
         }
 
-        override fun post(url: String, apiKey: String, json: ByteArray, timeoutMillis: Int): SpeechHttpResponse {
+        override suspend fun post(url: String, apiKey: String, json: ByteArray, timeoutMillis: Int): SpeechHttpResponse {
             calls++
             this.url = url
             this.apiKey = apiKey
@@ -78,10 +78,13 @@ class TranslationServiceTest {
     ) = TranslationService(GoogleTranslationClient(transport, timeoutMillis), credential = { key })
 
     private fun TranslationService.translateBlocking(sentence: String): TranslationResult =
-        runBlocking { translate(sentence) }
+        runSuspendTest { translate(sentence) }
 
     private fun GoogleTranslationClient.translateBlocking(apiKey: String, sentence: String): String =
-        runBlocking { translate(apiKey, sentence) }
+        runSuspendTest { translate(apiKey, sentence) }
+
+    private fun GoogleChirpSpeechProvider.listVoicesForTest(): List<CloudVoice> =
+        runSuspendTest { listVoices() }
 
     // --- request contract -------------------------------------------------
 
@@ -95,16 +98,11 @@ class TranslationServiceTest {
         assertFalse(transport.url.orEmpty().contains("?"))
         assertEquals(2_000, transport.timeoutMillis)
 
-        val sent = MiniJson.parse(transport.json.orEmpty()) as Map<*, *>
+        val sent = GoogleJson.decodeFromString<TranslationRequestDto>(transport.json.orEmpty())
         assertEquals(
-            setOf("q", "source", "target", "format", "model"),
-            sent.keys.map { it.toString() }.toSet(),
+            TranslationRequestDto("今日はいい天気ですね。", "ja", "en", "text", "nmt"),
+            sent,
         )
-        assertEquals("今日はいい天気ですね。", sent["q"])
-        assertEquals("ja", sent["source"])
-        assertEquals("en", sent["target"])
-        assertEquals("text", sent["format"])
-        assertEquals("nmt", sent["model"])
     }
 
     @Test
@@ -117,7 +115,7 @@ class TranslationServiceTest {
         // No dictionary meaning, reading hint, note, image, prompt, or provider plumbing.
         listOf("prompt", "messages", "temperature", "image", "photo", "notes", "definition", "google-key")
             .forEach { assertFalse("payload contained $it", body.contains(it)) }
-        assertEquals("猫が走った", (MiniJson.parse(body) as Map<*, *>)["q"])
+        assertEquals("猫が走った", GoogleJson.decodeFromString<TranslationRequestDto>(body).q)
     }
 
     // --- response handling ------------------------------------------------
@@ -207,7 +205,7 @@ class TranslationServiceTest {
                 credential = { "test-key" },
                 transport = FakeSpeechTransport(status = 302),
                 timeoutMillis = 1_000,
-            ).listVoices()
+            ).listVoicesForTest()
         }
         assertEquals(SpeechFailure.AUTHORIZATION, speechError.failure)
     }
@@ -256,7 +254,7 @@ class TranslationServiceTest {
         assertEquals(0, speechTransport.calls)
         assertEquals(0, translationTransport.calls)
 
-        assertEquals(listOf("ja-JP-Chirp3-HD-Achernar"), speech.listVoices().map(CloudVoice::name))
+        assertEquals(listOf("ja-JP-Chirp3-HD-Achernar"), speech.listVoicesForTest().map(CloudVoice::name))
         assertTrue(translation.translateBlocking("文") is TranslationResult.Ready)
 
         assertEquals("shared-google-key", speechTransport.apiKey)
@@ -274,14 +272,14 @@ class TranslationServiceTest {
     @Test
     fun speechNetworkFailureIsSpecific() {
         val offline = object : GoogleSpeechTransport {
-            override fun get(url: String, apiKey: String, timeoutMillis: Int): SpeechHttpResponse =
+            override suspend fun get(url: String, apiKey: String, timeoutMillis: Int): SpeechHttpResponse =
                 throw IOException("network unreachable")
 
-            override fun post(url: String, apiKey: String, json: ByteArray, timeoutMillis: Int): SpeechHttpResponse =
+            override suspend fun post(url: String, apiKey: String, json: ByteArray, timeoutMillis: Int): SpeechHttpResponse =
                 throw IOException("network unreachable")
         }
         val error = assertThrows(SpeechException::class.java) {
-            GoogleChirpSpeechProvider({ "k" }, offline, 1_000).listVoices()
+            GoogleChirpSpeechProvider({ "k" }, offline, 1_000).listVoicesForTest()
         }
         assertEquals(SpeechFailure.NETWORK, error.failure)
         assertEquals("Voice listing service is unavailable.", error.message)
@@ -296,7 +294,7 @@ class TranslationServiceTest {
                 credential,
                 FakeSpeechTransport(403, googleError(403, "PERMISSION_DENIED", "SERVICE_DISABLED")),
                 1_000,
-            ).listVoices()
+            ).listVoicesForTest()
         }
         assertEquals(SpeechFailure.API_NOT_ENABLED, speechError.failure)
         assertTrue(
@@ -309,14 +307,14 @@ class TranslationServiceTest {
             credential,
         ).translateBlocking("文")
         assertTrue((translation as TranslationResult.Failed).message.contains("Cloud Translation API is not enabled"))
-        assertEquals(1, GoogleChirpSpeechProvider(credential, FakeSpeechTransport(), 1_000).listVoices().size)
+        assertEquals(1, GoogleChirpSpeechProvider(credential, FakeSpeechTransport(), 1_000).listVoicesForTest().size)
 
         val speechBilling = assertThrows(SpeechException::class.java) {
             GoogleChirpSpeechProvider(
                 credential,
                 FakeSpeechTransport(403, googleError(403, "PERMISSION_DENIED", "BILLING_DISABLED")),
                 1_000,
-            ).listVoices()
+            ).listVoicesForTest()
         }
         assertEquals(SpeechFailure.BILLING, speechBilling.failure)
     }

@@ -1,8 +1,6 @@
 package dev.pierre.japaneseanki.speech
 
 import dev.pierre.japaneseanki.GoogleApiProblem
-import dev.pierre.japaneseanki.GoogleHttp
-import dev.pierre.japaneseanki.GoogleHttpConnectionFactory
 import dev.pierre.japaneseanki.classifyGoogleApiError
 import dev.pierre.japaneseanki.network.GoogleJson
 import dev.pierre.japaneseanki.network.request as googleHttpRequest
@@ -14,7 +12,6 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.util.Base64
 import javax.net.ssl.SSLException
-import kotlinx.coroutines.runBlocking
 
 /** Minimal HTTP result; headers are not needed and response bodies stay in memory. */
 data class SpeechHttpResponse(val code: Int, val body: ByteArray)
@@ -24,46 +21,30 @@ data class SpeechHttpResponse(val code: Int, val body: ByteArray)
  * mapping can be exercised without a Google key or network.
  */
 interface GoogleSpeechTransport {
-    fun get(url: String, apiKey: String, timeoutMillis: Int): SpeechHttpResponse
-    fun post(url: String, apiKey: String, json: ByteArray, timeoutMillis: Int): SpeechHttpResponse
+    suspend fun get(url: String, apiKey: String, timeoutMillis: Int): SpeechHttpResponse
+    suspend fun post(url: String, apiKey: String, json: ByteArray, timeoutMillis: Int): SpeechHttpResponse
 }
 
 class HttpGoogleSpeechTransport : GoogleSpeechTransport {
-    private val legacyConnectionFactory: GoogleHttpConnectionFactory?
-
-    constructor() {
-        legacyConnectionFactory = null
-    }
-
-    internal constructor(connectionFactory: GoogleHttpConnectionFactory) {
-        legacyConnectionFactory = connectionFactory
-    }
-
-    override fun get(url: String, apiKey: String, timeoutMillis: Int): SpeechHttpResponse =
+    override suspend fun get(url: String, apiKey: String, timeoutMillis: Int): SpeechHttpResponse =
         request(url, apiKey, timeoutMillis, body = null)
 
-    override fun post(url: String, apiKey: String, json: ByteArray, timeoutMillis: Int): SpeechHttpResponse =
+    override suspend fun post(url: String, apiKey: String, json: ByteArray, timeoutMillis: Int): SpeechHttpResponse =
         request(url, apiKey, timeoutMillis, body = json)
 
-    private fun request(url: String, apiKey: String, timeoutMillis: Int, body: ByteArray?): SpeechHttpResponse {
-        val response = legacyConnectionFactory?.let { factory ->
-            GoogleHttp.request(
-                url = url,
-                apiKey = apiKey,
-                timeoutMillis = timeoutMillis,
-                maxResponseBytes = MAX_RESPONSE_BYTES,
-                body = body,
-                connectionFactory = factory,
-            )
-        } ?: runBlocking {
-            googleHttpRequest(
-                url = url,
-                apiKey = apiKey,
-                timeoutMillis = timeoutMillis,
-                maxResponseBytes = MAX_RESPONSE_BYTES,
-                body = body,
-            )
-        }
+    private suspend fun request(
+        url: String,
+        apiKey: String,
+        timeoutMillis: Int,
+        body: ByteArray?,
+    ): SpeechHttpResponse {
+        val response = googleHttpRequest(
+            url = url,
+            apiKey = apiKey,
+            timeoutMillis = timeoutMillis,
+            maxResponseBytes = MAX_RESPONSE_BYTES,
+            body = body,
+        )
         return SpeechHttpResponse(response.code, response.body)
     }
 
@@ -84,7 +65,7 @@ class GoogleChirpSpeechProvider(
     private val timeoutMillis: Int = 20_000,
 ) : SentenceSpeechProvider {
 
-    override fun listVoices(): List<CloudVoice> = diagnosedRequest(
+    override suspend fun listVoices(): List<CloudVoice> = diagnosedRequest(
         SpeechRequestMetadata(SpeechOperation.VOICE_LIST),
     ) { updateStatus ->
         val key = requireCredential()
@@ -94,7 +75,7 @@ class GoogleChirpSpeechProvider(
         parseJapaneseChirpVoices(response.body.toString(Charsets.UTF_8))
     }
 
-    override fun synthesize(request: SentenceSpeechRequest, destination: File): File {
+    override suspend fun synthesize(request: SentenceSpeechRequest, destination: File): File {
         val json = buildSynthesisJson(request)
         val body = json.toByteArray(Charsets.UTF_8)
         val metadata = synthesisRequestMetadata(request, synthesisContentBytes(request), body.size)
@@ -137,9 +118,9 @@ class GoogleChirpSpeechProvider(
         return key
     }
 
-    private inline fun <T> diagnosedRequest(
+    private suspend fun <T> diagnosedRequest(
         metadata: SpeechRequestMetadata,
-        block: (updateStatus: (Int) -> Unit) -> T,
+        block: suspend (updateStatus: (Int) -> Unit) -> T,
     ): T {
         val started = System.nanoTime()
         var status: Int? = null
