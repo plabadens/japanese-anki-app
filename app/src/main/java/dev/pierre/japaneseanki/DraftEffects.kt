@@ -1,6 +1,6 @@
 package dev.pierre.japaneseanki
 
-import android.content.SharedPreferences
+
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.CancellationException
@@ -36,7 +36,7 @@ internal fun DraftTranslationEffect(
     currentRequestRevision: androidx.compose.runtime.State<Int>,
     currentSubmissionLocked: androidx.compose.runtime.State<Boolean>,
     translationService: TranslationService,
-    preferences: SharedPreferences,
+    storage: AppPreferenceStorage,
     onDraftChanged: (TranslationDraft) -> Unit,
     onLastHandledRetryChanged: (Int) -> Unit,
     onAttemptedSentenceChanged: (String?) -> Unit,
@@ -85,10 +85,10 @@ internal fun DraftTranslationEffect(
         requestDraft = currentDraft().requestStarted()
         onDraftChanged(requestDraft)
         onAttemptedSentenceChanged(sentence)
-        val requestRecorded = preferences.edit()
+        val requestRecorded = storage.persist(PreferenceFile.DRAFT, PreferenceChanges()
             .putString("translation_attempted_sentence", sentence)
             .putBoolean("translation_pending", true)
-            .commit()
+        )
         if (!requestRecorded) {
             onDraftChanged(currentDraft().requestFinished(TranslationResult.Failed(requestRecordFailedMessage)))
             return@LaunchedEffect
@@ -226,7 +226,7 @@ internal fun DraftDictionarySearchEffect(
     selectedEntryId: Long?,
     vocabulary: String,
     vocabularyReading: String,
-    preferences: SharedPreferences,
+    storage: AppPreferenceStorage,
     offlineDictionary: OfflineDictionary,
     isDraftCurrent: (Long) -> Boolean,
     onEntriesChanged: (List<DictionaryEntry>) -> Unit,
@@ -262,7 +262,7 @@ internal fun DraftDictionarySearchEffect(
                     it.id == selectedEntryId && it.expression == vocabulary && it.reading == vocabularyReading
                 }
                 val restoredSenseIndex = restoredEntry?.let { entry ->
-                    preferences.getStringSet("dictionary_sense_indices", null)
+                    storage.draft.value.getStringSet("dictionary_sense_indices", null)
                         ?.mapNotNull(String::toIntOrNull)
                         ?.filter { it in entry.senses.indices }
                         ?.minOrNull() ?: 0
