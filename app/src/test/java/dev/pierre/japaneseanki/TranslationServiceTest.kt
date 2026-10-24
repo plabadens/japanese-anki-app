@@ -20,6 +20,7 @@ import org.junit.runner.RunWith
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.util.concurrent.CancellationException
+import kotlinx.coroutines.runBlocking
 
 @RunWith(AndroidJUnit4::class)
 class TranslationServiceTest {
@@ -34,7 +35,7 @@ class TranslationServiceTest {
         var timeoutMillis: Int? = null
         var calls = 0
 
-        override fun post(url: String, apiKey: String, json: ByteArray, timeoutMillis: Int): TranslatorHttpResponse {
+        override suspend fun post(url: String, apiKey: String, json: ByteArray, timeoutMillis: Int): TranslatorHttpResponse {
             calls++
             this.url = url
             this.apiKey = apiKey
@@ -76,12 +77,18 @@ class TranslationServiceTest {
         timeoutMillis: Int = 2_000,
     ) = TranslationService(GoogleTranslationClient(transport, timeoutMillis), credential = { key })
 
+    private fun TranslationService.translateBlocking(sentence: String): TranslationResult =
+        runBlocking { translate(sentence) }
+
+    private fun GoogleTranslationClient.translateBlocking(apiKey: String, sentence: String): String =
+        runBlocking { translate(apiKey, sentence) }
+
     // --- request contract -------------------------------------------------
 
     @Test
     fun basicV2NmtRequestIsSerializedExactly() {
         val transport = FakeTranslationTransport()
-        val result = service(transport).translate("今日はいい天気ですね。")
+        val result = service(transport).translateBlocking("今日はいい天気ですね。")
 
         assertEquals(TranslationResult.Ready("It's a nice day.", TranslationSource.GOOGLE), result)
         assertEquals("https://translation.googleapis.com/language/translate/v2", transport.url)
@@ -103,7 +110,7 @@ class TranslationServiceTest {
     @Test
     fun payloadCarriesOnlyTheSentenceAndTheCredentialStaysInTheHeader() {
         val transport = FakeTranslationTransport()
-        service(transport).translate("猫が走った")
+        service(transport).translateBlocking("猫が走った")
 
         assertEquals("google-key", transport.apiKey)
         val body = transport.json.orEmpty()
@@ -120,7 +127,7 @@ class TranslationServiceTest {
         val transport = FakeTranslationTransport(
             body = translationBody("&lt;b&gt;Tom &amp; Jerry&lt;/b&gt; &#39;ok&#39;"),
         )
-        val result = service(transport).translate("文")
+        val result = service(transport).translateBlocking("文")
         assertEquals(TranslationResult.Ready("<b>Tom & Jerry</b> 'ok'", TranslationSource.GOOGLE), result)
         val exported = AnkiFieldSerializer.plainText((result as TranslationResult.Ready).text)
         assertTrue(exported.contains("&lt;b&gt;"))
@@ -140,7 +147,7 @@ class TranslationServiceTest {
             """{"data":{"translations":[{"translatedText":"one"},{"translatedText":"two"}]}}""",
         )
         bodies.forEach { body ->
-            val result = service(FakeTranslationTransport(body = body)).translate("文")
+            val result = service(FakeTranslationTransport(body = body)).translateBlocking("文")
             assertTrue("body: $body", result is TranslationResult.Failed)
             val message = (result as TranslationResult.Failed).message
             assertTrue(message.isNotBlank())
@@ -153,7 +160,7 @@ class TranslationServiceTest {
     @Test
     fun defaultsWithNoCredentialSendNothing() {
         val transport = FakeTranslationTransport()
-        val result = service(transport, key = null).translate("文")
+        val result = service(transport, key = null).translateBlocking("文")
         assertTrue(result is TranslationResult.Failed)
         assertTrue((result as TranslationResult.Failed).message.contains("Google Cloud API key"))
         assertEquals(0, transport.calls)
@@ -177,7 +184,7 @@ class TranslationServiceTest {
             Case(500, "secret body", "could not be reached"),
         )
         cases.forEach { case ->
-            val result = service(FakeTranslationTransport(case.status, case.body)).translate("秘密の文")
+            val result = service(FakeTranslationTransport(case.status, case.body)).translateBlocking("秘密の文")
             assertTrue("status ${case.status}", result is TranslationResult.Failed)
             val message = (result as TranslationResult.Failed).message
             assertTrue("status ${case.status}: $message", message.contains(case.expected))
@@ -191,7 +198,7 @@ class TranslationServiceTest {
     fun translationAndSpeechRedirectsKeepTheirDistinctFailureClasses() {
         val translationError = assertThrows(TranslatorException::class.java) {
             GoogleTranslationClient(FakeTranslationTransport(status = 302), timeoutMillis = 1_000)
-                .translate("test-key", "文")
+                .translateBlocking("test-key", "文")
         }
         assertEquals(TranslatorFailure.NETWORK, translationError.failure)
 
@@ -207,11 +214,11 @@ class TranslationServiceTest {
 
     @Test
     fun timeoutAndNetworkFailuresAreRetryableFailuresNotResults() {
-        val timeout = service(FakeTranslationTransport(failure = SocketTimeoutException("read timed out"))).translate("文")
+        val timeout = service(FakeTranslationTransport(failure = SocketTimeoutException("read timed out"))).translateBlocking("文")
         assertTrue(timeout is TranslationResult.Failed)
         assertEquals("Translation service could not be reached.", (timeout as TranslationResult.Failed).message)
 
-        val offline = service(FakeTranslationTransport(failure = IOException("no route to host"))).translate("文")
+        val offline = service(FakeTranslationTransport(failure = IOException("no route to host"))).translateBlocking("文")
         assertTrue(offline is TranslationResult.Failed)
     }
 
@@ -219,7 +226,7 @@ class TranslationServiceTest {
     fun cancellationIsNotConvertedIntoAFailedTranslation() {
         val transport = FakeTranslationTransport(failure = CancellationException())
         assertThrows(CancellationException::class.java) {
-            service(transport).translate("文")
+            service(transport).translateBlocking("文")
         }
     }
 
@@ -250,7 +257,7 @@ class TranslationServiceTest {
         assertEquals(0, translationTransport.calls)
 
         assertEquals(listOf("ja-JP-Chirp3-HD-Achernar"), speech.listVoices().map(CloudVoice::name))
-        assertTrue(translation.translate("文") is TranslationResult.Ready)
+        assertTrue(translation.translateBlocking("文") is TranslationResult.Ready)
 
         assertEquals("shared-google-key", speechTransport.apiKey)
         assertEquals("shared-google-key", translationTransport.apiKey)
@@ -294,13 +301,13 @@ class TranslationServiceTest {
         assertEquals(SpeechFailure.API_NOT_ENABLED, speechError.failure)
         assertTrue(
             TranslationService(GoogleTranslationClient(FakeTranslationTransport(), 1_000), credential)
-                .translate("文") is TranslationResult.Ready,
+                .translateBlocking("文") is TranslationResult.Ready,
         )
 
         val translation = TranslationService(
             GoogleTranslationClient(FakeTranslationTransport(403, googleError(403, "PERMISSION_DENIED", "SERVICE_DISABLED")), 1_000),
             credential,
-        ).translate("文")
+        ).translateBlocking("文")
         assertTrue((translation as TranslationResult.Failed).message.contains("Cloud Translation API is not enabled"))
         assertEquals(1, GoogleChirpSpeechProvider(credential, FakeSpeechTransport(), 1_000).listVoices().size)
 
