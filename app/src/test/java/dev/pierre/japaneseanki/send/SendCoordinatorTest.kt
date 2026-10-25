@@ -21,6 +21,9 @@ import dev.pierre.japaneseanki.MediaImportFailureStage
 import dev.pierre.japaneseanki.MediaImportOperation
 import dev.pierre.japaneseanki.PitchAccent
 import dev.pierre.japaneseanki.PreferenceFrozenSubmissionStore
+import dev.pierre.japaneseanki.SubmissionPhase
+import dev.pierre.japaneseanki.SubmissionRecoveryKeys
+import dev.pierre.japaneseanki.readFrozenSubmission
 import dev.pierre.japaneseanki.TargetSpan
 import dev.pierre.japaneseanki.liveMediaIdentity
 import dev.pierre.japaneseanki.runAttemptForTest
@@ -235,6 +238,15 @@ class SendCoordinatorTest {
         )
         assertEquals(listOf(MediaImportOperation.SENTENCE_AUDIO, MediaImportOperation.WORD_AUDIO), fixture.sink.mediaOperations)
         assertEquals(0, fixture.sink.insertCalls)
+        assertEquals(
+            SubmissionPhase.MEDIA_IMPORTING,
+            SubmissionPhase.fromPersisted(fixture.storage.draft.value.getString(SubmissionRecoveryKeys.STATUS, null)),
+        )
+        assertEquals(
+            MediaImportOperation.WORD_AUDIO.name,
+            fixture.storage.draft.value.getString(SubmissionRecoveryKeys.MEDIA_OPERATION, null),
+        )
+        assertEquals("sentence.mp3", readFrozenSubmission(fixture.storage.draft.value)?.sentenceAudio?.importedFilename)
     }
 
     @Test

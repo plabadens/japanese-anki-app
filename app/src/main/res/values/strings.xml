@@ -365,12 +365,12 @@
     <string name="card_choose_dictionary_entry">Choose dictionary entry</string>
     <string name="card_choose_text_from_photo">Choose text from photo</string>
     <string name="card_copy">✕</string>
+    <string name="card_discard_interrupted_send_keep_draft">Discard interrupted Send; keep this draft</string>
     <string name="card_edit_and_recheck">Edit and recheck</string>
     <string name="card_edit_notes_tags">Edit notes &amp; tags</string>
     <string name="card_edit_preparation_corrections">Edit preparation corrections</string>
     <string name="card_edit_sentence">\ \ Edit sentence</string>
     <string name="card_hide_preparation_corrections">Hide preparation corrections</string>
-    <string name="card_i_checked_clear_frozen_recovery">I checked; clear frozen recovery</string>
     <string name="card_i_checked_configure_destination">I checked; configure destination</string>
     <string name="card_i_checked_resolve_outcome">I checked; resolve outcome</string>
     <string name="card_keep_this_meaning">Keep this meaning</string>
@@ -476,7 +476,7 @@
     <string name="card_could_not_verify_the_saved_note_id_retry_t">Could not verify the saved note ID. Retry this read-only recovery check; no new note will be inserted.</string>
     <string name="card_dictionary_lookup_failed_retry_before_sele">Dictionary lookup failed. Retry before selecting a dictionary entry.</string>
     <string name="card_finish_setup_in_settings_before_reviewing">Finish setup in Settings before reviewing audio.</string>
-    <string name="card_frozen_recovery_cleared_after_review_the_d">Frozen recovery cleared after review; the draft media was retained.</string>
+    <string name="card_interrupted_send_discarded_draft_kept">Interrupted Send discarded. Draft fields and media were kept; AnkiDroid may contain unattached media from the import.</string>
     <string name="card_no_matching_note_was_found_but_the_frozen">No matching note was found, but the frozen destination deck is unavailable. Confirm the outcome before choosing a new destination.</string>
     <string name="card_no_matching_note_was_found_for_the_frozen">No matching note was found for the frozen revision; retry will reuse its saved media receipt.</string>
     <string name="card_no_pitch_pattern_can_be_resolved_for_this">No pitch pattern can be resolved for this reading.</string>
