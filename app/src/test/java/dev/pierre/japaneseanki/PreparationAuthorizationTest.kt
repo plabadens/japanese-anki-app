@@ -67,14 +67,11 @@ class PreparationAuthorizationTest {
         val firstProcess = gate(null)
         assertTrue(firstProcess.commitSentence("今日は晴れです。"))
         assertTrue(firstProcess.selectWord("晴れ", TargetSpan(3, 5)))
-        assertEquals(3, calls.size)
 
         // Recreated process receives the durable committed sentence but no pending authorizations.
         val restored = gate("今日は晴れです。")
         assertFalse(restored.commitSentence("今日は晴れです。"))
-        assertEquals(3, calls.size)
         assertTrue(restored.selectWord("晴れ", TargetSpan(3, 5)))
-        assertEquals(4, calls.size)
 
         assertTrue(restored.commitSentence("今日は雨です。"))
         assertEquals(

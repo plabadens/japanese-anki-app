@@ -22,8 +22,8 @@ class MainActivitySetupFlowTest {
 
     @Test
     fun freshLaunchShowsTheSetupFlowInItsFullScreenDialog() {
-        composeRule.onNodeWithText("Sentence audio").assertIsDisplayed()
-        composeRule.onNodeWithText("Install AnkiDroid").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Finish setup").assertIsNotEnabled()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.sentence_audio)).assertIsDisplayed()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.install_anki)).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.finish_setup)).assertIsNotEnabled()
     }
 }

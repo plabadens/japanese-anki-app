@@ -48,6 +48,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.camera.view.LifecycleCameraController
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import dev.pierre.japaneseanki.R
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -116,7 +117,7 @@ class InputScreenLayoutTest {
 
         val busyStatus = composeRule.onNodeWithTag("capture-status-line").fetchSemanticsNode().config
         assertEquals(ProgressBarRangeInfo.Indeterminate, busyStatus[SemanticsProperties.ProgressBarRangeInfo])
-        assertEquals("Reading text…", busyStatus[SemanticsProperties.StateDescription])
+        assertEquals(resourceString(R.string.reading_photo), busyStatus[SemanticsProperties.StateDescription])
         assertTrue("Background OCR must not dispatch haptics", events.isEmpty())
         captureMotionEvidence("reduced-motion-ocr-progress.png")
 
@@ -160,7 +161,7 @@ class InputScreenLayoutTest {
         assertEquals("Android's disabled animator setting must select reduced motion", false, resolvedMotionEnabled.get())
         val busyStatus = composeRule.onNodeWithTag("capture-status-line").fetchSemanticsNode().config
         assertEquals(ProgressBarRangeInfo.Indeterminate, busyStatus[SemanticsProperties.ProgressBarRangeInfo])
-        assertEquals("Reading text…", busyStatus[SemanticsProperties.StateDescription])
+        assertEquals(resourceString(R.string.reading_photo), busyStatus[SemanticsProperties.StateDescription])
         captureMotionEvidence("system-reduced-motion-capture-progress.png")
 
         composeRule.onNodeWithTag("capture-mode-type").performClick()
@@ -373,8 +374,8 @@ class InputScreenLayoutTest {
         )
         composeRule.onNodeWithTag("capture-mode-camera-icon", useUnmergedTree = true).assertExists()
         composeRule.onNodeWithTag("capture-mode-type-icon", useUnmergedTree = true).assertExists()
-        composeRule.onNodeWithText("Camera").assertIsDisplayed()
-        composeRule.onNodeWithText("Type").assertIsDisplayed()
+        composeRule.onNodeWithText(resourceString(R.string.camera)).assertIsDisplayed()
+        composeRule.onNodeWithText(resourceString(R.string.type)).assertIsDisplayed()
         composeRule.onNodeWithTag("capture-mode-type").performClick()
         assertEquals("Type", mode.value)
         composeRule.onNodeWithTag("capture-mode-type").assertIsSelected()
@@ -411,7 +412,7 @@ class InputScreenLayoutTest {
         listOf(360, 390).forEach { width ->
             screenWidth.value = width
             composeRule.waitForIdle()
-            listOf("Camera", "Type").forEach { label ->
+            listOf(resourceString(R.string.camera), resourceString(R.string.type)).forEach { label ->
                 val layouts = mutableListOf<TextLayoutResult>()
                 val node = composeRule.onNodeWithText(label, useUnmergedTree = true).fetchSemanticsNode()
                 val action = node.config[SemanticsActions.GetTextLayoutResult]
@@ -495,6 +496,9 @@ class InputScreenLayoutTest {
         val errorBounds = composeRule.onNodeWithTag("camera-shutter-test").fetchSemanticsNode().boundsInRoot
         assertEquals(readyBounds, errorBounds)
     }
+
+    private fun resourceString(id: Int): String =
+        InstrumentationRegistry.getInstrumentation().targetContext.getString(id)
 
     private fun setAnimatorDurationScale(scale: Float) {
         // Robolectric exposes the system animator scale through this protected shadow hook.
