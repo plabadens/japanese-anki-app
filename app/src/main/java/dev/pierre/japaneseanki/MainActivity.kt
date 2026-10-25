@@ -2310,6 +2310,7 @@ class MainActivity : ComponentActivity() {
                                 Text(licenseDocuments)
                             }
                         }
+                    }
                 }
             }
             if (setupVisible) {
@@ -3639,7 +3640,6 @@ class MainActivity : ComponentActivity() {
             }
         }
         }
-    }
     }
 
     override fun onResume() {
