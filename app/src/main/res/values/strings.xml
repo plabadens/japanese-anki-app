@@ -366,6 +366,7 @@
     <string name="card_choose_dictionary_entry">Choose dictionary entry</string>
     <string name="card_choose_text_from_photo">Choose text from photo</string>
     <string name="card_copy">✕</string>
+    <string name="card_frozen_send_read_only">This Send uses a saved snapshot. Discard it to edit the draft.</string>
     <string name="card_discard_interrupted_send_keep_draft">Discard interrupted Send; keep this draft</string>
     <string name="card_edit_and_recheck">Edit and recheck</string>
     <string name="card_edit_notes_tags">Edit notes &amp; tags</string>

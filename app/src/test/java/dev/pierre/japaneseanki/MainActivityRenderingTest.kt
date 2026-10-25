@@ -7,6 +7,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.performTextInputSelection
@@ -231,6 +232,24 @@ class MainActivityRenderingTest {
         assertTrue(clearFrozenSubmission().values.isNotEmpty())
     }
 
+    @Test
+    fun frozenRetryExplainsTheEditLockAndDiscardUnlocksTheVisibleDraft() {
+        waitForText(recoveryMessage())
+        composeRule.onNodeWithText(context.getString(R.string.card_retry_media_import_may_duplicate)).performClick()
+        waitForText(context.getString(R.string.card_frozen_send_read_only))
+        composeRule.onNodeWithText(context.getString(R.string.edit_sentence)).assertIsNotEnabled()
+        composeRule.onAllNodesWithText(context.getString(R.string.card_still_needed_1_s, "Select a dictionary entry."))
+            .assertCountEquals(0)
+        val discard = context.getString(R.string.card_discard_interrupted_send_keep_draft)
+        composeRule.onAllNodesWithText(discard).assertCountEquals(1)
+        composeRule.onNodeWithText(discard).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.edit_sentence)).assertIsEnabled()
+        val draft = context.getSharedPreferences("draft", Context.MODE_PRIVATE)
+        composeRule.waitUntil { clearFrozenSubmission().values.keys.none(draft::contains) }
+        assertEquals(TEST_SENTENCE, draft.getString("sentence", null))
+        assertEquals(TEST_NOTES, draft.getString("notes", null))
+    }
+
     private fun recoveryMessage(): String = context.getString(
         R.string.card_send_recovery_media_preparation_interrupted,
         MediaImportOperation.WORD_AUDIO.label.replaceFirstChar { it.uppercase() },
@@ -274,7 +293,8 @@ class MainActivityRenderingTest {
             "openSentenceEditRestoresItsWorkingTextAndSelectionAfterRecreation",
             "dismissingSentenceEditPreservesAuthoritativeSentenceAndTargetSelection" -> cardDraft()
             "interruptedWordAudioRecoveryDisplaysItsMessageAndEnabledDiscardAction",
-            "discardingInterruptedSendKeepsDraftAndClearsFrozenKeys" -> interruptedDraft()
+            "discardingInterruptedSendKeepsDraftAndClearsFrozenKeys",
+            "frozenRetryExplainsTheEditLockAndDiscardUnlocksTheVisibleDraft" -> interruptedDraft()
             else -> PreferenceChanges()
                 .putString("route", "Capture")
                 .putString("capture_mode", "Type")

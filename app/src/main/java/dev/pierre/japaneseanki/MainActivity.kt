@@ -70,9 +70,7 @@ import dev.pierre.japaneseanki.ui.AppContentMaxWidth
 import dev.pierre.japaneseanki.ui.ReviewAudioPresentation
 import dev.pierre.japaneseanki.ui.CardAction
 import dev.pierre.japaneseanki.card.CardHintActionEffects
-import dev.pierre.japaneseanki.card.CardHintActionSignals
 import dev.pierre.japaneseanki.card.CardScreenContent
-import dev.pierre.japaneseanki.card.CardNoTargetRecoveryContent
 import dev.pierre.japaneseanki.card.CardScreenContentModel
 import dev.pierre.japaneseanki.card.CardScreenDetailInput
 import dev.pierre.japaneseanki.card.CardScreenStateHolder
@@ -86,7 +84,9 @@ import dev.pierre.japaneseanki.card.CardVocabularyReadingCoordinator
 import dev.pierre.japaneseanki.card.CardVocabularySnapshot
 import dev.pierre.japaneseanki.card.DictionaryMatchPageRequest
 import dev.pierre.japaneseanki.card.cardHintAction
-import dev.pierre.japaneseanki.card.cardSendBlockers
+import dev.pierre.japaneseanki.card.CardSendReadinessInput
+import dev.pierre.japaneseanki.card.cardSendReadiness
+import dev.pierre.japaneseanki.card.cardSendBlockerMessage
 import dev.pierre.japaneseanki.card.cardScreenPresentationContext
 import dev.pierre.japaneseanki.card.loadMoreDictionaryMatches
 import dev.pierre.japaneseanki.card.CardSentenceEditorSheet
@@ -933,7 +933,6 @@ class MainActivity : ComponentActivity() {
             val selectedModel = noteTypes.firstOrNull { it.id == selectedModelId }
             val selectedDeck = decks.firstOrNull { it.id == selectedDeckId }
             val incoming = sharedText.value
-            val blockedStatusPrefix = stringResource(R.string.card_blocked)
             val navigationLocked = sendState.locked || captureInProgress
             val currentSubmissionLocked = rememberUpdatedState(sendState.locked)
             val currentDraftGeneration = rememberUpdatedState(draftGeneration)
@@ -990,7 +989,7 @@ class MainActivity : ComponentActivity() {
             }
 
             fun openSettings() {
-                if (navigationLocked || showSettings) return
+                if (sendState.submitting || captureInProgress || showSettings) return
                 settingsLoading = true
                 settingsSaving = false
                 settingsError = null
@@ -2595,7 +2594,6 @@ class MainActivity : ComponentActivity() {
                     localIdentity = if (localExists) liveMediaIdentity(localFile) else null,
                 )
             } ?: true
-            val sendImageReady = if (frozenRetryReady) frozenReceiptReady else imageReady
             val translationReady = activeTranslationResult() is TranslationResult.Ready &&
                 !translationDraft.stale && translationDraft.sentence == editor.text
             val cardPreparationReady = committedSentence == editor.text && translationReady &&
@@ -2604,15 +2602,31 @@ class MainActivity : ComponentActivity() {
                 !dictionaryLoading && !dictionarySearchLoading
             val cardNeedsUpdate = cardInvalidated ||
                 (target != null && (committedSentence != editor.text || !cardPreparationReady))
-            val canSend = apiPermissionGranted && selectedModel != null && selectedDeck != null &&
-                (if (frozenRetryReady) effectiveFrozenFields != null else fieldsByName != null && validationErrors.isEmpty()) &&
-                effectiveMapping?.isValid == true && sendImageReady && frozenDestinationReady &&
-                (frozenRetryReady || (!cardNeedsUpdate && cardPreparationReady)) &&
-                (frozenRetryReady || pitch != null) &&
-                (frozenRetryReady || (sentenceAudioReady && wordAudioReady)) &&
-                (frozenRetryReady || (!dictionaryLoading && !dictionarySearchLoading)) &&
-                setupLoadedSuccessfully && !setupLoading && setupError == null &&
-                (sendState.editingEnabled || frozenRetryReady)
+            val sendReadiness = cardSendReadiness(CardSendReadinessInput(
+                sendState = sendState,
+                noteDraft = noteDraft,
+                hasTarget = displayTarget != null,
+                audioSetupReady = setupReadiness.audioReady,
+                imagePending = imagePending,
+                imageReady = imageReady,
+                frozenReceiptReady = frozenReceiptReady,
+                sentenceAudioReady = sentenceAudioReady,
+                wordAudioReady = wordAudioReady,
+                apiPermissionGranted = apiPermissionGranted,
+                modelSelected = selectedModel != null,
+                deckSelected = selectedDeck != null,
+                mapping = effectiveMapping,
+                frozenFieldsAvailable = effectiveFrozenFields != null,
+                frozenDestinationReady = frozenDestinationReady,
+                pitchAvailable = pitch != null,
+                dictionaryLoading = dictionaryLoading || dictionarySearchLoading,
+                preparationReady = !cardNeedsUpdate && cardPreparationReady,
+                translationFailed = activeTranslationResult() is TranslationResult.Failed,
+                setupError = setupError,
+                setupLoaded = setupLoadedSuccessfully,
+                setupLoading = setupLoading,
+            ))
+            val canSend = sendReadiness.canSend
 
             // The card has one action: Send. Preparation is automatic, so an invalidated card only
             // greys Send out until every prepared artifact matches the committed sentence again.
@@ -2924,6 +2938,17 @@ class MainActivity : ComponentActivity() {
             }
 
             val sendRecoveryContent: @androidx.compose.runtime.Composable () -> Unit = {
+                if (frozenRetryReady) {
+                    Text(stringResource(R.string.card_frozen_send_read_only), style = MaterialTheme.typography.bodyMedium)
+                    TextButton(onClick = {
+                        discardInterruptedMediaRecovery(preferenceStorage)
+                        audioController.releaseFreeze(retainFiles = true)
+                        audioSnapshot = audioController.snapshot()
+                        sendState = SendState()
+                        frozenSnapshotAppliedRevision = -1L
+                        submitMessage = null
+                    }) { Text(stringResource(R.string.card_discard_interrupted_send_keep_draft)) }
+                }
                 knownNoteId?.let { noteId ->
                     TextButton(onClick = { openKnownNote(noteId) }) {
                         Text(stringResource(R.string.card_open_matching_note_in_ankidroid))
@@ -3154,51 +3179,13 @@ class MainActivity : ComponentActivity() {
                         val wordAudioPresentation = wordAudio.presentation(
                             this@MainActivity.getString(audioActionLabel(AudioItem.VOCABULARY)),
                         )
-                        // This precedes holder creation: submitHint below is an input to its state.
-                        val sendBlockers = cardSendBlockers(
-                            setupReadiness = setupReadiness,
-                            sendState = sendState,
-                            noteDraft = noteDraft,
-                            imageAttached = imageAttached,
-                            imageProcessing = imageProcessing,
-                            imageError = imageError,
-                            imageReady = imageReady,
-                            frozenReceiptReady = frozenReceiptReady,
-                            sentenceAudioReady = sentenceAudioReady,
-                            sentenceAudio = sentenceAudioPresentation,
-                            wordAudioReady = wordAudioReady,
-                            wordAudio = wordAudioPresentation,
-                            apiPermissionGranted = apiPermissionGranted,
-                            selectedModel = selectedModel,
-                            selectedDeck = selectedDeck,
-                            effectiveMapping = effectiveMapping,
-                            frozenDestinationReady = frozenDestinationReady,
-                            pitchAvailable = pitch != null,
-                            dictionaryLoading = dictionaryLoading,
-                            dictionarySearchLoading = dictionarySearchLoading,
-                            setupError = setupError,
-                            setupLoaded = setupLoadedSuccessfully,
-                            setupLoading = setupLoading,
+                        val submitHint = cardSendBlockerMessage(
+                            sendReadiness.blocker, sentenceAudioPresentation, wordAudioPresentation,
                         )
-                        val submitHint = when {
-                            completedSubmission != null || duplicateBlocked || recoveryRequired -> null
-                            isSubmitting -> null
-                            submitMessage != null -> null
-                            else -> sendBlockers.firstOrNull()
-                        }
                         val reviewTranslationError =
                             (activeTranslationResult() as? TranslationResult.Failed)?.message
                         val hintAction = cardHintAction(
-                            signals = CardHintActionSignals(
-                                translationError = reviewTranslationError,
-                                audioSetupReady = setupReadiness.audioReady,
-                                sentenceAudioReady = sentenceAudioReady,
-                                wordAudioReady = wordAudioReady,
-                                apiPermissionGranted = apiPermissionGranted,
-                                modelSelected = selectedModel != null,
-                                deckSelected = selectedDeck != null,
-                                setupError = setupError != null,
-                            ),
+                            blocker = sendReadiness.blocker,
                             sentenceAudioLabel = this@MainActivity.getString(audioActionLabel(AudioItem.SENTENCE)),
                             wordAudioLabel = this@MainActivity.getString(audioActionLabel(AudioItem.VOCABULARY)),
                             effects = CardHintActionEffects(
@@ -3213,11 +3200,10 @@ class MainActivity : ComponentActivity() {
                                 },
                                 retrySentenceAudio = { onAudioAction(AudioItem.SENTENCE) },
                                 retryWordAudio = { onAudioAction(AudioItem.VOCABULARY) },
-                                editPreparation = { route = AppRoute.Card },
                             ),
                         )
-                        val submitHintActionLabel = hintAction.label
-                        val submitHintAction = hintAction.invoke
+                        val submitHintActionLabel = hintAction?.label
+                        val submitHintAction: () -> Unit = { hintAction?.invoke?.invoke() }
                         val loadMoreMatches: () -> Unit = {
                             loadMoreDictionaryMatches(
                                 DictionaryMatchPageRequest(
@@ -3242,7 +3228,7 @@ class MainActivity : ComponentActivity() {
                         }
                         val submitAtClick: () -> Unit = submitAtClick@{
                             if (!canSend || (sendState.locked && !frozenRetryReady) || sendState.completedNoteId != null ||
-                                submitMessage?.startsWith(blockedStatusPrefix) == true
+                                sendState.duplicateBlocked
                             ) return@submitAtClick
                             val model = selectedModel ?: return@submitAtClick
                             val deck = selectedDeck ?: return@submitAtClick
@@ -3336,16 +3322,15 @@ class MainActivity : ComponentActivity() {
                             duplicateBlocked = duplicateBlocked,
                             recoveryRequired = recoveryRequired,
                             submitting = isSubmitting,
-                            sendBlocked = submitMessage?.startsWith(blockedStatusPrefix) == true,
+                            sendBlocked = sendState.duplicateBlocked,
                             submitMessage = submitMessage,
                             submitHint = submitHint,
                             submitHintActionLabel = submitHintActionLabel,
-                            editPreparationLabel = this@MainActivity.getString(R.string.card_edit_preparation),
                             translationFailure = reviewTranslationError?.let {
                                 this@MainActivity.getString(reviewTranslationFailureStatus(it).headlineResource)
                             },
                             wordAudioGenerating = wordAudioPresentation == ReviewAudioPresentation.Generating,
-                            hasTarget = target != null,
+                            hasTarget = reviewTarget != null,
                             actionHasTarget = reviewTarget != null,
                             canSend = canSend,
                             submissionLocked = sendState.locked,
@@ -3458,7 +3443,8 @@ class MainActivity : ComponentActivity() {
                                     sendLocked = sendState.locked,
                                 )
                                 CardScreenContent(
-                                    holder = cardScreenHolder,
+                                    state = cardScreenHolder.state,
+                                    onPrimaryAction = cardScreenHolder::onPrimaryAction,
                                     model = CardScreenContentModel(
                                         sentence = displaySentence,
                                         tokens = japaneseTokens,
@@ -3513,7 +3499,7 @@ class MainActivity : ComponentActivity() {
                                         onRetryWordAudio = { onAudioAction(AudioItem.VOCABULARY) },
                                         actionLoading = isSubmitting,
                                         statusContent = {
-                                            if (duplicateBlocked || recoveryRequired) sendRecoveryContent()
+                                            if (duplicateBlocked || recoveryRequired || frozenRetryReady) sendRecoveryContent()
                                         },
                                         modifier = Modifier.weight(1f).fillMaxWidth(),
                                     ),
@@ -3562,12 +3548,7 @@ class MainActivity : ComponentActivity() {
                                 ),
                             )
                         }
-                        CardNoTargetRecoveryContent(
-                            visible = visibleRoute == AppRoute.Card && reviewTarget == null,
-                            submitMessage = submitMessage,
-                            recoveryMessage = recoveryMessage,
-                            recoveryContent = { sendRecoveryContent() },
-                        )
+
 
 
                     }

@@ -39,6 +39,7 @@ data class CardPresentationInput(
     val actionHasTarget: Boolean,
     val recoveryMessage: String?,
     val copy: CardPresentationCopy,
+    val frozenRetryReady: Boolean = false,
 )
 
 @Immutable
@@ -59,50 +60,49 @@ fun cardPresentation(input: CardPresentationInput): CardPresentation {
         else -> null
     }
 
+    val liveAnalysis = !input.submissionLocked && !input.completed
+    val analyzing = liveAnalysis && input.analyzing
+    val analyzerError = input.analyzerError.takeIf { liveAnalysis }
+    val held = input.completed || input.duplicateBlocked || input.recoveryRequired || input.submitting
     val hint = when {
-        input.analyzerError != null -> input.analyzerError
-        input.analyzing -> input.copy.analyzingHint
-        !input.hasTarget -> input.copy.noTargetHint
-        input.completed || input.duplicateBlocked || input.recoveryRequired -> status
+        status != null -> status
         input.submitting -> input.copy.sendingHint
+        analyzerError != null -> analyzerError
+        analyzing -> input.copy.analyzingHint
+        !input.hasTarget && !input.submissionLocked -> input.copy.noTargetHint
+        input.submitHint != null -> input.submitHint
+        input.frozenRetryReady -> input.recoveryMessage
         input.sendBlocked -> input.submitMessage
         input.submitMessage != null -> input.submitMessage
-        input.translationFailure != null -> input.translationFailure
-        input.wordAudioGenerating -> input.copy.wordAudioPreparingHint
-        input.submitHint != null -> input.submitHint
+        input.translationFailure != null && !input.submissionLocked -> input.translationFailure
+        input.wordAudioGenerating && !input.submissionLocked -> input.copy.wordAudioPreparingHint
         else -> null
     }
-
-    val actionLabel = when {
-        input.noWordAction -> input.copy.sendActionLabel
-        input.analyzerError != null -> input.copy.retryActionLabel
-        input.recoveryRequired || input.duplicateBlocked || input.completed || input.submitting ->
-            input.copy.sendActionLabel
-        input.submitMessage != null && !input.sendBlocked -> input.copy.retrySendActionLabel
-        input.recoveryActionLabel != null -> input.recoveryActionLabel
-        else -> input.copy.sendActionLabel
-    }
-
-    val actionEnabled = when {
-        input.noWordAction -> false
-        input.submitting || input.analyzing || input.completed || input.duplicateBlocked || input.recoveryRequired -> false
-        input.analyzerError != null -> !input.submissionLocked
-        input.submitMessage != null && !input.sendBlocked -> input.canSend
-        input.recoveryActionLabel != null -> !input.submissionLocked
-        else -> input.canSend && input.actionHasTarget
-    }
-
     val action = when {
+        held -> CardAction.Submit
         input.noWordAction -> CardAction.None
-        input.analyzerError != null -> CardAction.RetryAnalysis
-        input.submitMessage != null && !input.sendBlocked -> CardAction.RetrySend
+        analyzerError != null -> CardAction.RetryAnalysis
         input.recoveryActionLabel != null -> CardAction.Recovery
+        input.frozenRetryReady || (input.submitMessage != null && !input.sendBlocked) -> CardAction.RetrySend
         else -> CardAction.Submit
+    }
+    val actionLabel = when (action) {
+        CardAction.RetryAnalysis -> input.copy.retryActionLabel
+        CardAction.RetrySend -> input.copy.retrySendActionLabel
+        CardAction.Recovery -> requireNotNull(input.recoveryActionLabel)
+        CardAction.None, CardAction.Submit -> input.copy.sendActionLabel
+    }
+    val actionEnabled = !held && !analyzing && when (action) {
+        CardAction.None -> false
+        CardAction.RetryAnalysis -> !input.submissionLocked
+        CardAction.Recovery -> !input.submissionLocked || input.frozenRetryReady
+        CardAction.RetrySend -> input.canSend
+        CardAction.Submit -> input.canSend && input.actionHasTarget
     }
 
     return CardPresentation(
         hint = hint,
-        hintPreparing = input.analyzing,
+        hintPreparing = analyzing,
         status = status,
         actionLabel = actionLabel,
         actionEnabled = actionEnabled,

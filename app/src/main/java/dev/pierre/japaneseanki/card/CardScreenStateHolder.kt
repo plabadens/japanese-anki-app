@@ -22,8 +22,7 @@ internal data class CardScreenPresentationContext(
     val sendBlocked: Boolean,
     val submitMessage: String?,
     val submitHint: String?,
-    val submitHintActionLabel: String,
-    val editPreparationLabel: String,
+    val submitHintActionLabel: String?,
     val translationFailure: String?,
     val wordAudioGenerating: Boolean,
     val hasTarget: Boolean,
@@ -144,9 +143,7 @@ internal class CardScreenStateHolder(
             submitting = presentationContext.submitting,
             sendBlocked = presentationContext.sendBlocked,
             submitMessage = presentationContext.submitMessage,
-            recoveryActionLabel = presentationContext.submitHintActionLabel.takeIf {
-                presentationContext.submitHint != null && it != presentationContext.editPreparationLabel
-            },
+            recoveryActionLabel = presentationContext.submitHintActionLabel,
             translationFailure = presentationContext.translationFailure,
             wordAudioGenerating = presentationContext.wordAudioGenerating,
             submitHint = presentationContext.submitHint,
@@ -157,6 +154,7 @@ internal class CardScreenStateHolder(
             canSend = presentationContext.canSend,
             submissionLocked = presentationContext.submissionLocked,
             actionHasTarget = presentationContext.actionHasTarget,
+            frozenRetryReady = presentationContext.frozenRetryReady,
             recoveryMessage = presentationContext.recoveryMessage,
             copy = presentationContext.copy,
         )

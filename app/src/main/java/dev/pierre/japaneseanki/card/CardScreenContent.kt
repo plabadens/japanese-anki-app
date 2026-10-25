@@ -3,7 +3,6 @@ package dev.pierre.japaneseanki.card
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import dev.pierre.japaneseanki.R
@@ -18,7 +17,6 @@ import dev.pierre.japaneseanki.ui.CardAction
 import dev.pierre.japaneseanki.VocabularyPartOfSpeech
 import dev.pierre.japaneseanki.ui.CardPresentationCopy
 import dev.pierre.japaneseanki.ui.CardScreen
-import dev.pierre.japaneseanki.ui.FlowStatusText
 import dev.pierre.japaneseanki.ui.ReviewAudioPresentation
 import dev.pierre.japaneseanki.ui.englishPartOfSpeechLabel
 
@@ -33,8 +31,7 @@ internal fun cardScreenPresentationContext(
     sendBlocked: Boolean,
     submitMessage: String?,
     submitHint: String?,
-    submitHintActionLabel: String,
-    editPreparationLabel: String,
+    submitHintActionLabel: String?,
     translationFailure: String?,
     wordAudioGenerating: Boolean,
     hasTarget: Boolean,
@@ -55,7 +52,6 @@ internal fun cardScreenPresentationContext(
     submitMessage = submitMessage,
     submitHint = submitHint,
     submitHintActionLabel = submitHintActionLabel,
-    editPreparationLabel = editPreparationLabel,
     translationFailure = translationFailure,
     wordAudioGenerating = wordAudioGenerating,
     hasTarget = hasTarget,
@@ -116,7 +112,7 @@ private fun deriveCardScreenDetails(input: CardScreenDetailInput): CardScreenDet
         it.id == input.selectedEntryId && it.expression == input.vocabulary && it.reading == input.vocabularyReading
     } == true
     val wordStatus = when {
-        input.selectedSpan == null -> null
+        input.sendLocked || input.selectedSpan == null -> null
         input.dictionaryLoading || input.dictionarySearchLoading -> stringResource(R.string.card_dictionary_searching)
         input.dictionaryError != null -> input.dictionaryError
         input.selectedEntry == null && input.meaningChoices.size > 1 ->
@@ -126,7 +122,7 @@ private fun deriveCardScreenDetails(input: CardScreenDetailInput): CardScreenDet
         input.wordAudio == ReviewAudioPresentation.SourceMissing -> stringResource(R.string.no_recording)
         else -> null
     }
-    val pitchPending = input.selectedSpan != null && input.pitch == null && (
+    val pitchPending = !input.sendLocked && input.selectedSpan != null && input.pitch == null && (
         input.dictionaryLoading || input.dictionarySearchLoading || !selectedEntryIsResolved || input.pitchLookupLoading
     )
     val pitchStatus = when {
@@ -183,10 +179,10 @@ internal data class CardScreenContentModel(
 
 @Composable
 internal fun CardScreenContent(
-    holder: CardScreenStateHolder,
+    state: CardScreenState,
+    onPrimaryAction: () -> Unit,
     model: CardScreenContentModel,
 ) {
-    val state = holder.state
     val presentation = state.presentation
     val details = deriveCardScreenDetails(model.details)
     CardScreen(
@@ -226,7 +222,7 @@ internal fun CardScreenContent(
         actionLabel = presentation.actionLabel,
         actionEnabled = presentation.actionEnabled,
         actionLoading = model.actionLoading,
-        onAction = holder::onPrimaryAction,
+        onAction = onPrimaryAction,
         statusMessage = presentation.status?.takeIf { it != presentation.hint },
         statusContent = model.statusContent,
         modifier = model.modifier,
@@ -263,29 +259,4 @@ internal fun rememberCardScreenStateHolder(
     }
     holder.update(sentence, selectedSpan, meaningChoice, committedSentence, presentationContext)
     return holder
-}
-
-@Composable
-internal fun CardNoTargetRecoveryContent(
-    visible: Boolean,
-    submitMessage: String?,
-    recoveryMessage: String?,
-    recoveryContent: @Composable () -> Unit,
-) {
-    if (!visible) return
-    submitMessage?.let {
-        FlowStatusText(
-            it,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-    }
-    recoveryMessage?.let {
-        FlowStatusText(
-            it,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-    }
-    recoveryContent()
 }

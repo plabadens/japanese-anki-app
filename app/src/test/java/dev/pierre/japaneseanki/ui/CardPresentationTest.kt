@@ -125,7 +125,7 @@ class CardPresentationTest {
                 input = input(completed = true, submitMessage = "Sent to AnkiDroid", canSend = false),
                 label = "Send",
                 enabled = false,
-                action = CardAction.RetrySend,
+                action = CardAction.Submit,
                 hint = "Sent to AnkiDroid",
                 status = "Sent to AnkiDroid",
             ),
@@ -152,7 +152,7 @@ class CardPresentationTest {
                 label = "Send",
                 enabled = false,
                 action = CardAction.Submit,
-                hint = "Preparing audio",
+                hint = "Word audio is not ready",
                 status = null,
             ),
             State(
@@ -197,6 +197,51 @@ class CardPresentationTest {
             assertEquals("${state.name}: status", state.status, result.status)
             assertEquals("${state.name}: hintPreparing", state.hintPreparing, result.hintPreparing)
         }
+    }
+
+    @Test
+    fun frozenRetryIgnoresLiveAnalysisAndUsesItsFrozenRecoveryExplanation() {
+        val result = cardPresentation(input(
+            analyzerError = "Old live analysis failure",
+            analyzing = true,
+            submissionLocked = true,
+            recoveryMessage = "No matching note found. Retry the frozen send.",
+            canSend = true,
+        ).copy(frozenRetryReady = true))
+        assertEquals("No matching note found. Retry the frozen send.", result.hint)
+        assertEquals("Retry send", result.actionLabel)
+        assertEquals(CardAction.RetrySend, result.action)
+        assertTrue(result.actionEnabled)
+        assertFalse(result.hintPreparing)
+    }
+
+    @Test
+    fun blockedFrozenRetryOffersSettingsRatherThanADeadRetrySendButton() {
+        val result = cardPresentation(input(
+            submitHint = "Restore the frozen destination.",
+            submitMessage = "A previous send failed.",
+            recoveryActionLabel = "Open Settings",
+            submissionLocked = true,
+            canSend = false,
+        ).copy(frozenRetryReady = true))
+        assertEquals("Restore the frozen destination.", result.hint)
+        assertEquals(CardAction.Recovery, result.action)
+        assertEquals("Open Settings", result.actionLabel)
+        assertTrue(result.actionEnabled)
+    }
+
+    @Test
+    fun recoveryWithoutATargetStillExplainsThePendingWriteNotWordSelection() {
+        val result = cardPresentation(input(
+            hasTarget = false,
+            actionHasTarget = false,
+            recoveryRequired = true,
+            submissionLocked = true,
+            recoveryMessage = "Inspect AnkiDroid before retrying.",
+            canSend = false,
+        ))
+        assertEquals("Inspect AnkiDroid before retrying.", result.hint)
+        assertFalse(result.actionEnabled)
     }
 
     private fun input(
