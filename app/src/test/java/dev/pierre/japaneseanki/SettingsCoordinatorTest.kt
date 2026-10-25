@@ -228,6 +228,58 @@ class SettingsCoordinatorTest {
         assertNotNull(opened.initialVoiceRequest)
     }
 
+    @Test
+    fun setupReadinessReportsEveryMissingRequirementAndTheAllReadyCase() {
+        fun readiness(
+            audioCredentialAvailable: Boolean = true,
+            selectedVoiceName: String = "ja-JP-Chirp3-HD-Aoede",
+            ankiDroidInstalled: Boolean = true,
+            ankiPermissionGranted: Boolean = true,
+            ankiSetupLoaded: Boolean = true,
+            selectedCompatibleNoteType: Boolean = true,
+            selectedDeckAvailable: Boolean = true,
+            dictionaryReady: Boolean = true,
+        ) = SettingsCoordinator.setupReadiness(
+            audioCredentialAvailable = audioCredentialAvailable,
+            selectedVoiceName = selectedVoiceName,
+            ankiDroidInstalled = ankiDroidInstalled,
+            ankiPermissionGranted = ankiPermissionGranted,
+            ankiSetupLoaded = ankiSetupLoaded,
+            selectedCompatibleNoteType = selectedCompatibleNoteType,
+            selectedDeckAvailable = selectedDeckAvailable,
+            dictionaryReady = dictionaryReady,
+        )
+
+        listOf(
+            readiness(audioCredentialAvailable = false),
+            readiness(selectedVoiceName = ""),
+        ).forEach { audioMissing ->
+            assertFalse(audioMissing.audioReady)
+            assertTrue(audioMissing.blockers.contains("Audio setup is incomplete."))
+        }
+
+        listOf(
+            readiness(ankiDroidInstalled = false),
+            readiness(ankiPermissionGranted = false),
+            readiness(ankiSetupLoaded = false),
+            readiness(selectedCompatibleNoteType = false),
+            readiness(selectedDeckAvailable = false),
+        ).forEach { ankiMissing ->
+            assertFalse(ankiMissing.ankiReady)
+            assertTrue(ankiMissing.blockers.contains("AnkiDroid setup is incomplete."))
+        }
+
+        val dictionaryMissing = readiness(dictionaryReady = false)
+        assertFalse(dictionaryMissing.dictionaryReady)
+        assertEquals(listOf("Dictionary is not ready."), dictionaryMissing.blockers)
+
+        val allReady = readiness()
+        assertTrue(allReady.audioReady)
+        assertTrue(allReady.ankiReady)
+        assertTrue(allReady.dictionaryReady)
+        assertTrue(allReady.blockers.isEmpty())
+    }
+
     private fun loaded(
         key: String,
         values: SettingsValues = SettingsValues(),

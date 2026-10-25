@@ -84,7 +84,7 @@ class CardSurfaceBehaviorTest {
             CompositionLocalProvider(
                 LocalConfiguration provides scaledConfiguration,
                 LocalDensity provides scaledDensity,
-                LocalMotionEnabled provides false,
+                LocalMotion provides ReducedMotionTestPolicy,
             ) {
                 MaterialTheme {
                     Box(Modifier.fillMaxSize()) {

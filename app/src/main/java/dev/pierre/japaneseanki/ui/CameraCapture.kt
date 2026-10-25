@@ -147,20 +147,29 @@ internal fun CameraShutterButton(
                 ContextCompat.getMainExecutor(context),
                 object : ImageCapture.OnImageSavedCallback {
                     override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
-                        if (!destination.isFile || destination.length() == 0L) {
-                            fail(destination, "empty_output", null, null)
-                            return
-                        }
-                        finish()
-                        currentOnCaptured(destination)
+                        handleCaptureSave(
+                            destination = destination,
+                            feedback = feedback,
+                            onFailure = { fail(destination, "empty_output", null, null) },
+                            onSuccess = { savedFile ->
+                                finish()
+                                currentOnCaptured(savedFile)
+                            },
+                        )
                     }
 
                     override fun onError(exception: ImageCaptureException) {
-                        fail(destination, "camera_write", exception.imageCaptureError, exception.cause)
+                        handleCaptureSave(
+                            destination = null,
+                            feedback = feedback,
+                            onFailure = {
+                                fail(destination, "camera_write", exception.imageCaptureError, exception.cause)
+                            },
+                            onSuccess = {},
+                        )
                     }
                 },
             )
-            feedback.dispatch(TouchFeedbackEvent.SHUTTER_ACCEPTED)
         } catch (exception: Exception) {
             fail(destination, "capture_setup", null, exception)
         }
@@ -181,14 +190,27 @@ internal fun CameraShutterButton(
     ) {
         if (presentation.showProgress) {
             MotionAwareProgressIndicator(
-                modifier = Modifier.size(32.dp),
                 color = MaterialTheme.colorScheme.onPrimary,
-                diameter = 32.dp,
-                strokeWidth = 2.dp,
+                progressSize = ProgressSize.Medium,
                 stateDescription = shutterStateDescription,
             )
         }
     }
+}
+
+internal fun handleCaptureSave(
+    destination: File?,
+    feedback: TouchFeedbackDispatcher,
+    onFailure: () -> Unit,
+    onSuccess: (File) -> Unit,
+) {
+    val savedFile = destination?.takeIf { it.isFile && it.length() > 0L }
+    if (savedFile == null) {
+        onFailure()
+        return
+    }
+    feedback.dispatch(TouchFeedbackEvent.SHUTTER_ACCEPTED)
+    onSuccess(savedFile)
 }
 
 private const val CAMERA_CAPTURE_TAG = "CameraCapture"
