@@ -9,9 +9,12 @@ import dev.pierre.japaneseanki.speech.SpeechException
 import dev.pierre.japaneseanki.speech.SpeechFailure
 
 /**
- * Synchronous facade for draft-audio state. The production adapter updates the in-memory view and
- * schedules persistence on the storage dispatcher; tests use an in-memory map. No Android type
- * appears here, so the controller is exercised by the standalone Kotlin harness.
+ * Synchronous string persistence for draft audio state.
+ *
+ * The app adapter is a SharedPreferences editor that commits: `read` is
+ * `getString(key, null)` and `write` applies every entry (`null` removes it) then returns
+ * `commit()`. Tests use an in-memory map. No Android type appears here, so the controller is
+ * exercised by the standalone Kotlin harness.
  */
 interface DraftAudioPersistence {
     fun read(key: String): String?
@@ -170,7 +173,7 @@ data class DraftAudioSnapshot(
 class DraftAudioController(
     private val store: DraftAudioFileStore,
     private val persistence: DraftAudioPersistence,
-    private val synthesize: suspend (DraftAudioInput, File) -> Unit,
+    private val synthesize: (DraftAudioInput, File) -> Unit,
     private val cache: AudioCacheSource = AudioCacheSource.disabled,
     private val diagnose: (String) -> Unit = {},
     legacyPaths: Map<AudioItem, String?> = emptyMap(),
@@ -281,10 +284,10 @@ class DraftAudioController(
     }
 
     /**
-     * Runs one authorized attempt on the calling coroutine: cache copy or exactly one
+     * Runs one authorized attempt on the calling (blocking) thread: cache copy or exactly one
      * provider call, validated staging, atomic publication, token-checked acceptance.
      */
-    suspend fun runAttempt(attempt: DraftAudioAttempt): DraftAudioAttemptResult {
+    fun runAttempt(attempt: DraftAudioAttempt): DraftAudioAttemptResult {
         val staging = attempt.staging
         val startedAt = System.nanoTime()
         try {

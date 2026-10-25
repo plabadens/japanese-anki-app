@@ -1,6 +1,6 @@
 package dev.pierre.japaneseanki
 
-
+import android.content.SharedPreferences
 import java.io.File
 import java.util.Base64
 
@@ -123,7 +123,7 @@ private val wordAudioKeys = FrozenAudioKeys(
     SubmissionRecoveryKeys.WORD_AUDIO_OMITTED,
 )
 
-private fun readFrozenAudioItem(preferences: PreferenceValues, keys: FrozenAudioKeys): FrozenAudioItem {
+private fun readFrozenAudioItem(preferences: SharedPreferences, keys: FrozenAudioKeys): FrozenAudioItem {
     val path = preferences.getString(keys.path, null)
     val identity = path?.let {
         MediaIdentity(it, preferences.getLong(keys.size, -1L), preferences.getLong(keys.modified, -1L))
@@ -132,7 +132,7 @@ private fun readFrozenAudioItem(preferences: PreferenceValues, keys: FrozenAudio
     return FrozenAudioItem(identity, filename, preferences.getBoolean(keys.omitted, false))
 }
 
-private fun PreferenceChanges.putFrozenAudioItem(item: FrozenAudioItem, keys: FrozenAudioKeys) {
+private fun SharedPreferences.Editor.putFrozenAudioItem(item: FrozenAudioItem, keys: FrozenAudioKeys) {
     if (item.importedFilename != null) {
         require(validMediaIdentity(item.identity)) { "Imported audio requires a complete source identity" }
         require(AnkiMediaImporter.sanitizeAudioFilename(item.importedFilename) == item.importedFilename) {
@@ -191,7 +191,7 @@ internal fun matchImportedReceipt(
  * sanitizer ([AnkiMediaImporter.sanitizeFilename] vs. [AnkiMediaImporter.sanitizeAudioFilename]).
  */
 internal fun importedReceiptFromPreferences(
-    preferences: PreferenceValues,
+    preferences: SharedPreferences,
     keys: ImportedReceiptKeys,
     currentMediaIdentity: MediaIdentity?,
     sanitize: (String) -> String?,
@@ -203,71 +203,6 @@ internal fun importedReceiptFromPreferences(
     currentMediaIdentity = currentMediaIdentity,
     sanitize = sanitize,
 )
-
-internal fun receiptIdentity(preferences: PreferenceValues, keys: ImportedReceiptKeys): MediaIdentity? =
-    preferences.getString(keys.path, null)?.let { path ->
-        MediaIdentity(path, preferences.getLong(keys.size, -1L), preferences.getLong(keys.modified, -1L))
-    }
-
-internal fun mediaImportRequest(
-    preferences: PreferenceValues,
-    keys: ImportedReceiptKeys,
-    operation: MediaImportOperation,
-    source: MediaIdentity,
-    frozenFilename: String?,
-): MediaImportRequest {
-    val hasSavedReceipt = listOf(keys.path, keys.filename, keys.size, keys.modified).any(preferences::contains)
-    val savedReceipt = when {
-        hasSavedReceipt -> ImportedMediaReceipt(
-            operation = operation,
-            source = receiptIdentity(preferences, keys) ?: MediaIdentity("", -1L, -1L),
-            filename = preferences.getString(keys.filename, null).orEmpty(),
-        )
-        frozenFilename != null -> ImportedMediaReceipt(operation, source, frozenFilename)
-        else -> null
-    }
-    val receipt = if (frozenFilename != null && savedReceipt != null && savedReceipt.filename != frozenFilename) {
-        savedReceipt.copy(source = MediaIdentity("", -1L, -1L))
-    } else savedReceipt
-    return MediaImportRequest(source, receipt)
-}
-
-internal fun PreferenceChanges.putMediaReceipt(receipt: ImportedMediaReceipt): PreferenceChanges {
-    val keys = when (receipt.operation) {
-        MediaImportOperation.IMAGE -> IMAGE_RECEIPT_KEYS
-        MediaImportOperation.SENTENCE_AUDIO -> SENTENCE_AUDIO_RECEIPT_KEYS
-        MediaImportOperation.WORD_AUDIO -> WORD_AUDIO_RECEIPT_KEYS
-        MediaImportOperation.AUDIO -> throw IllegalArgumentException("Generic audio is not a Send operation.")
-    }
-    return putString(keys.path, receipt.source.path)
-        .putLong(keys.size, receipt.source.size)
-        .putLong(keys.modified, receipt.source.modified)
-        .putString(keys.filename, receipt.filename)
-}
-
-internal fun applyImportedReceipt(snapshot: FrozenSubmission, receipt: ImportedMediaReceipt): FrozenSubmission {
-    val (fieldName, serialized, updatedSnapshot) = when (receipt.operation) {
-        MediaImportOperation.IMAGE -> Triple(
-            "Image", AnkiFieldSerializer.imageReference(receipt.filename),
-            snapshot.copy(importedFilename = receipt.filename),
-        )
-        MediaImportOperation.SENTENCE_AUDIO -> Triple(
-            "SentAudio", AnkiFieldSerializer.audioReference(receipt.filename),
-            snapshot.copy(sentenceAudio = snapshot.sentenceAudio.copy(importedFilename = receipt.filename)),
-        )
-        MediaImportOperation.WORD_AUDIO -> Triple(
-            "VocabAudio", AnkiFieldSerializer.audioReference(receipt.filename),
-            snapshot.copy(wordAudio = snapshot.wordAudio.copy(importedFilename = receipt.filename)),
-        )
-        MediaImportOperation.AUDIO -> throw IllegalArgumentException("Generic audio is not a Send operation.")
-    }
-    val valuesByName = snapshot.modelFields.zip(snapshot.orderedFields).toMap().toMutableMap()
-    require(fieldName in valuesByName && serialized != null) { "The imported media reference cannot be serialized." }
-    valuesByName[fieldName] = serialized
-    val mapping = AnkiFieldContract.mapToModelOrder(snapshot.modelFields, valuesByName)
-    require(mapping.isValid) { mapping.errors.joinToString() }
-    return updatedSnapshot.copy(orderedFields = mapping.values)
-}
 
 /**
  * Identity of a live media file for receipt matching: null when it is missing, not a regular
@@ -354,7 +289,7 @@ internal fun decodeSubmissionValues(encoded: String?): List<String>? {
     }.getOrNull()
 }
 
-internal fun readFrozenSubmission(preferences: PreferenceValues): FrozenSubmission? {
+internal fun readFrozenSubmission(preferences: SharedPreferences): FrozenSubmission? {
     val revision = preferences.getLong(SubmissionRecoveryKeys.REVISION, -1L).takeIf { it >= 0 } ?: return null
     val modelId = preferences.getLong(SubmissionRecoveryKeys.MODEL_ID, -1L).takeIf { it > 0 } ?: return null
     val deckId = preferences.getLong(SubmissionRecoveryKeys.DECK_ID, -1L).takeIf { it > 0 } ?: return null
@@ -399,10 +334,10 @@ internal fun readFrozenSubmission(preferences: PreferenceValues): FrozenSubmissi
     )
 }
 
-internal fun PreferenceChanges.putFrozenSubmission(
+internal fun SharedPreferences.Editor.putFrozenSubmission(
     snapshot: FrozenSubmission,
     phase: SubmissionPhase,
-): PreferenceChanges {
+): SharedPreferences.Editor {
     putString(SubmissionRecoveryKeys.STATUS, phase.persisted)
         .putLong(SubmissionRecoveryKeys.REVISION, snapshot.revision)
         .putLong(SubmissionRecoveryKeys.MODEL_ID, snapshot.modelId)
@@ -438,7 +373,8 @@ internal fun PreferenceChanges.putFrozenSubmission(
     return this
 }
 
-internal fun clearFrozenSubmission(): PreferenceChanges = PreferenceChanges()
+internal fun clearFrozenSubmission(preferences: SharedPreferences) {
+    preferences.edit()
         .remove(SubmissionRecoveryKeys.STATUS)
         .remove(SubmissionRecoveryKeys.REVISION)
         .remove(SubmissionRecoveryKeys.MODEL_ID)
@@ -475,3 +411,5 @@ internal fun clearFrozenSubmission(): PreferenceChanges = PreferenceChanges()
         .remove(SubmissionRecoveryKeys.MEDIA_SOURCE_PATH)
         .remove(SubmissionRecoveryKeys.MEDIA_SOURCE_SIZE)
         .remove(SubmissionRecoveryKeys.MEDIA_SOURCE_MODIFIED)
+        .commit()
+}

@@ -263,10 +263,10 @@ class SpeechException(
 /** Replaceable sentence-speech boundary. The workflow never builds Google JSON itself. */
 interface SentenceSpeechProvider {
     /** Lists Japanese-capable Chirp 3 HD voices. Throws [SpeechException] on failure. */
-    suspend fun listVoices(): List<CloudVoice>
+    fun listVoices(): List<CloudVoice>
 
     /** Synthesizes into [destination] (MP3). Returns the completed file. */
-    suspend fun synthesize(request: SentenceSpeechRequest, destination: java.io.File): java.io.File
+    fun synthesize(request: SentenceSpeechRequest, destination: java.io.File): java.io.File
 }
 
 /** Serializes a fetched voice list for offline display. */

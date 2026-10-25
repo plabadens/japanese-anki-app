@@ -256,36 +256,8 @@ internal class SettingsCoordinator(
 
     companion object {
         const val DEFAULT_DEBOUNCE_MILLIS = 350L
-
-        fun setupReadiness(
-            audioCredentialAvailable: Boolean,
-            selectedVoiceName: String,
-            ankiDroidInstalled: Boolean,
-            ankiPermissionGranted: Boolean,
-            ankiSetupLoaded: Boolean,
-            selectedCompatibleNoteType: Boolean,
-            selectedDeckAvailable: Boolean,
-            dictionaryReady: Boolean,
-        ): SetupReadiness {
-            val audioReady = audioCredentialAvailable && selectedVoiceName.isNotBlank()
-            val ankiReady = ankiDroidInstalled && ankiPermissionGranted && ankiSetupLoaded &&
-                selectedCompatibleNoteType && selectedDeckAvailable
-            val blockers = buildList {
-                if (!audioReady) add("Audio setup is incomplete.")
-                if (!ankiReady) add("AnkiDroid setup is incomplete.")
-                if (!dictionaryReady) add("Dictionary is not ready.")
-            }
-            return SetupReadiness(audioReady, ankiReady, dictionaryReady, blockers)
-        }
     }
 }
-
-internal data class SetupReadiness(
-    val audioReady: Boolean,
-    val ankiReady: Boolean,
-    val dictionaryReady: Boolean,
-    val blockers: List<String>,
-)
 
 /** No data-class toString: the request contains the in-memory key used for one voice-list GET. */
 internal class VoiceLoadRequest internal constructor(
@@ -303,22 +275,3 @@ internal class SettingsOpenState(
     val voiceCatalog: VoiceCatalogState,
     val initialVoiceRequest: VoiceLoadRequest?,
 )
-
-enum class AppRoute { Capture, Card }
-
-internal fun visibleRouteForAnalyzer(
-    requestedRoute: AppRoute,
-    analyzerReady: Boolean,
-    frozenCardActive: Boolean,
-): AppRoute = when {
-    !analyzerReady -> AppRoute.Capture
-    frozenCardActive -> AppRoute.Card
-    else -> requestedRoute
-}
-
-internal fun shouldShowSetup(
-    showSetup: Boolean,
-    onboardingComplete: Boolean,
-    analyzerReady: Boolean,
-    showSettings: Boolean,
-): Boolean = !showSettings && (showSetup || !onboardingComplete || !analyzerReady)

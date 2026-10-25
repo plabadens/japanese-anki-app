@@ -1,11 +1,8 @@
 package dev.pierre.japaneseanki
 
-import dev.pierre.japaneseanki.network.GoogleJson
-import dev.pierre.japaneseanki.network.request
+import dev.pierre.japaneseanki.speech.MiniJson
 import java.io.IOException
 import java.util.concurrent.CancellationException
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
 
 enum class TranslationSource { GOOGLE, MANUAL }
 
@@ -74,18 +71,27 @@ data class TranslatorHttpResponse(val code: Int, val body: String)
  * credential travels only as a header argument, and that no redirect is followed.
  */
 interface TranslatorTransport {
-    suspend fun post(url: String, apiKey: String, json: ByteArray, timeoutMillis: Int): TranslatorHttpResponse
+    fun post(url: String, apiKey: String, json: ByteArray, timeoutMillis: Int): TranslatorHttpResponse
 }
 
 /** Bounded, non-redirecting HTTPS transport; the key is sent only as `X-Goog-Api-Key`. */
 class HttpTranslatorTransport : TranslatorTransport {
-    override suspend fun post(url: String, apiKey: String, json: ByteArray, timeoutMillis: Int): TranslatorHttpResponse {
-        val response = request(
+    private val connectionFactory: GoogleHttpConnectionFactory
+
+    constructor() : this(DefaultGoogleHttpConnectionFactory)
+
+    internal constructor(connectionFactory: GoogleHttpConnectionFactory) {
+        this.connectionFactory = connectionFactory
+    }
+
+    override fun post(url: String, apiKey: String, json: ByteArray, timeoutMillis: Int): TranslatorHttpResponse {
+        val response = GoogleHttp.request(
             url = url,
             apiKey = apiKey,
             timeoutMillis = timeoutMillis,
             maxResponseBytes = MAX_RESPONSE_BYTES,
             body = json,
+            connectionFactory = connectionFactory,
         )
         return TranslatorHttpResponse(response.code, response.body.toString(Charsets.UTF_8))
     }
@@ -111,7 +117,7 @@ class GoogleTranslationClient(
         require(timeoutMillis in 1..MAX_TIMEOUT_MILLIS)
     }
 
-    suspend fun translate(apiKey: String, sentence: String): String {
+    fun translate(apiKey: String, sentence: String): String {
         require(apiKey.isNotBlank()) { "Translation credentials are missing" }
         require(sentence.isNotBlank() && sentence.length <= MAX_SENTENCE_CHARS) {
             "Sentence is invalid for translation"
@@ -158,15 +164,19 @@ class GoogleTranslationClient(
     }
 
     private fun parseTranslation(body: String): String {
-        val translations = runCatching {
-            GoogleJson.decodeFromString<TranslationResponseDto>(body).data.translations
-        }.getOrNull() ?: throw invalidResponse()
+        val root = runCatching { MiniJson.parse(body) as? Map<*, *> }.getOrNull()
+            ?: throw invalidResponse()
+        val data = root["data"] as? Map<*, *> ?: throw invalidResponse()
+        val translations = data["translations"] as? List<*> ?: throw invalidResponse()
         if (translations.size != 1) {
             throw TranslatorException(
                 TranslatorFailure.INVALID_RESPONSE, "Translation did not return exactly one result.",
             )
         }
-        val text = translations.single().translatedText.let(::unescapeTranslationEntities).trim()
+        val text = ((translations.single() as? Map<*, *>)?.get("translatedText") as? String)
+            ?.let(::unescapeTranslationEntities)
+            ?.trim()
+            .orEmpty()
         if (text.isEmpty()) {
             throw TranslatorException(
                 TranslatorFailure.INVALID_RESPONSE, "Translation returned no English text.",
@@ -192,15 +202,14 @@ class GoogleTranslationClient(
         private const val MAX_SENTENCE_CHARS = 20_000
 
         /** Exact outbound body: one plain-text sentence, explicit languages and the NMT model. */
-        fun buildRequestBody(sentence: String): String = GoogleJson.encodeToString(
-            TranslationRequestDto(
-                q = sentence,
-                source = SOURCE_LANGUAGE,
-                target = TARGET_LANGUAGE,
-                format = FORMAT,
-                model = MODEL,
-            ),
-        )
+        fun buildRequestBody(sentence: String): String = buildString {
+            append("{\"q\":").append(MiniJson.quote(sentence))
+            append(",\"source\":").append(MiniJson.quote(SOURCE_LANGUAGE))
+            append(",\"target\":").append(MiniJson.quote(TARGET_LANGUAGE))
+            append(",\"format\":").append(MiniJson.quote(FORMAT))
+            append(",\"model\":").append(MiniJson.quote(MODEL))
+            append('}')
+        }
     }
 }
 
@@ -246,7 +255,7 @@ class TranslationService(
     private val translator: GoogleTranslationClient = GoogleTranslationClient(),
     private val credential: () -> String? = { null },
 ) {
-    suspend fun translate(sentence: String): TranslationResult {
+    fun translate(sentence: String): TranslationResult {
         if (sentence.isBlank()) return TranslationResult.Failed("Sentence is empty.")
         val key = credential()?.trim().orEmpty()
         if (key.isEmpty()) return TranslationResult.Failed("Add your Google Cloud API key in Settings.")

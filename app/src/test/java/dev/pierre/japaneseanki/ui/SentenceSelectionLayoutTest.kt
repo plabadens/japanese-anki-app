@@ -74,7 +74,7 @@ class SentenceSelectionLayoutTest {
         composeRule.setContent {
             val current = scene.value
             CompositionLocalProvider(
-                LocalMotion provides ReducedMotionTestPolicy,
+                LocalMotionEnabled provides false,
                 LocalTouchFeedbackDispatcher provides dispatcher,
             ) {
                 MaterialTheme(colorScheme = lightColorScheme()) {
@@ -108,7 +108,7 @@ class SentenceSelectionLayoutTest {
         composeRule.setContent {
             val current = scene.value
             CompositionLocalProvider(
-                LocalMotion provides ReducedMotionTestPolicy,
+                LocalMotionEnabled provides false,
                 LocalTouchFeedbackDispatcher provides dispatcher,
             ) {
                 MaterialTheme(colorScheme = lightColorScheme()) {
@@ -133,14 +133,14 @@ class SentenceSelectionLayoutTest {
         val dispatcher = TouchFeedbackDispatcher { event -> events += event }
         composeRule.setContent {
             CompositionLocalProvider(
-                LocalMotion provides ReducedMotionTestPolicy,
+                LocalMotionEnabled provides false,
                 LocalTouchFeedbackDispatcher provides dispatcher,
             ) {
                 Box {
                     MotionAwareProgressIndicator(
                         modifier = Modifier.testTag("reduced-motion-progress"),
                         color = Color.Blue,
-                        progressSize = ProgressSize.Medium,
+                        diameter = 24.dp,
                         stateDescription = "Working",
                     )
                 }

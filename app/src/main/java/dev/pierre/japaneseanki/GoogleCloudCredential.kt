@@ -1,5 +1,7 @@
 package dev.pierre.japaneseanki
 
+import android.content.SharedPreferences
+
 /**
  * The one Google Cloud API key shared by sentence speech and translation (SPEC §4.7, §11).
  *
@@ -14,28 +16,24 @@ internal object GoogleCloudCredential {
     const val OBSOLETE_OPENROUTER_PREF = "openrouter_key_encrypted"
 
     /** Decrypts the shared key; failure means the saved ciphertext cannot be used. */
-    fun load(settings: PreferenceValues): Result<String?> = runCatching {
+    fun load(settings: SharedPreferences): Result<String?> = runCatching {
         EncryptedSecretStore.decrypt(settings.getString(PREF, null)).trim().ifEmpty { null }
     }
 
     /** The value handed to both Google adapters; null when unset or unreadable. */
-    fun read(settings: PreferenceValues): String? = load(settings).getOrNull()
+    fun read(settings: SharedPreferences): String? = load(settings).getOrNull()
 
-    /** Stores or clears the key. Called by the settings persistence worker, never composition. */
-    fun write(storage: AppPreferenceStorage, key: String): Boolean {
+    /** Stores or clears the key. Makes no network request of any kind. */
+    fun write(settings: SharedPreferences, key: String): Boolean {
         val trimmed = key.trim()
-        val saved = storage.persistBlocking(
-            PreferenceFile.SETTINGS,
-            PreferenceChanges().putString(PREF, if (trimmed.isEmpty()) null else EncryptedSecretStore.encrypt(trimmed)),
-        )
+        val edit = settings.edit()
+        if (trimmed.isEmpty()) edit.remove(PREF) else edit.putString(PREF, EncryptedSecretStore.encrypt(trimmed))
+        val saved = edit.commit()
         if (saved && trimmed.isEmpty()) runCatching { EncryptedSecretStore.removeKey() }
         return saved
     }
 
-    /** Removes the obsolete ciphertext without touching drafts, media, or settings. */
-    fun removeObsoleteOpenRouterStorage(storage: AppPreferenceStorage): Boolean =
-        !storage.settings.value.contains(OBSOLETE_OPENROUTER_PREF) || storage.persistBlocking(
-            PreferenceFile.SETTINGS,
-            PreferenceChanges().remove(OBSOLETE_OPENROUTER_PREF),
-        )
+    /** Removes the obsolete OpenRouter ciphertext without touching drafts, media, or settings. */
+    fun removeObsoleteOpenRouterStorage(settings: SharedPreferences): Boolean =
+        !settings.contains(OBSOLETE_OPENROUTER_PREF) || settings.edit().remove(OBSOLETE_OPENROUTER_PREF).commit()
 }

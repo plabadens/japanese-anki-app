@@ -1,8 +1,6 @@
 package dev.pierre.japaneseanki
 
-import dev.pierre.japaneseanki.network.GoogleJson
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
+import dev.pierre.japaneseanki.speech.MiniJson
 
 /**
  * What a Google Cloud API error response says went wrong, independent of the operation.
@@ -27,34 +25,19 @@ internal data class GoogleApiErrorDetails(
     val mentionsDisabledApi: Boolean = false,
 )
 
-@Serializable
-internal data class GoogleApiErrorResponseDto(
-    val error: GoogleApiErrorBodyDto? = null,
-)
-
-@Serializable
-internal data class GoogleApiErrorBodyDto(
-    val details: List<GoogleApiErrorDetailDto>? = null,
-    val message: String? = null,
-    val status: String? = null,
-)
-
-@Serializable
-internal data class GoogleApiErrorDetailDto(
-    val reason: String? = null,
-)
-
 internal fun parseGoogleApiError(body: String): GoogleApiErrorDetails {
-    val error = runCatching { GoogleJson.decodeFromString<GoogleApiErrorResponseDto>(body).error }
-        .getOrNull() ?: return GoogleApiErrorDetails("", "")
-    val reason = error.details.orEmpty().asSequence()
-        .mapNotNull(GoogleApiErrorDetailDto::reason)
+    val root = runCatching { MiniJson.parse(body) as? Map<*, *> }.getOrNull()
+    val error = root?.get("error") as? Map<*, *> ?: return GoogleApiErrorDetails("", "")
+    val details = error["details"] as? List<*> ?: emptyList<Any?>()
+    val reason = details.asSequence()
+        .mapNotNull { it as? Map<*, *> }
+        .mapNotNull { it["reason"] as? String }
         .mapNotNull(::safeGoogleToken)
         .firstOrNull()
         .orEmpty()
-    val message = error.message.orEmpty().lowercase()
+    val message = (error["message"] as? String).orEmpty().lowercase()
     return GoogleApiErrorDetails(
-        status = safeGoogleToken(error.status).orEmpty(),
+        status = safeGoogleToken(error["status"] as? String).orEmpty(),
         reason = reason,
         // Provider prose is used only for classification; it is never retained or exposed.
         mentionsBilling = "billing" in message,

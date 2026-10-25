@@ -87,9 +87,9 @@ class DraftAudioControllerTest {
     private fun readyBoth(fixture: Fixture, persistence: MapPersistence): DraftAudioController {
         val controller = controller(fixture, persistence)
         controller.setInput(fixture.input(AudioItem.SENTENCE, "sentence-a"))
-        controller.runAttemptForTest(controller.confirm(AudioItem.SENTENCE)!!)
+        controller.runAttempt(controller.confirm(AudioItem.SENTENCE)!!)
         controller.setInput(fixture.input(AudioItem.VOCABULARY, "word-a", format = AudioFormat.OGG))
-        controller.runAttemptForTest(controller.confirm(AudioItem.VOCABULARY)!!)
+        controller.runAttempt(controller.confirm(AudioItem.VOCABULARY)!!)
         return controller
     }
 
@@ -106,7 +106,7 @@ class DraftAudioControllerTest {
 
             val attempt = controller.confirm(AudioItem.SENTENCE)
             assertNotNull(attempt)
-            val result = controller.runAttemptForTest(attempt!!)
+            val result = controller.runAttempt(attempt!!)
             assertTrue(result is DraftAudioAttemptResult.Accepted)
             assertTrue(controller.state(AudioItem.SENTENCE) is DraftAudioState.Ready)
             assertEquals(1, fixture.providerCalls)
@@ -149,7 +149,7 @@ class DraftAudioControllerTest {
             val attempts = entry.onReviewEntry(7, ReviewAudioEntryCause.EXPLICIT_CONTINUE)
             assertEquals(setOf(AudioItem.SENTENCE, AudioItem.VOCABULARY), attempts.map { it.token.item }.toSet())
             assertTrue(entry.onReviewEntry(7, ReviewAudioEntryCause.EXPLICIT_CONTINUE).isEmpty())
-            attempts.forEach { controller.runAttemptForTest(it) }
+            attempts.forEach(controller::runAttempt)
             assertEquals(2, fixture.providerCalls)
 
             // An edited sentence is a new revision; the accepted word audio remains valid.
@@ -158,7 +158,7 @@ class DraftAudioControllerTest {
             val changedRevision = entry.onReviewEntry(8, ReviewAudioEntryCause.EXPLICIT_CONTINUE)
             assertEquals(listOf(AudioItem.SENTENCE), changedRevision.map { it.token.item })
             assertTrue(controller.state(AudioItem.VOCABULARY) is DraftAudioState.Ready)
-            changedRevision.forEach { controller.runAttemptForTest(it) }
+            changedRevision.forEach(controller::runAttempt)
             assertEquals(3, fixture.providerCalls)
 
             controller.dispose()
@@ -212,7 +212,7 @@ class DraftAudioControllerTest {
             )
             val input = fixture.input(AudioItem.SENTENCE, "permanent-rejection", revision = 3)
             controller.setInput(input)
-            val failed = controller.runAttemptForTest(controller.confirm(AudioItem.SENTENCE)!!)
+            val failed = controller.runAttempt(controller.confirm(AudioItem.SENTENCE)!!)
             assertTrue(failed is DraftAudioAttemptResult.Failed)
             assertFalse((failed as DraftAudioAttemptResult.Failed).retryable)
             assertNull(controller.retry(AudioItem.SENTENCE))
@@ -273,7 +273,7 @@ class DraftAudioControllerTest {
 
             val controller = controller(fixture, MapPersistence(), cache)
             controller.setInput(input)
-            val result = controller.runAttemptForTest(controller.confirm(AudioItem.SENTENCE)!!)
+            val result = controller.runAttempt(controller.confirm(AudioItem.SENTENCE)!!)
             assertTrue(result is DraftAudioAttemptResult.Accepted)
             assertTrue((result as DraftAudioAttemptResult.Accepted).fromCache)
             assertEquals("cache hit must not call the provider", 0, fixture.providerCalls)
@@ -290,7 +290,7 @@ class DraftAudioControllerTest {
             val controller = controller(fixture, MapPersistence(), cache)
             val input = fixture.input(AudioItem.SENTENCE, "sentence-a")
             controller.setInput(input)
-            val result = controller.runAttemptForTest(controller.confirm(AudioItem.SENTENCE)!!)
+            val result = controller.runAttempt(controller.confirm(AudioItem.SENTENCE)!!)
             assertTrue(result is DraftAudioAttemptResult.Accepted)
             assertFalse((result as DraftAudioAttemptResult.Accepted).fromCache)
             assertEquals(1, fixture.providerCalls)
@@ -311,7 +311,7 @@ class DraftAudioControllerTest {
             }
             val controller = controller(fixture, MapPersistence(), broken)
             controller.setInput(fixture.input(AudioItem.SENTENCE, "sentence-a"))
-            val result = controller.runAttemptForTest(controller.confirm(AudioItem.SENTENCE)!!)
+            val result = controller.runAttempt(controller.confirm(AudioItem.SENTENCE)!!)
             assertTrue(result is DraftAudioAttemptResult.Accepted)
             assertEquals(1, fixture.providerCalls)
             assertTrue((controller.state(AudioItem.SENTENCE) as DraftAudioState.Ready).file.isIntact())
@@ -332,7 +332,7 @@ class DraftAudioControllerTest {
             }
             val controller = controller(fixture, MapPersistence(), brokenCopy)
             controller.setInput(fixture.input(AudioItem.SENTENCE, "sentence-a"))
-            val result = controller.runAttemptForTest(controller.confirm(AudioItem.SENTENCE)!!)
+            val result = controller.runAttempt(controller.confirm(AudioItem.SENTENCE)!!)
             assertTrue(result is DraftAudioAttemptResult.Failed)
             assertEquals("a cache read failure must not trigger a billable call", 0, fixture.providerCalls)
             assertTrue(controller.state(AudioItem.SENTENCE) is DraftAudioState.Failed)
@@ -349,7 +349,7 @@ class DraftAudioControllerTest {
             val controller = controller(fixture, persistence)
             controller.setInput(fixture.input(AudioItem.SENTENCE, "sentence-a"))
             fixture.providerFailure = IOException("Speech synthesis failed.")
-            val failed = controller.runAttemptForTest(controller.confirm(AudioItem.SENTENCE)!!)
+            val failed = controller.runAttempt(controller.confirm(AudioItem.SENTENCE)!!)
             assertTrue(failed is DraftAudioAttemptResult.Failed)
             val state = controller.state(AudioItem.SENTENCE)
             assertTrue(state is DraftAudioState.Failed)
@@ -363,7 +363,7 @@ class DraftAudioControllerTest {
             fixture.providerFailure = null
             val retried = controller.retry(AudioItem.SENTENCE)
             assertNotNull("Retry must be explicit and per item", retried)
-            assertTrue(controller.runAttemptForTest(retried!!) is DraftAudioAttemptResult.Accepted)
+            assertTrue(controller.runAttempt(retried!!) is DraftAudioAttemptResult.Accepted)
             assertEquals(2, fixture.providerCalls)
         } finally {
             fixture.close()
@@ -381,7 +381,7 @@ class DraftAudioControllerTest {
             fixture.duringSynthesis = {
                 controller.setInput(fixture.input(AudioItem.SENTENCE, "sentence-b", text = "別の文"))
             }
-            val result = controller.runAttemptForTest(attempt)
+            val result = controller.runAttempt(attempt)
             assertEquals(DraftAudioAttemptResult.Stale, result)
             assertTrue(controller.state(AudioItem.SENTENCE) is DraftAudioState.NeedsContinue)
             assertEquals("no file may be published for a stale attempt", 0, fixture.finals.listFiles().orEmpty().size)
@@ -399,7 +399,7 @@ class DraftAudioControllerTest {
             val attempt = controller.confirm(AudioItem.SENTENCE)!!
             assertTrue(controller.cancel(AudioItem.SENTENCE))
             assertTrue(controller.state(AudioItem.SENTENCE) is DraftAudioState.NeedsContinue)
-            assertEquals("cancelled attempt must not call the provider", DraftAudioAttemptResult.Stale, controller.runAttemptForTest(attempt))
+            assertEquals("cancelled attempt must not call the provider", DraftAudioAttemptResult.Stale, controller.runAttempt(attempt))
             assertEquals(0, fixture.providerCalls)
             assertEquals(0, fixture.finals.listFiles().orEmpty().size)
         } finally {
@@ -417,7 +417,7 @@ class DraftAudioControllerTest {
             fixture.providerFailure = java.util.concurrent.CancellationException("job cancelled")
             var rethrown = false
             try {
-                controller.runAttemptForTest(attempt)
+                controller.runAttempt(attempt)
             } catch (_: java.util.concurrent.CancellationException) {
                 rethrown = true
             }
@@ -436,7 +436,7 @@ class DraftAudioControllerTest {
         try {
             val controller = controller(fixture, MapPersistence())
             controller.setInput(fixture.input(AudioItem.SENTENCE, "sentence-a"))
-            controller.runAttemptForTest(controller.confirm(AudioItem.SENTENCE)!!)
+            controller.runAttempt(controller.confirm(AudioItem.SENTENCE)!!)
             val firstFile = (controller.state(AudioItem.SENTENCE) as DraftAudioState.Ready).file
             assertTrue(firstFile.file().isFile)
 
@@ -535,7 +535,7 @@ class DraftAudioControllerTest {
             val persistence = MapPersistence()
             val controller = controller(fixture, persistence)
             controller.setInput(fixture.input(AudioItem.SENTENCE, "sentence-a"))
-            controller.runAttemptForTest(controller.confirm(AudioItem.SENTENCE)!!)
+            controller.runAttempt(controller.confirm(AudioItem.SENTENCE)!!)
             val file = (controller.state(AudioItem.SENTENCE) as DraftAudioState.Ready).file
             assertTrue(file.file().delete())
 
@@ -557,13 +557,13 @@ class DraftAudioControllerTest {
             val wordFile = (controller.state(AudioItem.VOCABULARY) as DraftAudioState.Ready).file
             controller.setInput(fixture.input(AudioItem.SENTENCE, "sentence-b", text = "別の文"))
             fixture.providerFailure = IOException("Speech synthesis failed.")
-            controller.runAttemptForTest(controller.confirm(AudioItem.SENTENCE)!!)
+            controller.runAttempt(controller.confirm(AudioItem.SENTENCE)!!)
             assertTrue(controller.state(AudioItem.SENTENCE) is DraftAudioState.Failed)
             assertEquals("Ready sibling must stay Ready", wordFile, (controller.state(AudioItem.VOCABULARY) as DraftAudioState.Ready).file)
             assertTrue(wordFile.file().isFile)
 
             fixture.providerFailure = null
-            controller.runAttemptForTest(controller.retry(AudioItem.SENTENCE)!!)
+            controller.runAttempt(controller.retry(AudioItem.SENTENCE)!!)
             assertEquals(wordFile, (controller.state(AudioItem.VOCABULARY) as DraftAudioState.Ready).file)
         } finally {
             fixture.close()
@@ -580,9 +580,9 @@ class DraftAudioControllerTest {
             val incomplete = controller.freezeForSend()
             assertTrue(incomplete is DraftAudioFreeze.Incomplete)
             assertTrue((incomplete as DraftAudioFreeze.Incomplete).missing.contains(AudioItem.SENTENCE))
-            controller.runAttemptForTest(attempt)
+            controller.runAttempt(attempt)
             controller.setInput(fixture.input(AudioItem.VOCABULARY, "word-a", format = AudioFormat.OGG))
-            controller.runAttemptForTest(controller.confirm(AudioItem.VOCABULARY)!!)
+            controller.runAttempt(controller.confirm(AudioItem.VOCABULARY)!!)
 
             val freeze = controller.freezeForSend()
             assertTrue(freeze is DraftAudioFreeze.Frozen)
@@ -611,7 +611,7 @@ class DraftAudioControllerTest {
             controller.setInput(fixture.input(AudioItem.SENTENCE, "sentence-a"))
             val attempt = controller.confirm(AudioItem.SENTENCE)!!
             persistence.failWrites = true
-            val result = controller.runAttemptForTest(attempt)
+            val result = controller.runAttempt(attempt)
             assertTrue(result is DraftAudioAttemptResult.Failed)
             assertTrue(controller.state(AudioItem.SENTENCE) is DraftAudioState.Failed)
             assertEquals("no durable reference is claimed", 0, fixture.finals.listFiles().orEmpty().size)
@@ -628,7 +628,7 @@ class DraftAudioControllerTest {
             controller.setInput(fixture.input(AudioItem.SENTENCE, "sentence-a"))
             val attempt = controller.confirm(AudioItem.SENTENCE)!!
             controller.dispose()
-            assertEquals(DraftAudioAttemptResult.Stale, controller.runAttemptForTest(attempt))
+            assertEquals(DraftAudioAttemptResult.Stale, controller.runAttempt(attempt))
             assertEquals(0, fixture.providerCalls)
         } finally {
             fixture.close()
@@ -649,7 +649,7 @@ class DraftAudioControllerTest {
                 },
             )
             controller.setInput(fixture.input(AudioItem.VOCABULARY, "word-a", format = AudioFormat.OGG))
-            val result = controller.runAttemptForTest(controller.confirm(AudioItem.VOCABULARY)!!)
+            val result = controller.runAttempt(controller.confirm(AudioItem.VOCABULARY)!!)
             assertTrue(result is DraftAudioAttemptResult.Accepted)
             assertTrue("NHK provider requires an .ogg destination", stagingName!!.endsWith(".ogg"))
             val ready = controller.state(AudioItem.VOCABULARY) as DraftAudioState.Ready
@@ -665,13 +665,13 @@ class DraftAudioControllerTest {
         try {
             val controller = controller(fixture, MapPersistence())
             controller.setInput(fixture.input(AudioItem.SENTENCE, "sentence-a"))
-            controller.runAttemptForTest(controller.confirm(AudioItem.SENTENCE)!!)
+            controller.runAttempt(controller.confirm(AudioItem.SENTENCE)!!)
             val old = (controller.state(AudioItem.SENTENCE) as DraftAudioState.Ready).file
             val playback = fixture.store.lease(old, AudioFileOwner.PLAYBACK)
 
             controller.setInput(fixture.input(AudioItem.SENTENCE, "sentence-b", text = "別の文"))
             assertTrue("old file is still being played", old.file().isFile)
-            controller.runAttemptForTest(controller.confirm(AudioItem.SENTENCE)!!)
+            controller.runAttempt(controller.confirm(AudioItem.SENTENCE)!!)
             val new = (controller.state(AudioItem.SENTENCE) as DraftAudioState.Ready).file
             assertTrue(new.file().isFile)
             assertTrue("leased previous file is not deleted under the player", old.file().isFile)

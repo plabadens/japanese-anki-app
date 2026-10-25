@@ -7,7 +7,6 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.UUID
-import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -31,7 +30,7 @@ class ReleaseAudioCodecSmokeTest {
     }
 
     @Test
-    fun materializedWavOggAndMp3FilesDecodeAndPlayOnDevice() = runTest {
+    fun materializedWavOggAndMp3FilesDecodeAndPlayOnDevice() {
         val root = root()
         try {
             val draftDirectory = File(root, "draft").apply { mkdirs() }

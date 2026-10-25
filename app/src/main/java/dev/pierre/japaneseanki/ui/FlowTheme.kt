@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -19,17 +20,14 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Shapes
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.Alignment
@@ -46,7 +44,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import dev.pierre.japaneseanki.R
 
@@ -146,45 +143,10 @@ internal val FlowTypography: Typography = Typography().run {
     )
 }
 
-internal val FlowShapes: Shapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(14.dp),
-    medium = RoundedCornerShape(20.dp),
-    large = RoundedCornerShape(24.dp),
-    extraLarge = RoundedCornerShape(28.dp),
-)
-
-@Immutable
-internal data class FlowTokens(
-    val screenPadding: Dp = 20.dp,
-    val cardPadding: Dp = 18.dp,
-    val sectionGap: Dp = 14.dp,
-    val touchTarget: Dp = 48.dp,
-    val hairline: Dp = 1.dp,
-    val primaryButtonHeight: Dp = 56.dp,
-    val disabledAlpha: Float = 0.38f,
-    val sheetMaxHeight: Dp = 560.dp,
-    val tallSheetMaxHeight: Dp = 620.dp,
-    val sheetWidePadding: Dp = 24.dp,
-    val sheetVerticalPadding: Dp = 8.dp,
-    val quietOutline: Color,
-)
-
-internal val LocalFlowTokens = staticCompositionLocalOf<FlowTokens> {
-    error("FlowTokens accessed outside FlowTheme")
-}
-
-internal val MaterialTheme.flow: FlowTokens
-    @Composable
-    @ReadOnlyComposable
-    get() = LocalFlowTokens.current
-
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun FlowTheme(darkTheme: Boolean, content: @Composable () -> Unit) {
-    val durationScale = rememberSystemMotionDurationScale()
-    val motionScheme = if (durationScale > 0f) MotionScheme.expressive() else MotionScheme.standard()
-    val motionPolicy = MotionPolicy(durationScale, motionScheme)
+    val motionEnabled = rememberSystemMotionEnabled()
     val view = LocalView.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val touchFeedback = remember(view, lifecycleOwner) {
@@ -192,17 +154,12 @@ internal fun FlowTheme(darkTheme: Boolean, content: @Composable () -> Unit) {
     }
     MaterialExpressiveTheme(
         colorScheme = if (darkTheme) FlowDarkColors else FlowLightColors,
-        shapes = FlowShapes,
         typography = FlowTypography,
-        motionScheme = motionScheme,
+        motionScheme = if (motionEnabled) MotionScheme.expressive() else MotionScheme.standard(),
     ) {
-        val flowTokens = FlowTokens(
-            quietOutline = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-        )
         CompositionLocalProvider(
-            LocalMotion provides motionPolicy,
+            LocalMotionEnabled provides motionEnabled,
             LocalTouchFeedbackDispatcher provides touchFeedback,
-            LocalFlowTokens provides flowTokens,
             content = content,
         )
     }
@@ -287,6 +244,38 @@ internal fun FlowPrimaryButton(
     }
 }
 
+@Composable
+internal fun FlowCard(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        content = content,
+    )
+}
+
+@Composable
+internal fun FlowRoundIconButton(
+    onClick: () -> Unit,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+    filled: Boolean = true,
+    content: @Composable () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.size(48.dp).semantics { this.contentDescription = contentDescription },
+        shape = CircleShape,
+        color = if (filled) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+        contentColor = if (filled) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+    ) {
+        Box(contentAlignment = Alignment.Center) { content() }
+    }
+}
 
 /** Minimal geometric icons for controls the study uses but MaterialSymbols does not carry. */
 internal object FlowIcons {

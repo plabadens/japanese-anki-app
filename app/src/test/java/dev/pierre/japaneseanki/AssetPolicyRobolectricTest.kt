@@ -38,7 +38,7 @@ class AssetPolicyAndroidTest {
                 context.assets.open(Nhk2016PronunciationSource.ASSET_NAME)
                     .bufferedReader(Charsets.UTF_8).use { it.readText() }
             },
-            mediaRoot = "http://must-not-be-used",
+            connectionFactory = { error("Bundled index lookup must not access the network: $it") },
         )
         assertEquals("20170726141547.ogg", source.findRecording("猫"))
         assertEquals("20170712154846.ogg", source.findRecording("新しい"))

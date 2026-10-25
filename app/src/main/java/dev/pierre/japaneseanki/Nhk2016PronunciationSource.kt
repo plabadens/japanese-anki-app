@@ -2,20 +2,11 @@ package dev.pierre.japaneseanki
 
 import java.io.File
 import java.io.IOException
+import java.net.HttpURLConnection
+import java.net.URL
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
-import java.util.concurrent.TimeUnit
 import java.util.UUID
-import okhttp3.OkHttpClient
-import okhttp3.Request
-
-private val nhkHttpClient = OkHttpClient.Builder()
-    .connectTimeout(20, TimeUnit.SECONDS)
-    .readTimeout(20, TimeUnit.SECONDS)
-    .callTimeout(20, TimeUnit.SECONDS)
-    .followRedirects(false)
-    .followSslRedirects(false)
-    .build()
 
 /**
  * On-demand adapter for AJATT NHK-2016 index at commit b0207d240f0f28cdc2dd491dd83343c3a5630119.
@@ -25,7 +16,7 @@ private val nhkHttpClient = OkHttpClient.Builder()
 class Nhk2016PronunciationSource(
     private val readIndexText: () -> String,
     private val spellingFor: (AudioSynthesisRequest) -> String = { it.text },
-    private val mediaRoot: String = MEDIA_ROOT,
+    private val connectionFactory: (URL) -> HttpURLConnection = { it.openConnection() as HttpURLConnection },
 ) : AudioProvider {
     /** Keep one large bundled-index scan in flight at a time. */
     private val indexLock = Any()
@@ -41,27 +32,26 @@ class Nhk2016PronunciationSource(
         val parent = output.absoluteFile.parentFile ?: throw IOException("Invalid audio output path")
         if (!parent.exists() && !parent.mkdirs()) throw IOException("Could not create audio output directory")
         val temporary = File(parent, ".${UUID.randomUUID()}.ogg")
-        val request = Request.Builder().url("$mediaRoot/$recording").get().build()
+        val connection = connectionFactory(URL("$MEDIA_ROOT/$recording"))
         try {
-            nhkHttpClient.newCall(request).execute().use { response ->
-                val status = response.code
-                if (status == 404 || status == 410) {
-                    throw AudioSourceMissingException("No NHK recording matches this spelling")
-                }
-                if (status != 200) throw IOException("NHK recording service is unavailable")
-                val input = response.body?.byteStream()
-                    ?: throw IOException("NHK recording response was empty")
-                input.use {
-                    temporary.outputStream().use { stream ->
-                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                        var total = 0L
-                        while (true) {
-                            val size = it.read(buffer)
-                            if (size < 0) break
-                            total += size
-                            if (total > MAX_RECORDING_BYTES) throw IOException("NHK recording is too large")
-                            stream.write(buffer, 0, size)
-                        }
+            connection.connectTimeout = TIMEOUT_MILLIS
+            connection.readTimeout = TIMEOUT_MILLIS
+            connection.instanceFollowRedirects = false
+            val status = connection.responseCode
+            if (status == HttpURLConnection.HTTP_NOT_FOUND || status == HttpURLConnection.HTTP_GONE) {
+                throw AudioSourceMissingException("No NHK recording matches this spelling")
+            }
+            if (status != HttpURLConnection.HTTP_OK) throw IOException("NHK recording service is unavailable")
+            connection.inputStream.use { input ->
+                temporary.outputStream().use { stream ->
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    var total = 0L
+                    while (true) {
+                        val size = input.read(buffer)
+                        if (size < 0) break
+                        total += size
+                        if (total > MAX_RECORDING_BYTES) throw IOException("NHK recording is too large")
+                        stream.write(buffer, 0, size)
                     }
                 }
             }
@@ -75,6 +65,7 @@ class Nhk2016PronunciationSource(
             return output
         } finally {
             temporary.delete()
+            connection.disconnect()
         }
     }
 
@@ -92,6 +83,7 @@ class Nhk2016PronunciationSource(
         const val SOURCE_LICENSE = "GPL-3.0 (index repository only; recording rights are not verified)"
         const val ASSET_NAME = "nhk-2016-b0207d240f0f.json"
         private const val MEDIA_ROOT = "https://raw.githubusercontent.com/Ajatt-Tools/nhk_2016_pronunciations_index/$SOURCE_VERSION/media"
+        private const val TIMEOUT_MILLIS = 20_000
         private const val MAX_RECORDING_BYTES = 8L * 1024 * 1024
     }
 }

@@ -4,16 +4,11 @@ import android.animation.ValueAnimator
 import android.os.Build
 import android.view.HapticFeedbackConstants
 import android.view.View
-import androidx.compose.animation.core.FiniteAnimationSpec
-import androidx.compose.animation.core.snap
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.MotionScheme
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,71 +50,7 @@ internal val LocalTouchFeedbackDispatcher = staticCompositionLocalOf<TouchFeedba
     NoTouchFeedback
 }
 
-internal fun hapticConstantFor(event: TouchFeedbackEvent, sdkInt: Int): Int = when (event) {
-    TouchFeedbackEvent.WORD_SELECTION,
-    TouchFeedbackEvent.MEANING_SELECTION,
-    TouchFeedbackEvent.MODE_SELECTION -> HapticFeedbackConstants.CLOCK_TICK
-    TouchFeedbackEvent.SHUTTER_ACCEPTED -> HapticFeedbackConstants.VIRTUAL_KEY
-    TouchFeedbackEvent.DELIVERY_VERIFIED -> if (sdkInt >= 30) {
-        HapticFeedbackConstants.CONFIRM
-    } else {
-        HapticFeedbackConstants.CLOCK_TICK
-    }
-}
-
-/** Dispatches only when an attempted interaction changes its model key. */
-@Composable
-internal fun rememberChangeFeedback(
-    event: TouchFeedbackEvent,
-    enabled: Boolean = true,
-): (Any?) -> Unit {
-    val dispatcher = LocalTouchFeedbackDispatcher.current
-    val state = remember(event) { ChangeFeedbackState() }
-    return remember(event, dispatcher, enabled, state) {
-        { key ->
-            if (enabled && (!state.hasLastKey || state.lastKey != key)) {
-                state.lastKey = key
-                state.hasLastKey = true
-                dispatcher.dispatch(event)
-            }
-        }
-    }
-}
-
-private class ChangeFeedbackState(var lastKey: Any? = null, var hasLastKey: Boolean = false)
-
-@Immutable
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-internal data class MotionPolicy(val durationScale: Float, val scheme: MotionScheme) {
-    val animated: Boolean get() = durationScale > 0f
-}
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-internal val LocalMotion = staticCompositionLocalOf {
-    MotionPolicy(1f, MotionScheme.standard())
-}
-
-@Immutable
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-internal class FlowMotion(private val scheme: MotionScheme, private val animated: Boolean) {
-    fun <T> colour(): FiniteAnimationSpec<T> =
-        if (animated) scheme.fastEffectsSpec() else snap()
-
-    fun <T> smallSpatial(): FiniteAnimationSpec<T> =
-        if (animated) scheme.fastSpatialSpec() else snap()
-
-    fun <T> containerSpatial(): FiniteAnimationSpec<T> =
-        if (animated) scheme.defaultSpatialSpec() else snap()
-}
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-internal fun rememberFlowMotion(): FlowMotion {
-    val policy = LocalMotion.current
-    return remember(policy.scheme, policy.animated) {
-        FlowMotion(policy.scheme, policy.animated)
-    }
-}
+internal val LocalMotionEnabled = staticCompositionLocalOf { true }
 
 /** Uses platform haptics without IGNORE_GLOBAL_SETTING, so Android honours touch-feedback settings. */
 internal class PlatformTouchFeedbackDispatcher(
@@ -128,48 +59,54 @@ internal class PlatformTouchFeedbackDispatcher(
 ) : TouchFeedbackDispatcher {
     override fun dispatch(event: TouchFeedbackEvent) {
         if (!lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) || !view.isShown) return
-        view.performHapticFeedback(hapticConstantFor(event, Build.VERSION.SDK_INT))
+        val constant = when (event) {
+            TouchFeedbackEvent.WORD_SELECTION,
+            TouchFeedbackEvent.MEANING_SELECTION,
+            TouchFeedbackEvent.MODE_SELECTION -> HapticFeedbackConstants.CLOCK_TICK
+            TouchFeedbackEvent.SHUTTER_ACCEPTED -> HapticFeedbackConstants.VIRTUAL_KEY
+            TouchFeedbackEvent.DELIVERY_VERIFIED -> if (Build.VERSION.SDK_INT >= 30) {
+                HapticFeedbackConstants.CONFIRM
+            } else {
+                HapticFeedbackConstants.CLOCK_TICK
+            }
+        }
+        view.performHapticFeedback(constant)
     }
 }
 
 @Composable
-internal fun rememberSystemMotionDurationScale(): Float {
+internal fun rememberSystemMotionEnabled(): Boolean {
     val lifecycleOwner = LocalLifecycleOwner.current
-    var durationScale by remember { mutableStateOf(readSystemMotionDurationScale()) }
+    var enabled by remember { mutableStateOf(readSystemMotionEnabled()) }
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) durationScale = readSystemMotionDurationScale()
+            if (event == Lifecycle.Event.ON_RESUME) enabled = readSystemMotionEnabled()
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
-    return durationScale
+    return enabled
 }
 
-private fun readSystemMotionDurationScale(): Float =
-    if (Build.VERSION.SDK_INT < 26) 1f else ValueAnimator.getDurationScale()
-
-internal enum class ProgressSize(val diameter: Dp, val strokeWidth: Dp) {
-    Small(16.dp, 2.dp),
-    Medium(32.dp, 2.dp),
-    Large(40.dp, 2.dp),
-}
+private fun readSystemMotionEnabled(): Boolean =
+    Build.VERSION.SDK_INT < 26 || ValueAnimator.areAnimatorsEnabled()
 
 /** A non-animated indeterminate indicator that retains progress semantics. */
 @Composable
 internal fun StaticProgressIndicator(
     modifier: Modifier = Modifier,
     color: Color,
-    progressSize: ProgressSize,
+    diameter: Dp,
+    strokeWidth: Dp = 2.dp,
     stateDescription: String,
 ) {
     Canvas(
-        modifier = modifier.size(progressSize.diameter).semantics {
+        modifier = modifier.size(diameter).semantics {
             progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
             this.stateDescription = stateDescription
         },
     ) {
-        val stroke = progressSize.strokeWidth.toPx()
+        val stroke = strokeWidth.toPx()
         val radius = (size.minDimension - stroke) / 2f
         val topLeft = Offset((size.width - radius * 2f) / 2f, (size.height - radius * 2f) / 2f)
         val ringSize = androidx.compose.ui.geometry.Size(radius * 2f, radius * 2f)
@@ -199,23 +136,25 @@ internal fun StaticProgressIndicator(
 internal fun MotionAwareProgressIndicator(
     modifier: Modifier = Modifier,
     color: Color,
-    progressSize: ProgressSize,
+    diameter: Dp,
+    strokeWidth: Dp = 2.dp,
     stateDescription: String,
 ) {
-    if (LocalMotion.current.animated) {
+    if (LocalMotionEnabled.current) {
         CircularProgressIndicator(
-            modifier = modifier.size(progressSize.diameter).semantics {
+            modifier = modifier.size(diameter).semantics {
                 progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
                 this.stateDescription = stateDescription
             },
             color = color,
-            strokeWidth = progressSize.strokeWidth,
+            strokeWidth = strokeWidth,
         )
     } else {
         StaticProgressIndicator(
             modifier = modifier,
             color = color,
-            progressSize = progressSize,
+            diameter = diameter,
+            strokeWidth = strokeWidth,
             stateDescription = stateDescription,
         )
     }
