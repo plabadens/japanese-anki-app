@@ -132,6 +132,11 @@ android {
 
     buildFeatures { compose = true }
 
+    lint {
+        checkOnly += "HardcodedText"
+        error += "HardcodedText"
+    }
+
     testOptions {
         unitTests {
             isIncludeAndroidResources = true

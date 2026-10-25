@@ -7,5 +7,5 @@ plugins {
 tasks.register("verifyFast") {
     group = "verification"
     description = "Runs the offline JVM unit and Compose UI assertions without image baselines."
-    dependsOn(":app:testDebugUnitTest")
+    dependsOn(":app:testDebugUnitTest", ":app:lintDebug")
 }
