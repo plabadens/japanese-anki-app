@@ -1,7 +1,9 @@
 package dev.pierre.japaneseanki
 
 import android.content.Context
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -16,6 +18,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -127,8 +130,12 @@ class MainActivityRenderingTest {
         sentenceField.performTextReplacement("今日は雨です。")
         sentenceField.performTextInputSelection(androidx.compose.ui.text.TextRange(3, 4))
 
-        scenario?.onActivity { activity -> activity.onBackPressedDispatcher.onBackPressed() }
+        composeRule.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.Dismiss))
+            .performSemanticsAction(SemanticsActions.Dismiss) { dismiss -> dismiss() }
 
+        sentenceField.assertDoesNotExist()
+        composeRule.onNodeWithText("今日は雨です。").assertDoesNotExist()
+        composeRule.onNodeWithTag("sentence-layout").assertIsDisplayed()
         composeRule.onNodeWithTag("sentence-word-text-0-1", useUnmergedTree = true)
             .assertTextEquals("猫")
         composeRule.onNodeWithTag("sentence-word-0-1").assertIsSelected()
