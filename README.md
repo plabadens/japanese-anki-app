@@ -43,7 +43,9 @@ gradle --offline --configuration-cache --build-cache \
   :app:renderDesignStates assembleDebug
 ```
 
-The GitHub debug and release build scripts run both test invocations before assembling their APKs. Python dictionary/asset checks in `nix flake check` validate generated data and packaging inputs; they are separate from the Android test suite.
+Both GitHub workflows run **lint** and **tests** as separate jobs. The tests job runs the unit/Compose suite and then renders the design catalogue; APK assembly and publication wait for both jobs to pass. Release jobs share one resolved source commit, including manual branch builds. Reports are uploaded even on failure. `scripts/ci-gradle.sh` supplies the shared Nix-shell Gradle options; the build scripts retain the full local gate by default, while CI uses `--build-only` after the prerequisite jobs succeed.
+
+Run `python3 scripts/test-ci-scripts.py` to check entry-point sequencing and release-signing guards without Android. Python dictionary/asset checks in `nix flake check` validate generated data and packaging inputs; they are separate from the Android test suite.
 
 ## Robolectric conventions and shared fixtures
 

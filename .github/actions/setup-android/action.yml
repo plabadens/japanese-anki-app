@@ -1,0 +1,31 @@
+name: Set up Android build
+description: Install the pinned Nix toolchain and restore Gradle caches
+inputs:
+  cache-scope:
+    description: Separate cache writers for parallel jobs
+    required: true
+runs:
+  using: composite
+  steps:
+    # Nix supplies the API 37 SDK; remove the runner's unused toolchains for disk space.
+    - name: Reclaim runner disk
+      shell: bash
+      run: |
+        sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+        df -h
+
+    - name: Install Nix
+      uses: cachix/install-nix-action@v31
+      with:
+        extra_nix_config: |
+          experimental-features = nix-command flakes
+          accept-flake-config = true
+
+    - name: Cache Gradle downloads and build cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.gradle/caches
+        key: gradle-${{ runner.os }}-${{ inputs.cache-scope }}-${{ hashFiles('flake.lock', 'gradle/libs.versions.toml', 'gradle.properties', 'build.gradle.kts', 'app/build.gradle.kts', 'nix/gradle/deps.json') }}
+        restore-keys: |
+          gradle-${{ runner.os }}-${{ inputs.cache-scope }}-
+          gradle-${{ runner.os }}-

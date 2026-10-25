@@ -2,6 +2,8 @@ package dev.pierre.japaneseanki
 
 import android.content.Context
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -68,9 +70,10 @@ class MediaImportRecoveryActionsTest {
         var terminal = false
 
         composeRule.setContent {
+            val draft by storage.draft.collectAsState()
             MaterialTheme {
                 MediaImportRecoveryActions(
-                    operation = pendingMediaRecoveryOperation(storage.draft.value),
+                    operation = pendingMediaRecoveryOperation(draft),
                     onRetry = {},
                     onDiscardAudio = {
                         discardInterruptedMediaRecovery(storage)

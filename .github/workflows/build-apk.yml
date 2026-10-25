@@ -7,60 +7,73 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: build-apk-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: Nix debug APK
+  lint:
+    name: Android lint
     runs-on: ubuntu-latest
     timeout-minutes: 90
-
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      # The runner's preinstalled Android SDK is not the flake-pinned API 37 SDK, and the
-      # 524 MB APK plus the Nix Android closure need room. Nix supplies the entire toolchain.
-      - name: Reclaim runner disk
-        run: |
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          df -h
-
-      - name: Install Nix
-        uses: cachix/install-nix-action@v31
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-android
         with:
-          extra_nix_config: |
-            experimental-features = nix-command flakes
-            accept-flake-config = true
-
-      - name: Cache Gradle downloads
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-          key: gradle-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml', 'gradle.properties', 'build.gradle.kts', 'app/build.gradle.kts', 'nix/gradle/deps.json') }}
-          restore-keys: |
-            gradle-${{ runner.os }}-
-
-      - name: Build and test
-        shell: bash
-        run: nix develop --command ./scripts/ci-build-apk.sh
-
-      - name: Upload rendered design states
+          cache-scope: lint
+      - name: Run lint
+        run: nix develop --command ./scripts/ci-gradle.sh :app:lintDebug
+      - name: Upload lint reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: japanese-anki-design-states
-          path: build/design-states/
+          name: android-lint
+          path: app/build/reports/lint-results-debug.*
+          if-no-files-found: warn
+
+  tests:
+    name: Tests and design states
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test CI entry points
+        run: python3 scripts/test-ci-scripts.py
+      - uses: ./.github/actions/setup-android
+        with:
+          cache-scope: tests
+      - name: Run unit and Compose tests
+        run: nix develop --command ./scripts/ci-gradle.sh :app:testDebugUnitTest
+      - name: Render design states
+        run: nix develop --command ./scripts/ci-gradle.sh :app:renderDesignStates
+      - name: Upload test reports and design states
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: japanese-anki-tests-and-design-states
+          path: |
+            app/build/reports/tests/
+            app/build/test-results/
+            build/design-states/
           retention-days: 14
           if-no-files-found: warn
+
+  build:
+    name: Nix debug APK
+    needs: [lint, tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-android
+        with:
+          cache-scope: build
+      - name: Assemble debug APKs
+        run: nix develop --command ./scripts/ci-build-apk.sh --build-only
 
       - name: Collect and verify ABI APKs
         shell: bash

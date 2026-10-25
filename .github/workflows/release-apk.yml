@@ -29,19 +29,22 @@ on:
         type: string
 
 permissions:
-  contents: write
-  issues: write
+  contents: read
 
 concurrency:
   group: release-apk-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Nix release APK
+  source:
+    name: Resolve release source
     runs-on: ubuntu-latest
-    timeout-minutes: 120
-
+    timeout-minutes: 10
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
+      tag: ${{ steps.meta.outputs.tag }}
+      version_name: ${{ steps.meta.outputs.version_name }}
+      version_code: ${{ steps.meta.outputs.version_code }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -49,10 +52,16 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           fetch-depth: 1
 
+      # Pin manual branch inputs once: checks and signing must use identical source.
+      - name: Pin source commit
+        id: commit
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Resolve tag and version
         id: meta
         env:
           INPUT_TAG: ${{ inputs.tag }}
+          SOURCE_SHA: ${{ steps.commit.outputs.sha }}
         run: |
           set -euo pipefail
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
@@ -91,15 +100,9 @@ jobs:
             echo "version_code=${version_code}"
           } >> "$GITHUB_OUTPUT"
           {
-            echo "TAG=${tag}"
-            echo "VERSION_NAME=${version_name}"
-            echo "VERSION_CODE=${version_code}"
-          } >> "$GITHUB_ENV"
-
-          {
             echo "### ${tag}"
             echo
-            echo "versionName \`${version_name}\`, versionCode \`${version_code}\`, commit \`${GITHUB_SHA}\`"
+            echo "versionName \`${version_name}\`, versionCode \`${version_code}\`, commit \`${SOURCE_SHA}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       # Fail before the long native build if the release identity is not available. The
@@ -124,6 +127,79 @@ jobs:
             exit 1
           fi
 
+  lint:
+    name: Android lint
+    needs: source
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.source.outputs.sha }}
+      - uses: ./.github/actions/setup-android
+        with:
+          cache-scope: release-lint
+      - name: Run lint
+        run: nix develop --command ./scripts/ci-gradle.sh :app:lintRelease
+      - name: Upload lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-lint
+          path: app/build/reports/lint-results-release.*
+          if-no-files-found: warn
+
+  tests:
+    name: Tests and design states
+    needs: source
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.source.outputs.sha }}
+      - name: Test CI entry points
+        run: python3 scripts/test-ci-scripts.py
+      - uses: ./.github/actions/setup-android
+        with:
+          cache-scope: release-tests
+      - name: Run unit and Compose tests
+        run: nix develop --command ./scripts/ci-gradle.sh :app:testDebugUnitTest
+      - name: Render design states
+        run: nix develop --command ./scripts/ci-gradle.sh :app:renderDesignStates
+      - name: Upload test reports and design states
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-tests-and-design-states
+          path: |
+            app/build/reports/tests/
+            app/build/test-results/
+            build/design-states/
+          retention-days: 14
+          if-no-files-found: warn
+
+  release:
+    name: Nix release APK
+    needs: [source, lint, tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: write
+      issues: write
+    env:
+      TAG: ${{ needs.source.outputs.tag }}
+      VERSION_NAME: ${{ needs.source.outputs.version_name }}
+      VERSION_CODE: ${{ needs.source.outputs.version_code }}
+      SOURCE_SHA: ${{ needs.source.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.source.outputs.sha }}
+      - uses: ./.github/actions/setup-android
+        with:
+          cache-scope: release-build
+
       - name: Materialize the signing keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -139,40 +215,13 @@ jobs:
           fi
           printf 'keystore: %s bytes\n' "$(stat --printf='%s' "$signing_dir/release.jks")"
 
-      # The runner's preinstalled Android SDK is not the flake-pinned API 37 SDK, and the native
-      # closure plus Gradle caches need room. Nix supplies the entire toolchain.
-      - name: Reclaim runner disk
-        run: |
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          df -h
-
-      - name: Install Nix
-        uses: cachix/install-nix-action@v31
-        with:
-          extra_nix_config: |
-            experimental-features = nix-command flakes
-            accept-flake-config = true
-
-      - name: Cache Gradle downloads
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-          key: gradle-release-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml', 'gradle.properties', 'build.gradle.kts', 'app/build.gradle.kts', 'nix/gradle/deps.json') }}
-          restore-keys: |
-            gradle-release-${{ runner.os }}-
-            gradle-${{ runner.os }}-
-
-      - name: Build, test and assemble the release APK
+      - name: Assemble the release APK
         env:
           JAPANESE_ANKI_RELEASE_KEYSTORE: ${{ runner.temp }}/signing/release.jks
           JAPANESE_ANKI_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           JAPANESE_ANKI_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           JAPANESE_ANKI_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: nix develop --command bash ./.github/scripts/ci-build-release-apk.sh
+        run: nix develop --command bash ./.github/scripts/ci-build-release-apk.sh --build-only
 
       - name: Verify signature, ABI, applicationId and version
         env:
@@ -202,7 +251,7 @@ jobs:
             echo "| versionCode | \`${VERSION_CODE}\` |"
             echo "| APK | \`${apk}\` |"
             echo "| SHA-256 | \`${digest}\` |"
-            echo "| commit | \`${GITHUB_SHA}\` |"
+            echo "| commit | \`${SOURCE_SHA}\` |"
             if [ -n "$issue" ]; then
               echo "| issue | #${issue} |"
             fi
@@ -223,7 +272,6 @@ jobs:
       - name: Publish the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          INPUT_REF: ${{ inputs.ref }}
         run: |
           set -euo pipefail
           repo="${GITHUB_REPOSITORY}"
@@ -244,7 +292,7 @@ jobs:
               --notes-file dist/RELEASE_NOTES.md "$latest_flag"
           else
             gh release create "$TAG" "${assets[@]}" --repo "$repo" \
-              --target "${INPUT_REF:-main}" \
+              --target "$SOURCE_SHA" \
               --title "Japanese Anki ${VERSION_NAME} (${TAG})" \
               --notes-file dist/RELEASE_NOTES.md "$latest_flag"
           fi
@@ -282,7 +330,7 @@ jobs:
       - name: Upload the release APK as a workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: japanese-anki-release-apk-${{ steps.meta.outputs.tag }}
+          name: japanese-anki-release-apk-${{ needs.source.outputs.tag }}
           path: |
             dist/*.apk
             dist/SHA256SUMS.txt
@@ -295,7 +343,7 @@ jobs:
         run: |
           {
             echo
-            echo "Published \`${TAG}\` from \`${GITHUB_SHA}\`."
+            echo "Published \`${TAG}\` from \`${SOURCE_SHA}\`."
             echo
             echo '```'
             cat dist/SHA256SUMS.txt

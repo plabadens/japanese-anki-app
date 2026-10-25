@@ -1,18 +1,15 @@
 #!/usr/bin/env bash
-# CI entry point for the Nix-backed debug build. Run from the repository root via
-# `nix develop --command ./scripts/ci-build-apk.sh`.
+# Full local CI by default. --build-only is for the workflow job gated by lint and tests.
+# Run from the repository root inside the Nix development shell.
 set -euo pipefail
 
-# Not --offline: the actions/cache key includes gradle/libs.versions.toml, so the first run after
-# any dependency change always starts with a cold cache and would fail to resolve the new artifact.
-# The runner has network; reproducible offline builds are the Nix derivation's job, not this script's.
-gradle --no-daemon --configuration-cache --build-cache --max-workers=2 --console=plain \
-  -Panki.testForks=2 \
-  -Pandroid.aapt2FromMavenOverride="$ANDROID_HOME/build-tools/36.0.0/aapt2" \
-  verifyFast
-
-# Roborazzi's record task owns the unit-test filter while rendering the catalogue, so keep it in
-# a separate Gradle invocation from verifyFast, which deliberately excludes those render tests.
-gradle --no-daemon --configuration-cache --build-cache --max-workers=2 --console=plain \
-  -Pandroid.aapt2FromMavenOverride="$ANDROID_HOME/build-tools/36.0.0/aapt2" \
-  :app:renderDesignStates assembleDebug
+if (( $# == 0 )); then
+  scripts/ci-gradle.sh verifyFast
+  # Roborazzi owns the test filter: render in a separate invocation from verifyFast.
+  scripts/ci-gradle.sh :app:renderDesignStates assembleDebug
+elif [[ $# == 1 && $1 == --build-only ]]; then
+  scripts/ci-gradle.sh assembleDebug
+else
+  printf 'Usage: %s [--build-only]\n' "$0" >&2
+  exit 2
+fi
