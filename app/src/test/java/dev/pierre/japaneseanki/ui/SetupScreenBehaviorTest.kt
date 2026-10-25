@@ -1,7 +1,11 @@
 package dev.pierre.japaneseanki.ui
 
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertCountEquals
@@ -15,6 +19,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.pierre.japaneseanki.AnkiDeck
 import dev.pierre.japaneseanki.AnkiFieldContract
@@ -84,6 +89,72 @@ class SetupScreenBehaviorTest {
         audioReady = audioReady,
         ankiReady = ankiReady,
     )
+
+    @Test
+    fun firstRunSetupRendersAndCompletesInsideItsFullScreenFlowDialog() {
+        val initial = SetupUi(
+            audio = AudioSetupUi(
+                key = "",
+                credentialStored = false,
+                selectedVoice = "",
+                voices = emptyList(),
+                loading = false,
+                loadingVoices = false,
+            ),
+            anki = AnkiSetupUi(
+                installed = false,
+                connected = false,
+                loading = false,
+                noteTypes = emptyList(),
+                decks = emptyList(),
+                selectedNoteTypeId = null,
+                selectedDeckId = null,
+            ),
+            cameraPermissionGranted = false,
+            cameraDenied = false,
+            dictionaryPreparing = true,
+            dictionaryErrorResource = null,
+            audioReady = false,
+            ankiReady = false,
+        )
+        val state = mutableStateOf(initial)
+        var finished = false
+        composeRule.setContent {
+            FlowDialog(
+                onDismissRequest = {},
+                properties = DialogProperties(
+                    usePlatformDefaultWidth = false,
+                    decorFitsSystemWindows = false,
+                    dismissOnClickOutside = false,
+                ),
+            ) {
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    SetupScreen(
+                        state = state.value,
+                        onBack = null,
+                        onKeyChange = {},
+                        onVoiceChange = {},
+                        onLoadVoices = {},
+                        onRequestCamera = {},
+                        onConnectAnki = {},
+                        onSelectNoteType = {},
+                        onSelectDeck = {},
+                        onRetryDictionary = {},
+                        onFinish = { finished = true },
+                    )
+                }
+            }
+        }
+
+        composeRule.onNodeWithText("Preparing the offline dictionary").assertIsDisplayed()
+        composeRule.onNodeWithText("Install AnkiDroid").assertIsDisplayed()
+        composeRule.onNodeWithText("Finish setup").assertIsNotEnabled()
+
+        composeRule.runOnIdle { state.value = setupUi() }
+        composeRule.onNodeWithText("Everything is ready").assertIsDisplayed()
+        composeRule.onNodeWithText("Finish setup").assertIsEnabled().performClick()
+        composeRule.runOnIdle { assertTrue(finished) }
+    }
 
     @Test
     fun voiceRowOpensTheListAndReportsTheChosenVoice() {
