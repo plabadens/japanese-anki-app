@@ -109,6 +109,9 @@ import dev.pierre.japaneseanki.send.IndeterminateReason
 import dev.pierre.japaneseanki.send.SendCoordinator
 import dev.pierre.japaneseanki.send.SendOutcome
 import dev.pierre.japaneseanki.send.SendRequest
+import dev.pierre.japaneseanki.send.MediaImportRecoveryActions
+import dev.pierre.japaneseanki.send.discardInterruptedMediaRecovery
+import dev.pierre.japaneseanki.send.pendingMediaRecoveryOperation
 import dev.pierre.japaneseanki.send.cardActionClickHandler
 import dev.pierre.japaneseanki.send.toUiUpdate
 import dev.pierre.japaneseanki.ui.InputScreen
@@ -3013,17 +3016,27 @@ class MainActivity : ComponentActivity() {
                         submitMessage = this@MainActivity.getString(R.string.card_pending_send_marked_complete)
                     }) { Text(stringResource(R.string.card_treat_pending_send_as_complete)) }
                 } else if (recoveryRequired && recoveryPhase == SubmissionPhase.MEDIA_IMPORTING) {
-                    val pendingOperation = preferences.getString(SubmissionRecoveryKeys.MEDIA_OPERATION, null)
-                        ?.let { name -> runCatching { MediaImportOperation.valueOf(name) }.getOrNull() }
-                    TextButton(onClick = {
-                        updateRecoveryMessage(
-                            this@MainActivity.getString(R.string.card_retrying_the_frozen_media_sequence_may_dup),
-                            RecoveryReason.None,
-                            SendPhase.Preparing,
-                        )
-                    }) { Text(stringResource(R.string.card_retry_media_import_may_duplicate)) }
-                    if (pendingOperation == MediaImportOperation.IMAGE) {
-                        TextButton(onClick = {
+                    MediaImportRecoveryActions(
+                        operation = pendingMediaRecoveryOperation(preferences),
+                        onRetry = {
+                            updateRecoveryMessage(
+                                this@MainActivity.getString(R.string.card_retrying_the_frozen_media_sequence_may_dup),
+                                RecoveryReason.None,
+                                SendPhase.Preparing,
+                            )
+                        },
+                        onDiscardAudio = {
+                            discardInterruptedMediaRecovery(preferenceStorage)
+                            audioController.releaseFreeze(retainFiles = true)
+                            audioSnapshot = audioController.snapshot()
+                            updateRecoveryMessage(
+                                this@MainActivity.getString(R.string.card_interrupted_send_discarded_draft_kept),
+                                RecoveryReason.None,
+                                SendPhase.Idle,
+                            )
+                            sendState = sendState.copy(frozen = null, duplicateNoteId = null)
+                        },
+                        onRemoveImage = {
                             clearPendingSubmission(preferenceStorage)
                             removeDraftImage()
                             updateRecoveryMessage(
@@ -3031,20 +3044,8 @@ class MainActivity : ComponentActivity() {
                                 RecoveryReason.None,
                                 SendPhase.Idle,
                             )
-                        }) { Text(stringResource(R.string.card_remove_interrupted_image)) }
-                    } else {
-                        TextButton(onClick = {
-                            clearPendingSubmission(preferenceStorage)
-                            audioController.releaseFreeze(retainFiles = true)
-                            audioSnapshot = audioController.snapshot()
-                            updateRecoveryMessage(
-                                this@MainActivity.getString(R.string.card_frozen_recovery_cleared_after_review_the_d),
-                                RecoveryReason.None,
-                                SendPhase.Idle,
-                            )
-                            sendState = sendState.copy(frozen = null, duplicateNoteId = null)
-                        }) { Text(stringResource(R.string.card_i_checked_clear_frozen_recovery)) }
-                    }
+                        },
+                    )
                 } else if (recoveryRequired && recoveryPhase == SubmissionPhase.MEDIA_IMPORTED) {
                     TextButton(onClick = {
                         updateRecoveryMessage(
