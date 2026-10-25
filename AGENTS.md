@@ -7,6 +7,24 @@ Working rules for this repository. Deliberately short: **the code and its tests 
 - When behaviour changes, the tests change with it. A behaviour change with no test change is not
   finished.
 
+## Structure and design
+
+Authorities: [Android architecture](https://developer.android.com/topic/architecture/recommendations),
+[state holders](https://developer.android.com/topic/architecture/ui-layer/stateholders),
+[data layer](https://developer.android.com/jetpack/guide/data-layer),
+[testing](https://developer.android.com/training/testing/fundamentals) and
+[Material Design 3](https://m3.material.io/). Local taste yields to them.
+
+- Layer and flow one way: UI → state holder → repository → data source; nothing above it reaches a source.
+- One state holder per screen, ViewModel or plain class; components take values and callbacks, not holders.
+- One abstraction level per function: policy decides, orchestration sequences, mechanism touches the world.
+- Name composables; keep state in the narrowest scope that reads it, so one change re-renders only itself.
+- Interfaces only at a boundary you do not own, or where a second implementation exists; fakes over mocks.
+- Test behaviour at the lowest layer that fails for the right reason — what the user sees, not how it is built.
+- Theme, don't style: M3 colour roles, type and shape scales, spacing tokens; no literal hex, `sp` or `dp` in a screen.
+- Use the Material component before a custom one; one primary action, state visible without interaction.
+- Respect the system: dynamic colour, light and dark, reduced motion — nothing depends on motion to work.
+
 ## Never do these
 
 - Don't log credentials, API keys, sentence text, or dictionary content off the 
