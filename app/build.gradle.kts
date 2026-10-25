@@ -133,7 +133,6 @@ android {
     buildFeatures { compose = true }
 
     lint {
-        checkOnly += "HardcodedText"
         error += "HardcodedText"
     }
 
