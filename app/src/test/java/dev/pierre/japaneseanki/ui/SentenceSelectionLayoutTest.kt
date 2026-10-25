@@ -25,6 +25,7 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
@@ -64,6 +65,7 @@ class SentenceSelectionLayoutTest {
         val dark: Boolean = false,
         val fontScale: Float = 1f,
         val width: Int = 320,
+        val enabled: Boolean = true,
     )
 
     @Test
@@ -128,6 +130,48 @@ class SentenceSelectionLayoutTest {
     }
 
     @Test
+    fun singleCharacterTargetsAcceptPaddedEdgeTapsWithoutOverlapOrDisabledSelection() {
+        val sentence = "猫犬"
+        val scene = mutableStateOf(Scene(sentence, listOf(
+            token(sentence, 0, 1, "ねこ"),
+            token(sentence, 1, 2, "いぬ"),
+        ), width = 360))
+        composeRule.setContent {
+            val current = scene.value
+            CompositionLocalProvider(
+                LocalDensity provides Density(composeRule.density.density, current.fontScale),
+            ) {
+                sentencePane(current) { span -> scene.value = scene.value.copy(selected = span) }
+            }
+        }
+
+        listOf(360, 390).forEach { width ->
+            listOf(1f, 2f).forEach { scale ->
+                scene.value = scene.value.copy(width = width, fontScale = scale, selected = null, enabled = true)
+                composeRule.waitForIdle()
+                val first = composeRule.onNodeWithTag("sentence-word-text-0-1", useUnmergedTree = true)
+                val second = composeRule.onNodeWithTag("sentence-word-text-1-2", useUnmergedTree = true)
+                val bounds = listOf(first, second).map { it.fetchSemanticsNode().boundsInRoot }
+                val minimum = with(composeRule.density) { 48.dp.toPx() }
+                bounds.forEach {
+                    assertTrue("Short words need 48x48dp targets at $width / $scale: $it",
+                        it.width >= minimum - 1f && it.height >= minimum - 1f)
+                }
+                assertTrue("Adjacent hit targets must not overlap", bounds[0].right <= bounds[1].left)
+                first.performTouchInput { click(Offset(1f, center.y)) }
+                assertEquals(TargetSpan(0, 1), scene.value.selected)
+                second.performTouchInput { click(Offset(center.x * 2f - 1f, center.y)) }
+                assertEquals(TargetSpan(1, 2), scene.value.selected)
+
+                scene.value = scene.value.copy(enabled = false)
+                composeRule.onNodeWithTag("sentence-word-0-1").assertIsNotEnabled()
+                first.performTouchInput { click(center) }
+                assertEquals("Disabled targets must not select", TargetSpan(1, 2), scene.value.selected)
+            }
+        }
+    }
+
+    @Test
     fun reducedMotionProgressRemainsStaticAccessibleAndSilent() {
         val events = mutableListOf<TouchFeedbackEvent>()
         val dispatcher = TouchFeedbackDispatcher { event -> events += event }
@@ -178,9 +222,10 @@ class SentenceSelectionLayoutTest {
         )
         val beforeRoot = root.fetchSemanticsNode().boundsInRoot
         val beforeWords = wordTags.map { composeRule.onNodeWithTag(it).fetchSemanticsNode().boundsInRoot }
-        val minTargetHeightPx = 48f * composeRule.density.density
+        val minTargetPx = 48f * composeRule.density.density
         beforeWords.forEachIndexed { index, bounds ->
-            assertTrue("Word target $index is under 48dp: $bounds", bounds.height >= minTargetHeightPx - 1f)
+            assertTrue("Word target $index is under 48dp high: $bounds", bounds.height >= minTargetPx - 1f)
+            assertTrue("Word target $index is under 48dp wide: $bounds", bounds.width >= minTargetPx - 1f)
         }
         beforeWords.forEachIndexed { index, bounds ->
             beforeWords.drop(index + 1).forEach { other ->
@@ -315,7 +360,7 @@ class SentenceSelectionLayoutTest {
                         sentence = scene.sentence,
                         tokens = scene.tokens,
                         selectedSpan = scene.selected,
-                        selectionEnabled = true,
+                        selectionEnabled = scene.enabled,
                         onSelectSpan = onSelect,
                         furigana = emptyList(),
                         modifier = Modifier.fillMaxWidth(),

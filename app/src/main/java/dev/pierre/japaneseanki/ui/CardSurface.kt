@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -60,6 +61,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -75,6 +77,7 @@ import androidx.compose.ui.semantics.traversalIndex
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -466,6 +469,7 @@ internal fun SelectableSentence(
     )
     val motion = rememberFlowMotion()
     val readingBandHeight = with(LocalDensity.current) { 13.sp.toDp().coerceAtLeast(14.dp) }
+    val touchTarget = LocalViewConfiguration.current.minimumTouchTargetSize
     if (tokens.isEmpty() || sentence.isBlank()) {
         Text(sentence, modifier = modifier, style = MaterialTheme.typography.headlineMedium)
         return
@@ -518,7 +522,7 @@ internal fun SelectableSentence(
             }
             Column(
                 modifier = Modifier
-                    .heightIn(min = 48.dp)
+                    .sizeIn(minWidth = touchTarget.width, minHeight = touchTarget.height)
                     .testTag("sentence-word-${token.span.start}-${token.span.end}")
                     .semantics(mergeDescendants = true) {
                         contentDescription = wordLabel
@@ -552,9 +556,9 @@ internal fun SelectableSentence(
                 Text(
                     text = display,
                     modifier = Modifier
-                        .heightIn(min = 48.dp)
+                        .sizeIn(minWidth = touchTarget.width, minHeight = touchTarget.height)
                         .testTag("sentence-word-text-${token.span.start}-${token.span.end}")
-                        .pointerInput(selectionEnabled, baseStart, baseEnd) {
+                        .pointerInput(selectionEnabled, display.text, baseStart, baseEnd) {
                             if (selectionEnabled) {
                                 detectTapGestures(
                                     onPress = { position ->
@@ -566,16 +570,11 @@ internal fun SelectableSentence(
                                         }
                                         if (!released) return@detectTapGestures
                                         val textLayout = layoutResult.value ?: return@detectTapGestures
-                                        val minimumTouchHeight = 48.dp.toPx()
-                                        val hitBaseText = (baseStart until baseEnd).any { offset ->
-                                            val character = textLayout.getBoundingBox(offset)
-                                            val verticalExpansion = ((minimumTouchHeight - character.height) / 2f).coerceAtLeast(0f)
-                                            val top = (character.top - verticalExpansion).coerceAtLeast(0f)
-                                            val bottom = (character.bottom + verticalExpansion).coerceAtMost(size.height.toFloat())
-                                            position.x >= character.left && position.x <= character.right &&
-                                                position.y >= top && position.y <= bottom
-                                        }
-                                        if (hitBaseText) selectSpan()
+                                        // The padded word box is interactive, not just its glyphs.
+                                        // Retain non-selectable punctuation and Japanese line wrapping.
+                                        val hitPunctuation = ((0 until baseStart) + (baseEnd until display.length))
+                                            .any { textLayout.getBoundingBox(it).contains(position) }
+                                        if (!hitPunctuation) selectSpan()
                                     },
                                 )
                             }
@@ -601,6 +600,7 @@ internal fun SelectableSentence(
                             }
                         },
                     style = MaterialTheme.typography.headlineMedium,
+                    textAlign = TextAlign.Center,
                     onTextLayout = { layoutResult.value = it },
                 )
             }
