@@ -63,24 +63,22 @@ internal fun CardSentenceEditorSheet(
 internal fun useCardSentenceSelectionAsTarget(
     edited: TextFieldValue,
     updateEditor: (TextFieldValue) -> Unit,
-    commitSentence: (String) -> Boolean,
+    commitSentence: (String, () -> Unit) -> Boolean,
     selectTarget: (TargetSpan?) -> Unit,
     onCommitted: () -> Unit,
 ) {
+    if (edited.text.isBlank() || !commitSentence(edited.text) { updateEditor(edited) }) return
     val selected = TargetSpan.fromSelection(edited.text, edited.selection.start, edited.selection.end)
-    updateEditor(edited)
-    if (commitSentence(edited.text)) {
-        selectTarget(selected)
-        onCommitted()
-    }
+    selectTarget(selected)
+    onCommitted()
 }
 
 internal fun commitCardSentenceEdit(
     edited: TextFieldValue,
     updateEditor: (TextFieldValue) -> Unit,
-    commitSentence: (String) -> Boolean,
+    commitSentence: (String, () -> Unit) -> Boolean,
     onCommitted: () -> Unit,
 ) {
-    updateEditor(edited)
-    if (commitSentence(edited.text)) onCommitted()
+    if (edited.text.isBlank() || !commitSentence(edited.text) { updateEditor(edited) }) return
+    onCommitted()
 }

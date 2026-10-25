@@ -16,11 +16,13 @@ internal class PreparationAuthorization(
     private var selectedWordIdentity: String? = null
 
     /** Returns true only when this new committed sentence authorizes its two sentence operations. */
-    fun commitSentence(sentence: String): Boolean {
+    fun commitSentence(sentence: String, beforeAuthorization: () -> Unit = {}): Boolean {
         if (sentence.isBlank() || sentence == committedSentence) return false
         if (!persistSentenceCommit(sentence)) return false
         committedSentence = sentence
         selectedWordIdentity = null
+        // Apply editor invalidation only after persistence succeeds, before it grants new work.
+        beforeAuthorization()
         authorizeTranslation(sentence)
         authorizeSentenceSpeech(sentence)
         return true

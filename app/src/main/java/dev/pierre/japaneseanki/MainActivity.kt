@@ -140,6 +140,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalView
@@ -462,8 +463,10 @@ class MainActivity : ComponentActivity() {
             var showSetup by remember { mutableStateOf(!onboardingComplete) }
             var cameraDenied by remember { mutableStateOf(settings.getBoolean("onboarding_camera_denied", false)) }
             var showSettings by remember { mutableStateOf(false) }
-            var showSentenceEditor by remember { mutableStateOf(false) }
-            var sentenceEditorDraft by remember { mutableStateOf<TextFieldValue?>(null) }
+            var showSentenceEditor by rememberSaveable { mutableStateOf(false) }
+            var sentenceEditorDraft by rememberSaveable(stateSaver = TextFieldValue.Saver) {
+                mutableStateOf(TextFieldValue(""))
+            }
             var showDeckSheet by remember { mutableStateOf(false) }
             var showDiscardConfirm by remember { mutableStateOf(false) }
             var audioCacheBytes by remember { mutableStateOf(0L) }
@@ -1107,11 +1110,17 @@ class MainActivity : ComponentActivity() {
                 route = AppRoute.Card
             }
 
-            fun commitSentence(sentence: String = editor.text): Boolean {
+            fun commitSentence(
+                sentence: String = editor.text,
+                beforeAuthorization: () -> Unit = {},
+            ): Boolean {
                 if (navigationLocked || sentence.isBlank()) return false
                 preparationAuthorizationError = null
-                if (committedSentence == sentence) return true
-                val committed = preparationAuthorization.commitSentence(sentence)
+                if (committedSentence == sentence) {
+                    beforeAuthorization()
+                    return true
+                }
+                val committed = preparationAuthorization.commitSentence(sentence, beforeAuthorization)
                 if (!committed && committedSentence != sentence) {
                     preparationAuthorizationError = "Could not record the sentence commit. Try committing it again."
                 }
@@ -3518,7 +3527,12 @@ class MainActivity : ComponentActivity() {
                                             }
                                         },
                                         furigana = if (frozenForDisplay == null) sentenceFurigana else emptyList(),
-                                        onEditSentence = { if (!sendState.locked) showSentenceEditor = true },
+                                        onEditSentence = {
+                                            if (!sendState.locked) {
+                                                sentenceEditorDraft = editor
+                                                showSentenceEditor = true
+                                            }
+                                        },
                                         translation = displayTranslation,
                                         vocabulary = displayVocabulary,
                                         vocabularyReading = displayVocabularyReading,
@@ -3569,17 +3583,19 @@ class MainActivity : ComponentActivity() {
                                 editor = editor,
                                 onDraftChanged = { sentenceEditorDraft = it },
                                 onDismiss = {
-                                    sentenceEditorDraft = null
+                                    sentenceEditorDraft = editor
                                     showSentenceEditor = false
                                 },
                                 onUseSelection = { edited ->
                                     useCardSentenceSelectionAsTarget(
                                         edited,
                                         updateEditor,
-                                        { sentence -> commitSentence(sentence) },
+                                        { sentence, beforeAuthorization ->
+                                            commitSentence(sentence, beforeAuthorization)
+                                        },
                                         selectTarget,
                                     ) {
-                                        sentenceEditorDraft = null
+                                        sentenceEditorDraft = edited
                                         showSentenceEditor = false
                                     }
                                 },
@@ -3587,9 +3603,11 @@ class MainActivity : ComponentActivity() {
                                     commitCardSentenceEdit(
                                         edited,
                                         updateEditor,
-                                        { sentence -> commitSentence(sentence) },
+                                        { sentence, beforeAuthorization ->
+                                            commitSentence(sentence, beforeAuthorization)
+                                        },
                                     ) {
-                                        sentenceEditorDraft = null
+                                        sentenceEditorDraft = edited
                                         showSentenceEditor = false
                                     }
                                 },

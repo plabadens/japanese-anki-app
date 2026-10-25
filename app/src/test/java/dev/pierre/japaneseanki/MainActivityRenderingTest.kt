@@ -7,6 +7,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.performTextInputSelection
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -95,6 +97,48 @@ class MainActivityRenderingTest {
     }
 
     @Test
+    fun openSentenceEditRestoresItsWorkingTextAndSelectionAfterRecreation() {
+        waitForTag("sentence-layout")
+
+        val editSentence = context.getString(R.string.edit_sentence)
+        composeRule.onNodeWithText(editSentence).performClick()
+        val sentenceField = composeRule.onNodeWithText(context.getString(R.string.sentence))
+        sentenceField.performTextReplacement("今日は雨です。")
+        sentenceField.performTextInputSelection(androidx.compose.ui.text.TextRange(3, 4))
+
+        scenario?.recreate()
+
+        waitForText(editSentence)
+        composeRule.onNodeWithText("今日は雨です。").assertIsDisplayed()
+        val restoredField = composeRule.onNodeWithText(context.getString(R.string.sentence))
+        assertEquals(
+            androidx.compose.ui.text.TextRange(3, 4),
+            restoredField.fetchSemanticsNode().config[
+                androidx.compose.ui.semantics.SemanticsProperties.TextSelectionRange
+            ],
+        )
+    }
+
+    @Test
+    fun dismissingSentenceEditPreservesAuthoritativeSentenceAndTargetSelection() {
+        waitForTag("sentence-layout")
+        composeRule.onNodeWithText(context.getString(R.string.edit_sentence)).performClick()
+        val sentenceField = composeRule.onNodeWithText(context.getString(R.string.sentence))
+        sentenceField.performTextReplacement("今日は雨です。")
+        sentenceField.performTextInputSelection(androidx.compose.ui.text.TextRange(3, 4))
+
+        scenario?.onActivity { activity -> activity.onBackPressedDispatcher.onBackPressed() }
+
+        composeRule.onNodeWithTag("sentence-word-text-0-1", useUnmergedTree = true)
+            .assertTextEquals("猫")
+        composeRule.onNodeWithTag("sentence-word-0-1").assertIsSelected()
+        val draftPreferences = context.getSharedPreferences("draft", Context.MODE_PRIVATE)
+        assertEquals(TEST_SENTENCE, draftPreferences.getString("sentence", null))
+        assertEquals(0, draftPreferences.getInt("target_start", -1))
+        assertEquals(1, draftPreferences.getInt("target_end", -1))
+    }
+
+    @Test
     fun interruptedWordAudioRecoveryDisplaysItsMessageAndEnabledDiscardAction() {
         waitForText(recoveryMessage())
 
@@ -164,7 +208,9 @@ class MainActivityRenderingTest {
         val draft = context.getSharedPreferences("draft", Context.MODE_PRIVATE)
         write(settings, PreferenceChanges().putBoolean("onboarding_complete", true))
         write(draft, when (methodName) {
-            "cardRouteRendersTheCommittedSentenceAndTargetWithSetupBlockedSend" -> cardDraft()
+            "cardRouteRendersTheCommittedSentenceAndTargetWithSetupBlockedSend",
+            "openSentenceEditRestoresItsWorkingTextAndSelectionAfterRecreation",
+            "dismissingSentenceEditPreservesAuthoritativeSentenceAndTargetSelection" -> cardDraft()
             "interruptedWordAudioRecoveryDisplaysItsMessageAndEnabledDiscardAction",
             "discardingInterruptedSendKeepsDraftAndClearsFrozenKeys" -> interruptedDraft()
             else -> PreferenceChanges()

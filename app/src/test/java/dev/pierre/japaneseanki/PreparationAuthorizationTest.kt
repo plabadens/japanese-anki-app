@@ -51,6 +51,62 @@ class PreparationAuthorizationTest {
     }
 
     @Test
+    fun rejectedPersistenceLeavesEditorAndPreparationAuthorizationUntouched() {
+        val events = mutableListOf<String>()
+        val authorization = PreparationAuthorization(
+            initialCommittedSentence = "今日は晴れです。",
+            persistSentenceCommit = { events += "persist:$it"; false },
+            authorizeTranslation = { events += "translation:$it" },
+            authorizeSentenceSpeech = { events += "speech:$it" },
+            authorizeWordRecording = { _, _ -> error("No word authorization expected") },
+        )
+
+        assertFalse(authorization.commitSentence("今日は雨です。") {
+            events += "editor-update"
+        })
+
+        assertEquals(listOf("persist:今日は雨です。"), events)
+        assertFalse(authorization.commitSentence("今日は晴れです。"))
+        assertEquals(listOf("persist:今日は雨です。"), events)
+    }
+
+    @Test
+    fun sentenceEditInvalidationRunsBeforeSingleAuthorizationAndDoesNotCancelIt() {
+        val events = mutableListOf<String>()
+        var translationAutoAllowed = false
+        var generationStarted = false
+        val authorization = PreparationAuthorization(
+            initialCommittedSentence = "今日は晴れです。",
+            persistSentenceCommit = { events += "persist:$it"; true },
+            authorizeTranslation = {
+                events += "translation:$it"
+                translationAutoAllowed = true
+                generationStarted = true
+            },
+            authorizeSentenceSpeech = { events += "speech:$it" },
+            authorizeWordRecording = { _, _ -> error("No word authorization expected") },
+        )
+
+        assertTrue(authorization.commitSentence("今日は雨です。") {
+            events += "invalidate-editor-dependent-state"
+            translationAutoAllowed = false
+            generationStarted = false
+        })
+
+        assertEquals(
+            listOf(
+                "persist:今日は雨です。",
+                "invalidate-editor-dependent-state",
+                "translation:今日は雨です。",
+                "speech:今日は雨です。",
+            ),
+            events,
+        )
+        assertTrue(translationAutoAllowed)
+        assertTrue(generationStarted)
+    }
+
+    @Test
     fun editingAndCommittingAuthorizesReplacementAndRestorationDoesNot() {
         val calls = mutableListOf<String>()
         fun gate(initialSentence: String?) = PreparationAuthorization(
