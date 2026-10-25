@@ -257,9 +257,11 @@ internal fun SettingsScreen(
                     stringResource(R.string.voices_empty)
                 else -> null
             },
-            cachedMessage = if (state.voiceCatalog.provenance == VoiceCatalogProvenance.CACHED) {
-                stringResource(R.string.cached_voices)
-            } else null,
+            cachedMessage = when (state.voiceCatalog.provenance) {
+                VoiceCatalogProvenance.CACHED -> stringResource(R.string.cached_voices)
+                VoiceCatalogProvenance.STALE -> stringResource(R.string.cached_voices_stale)
+                else -> null
+            },
             loadingMessage = if (state.voiceCatalog.loading) stringResource(R.string.loading_voices) else null,
             onSelect = { index ->
                 state.voiceCatalog.voices.getOrNull(index.toInt())?.let { onVoiceChange(it.name) }

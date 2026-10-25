@@ -1820,12 +1820,15 @@ class MainActivity : ComponentActivity() {
             fun audioReadyFile(item: AudioItem): DraftAudioFile? =
                 (audioSnapshot.items[item] as? DraftAudioState.Ready)?.file
 
-            fun audioSettingsRequired(item: AudioItem): Boolean = item == AudioItem.SENTENCE && (
-                settingsScreenState.credentialUnreadable || !settingsScreenState.credentialStored ||
-                    selectedVoiceName.isBlank() ||
-                    settingsScreenState.voiceCatalog.provenance != VoiceCatalogProvenance.AUTHORITATIVE ||
-                    settingsScreenState.voiceCatalog.voices.none { it.name == selectedVoiceName }
-                )
+            fun selectedSentenceVoice(): CloudVoice? = sentenceVoiceForSynthesis(
+                credentialStored = settingsScreenState.credentialStored,
+                credentialUnreadable = settingsScreenState.credentialUnreadable,
+                voiceName = selectedVoiceName,
+                catalog = settingsScreenState.voiceCatalog,
+            )
+
+            fun audioSettingsRequired(item: AudioItem): Boolean =
+                item == AudioItem.SENTENCE && selectedSentenceVoice() == null
 
             fun audioActionLabel(item: AudioItem): Int = when {
                 audioConfigErrors.containsKey(item) && audioSettingsRequired(item) -> R.string.card_open_settings_action
@@ -1879,10 +1882,7 @@ class MainActivity : ComponentActivity() {
                 val sentenceText = editor.text
                 val requestHintSpans = sentenceHintSpans(sentenceText, japaneseTokens, readingCorrections)
                 val hintResult = ReadingHintBuilder.build(sentenceText, requestHintSpans)
-                val authoritativeCatalog = settingsScreenState.voiceCatalog.takeIf {
-                    settingsScreenState.credentialStored && it.provenance == VoiceCatalogProvenance.AUTHORITATIVE
-                }
-                val voice = authoritativeCatalog?.voices?.firstOrNull { it.name == selectedVoiceName }
+                val voice = selectedSentenceVoice()
 
                 if (sentenceText.isNotEmpty() &&
                     voice != null && hintResult is HintResult.Ready

@@ -118,7 +118,7 @@ internal class SettingsCoordinator(
             latestRequest = null
             requestRevision++
             voiceCatalog = voiceCatalog.copy(
-                provenance = if (voiceCatalog.voices.isNotEmpty()) VoiceCatalogProvenance.CACHED
+                provenance = if (voiceCatalog.voices.isNotEmpty()) VoiceCatalogProvenance.STALE
                     else VoiceCatalogProvenance.NONE,
                 loading = false,
                 attempted = false,
@@ -147,7 +147,11 @@ internal class SettingsCoordinator(
         if (latestRequest != token || token.credentialRevision != credentialRevision) return@synchronized false
         latestRequest = null
         if (voices != null) {
-            val cacheSaved = runCatching { persistence.saveVoiceCache(voices) }.getOrDefault(false)
+            val cacheSaved = if (credentialDirty) {
+                true
+            } else {
+                runCatching { persistence.saveVoiceCache(voices) }.getOrDefault(false)
+            }
             voiceCatalog = VoiceCatalogState(
                 voices = voices.toList(),
                 provenance = VoiceCatalogProvenance.AUTHORITATIVE,
@@ -165,11 +169,15 @@ internal class SettingsCoordinator(
         true
     }
 
-    /** True only when a key and voice are configured and the authoritative list has not removed it. */
+    /** A saved catalog stays usable until a refresh rejects the voice; onboarding still requires verification. */
     fun canSynthesizeSentence(): Boolean = synchronized(lock) {
         checkOpened()
-        credential.isNotBlank() && values.voiceName.isNotBlank() &&
-            !voiceCatalog.selectedVoiceMissing(values.voiceName)
+        sentenceVoiceForSynthesis(
+            credentialStored = credential.isNotBlank(),
+            credentialUnreadable = false,
+            voiceName = values.voiceName,
+            catalog = voiceCatalog,
+        ) != null
     }
 
     /** First-run completion requires a usable key and a voice verified against the current key. */
@@ -231,8 +239,20 @@ internal class SettingsCoordinator(
                 require(credential.trim().none(Char::isWhitespace)) {
                     "The Google Cloud key contains whitespace."
                 }
+                val keyChanged = credential.trim() != persistedCredential
+                if (keyChanged) {
+                    check(persistence.saveVoiceCache(emptyList())) { "Could not save your changes." }
+                }
                 check(persistence.saveGoogleKey(credential)) {
                     "Could not save your changes."
+                }
+                if (keyChanged && voiceCatalog.provenance == VoiceCatalogProvenance.AUTHORITATIVE) {
+                    val cacheSaved = runCatching { persistence.saveVoiceCache(voiceCatalog.voices) }.getOrDefault(false)
+                    if (!cacheSaved) {
+                        voiceCatalog = voiceCatalog.copy(
+                            error = "Voice list loaded, but its offline cache could not be saved.",
+                        )
+                    }
                 }
                 persistedCredential = credential.trim()
                 credentialDirty = false
