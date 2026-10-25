@@ -367,6 +367,7 @@ private class FakeSettingsPersistence(
 
     var failValues = false
     var failKey = false
+    var cacheWrites = 0
     var savedValues = initial.values
     var savedCredential = initial.googleKey
     private var cachedVoices = initial.cachedVoices
@@ -393,6 +394,7 @@ private class FakeSettingsPersistence(
     }
 
     override fun saveVoiceCache(voices: List<CloudVoice>): Boolean {
+        cacheWrites++
         cachedVoices = voices.toList()
         cachedVoiceListPresent = voices.isNotEmpty()
         return true
