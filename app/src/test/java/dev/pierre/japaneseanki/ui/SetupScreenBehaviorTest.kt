@@ -24,6 +24,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.pierre.japaneseanki.AnkiDeck
 import dev.pierre.japaneseanki.AnkiFieldContract
 import dev.pierre.japaneseanki.AnkiNoteType
+import dev.pierre.japaneseanki.R
 import dev.pierre.japaneseanki.speech.CloudVoice
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -146,13 +147,13 @@ class SetupScreenBehaviorTest {
             }
         }
 
-        composeRule.onNodeWithText("Preparing the offline dictionary").assertIsDisplayed()
-        composeRule.onNodeWithText("Install AnkiDroid").assertIsDisplayed()
-        composeRule.onNodeWithText("Finish setup").assertIsNotEnabled()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.setup_dictionary_preparing)).assertIsDisplayed()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.install_anki)).assertIsDisplayed()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.finish_setup)).assertIsNotEnabled()
 
         composeRule.runOnIdle { state.value = setupUi() }
-        composeRule.onNodeWithText("Everything is ready").assertIsDisplayed()
-        composeRule.onNodeWithText("Finish setup").assertIsEnabled().performClick()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.setup_ready)).assertIsDisplayed()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.finish_setup)).assertIsEnabled().performClick()
         composeRule.runOnIdle { assertTrue(finished) }
     }
 
@@ -183,14 +184,16 @@ class SetupScreenBehaviorTest {
             }
         }
 
-        composeRule.onNodeWithText("Sentence voice").performScrollTo().performClick()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.sentence_voice)).performScrollTo().performClick()
         composeRule.onNodeWithText("Kore").performScrollTo().performClick()
 
         composeRule.runOnIdle {
             assertEquals("ja-JP-Chirp3-HD-Kore", chosen)
             assertEquals("ja-JP-Chirp3-HD-Kore", state.value.audio.selectedVoice)
         }
-        composeRule.onNodeWithText("Kore · ja-JP-Chirp3-HD-Kore").assertIsDisplayed()
+        composeRule.onNodeWithText(
+            composeRule.activity.getString(R.string.voice_summary, "Kore", "ja-JP-Chirp3-HD-Kore"),
+        ).assertIsDisplayed()
     }
 
     @Test
@@ -230,14 +233,14 @@ class SetupScreenBehaviorTest {
             }
         }
 
-        composeRule.onNodeWithText("Note type").performScrollTo().performClick()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.note_type)).performScrollTo().performClick()
         val noteTypeOption = composeRule.onNodeWithText("Alternate note type").fetchSemanticsNode()
         assertEquals(Role.RadioButton, noteTypeOption.config[SemanticsProperties.Role])
         assertTrue(noteTypeOption.boundsInRoot.height >= with(composeRule.density) { 48.dp.toPx() })
         composeRule.onNodeWithText("Alternate note type").performClick()
         composeRule.runOnIdle { assertEquals(2L, state.value.anki.selectedNoteTypeId) }
 
-        composeRule.onNodeWithText("Deck").performScrollTo().performClick()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.deck)).performScrollTo().performClick()
         val deckOption = composeRule.onNodeWithText("Second deck").fetchSemanticsNode()
         assertEquals(Role.RadioButton, deckOption.config[SemanticsProperties.Role])
         assertTrue(deckOption.boundsInRoot.height >= with(composeRule.density) { 48.dp.toPx() })
@@ -266,7 +269,7 @@ class SetupScreenBehaviorTest {
             }
         }
 
-        composeRule.onNodeWithContentDescription("Back").performClick()
+        composeRule.onNodeWithContentDescription(composeRule.activity.getString(R.string.back)).performClick()
         composeRule.runOnIdle { assertEquals(1, backs) }
     }
 
@@ -291,14 +294,14 @@ class SetupScreenBehaviorTest {
             }
         }
 
-        composeRule.onNodeWithText("Two steps left").assertIsDisplayed()
-        composeRule.onNodeWithText("Finish setup").assertIsNotEnabled()
-        composeRule.onNodeWithText("Connect AnkiDroid").assertIsDisplayed()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.setup_two_steps_left)).assertIsDisplayed()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.finish_setup)).assertIsNotEnabled()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.connect_anki)).assertIsDisplayed()
 
         composeRule.runOnIdle { state.value = setupUi() }
 
-        composeRule.onNodeWithText("Everything is ready").assertIsDisplayed()
-        composeRule.onNodeWithText("Finish setup").assertIsEnabled()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.setup_ready)).assertIsDisplayed()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.finish_setup)).assertIsEnabled()
     }
 
     @Test
@@ -322,11 +325,11 @@ class SetupScreenBehaviorTest {
             }
         }
 
-        composeRule.onNodeWithText("AnkiDroid is left").assertIsDisplayed()
-        composeRule.onNodeWithText("Finish setup").assertIsNotEnabled()
-        composeRule.onNodeWithText("Connect AnkiDroid").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Allow camera").performScrollTo().assertIsDisplayed()
-        composeRule.onAllNodesWithText("Camera access is off.").assertCountEquals(0)
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.setup_anki_left)).assertIsDisplayed()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.finish_setup)).assertIsNotEnabled()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.connect_anki)).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.allow_camera)).performScrollTo().assertIsDisplayed()
+        composeRule.onAllNodesWithText(composeRule.activity.getString(R.string.camera_denied)).assertCountEquals(0)
     }
 
     @Test
@@ -349,7 +352,15 @@ class SetupScreenBehaviorTest {
             }
         }
 
-        listOf("Dictionary", "Download", "Downloads", "UniDic", "Waiting for Wi-Fi", "Pause", "Resume")
+        listOf(
+            composeRule.activity.getString(R.string.dictionary),
+            "Download",
+            "Downloads",
+            "UniDic",
+            "Waiting for Wi-Fi",
+            "Pause",
+            "Resume",
+        )
             .forEach { label ->
                 composeRule.onAllNodesWithText(label, substring = true).assertCountEquals(0)
             }
@@ -380,8 +391,8 @@ class SetupScreenBehaviorTest {
             state.value = state.value.copy(dictionaryPreparing = true)
         }
 
-        composeRule.onNodeWithText("Preparing the offline dictionary").assertIsDisplayed()
-        composeRule.onNodeWithText("Finish setup").assertIsNotEnabled()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.setup_dictionary_preparing)).assertIsDisplayed()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.finish_setup)).assertIsNotEnabled()
         composeRule.onAllNodesWithText("Download", substring = true).assertCountEquals(0)
     }
 }

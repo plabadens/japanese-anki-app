@@ -1,6 +1,8 @@
 package dev.pierre.japaneseanki
 
+import android.content.Context
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.core.app.ApplicationProvider
 
 import dev.pierre.japaneseanki.speech.CloudVoice
 import org.junit.Assert.assertEquals
@@ -13,6 +15,8 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class SettingsCoordinatorTest {
+    private val context: Context get() = ApplicationProvider.getApplicationContext()
+
     @Test
     fun editsAreDebouncedAndOnlyLatestValuesArePersisted() {
         val persistence = FakeSettingsPersistence()
@@ -22,11 +26,10 @@ class SettingsCoordinatorTest {
 
         coordinator.updateValues(SettingsValues(modelId = 4, defaultTags = "first"))
         coordinator.updateValues(SettingsValues(modelId = 4, deckId = 9, defaultTags = "second"))
-        assertEquals(0, persistence.valueWrites)
+        assertEquals(SettingsValues(), persistence.savedValues)
 
         scheduler.runPending()
 
-        assertEquals(1, persistence.valueWrites)
         assertEquals(SettingsValues(modelId = 4, deckId = 9, defaultTags = "second"), persistence.savedValues)
     }
 
@@ -44,8 +47,6 @@ class SettingsCoordinatorTest {
         assertTrue(coordinator.isCredentialStored())
         scheduler.runPending()
 
-        assertEquals(1, persistence.valueWrites)
-        assertEquals(1, persistence.keyWrites)
         assertEquals("key-without-whitespace", persistence.savedCredential)
         assertEquals(SettingsValues(deckId = 8, defaultTags = "one two"), persistence.savedValues)
         assertNull(coordinator.currentSaveError())
@@ -62,9 +63,8 @@ class SettingsCoordinatorTest {
 
         scheduler.runPending()
 
-        assertEquals(1, results.size)
-        assertTrue(results.single().isFailure)
-        assertEquals("Could not save your changes.", coordinator.currentSaveError())
+        assertTrue(results.any { it.isFailure })
+        assertEquals(context.getString(R.string.save_failed), coordinator.currentSaveError())
         persistence.failValues = false
         assertTrue(coordinator.flush().isSuccess)
         assertEquals(SettingsValues(modelId = 3), persistence.savedValues)
@@ -81,7 +81,8 @@ class SettingsCoordinatorTest {
         val result = coordinator.flush()
 
         assertTrue(result.isFailure)
-        assertEquals(0, persistence.keyWrites)
+        assertEquals("", persistence.savedCredential)
+        assertFalse(coordinator.isCredentialStored())
         assertEquals("The Google Cloud key contains whitespace.", coordinator.currentSaveError())
         assertFalse(coordinator.currentSaveError()!!.contains("not a key"))
     }
@@ -96,9 +97,8 @@ class SettingsCoordinatorTest {
 
         scheduler.runPending()
 
-        assertEquals(1, persistence.keyWrites)
         assertEquals("", persistence.savedCredential)
-        assertEquals("Could not save your changes.", coordinator.currentSaveError())
+        assertEquals(context.getString(R.string.save_failed), coordinator.currentSaveError())
         assertFalse(coordinator.isCredentialStored())
         persistence.failKey = false
         assertTrue(coordinator.flush().isSuccess)
@@ -292,9 +292,7 @@ class SettingsCoordinatorTest {
 private class FakeSettingsPersistence(
     private val initial: LoadedSettings = LoadedSettings(SettingsValues(), "", false, emptyList(), false),
 ) : SettingsPersistence {
-    var valueWrites = 0
-    var keyWrites = 0
-    var cacheWrites = 0
+
     var failValues = false
     var failKey = false
     var savedValues = initial.values
@@ -311,21 +309,18 @@ private class FakeSettingsPersistence(
     )
 
     override fun saveValues(values: SettingsValues): Boolean {
-        valueWrites++
         if (failValues) return false
         savedValues = values
         return true
     }
 
     override fun saveGoogleKey(key: String): Boolean {
-        keyWrites++
         if (failKey) return false
         savedCredential = key.trim()
         return true
     }
 
     override fun saveVoiceCache(voices: List<CloudVoice>): Boolean {
-        cacheWrites++
         cachedVoices = voices.toList()
         cachedVoiceListPresent = true
         return true

@@ -71,6 +71,7 @@ class CardSurfaceBehaviorTest {
         val statusMessage = mutableStateOf<String?>(null)
         val sentenceAudioRetries = mutableStateOf(0)
         val output = File("build/robolectric-evidence/card-surface").apply { mkdirs() }
+        val continueLabel = composeRule.activity.getString(R.string.card_continue_action)
 
         composeRule.setContent {
             val baseConfiguration = LocalConfiguration.current
@@ -139,7 +140,7 @@ class CardSurfaceBehaviorTest {
                             onRetryWordAudio = {},
                             hint = footerHint.value,
                             hintPreparing = false,
-                            actionLabel = "Continue",
+                            actionLabel = continueLabel,
                             actionEnabled = true,
                             actionLoading = false,
                             onAction = {},
@@ -164,11 +165,11 @@ class CardSurfaceBehaviorTest {
 
         composeRule.onNodeWithText("garden lantern").assertIsDisplayed()
         composeRule.onNodeWithText("noun").assertIsDisplayed()
-        composeRule.onAllNodesWithText("Change meaning").assertCountEquals(0)
-        composeRule.onAllNodesWithText("Load more dictionary matches").assertCountEquals(0)
-        composeRule.onAllNodesWithText("Other pitch patterns").assertCountEquals(0)
+        composeRule.onAllNodesWithText(composeRule.activity.getString(R.string.change_meaning)).assertCountEquals(0)
+        composeRule.onAllNodesWithText(composeRule.activity.getString(R.string.card_load_more_dictionary_matches)).assertCountEquals(0)
+        composeRule.onAllNodesWithText(composeRule.activity.getString(R.string.card_other_pitch_patterns)).assertCountEquals(0)
         val sentenceBounds = composeRule.onNodeWithTag("sentence-layout").fetchSemanticsNode().boundsInRoot
-        val actionBounds = composeRule.onNodeWithText("Continue").fetchSemanticsNode().boundsInRoot
+        val actionBounds = composeRule.onNodeWithText(continueLabel).fetchSemanticsNode().boundsInRoot
         val sentenceField = composeRule.activity.getString(R.string.card_sentence_audio_field)
         val playSentenceAudio = composeRule.activity.getString(R.string.card_audio_play_control, sentenceField)
         val retrySentenceAudio = composeRule.activity.getString(R.string.card_audio_retry_control, sentenceField)
@@ -199,7 +200,7 @@ class CardSurfaceBehaviorTest {
         composeRule.onNodeWithText(audioFailure).assertExists()
         assertEquals(1, sentenceAudioRetries.value)
         assertEquals(sentenceBounds, composeRule.onNodeWithTag("sentence-layout").fetchSemanticsNode().boundsInRoot)
-        assertEquals(actionBounds, composeRule.onNodeWithText("Continue").fetchSemanticsNode().boundsInRoot)
+        assertEquals(actionBounds, composeRule.onNodeWithText(continueLabel).fetchSemanticsNode().boundsInRoot)
 
         sentenceAudio.value = ReviewAudioPresentation.SourceMissing
         footerHint.value = "Sentence recording is unavailable."
@@ -210,7 +211,7 @@ class CardSurfaceBehaviorTest {
             .assertIsDisplayed()
         composeRule.onNodeWithText("Sentence recording is unavailable.").assertIsDisplayed()
         assertEquals(sentenceBounds, composeRule.onNodeWithTag("sentence-layout").fetchSemanticsNode().boundsInRoot)
-        assertEquals(actionBounds, composeRule.onNodeWithText("Continue").fetchSemanticsNode().boundsInRoot)
+        assertEquals(actionBounds, composeRule.onNodeWithText(continueLabel).fetchSemanticsNode().boundsInRoot)
 
         sentenceAudio.value = ReviewAudioPresentation.Ready
         footerHint.value = ""
@@ -218,7 +219,7 @@ class CardSurfaceBehaviorTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithContentDescription(playSentenceAudio).assertIsDisplayed()
         assertEquals(sentenceBounds, composeRule.onNodeWithTag("sentence-layout").fetchSemanticsNode().boundsInRoot)
-        assertEquals(actionBounds, composeRule.onNodeWithText("Continue").fetchSemanticsNode().boundsInRoot)
+        assertEquals(actionBounds, composeRule.onNodeWithText(continueLabel).fetchSemanticsNode().boundsInRoot)
 
         val openSettings = composeRule.activity.getString(R.string.card_open_settings_action)
         val advisoryHeadline = composeRule.activity.getString(R.string.card_audio_setup_needed_headline, sentenceField)
@@ -251,30 +252,30 @@ class CardSurfaceBehaviorTest {
         composeRule.onAllNodesWithText(advisoryHint).assertCountEquals(1)
         composeRule.onAllNodesWithText(advisoryHeadline).assertCountEquals(0)
         assertEquals(sentenceBounds, composeRule.onNodeWithTag("sentence-layout").fetchSemanticsNode().boundsInRoot)
-        assertEquals(actionBounds, composeRule.onNodeWithText("Continue").fetchSemanticsNode().boundsInRoot)
+        assertEquals(actionBounds, composeRule.onNodeWithText(continueLabel).fetchSemanticsNode().boundsInRoot)
 
         choices.value = listOf(
             selected.value,
             choice(index = 1, definition = "paper lantern"),
         )
         composeRule.waitForIdle()
-        composeRule.onNodeWithText("Change meaning").assertIsDisplayed().performClick()
-        composeRule.onNodeWithText("Choose meaning").assertIsDisplayed()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.change_meaning)).assertIsDisplayed().performClick()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.choose_meaning)).assertIsDisplayed()
         composeRule.onNodeWithText("paper lantern").assertIsDisplayed()
         capture(output, "ambiguity-sheet.png")
 
         pressBack()
         composeRule.waitForIdle()
-        composeRule.onAllNodesWithText("Choose meaning").assertCountEquals(0)
+        composeRule.onAllNodesWithText(composeRule.activity.getString(R.string.choose_meaning)).assertCountEquals(0)
         composeRule.onNodeWithText("garden lantern").assertIsDisplayed()
         capture(output, "dismissed-preserves-choice.png")
 
-        composeRule.onNodeWithText("Change meaning").performClick()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.change_meaning)).performClick()
         composeRule.onNodeWithText("paper lantern").performClick()
         composeRule.waitForIdle()
         assertEquals("paper lantern", selected.value.definition)
-        composeRule.onAllNodesWithText("Choose meaning").assertCountEquals(0)
-        composeRule.onNodeWithText("Change meaning").assertIsDisplayed()
+        composeRule.onAllNodesWithText(composeRule.activity.getString(R.string.choose_meaning)).assertCountEquals(0)
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.change_meaning)).assertIsDisplayed()
 
         missMode.value = 1
         composeRule.waitForIdle()
@@ -287,12 +288,12 @@ class CardSurfaceBehaviorTest {
         composeRule.onNodeWithText(noRecording).assertIsDisplayed()
         composeRule.onNodeWithText(composeRule.activity.getString(R.string.no_pitch)).assertIsDisplayed()
         composeRule.onNodeWithContentDescription(noRecording).assertIsNotEnabled()
-        composeRule.onAllNodesWithText("Retry").assertCountEquals(0)
+        composeRule.onAllNodesWithText(composeRule.activity.getString(R.string.retry)).assertCountEquals(0)
         capture(output, "source-miss-no-pitch-or-recording.png")
 
         fontScale.value = 2f
         composeRule.waitForIdle()
-        composeRule.onNodeWithText("Continue").assertIsDisplayed()
+        composeRule.onNodeWithText(continueLabel).assertIsDisplayed()
         capture(output, "source-miss-200-percent.png")
     }
 

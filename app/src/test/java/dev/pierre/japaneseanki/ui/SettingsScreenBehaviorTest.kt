@@ -19,6 +19,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.pierre.japaneseanki.AppRoute
+import dev.pierre.japaneseanki.R
 import dev.pierre.japaneseanki.SettingsValues
 import dev.pierre.japaneseanki.shouldShowSetup
 import dev.pierre.japaneseanki.visibleRouteForAnalyzer
@@ -40,10 +41,10 @@ class SettingsScreenBehaviorTest {
     fun keyAndTagFieldsAcceptInputInsideFullscreenDialog() {
         val state = showSettings(SettingsPreviewState.KEY_SAVED)
 
-        composeRule.onNodeWithText("Google Cloud API key").performClick()
-        composeRule.onNodeWithText("Google Cloud API key").performTextInput("-typed-fixture")
-        composeRule.onNodeWithText("Default tags").performClick()
-        composeRule.onNodeWithText("Default tags").performTextInput("fresh-tag")
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.google_key)).performClick()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.google_key)).performTextInput("-typed-fixture")
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.default_tags)).performClick()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.default_tags)).performTextInput("fresh-tag")
 
         composeRule.runOnIdle {
             assertEquals("synthetic-test-fixture-typed-fixture", state.value.googleKey)
@@ -62,8 +63,10 @@ class SettingsScreenBehaviorTest {
         composeRule.onNodeWithText("Japanese").performScrollTo().performClick()
         composeRule.onNodeWithText("Language study").assertIsDisplayed().performClick()
 
-        composeRule.onNodeWithText("Sentence voice").performScrollTo().performClick()
-        composeRule.onNodeWithText("Kore · ja-JP-Chirp3-HD-Kore").assertIsDisplayed().performClick()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.sentence_voice)).performScrollTo().performClick()
+        composeRule.onNodeWithText(
+            composeRule.activity.getString(R.string.voice_summary, "Kore", "ja-JP-Chirp3-HD-Kore"),
+        ).assertIsDisplayed().performClick()
 
         composeRule.runOnIdle {
             assertEquals(2L, state.value.values.modelId)
@@ -78,15 +81,15 @@ class SettingsScreenBehaviorTest {
         assertEquals(false, noKeyState.value.credentialStored)
         assertEquals(null, noKeyState.value.voiceCatalog.error)
         composeRule.onAllNodesWithText("Use app while setup runs").assertCountEquals(0)
-        composeRule.onNodeWithText("Sentence voice").performScrollTo().performClick()
-        composeRule.onNodeWithText("Enter a Google Cloud API key.").assertIsDisplayed()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.sentence_voice)).performScrollTo().performClick()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.key_required)).assertIsDisplayed()
     }
 
     @Test
     fun voiceFailureStateExplainsWhatTheUserCanDo() {
         showSettings(SettingsPreviewState.VOICE_LIST_FAILED)
-        composeRule.onNodeWithText("Sentence voice").performScrollTo()
-        composeRule.onNodeWithText("Could not load voices.").assertIsDisplayed()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.sentence_voice)).performScrollTo()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.voices_failed)).assertIsDisplayed()
     }
 
     @Test

@@ -1,11 +1,13 @@
 package dev.pierre.japaneseanki
 
+import android.content.Context
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.core.app.ApplicationProvider
 import dev.pierre.japaneseanki.send.MediaImportRecoveryActions
 import dev.pierre.japaneseanki.send.discardInterruptedMediaRecovery
 import dev.pierre.japaneseanki.send.pendingMediaRecoveryOperation
@@ -79,7 +81,9 @@ class MediaImportRecoveryActionsTest {
             }
         }
 
-        composeRule.onNodeWithText("Discard interrupted Send; keep this draft")
+        val discardAction = ApplicationProvider.getApplicationContext<Context>()
+            .getString(R.string.card_discard_interrupted_send_keep_draft)
+        composeRule.onNodeWithText(discardAction)
             .assertIsDisplayed()
             .performClick()
         composeRule.runOnIdle {
