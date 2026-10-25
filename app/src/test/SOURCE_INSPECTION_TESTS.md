@@ -12,3 +12,5 @@ Legitimate file-content tests are retained because they read application data fi
 
 - `AssetPolicyAndroidTest.bundledNhkIndexResolvesHeadwordWithoutNetwork` reads the bundled pronunciation index asset and verifies that real headwords resolve to recording filenames.
 - `BundledDictionaryTest.installUnpacksOnceAndReplacesAnOlderDictionary` reads the installed dictionary's `version` marker to verify the installer wrote the expected data version. Its other file checks validate unpacked dictionary contents and sizes.
+
+Android Lint's `HardcodedText` rule is now configured as an error and `lintDebug` is part of `verifyFast`. This guards hardcoded text in the source forms recognized by that lint detector; it does not establish that every Compose/Kotlin label is resource-backed or enforce removal of obsolete resource IDs. Those two static invariants remain unguarded outside the listed behavior tests.
