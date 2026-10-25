@@ -1,95 +1,58 @@
 # AGENTS.md
 
-Working rules for this repository. Deliberately short: **the code and its tests are the contract.**
-- If you need to know what a screen does, read the screen and its tests.
-- `USER-STORY.md` says why the app exists. `SCREENS.md` says what each screen is for and what must
-  not appear on it.
-- When behaviour changes, the tests change with it. A behaviour change with no test change is not
-  finished.
+**The code and its tests are the contract.** `USER-STORY.md` says why the app exists; `SCREENS.md`
+says what each screen is for and what must not appear on it. When behaviour changes, its tests change
+with it — a behaviour change with no test change is not finished.
 
-## Structure and design
+## Design
 
-Authorities: [Android architecture](https://developer.android.com/topic/architecture/recommendations),
+Authorities: [architecture](https://developer.android.com/topic/architecture/recommendations),
 [state holders](https://developer.android.com/topic/architecture/ui-layer/stateholders),
 [data layer](https://developer.android.com/jetpack/guide/data-layer),
-[testing](https://developer.android.com/training/testing/fundamentals) and
+[testing](https://developer.android.com/training/testing/fundamentals),
 [Material Design 3](https://m3.material.io/). Local taste yields to them.
 
 - Layer and flow one way: UI → state holder → repository → data source; nothing above it reaches a source.
-- One state holder per screen, ViewModel or plain class; components take values and callbacks, not holders.
+- One state holder per screen, ViewModel or plain class; composables take values and callbacks, not holders.
 - One abstraction level per function: policy decides, orchestration sequences, mechanism touches the world.
-- Name composables; keep state in the narrowest scope that reads it, so one change re-renders only itself.
-- Interfaces only at a boundary you do not own, or where a second implementation exists; fakes over mocks.
-- Test behaviour at the lowest layer that fails for the right reason — what the user sees, not how it is built.
-- Theme, don't style: M3 colour roles, type and shape scales, spacing tokens; no literal hex, `sp` or `dp` in a screen.
-- Use the Material component before a custom one; one primary action, state visible without interaction.
-- Respect the system: dynamic colour, light and dark, reduced motion — nothing depends on motion to work.
+- Name composables; keep state in the narrowest scope that reads it.
+- Interfaces only at a boundary you do not own; fakes over mocks.
+- Test behaviour at the lowest layer that fails for the right reason.
+- Theme, don't style: M3 roles, type and shape scales, tokens; no literal hex, `sp` or `dp` in a screen.
+- Material component before a custom one; one primary action, one instruction per state.
+- Respect the system: dynamic colour, light and dark, reduced motion.
+- Targets ≥ 48 dp; text never clips at 200 % font scale, at 360 × 828 or 390 × 844.
 
-## Never do these
+## Never
 
-- Don't log credentials, API keys, sentence text, or dictionary content off the 
-  device. No remote
-  upload, no telemetry, no analytics endpoint.
-- Never weaken or delete a test to make a build pass. Fix the code, or state precisely why the
-  expectation was wrong.
-- Never commit secrets, keystores, or generated build output.
-- Never mention NHK recording rights in any output — replies, reports, task comments, handoffs,
-  release notes, or generated artifacts.
+- Log credentials, keys, sentence text or dictionary content off the device. No upload, no telemetry, no analytics.
+- Weaken or delete a test to make a build pass — fix the code, or say why the expectation was wrong.
+- Commit secrets, keystores or generated build output.
+- Mention NHK recording rights in any output.
 
-## Accessibility floor
+## Git
 
-- Every interactive control is at least 48 dp.
-- Text never clips at 200 % font scale, at 360 × 828 or 390 × 844.
-- One instruction per state, in one place.
+- Author and committer: `Pierre Labadens <labadens.pierre@gmail.com>`. No agent identities, no co-author trailers.
+- Work on your own task branch; it stays local — never push it, not for CI, backup or review.
+- `dev` is the integration branch: merge into it, and push it only once the gate below is green.
+- Before merging: `scripts/dev.sh test` green, `scripts/dev.sh render` complete, `git diff --check` clean.
 
-## Git and delivery
+## Build
 
-- Commits and authorship are `Pierre Labadens <labadens.pierre@gmail.com>`. No agent identities, no
-  co-author trailers.
-- Work on your own task branch. Task branches stay local: never push one, not for CI, backup or
-  review.
-- `dev` is the integration branch. You should not push to other branches unless 
-  instructed to do so.
-- Publishing means merging into `dev` and pushing `dev`. Before that: `verifyFast` green,
-  `renderDesignStates` producing its full set, `git diff --check` clean.
-
-## Build, test, render
-
-The toolchain comes from Nix. There is no Gradle wrapper. Enter the flake's shell through
-`scripts/dev.sh` instead of wrapping every command in `nix develop`: it captures the dev-shell
-environment once (keyed on `flake.nix`/`flake.lock`), then runs Gradle with the daemon and both
-caches warm. A per-command `nix develop` costs ~12 s of evaluation and a cold Gradle context, and
-the flake no longer disables Gradle's native services in the shell, so the daemon is reusable.
+No Gradle wrapper; the toolchain is Nix. Go through `scripts/dev.sh`, which caches the dev-shell
+environment and keeps the Gradle daemon warm — a bare `nix develop` per command costs ~12 s and a cold
+context.
 
 ```sh
-scripts/dev.sh test                    # verifyFast: unit + JVM Compose assertions
-scripts/dev.sh test 'dev.pierre…Test'  # one class while iterating
-scripts/dev.sh render                  # design states -> build/design-states
-scripts/dev.sh apk                     # debug APK (both ABIs)
-scripts/dev.sh gradle <args…>          # anything else
-scripts/rebuild.sh                     # APK + reinstall on the running emulator
+scripts/dev.sh test [Class]   # verifyFast: unit, Robolectric and Compose assertions
+scripts/dev.sh render         # design states -> build/design-states
+scripts/dev.sh apk            # debug APK, both ABIs
+scripts/rebuild.sh            # APK + reinstall on the running emulator
+nix develop --command ./scripts/ci-build-apk.sh   # full CI: gate + render + APK
 ```
 
-The test task runs in parallel forks (`-Panki.testForks=N` overrides the default). The hermetic
-path is unchanged and still what CI and releases use:
-
-```sh
-# full CI: fast gate + design render + debug APK
-nix develop --command ./scripts/ci-build-apk.sh
-```
-
-Design screenshots are **artifacts, not sources**. Do not commit PNGs; CI publishes them so the
-design can be reviewed without a checkout. Regression value lives in numeric assertions — bounds
-that must not move, symmetry, hit-target sizes, one hint line — not in image diffs.
-
-Only use the emulator when the task explicitly asks for device work. Every call 
-goes through the pinned wrapper:
-
-```sh
-nix develop --command ./scripts/emulator-adb run <shell|install|exec-out|logcat|…>
-```
-
-Never bare `adb`. Never uninstall when `install -r` will do.
-
-If the toolchain, emulator or Nix setup misbehaves, report it and propose a 
-clean fix. Do not work around it silently.
+Design screenshots are artifacts, not sources: never commit PNGs, and put regression value in numeric
+assertions rather than image diffs. Use the emulator only when the task asks for device work, always
+through `nix develop --command ./scripts/emulator-adb run …` — never bare `adb`, and never uninstall
+when `install -r` will do. If the toolchain misbehaves, report it and propose a fix; do not work
+around it silently.
