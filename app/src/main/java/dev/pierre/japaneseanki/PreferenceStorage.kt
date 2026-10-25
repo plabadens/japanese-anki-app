@@ -205,7 +205,31 @@ internal class PreferenceFrozenSubmissionStore(
         PreferenceChanges().putString("last_note_tags", tags.joinToString(" ")),
     )
 
-    override fun clearDraft() = clearPersistedDraftBlocking(storage, draftDirectory)
+    override fun clearDraft() {
+        // Called from composition (a LaunchedEffect when a submission completes, and discard click
+        // handlers), i.e. on the main thread. persistBlocking deliberately rejects the main thread,
+        // so clear the in-memory state synchronously and move the commit + file deletion off it.
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            clearPersistedDraftBlocking(storage, draftDirectory)
+        } else {
+            val ownedFiles = ownedDraftFiles(storage.draft.value, draftDirectory)
+            storage.update(PreferenceFile.DRAFT, draftClearChanges())
+            draftClearScope.launch { ownedFiles.forEach { file -> runCatching { file.delete() } } }
+        }
+    }
+}
+
+/** Shared off-main host for draft clears requested from composition. */
+private val draftClearScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+/** Draft image files this app owns, resolved before the draft that names them is cleared. */
+private fun ownedDraftFiles(preferences: PreferenceValues, draftDirectory: java.io.File?): List<java.io.File> {
+    val ownedDirectory = draftDirectory?.canonicalFile ?: return emptyList()
+    return listOf("photo_source_path", "note_image_path", "processed_image_path", "pending_replacement_image_path")
+        .mapNotNull { preferences.getString(it, null) }
+        .distinct()
+        .map { java.io.File(it) }
+        .filter { file -> file.exists() && runCatching { file.canonicalFile.parentFile == ownedDirectory }.getOrDefault(false) }
 }
 
 internal fun clearPersistedDraftBlocking(storage: AppPreferenceStorage, draftDirectory: java.io.File?) {
