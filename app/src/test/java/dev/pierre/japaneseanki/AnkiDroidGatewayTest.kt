@@ -8,6 +8,8 @@ import android.database.Cursor
 import android.net.Uri
 import androidx.core.content.FileProvider
 import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -229,10 +231,12 @@ class AnkiDroidGatewayTest {
         )
         val storage = MemoryAppPreferenceStorage()
         assertTrue(
-            storage.persistBlocking(
-                PreferenceFile.DRAFT,
-                PreferenceChanges().putFrozenSubmission(frozen, SubmissionPhase.MEDIA_IMPORTING),
-            ),
+            runBlocking(Dispatchers.IO) {
+                storage.persistBlocking(
+                    PreferenceFile.DRAFT,
+                    PreferenceChanges().putFrozenSubmission(frozen, SubmissionPhase.MEDIA_IMPORTING),
+                )
+            },
         )
         var insertCount = 0
         fixture.resolver.onInsert = { call ->
@@ -247,13 +251,17 @@ class AnkiDroidGatewayTest {
                 wordAudio = MediaImportRequest(wordIdentity),
                 image = null,
                 markImporting = { operation, source ->
-                    storage.persistBlocking(
-                        PreferenceFile.DRAFT,
-                        PreferenceChanges()
-                            .putFrozenSubmission(frozen, SubmissionPhase.MEDIA_IMPORTING)
-                            .putString(SubmissionRecoveryKeys.MEDIA_OPERATION, operation.name)
-                            .putString(SubmissionRecoveryKeys.MEDIA_SOURCE_PATH, source.path),
-                    )
+                    runBlocking(Dispatchers.IO) {
+                        storage.persistBlocking(
+                            PreferenceFile.DRAFT,
+                            PreferenceChanges()
+                                .putFrozenSubmission(frozen, SubmissionPhase.MEDIA_IMPORTING)
+                                .putString(SubmissionRecoveryKeys.MEDIA_OPERATION, operation.name)
+                                .putString(SubmissionRecoveryKeys.MEDIA_SOURCE_PATH, source.path)
+                                .putLong(SubmissionRecoveryKeys.MEDIA_SOURCE_SIZE, source.size)
+                                .putLong(SubmissionRecoveryKeys.MEDIA_SOURCE_MODIFIED, source.modified),
+                        )
+                    }
                 },
                 import = { operation, _ ->
                     val file = if (operation == MediaImportOperation.SENTENCE_AUDIO) sentenceFile else wordFile
@@ -261,11 +269,17 @@ class AnkiDroidGatewayTest {
                 },
                 persistReceipt = { receipt ->
                     val updated = applyImportedReceipt(frozen, receipt)
-                    val saved = storage.persistBlocking(
-                        PreferenceFile.DRAFT,
-                        PreferenceChanges().putFrozenSubmission(updated, SubmissionPhase.MEDIA_IMPORTED)
-                            .apply { putMediaReceipt(receipt) },
-                    )
+                    val saved = runBlocking(Dispatchers.IO) {
+                        storage.persistBlocking(
+                            PreferenceFile.DRAFT,
+                            PreferenceChanges().putFrozenSubmission(updated, SubmissionPhase.MEDIA_IMPORTED)
+                                .apply { putMediaReceipt(receipt) }
+                                .remove(SubmissionRecoveryKeys.MEDIA_OPERATION)
+                                .remove(SubmissionRecoveryKeys.MEDIA_SOURCE_PATH)
+                                .remove(SubmissionRecoveryKeys.MEDIA_SOURCE_SIZE)
+                                .remove(SubmissionRecoveryKeys.MEDIA_SOURCE_MODIFIED),
+                        )
+                    }
                     if (saved) frozen = updated
                     saved
                 },
