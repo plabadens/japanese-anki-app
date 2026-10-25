@@ -151,6 +151,7 @@
     <string name="voices_empty">No compatible Japanese voices found.</string>
     <string name="voice_unavailable">Choose an available sentence voice.</string>
     <string name="cached_voices">Saved voices · offline</string>
+    <string name="cached_voices_stale">Saved voices are for a different key. Reload before using them.</string>
     <string name="save_failed">Could not save your changes.</string>
     <string name="draft_save_failed">Could not save this draft.</string>
     <string name="cache_failed">Could not clear the cache.</string>

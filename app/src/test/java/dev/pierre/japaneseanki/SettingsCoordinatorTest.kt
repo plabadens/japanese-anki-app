@@ -128,8 +128,9 @@ class SettingsCoordinatorTest {
         coordinator.updateGoogleKey("new-key")
 
         assertFalse(coordinator.completeVoiceLoad(oldRequest!!, voices = emptyList()))
-        assertEquals(VoiceCatalogProvenance.CACHED, coordinator.currentVoiceCatalog().provenance)
+        assertEquals(VoiceCatalogProvenance.STALE, coordinator.currentVoiceCatalog().provenance)
         assertFalse(coordinator.currentVoiceCatalog().loading)
+        assertNull(coordinator.currentVoiceCatalog().selectedVoiceForSynthesis(cached.name))
         assertEquals(cached.name, coordinator.currentValues().voiceName)
 
         val currentRequest = coordinator.reloadVoices()
@@ -156,6 +157,75 @@ class SettingsCoordinatorTest {
     }
 
     @Test
+    fun coldOpenUsesPersistedCatalogWithoutWaitingForNetwork() {
+        val selected = voice("ja-JP-Chirp3-HD-Aoede")
+        val coordinator = SettingsCoordinator(
+            FakeSettingsPersistence(
+                initial = loaded(
+                    key = "valid-key",
+                    values = SettingsValues(voiceName = selected.name),
+                    cachedVoices = listOf(selected),
+                ),
+            ),
+            FakeSettingsScheduler(),
+        )
+
+        val opened = coordinator.open()
+
+        assertNotNull("A refresh may be in flight, but cached readiness must not wait for it", opened.initialVoiceRequest)
+        assertEquals(VoiceCatalogProvenance.CACHED, opened.voiceCatalog.provenance)
+        assertEquals(
+            selected,
+            sentenceVoiceForSynthesis(
+                credentialStored = true,
+                credentialUnreadable = false,
+                voiceName = selected.name,
+                catalog = opened.voiceCatalog,
+            ),
+        )
+        assertTrue(coordinator.canSynthesizeSentence())
+    }
+
+    @Test
+    fun missingCatalogDoesNotClaimSentenceSynthesisReady() {
+        val coordinator = SettingsCoordinator(
+            FakeSettingsPersistence(initial = loaded(
+                key = "valid-key",
+                values = SettingsValues(voiceName = "ja-JP-Chirp3-HD-Aoede"),
+            )),
+            FakeSettingsScheduler(),
+        )
+
+        coordinator.open()
+
+        assertFalse(coordinator.canSynthesizeSentence())
+    }
+
+    @Test
+    fun savingChangedKeyInvalidatesPersistedVoiceCache() {
+        val selected = voice("ja-JP-Chirp3-HD-Aoede")
+        val persistence = FakeSettingsPersistence(
+            initial = LoadedSettings(
+                values = SettingsValues(voiceName = selected.name),
+                googleKey = "old-key",
+                credentialUnreadable = false,
+                cachedVoices = listOf(selected),
+                cachedVoiceListPresent = true,
+            ),
+        )
+        val coordinator = SettingsCoordinator(persistence, FakeSettingsScheduler())
+        coordinator.open()
+        coordinator.updateGoogleKey("new-key")
+
+        assertTrue(coordinator.flush().isSuccess)
+        val reopened = SettingsCoordinator(persistence, FakeSettingsScheduler()).open()
+
+        assertEquals("new-key", reopened.googleKey)
+        assertEquals(VoiceCatalogProvenance.NONE, reopened.voiceCatalog.provenance)
+        assertTrue(reopened.voiceCatalog.voices.isEmpty())
+    }
+
+    @Test
     fun removedVoiceBlocksSynthesisOnlyAfterAuthoritativeListSaysItIsMissing() {
         val selected = voice("ja-JP-Chirp3-HD-Aoede")
         val coordinator = SettingsCoordinator(
@@ -170,7 +240,7 @@ class SettingsCoordinatorTest {
         )
         val opened = coordinator.open()
 
-        assertTrue(coordinator.canSynthesizeSentence()) // cached metadata is not authoritative evidence
+        assertTrue(coordinator.canSynthesizeSentence()) // the saved catalog remains usable until a refresh disproves it
         assertTrue(coordinator.completeVoiceLoad(opened.initialVoiceRequest!!, voices = emptyList()))
         assertTrue(coordinator.currentVoiceCatalog().selectedVoiceMissing(selected.name))
         assertFalse(coordinator.canSynthesizeSentence())
@@ -217,9 +287,11 @@ class SettingsCoordinatorTest {
         val selected = voice("ja-JP-Chirp3-HD-Aoede")
         val request = coordinator.reloadVoices()!!
         assertTrue(coordinator.completeVoiceLoad(request, voices = listOf(selected)))
+        assertEquals("The new key is not persisted yet; don't associate its catalog with the old key", 0, persistence.cacheWrites)
         coordinator.updateValues(coordinator.currentValues().copy(voiceName = selected.name))
 
         assertTrue(coordinator.flush().isSuccess)
+        assertEquals(2, persistence.cacheWrites)
 
         val reopened = SettingsCoordinator(persistence, FakeSettingsScheduler())
         val opened = reopened.open()
@@ -327,7 +399,7 @@ private class FakeSettingsPersistence(
     override fun saveVoiceCache(voices: List<CloudVoice>): Boolean {
         cacheWrites++
         cachedVoices = voices.toList()
-        cachedVoiceListPresent = true
+        cachedVoiceListPresent = voices.isNotEmpty()
         return true
     }
 }

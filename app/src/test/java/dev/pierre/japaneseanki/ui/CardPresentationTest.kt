@@ -1,9 +1,56 @@
 package dev.pierre.japaneseanki.ui
 
+import dev.pierre.japaneseanki.VoiceCatalogProvenance
+import dev.pierre.japaneseanki.VoiceCatalogState
+import dev.pierre.japaneseanki.sentenceVoiceForSynthesis
+import dev.pierre.japaneseanki.speech.CloudVoice
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CardPresentationTest {
+    @Test
+    fun preparedOfflineDraftCanSendWithTheSavedCatalog() {
+        val voice = CloudVoice("ja-JP-Chirp3-HD-Aoede", "Aoede", listOf("ja-JP"), 24_000)
+        val selected = sentenceVoiceForSynthesis(
+            credentialStored = true,
+            credentialUnreadable = false,
+            voiceName = voice.name,
+            catalog = VoiceCatalogState(
+                voices = listOf(voice),
+                provenance = VoiceCatalogProvenance.CACHED,
+            ),
+        )
+
+        assertEquals(voice, selected)
+        // Reopening with the same identity retains both already-generated audio artifacts.
+        val sentenceAudioReady = true
+        val wordAudioReady = true
+        val canSend = selected != null && sentenceAudioReady && wordAudioReady
+        assertTrue(cardPresentation(input(canSend = canSend)).actionEnabled)
+    }
+
+    @Test
+    fun missingCatalogKeepsSendDisabledAndShowsSetupReason() {
+        val reason = "The selected sentence voice is not verified. Reload voices and choose a verified voice in Settings."
+        val selected = sentenceVoiceForSynthesis(
+            credentialStored = true,
+            credentialUnreadable = false,
+            voiceName = "ja-JP-Chirp3-HD-Aoede",
+            catalog = VoiceCatalogState(),
+        )
+        val result = cardPresentation(
+            input(
+                canSend = selected != null,
+                submitHint = reason,
+            ),
+        )
+
+        assertFalse(result.actionEnabled)
+        assertEquals(reason, result.hint)
+    }
+
     @Test
     fun derivesHintStatusAndPrimaryActionForEachCardState() {
         val states = listOf(
