@@ -69,7 +69,6 @@ import dev.pierre.japaneseanki.ui.AppContentMaxWidth
 
 import dev.pierre.japaneseanki.ui.ReviewAudioPresentation
 import dev.pierre.japaneseanki.ui.CardAction
-import dev.pierre.japaneseanki.card.CardDeckSheet
 import dev.pierre.japaneseanki.card.CardHintActionEffects
 import dev.pierre.japaneseanki.card.CardHintActionSignals
 import dev.pierre.japaneseanki.card.CardScreenContent
@@ -467,25 +466,12 @@ class MainActivity : ComponentActivity() {
             var sentenceEditorDraft by rememberSaveable(stateSaver = TextFieldValue.Saver) {
                 mutableStateOf(TextFieldValue(""))
             }
-            var showDeckSheet by remember { mutableStateOf(false) }
-            var showDiscardConfirm by remember { mutableStateOf(false) }
             var audioCacheBytes by remember { mutableStateOf(0L) }
             var audioCacheBusy by remember { mutableStateOf(false) }
             var audioCacheMessage by remember { mutableStateOf<String?>(null) }
-            var googleKey by remember { mutableStateOf("") }
-            var googleKeyVisible by remember { mutableStateOf(false) }
-            var translationTestRunning by remember { mutableStateOf(false) }
-            var translationTestResult by remember { mutableStateOf<TranslationResult?>(null) }
             var selectedVoiceName by remember {
                 mutableStateOf(settings.getString(SettingsPreferenceKeys.GOOGLE_VOICE, "").orEmpty())
             }
-            var cloudVoices by remember { mutableStateOf(emptyList<CloudVoice>()) }
-            var cloudVoicesCached by remember { mutableStateOf(false) }
-            var cloudVoicesLoading by remember { mutableStateOf(false) }
-            var cloudVoicesError by remember { mutableStateOf<String?>(null) }
-            var voiceListAttempted by remember { mutableStateOf(false) }
-            var voiceRefresh by remember { mutableStateOf(0) }
-            var showVoiceMenu by remember { mutableStateOf(false) }
             var settingsLoading by remember { mutableStateOf(false) }
             var settingsSaving by remember { mutableStateOf(false) }
             var settingsError by remember { mutableStateOf<String?>(null) }
@@ -867,8 +853,6 @@ class MainActivity : ComponentActivity() {
             }
             var cameraError by remember { mutableStateOf<String?>(null) }
             var captureInProgress by remember { mutableStateOf(false) }
-            var showModelMenu by remember { mutableStateOf(false) }
-            var showDeckMenu by remember { mutableStateOf(false) }
             var submitMessage by remember { mutableStateOf<String?>(null) }
             val restoredPhase = SubmissionPhase.fromPersisted(
                 preferences.getString(SubmissionRecoveryKeys.STATUS, null),
@@ -942,7 +926,6 @@ class MainActivity : ComponentActivity() {
                     else -> null
                 }
             }
-            var pitchInfoExpanded by remember { mutableStateOf(false) }
             var frozenSnapshotAppliedRevision by remember { mutableStateOf(-1L) }
             var draftGeneration by remember { mutableStateOf(0L) }
             var editorInputRevision by remember { mutableStateOf(0L) }
@@ -984,11 +967,6 @@ class MainActivity : ComponentActivity() {
                 selectedModelId = values.modelId
                 selectedDeckId = values.deckId
                 selectedVoiceName = values.voiceName
-                cloudVoices = catalog.voices
-                cloudVoicesCached = catalog.hasCachedList
-                cloudVoicesLoading = catalog.loading
-                cloudVoicesError = catalog.error
-                voiceListAttempted = catalog.attempted
             }
 
             fun startVoiceList(coordinator: SettingsCoordinator, request: VoiceLoadRequest) {
@@ -1016,9 +994,6 @@ class MainActivity : ComponentActivity() {
                 settingsLoading = true
                 settingsSaving = false
                 settingsError = null
-                googleKeyVisible = false
-                translationTestResult = null
-                translationTestRunning = false
                 showSettings = true
             }
 
@@ -1045,7 +1020,6 @@ class MainActivity : ComponentActivity() {
                     val result = flushSettings(coordinator)
                     if (result.isSuccess) {
                         syncSettingsScreen(coordinator)
-                        googleKey = coordinator.currentGoogleKey()
                         settingsCoordinator = null
                         showSettings = false
                         if (resumeSetup || audioSetupInvalidated) {
@@ -2515,33 +2489,6 @@ class MainActivity : ComponentActivity() {
                 },
             )
 
-            if (showDiscardConfirm) {
-                FlowDialog(
-                    onDismissRequest = { showDiscardConfirm = false },
-                    title = { Text(stringResource(R.string.legacy_capture_discard_this_draft)) },
-                    text = {
-                        Text(
-                            if (editor.text.isNotBlank() || noteImagePath != null || target != null) {
-                                stringResource(R.string.legacy_capture_the_sentence_target_photo_and_any_generate)
-                            } else {
-                                stringResource(R.string.legacy_capture_this_draft_is_already_empty)
-                            },
-                        )
-                    },
-                    confirmButton = {
-                        TextButton(enabled = !sendState.locked, onClick = {
-                            showDiscardConfirm = false
-                            clearDraft()
-                        }) { Text(stringResource(R.string.legacy_capture_discard_draft)) }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showDiscardConfirm = false }) {
-                            Text(stringResource(R.string.legacy_capture_keep_working))
-                        }
-                    },
-                )
-            }
-
             val processedImageIdentity = liveMediaIdentity(processedImagePath?.let(::File))
             val imageReceiptFilename = importedReceiptFromPreferences(
                 preferences,
@@ -2902,9 +2849,6 @@ class MainActivity : ComponentActivity() {
                 settingsSaving = false
                 settingsError = null
                 setupAudioErrorResource = null
-                googleKeyVisible = false
-                translationTestResult = null
-                translationTestRunning = false
                 val coordinator = SettingsCoordinator(
                     persistence = PreferenceBackedSettingsPersistence(preferenceStorage),
                     onSaveResult = { result ->
@@ -2918,7 +2862,6 @@ class MainActivity : ComponentActivity() {
                 settingsCoordinator = coordinator
                 try {
                     val opened = withContext(Dispatchers.IO) { coordinator.open() }
-                    googleKey = opened.googleKey
                     audioCacheBytes = withContext(Dispatchers.IO) { reusableAudioCache.sizeBytes() }
                     settingsLoading = false
                     syncSettingsScreen(coordinator)
@@ -3619,20 +3562,6 @@ class MainActivity : ComponentActivity() {
                                 ),
                             )
                         }
-                        CardDeckSheet(
-                            visible = showDeckSheet,
-                            decks = decks,
-                            title = stringResource(R.string.legacy_settings_destination_deck),
-                            emptyMessage = stringResource(
-                                R.string.legacy_settings_no_decks_are_available_check_ankidroid_set,
-                            ),
-                            onDismiss = { showDeckSheet = false },
-                            onSelect = { deck ->
-                                selectedDeckId = deck.id
-                                updateDraft(PreferenceChanges().putLong("deck_id", deck.id))
-                                showDeckSheet = false
-                            },
-                        )
                         CardNoTargetRecoveryContent(
                             visible = visibleRoute == AppRoute.Card && reviewTarget == null,
                             submitMessage = submitMessage,
