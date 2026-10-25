@@ -321,8 +321,8 @@ class MainActivity : ComponentActivity() {
     private val sharedImage = mutableStateOf<Uri?>(null)
     private var ankiDroidInstalled by mutableStateOf(false)
     private var apiPermissionGranted by mutableStateOf(false)
-    private lateinit var offlineDictionary: OfflineDictionary
-    private lateinit var offlineAnalyzer: OfflineJapaneseAnalyzer
+    private lateinit var offlineDictionary: OfflineDictionaryService
+    internal lateinit var offlineAnalyzer: JapaneseAnalyzer
     private lateinit var japaneseOcr: JapaneseOcr
     private lateinit var ajtPitchRepository: AjtPitchRepository
     private var audioPlayer: MediaPlayer? = null
@@ -348,8 +348,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         sharedText.value = textFromIntent(intent)
         sharedImage.value = imageFromIntent(intent)
-        offlineDictionary = sharedDictionary(this)
-        offlineAnalyzer = OfflineJapaneseAnalyzer.shared(this)
+        offlineDictionary = AppServices.offlineDictionary(this) { sharedDictionary(it) }
+        offlineAnalyzer = AppServices.offlineAnalyzer(this)
         japaneseOcr = JapaneseOcr()
         ajtPitchRepository = AjtPitchRepository.shared(this)
         val preferenceStorage = AndroidPreferenceStorage(this)

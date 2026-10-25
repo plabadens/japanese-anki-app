@@ -424,8 +424,8 @@ internal fun CardScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        statusContent()
                     }
+                    statusContent()
                     CardInstruction(
                         hint = hint,
                         loading = hintPreparing || wordAudio == ReviewAudioPresentation.Generating,

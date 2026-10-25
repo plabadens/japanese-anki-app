@@ -6,15 +6,21 @@ import java.io.File
 import java.io.FileOutputStream
 
 /** One-time private copy of the bundled, read-only JMdict/Kanjium index. */
+internal interface OfflineDictionaryService {
+    fun prepare(): Map<String, String>
+    fun hasEntry(surface: String): Boolean
+    fun search(surface: String, lemma: String? = null, limit: Int = 50, offset: Int = 0): List<DictionaryEntry>
+}
+
 class OfflineDictionary(
     context: Context,
     private val databaseFile: File = File(context.applicationContext.filesDir, "japanese-dictionary-v2.sqlite"),
-) : AutoCloseable {
+) : OfflineDictionaryService, AutoCloseable {
     private val appContext: Context = context.applicationContext
     @Volatile private var database: SQLiteDatabase? = null
 
     @Synchronized
-    fun prepare(): Map<String, String> = synchronized(installationLock) {
+    override fun prepare(): Map<String, String> = synchronized(installationLock) {
         database?.let { return metadata(it) }
         if (databaseFile.exists()) {
             database = openValidatedDatabase(databaseFile)
@@ -54,14 +60,14 @@ class OfflineDictionary(
      * this return `true` for an entry that [search] would refuse to parse; selection still goes
      * through [search], which surfaces the malformed entry instead of exporting a partial note.
      */
-    fun hasEntry(surface: String): Boolean {
+    override fun hasEntry(surface: String): Boolean {
         val query = surface.trim()
         if (query.isEmpty()) return false
         val db = database ?: error("Offline dictionary is not ready.")
         return db.rawQuery(HAS_ENTRY_SQL, arrayOf(query, query)).use { it.moveToFirst() }
     }
 
-    fun search(surface: String, lemma: String? = null, limit: Int = 50, offset: Int = 0): List<DictionaryEntry> {
+    override fun search(surface: String, lemma: String?, limit: Int, offset: Int): List<DictionaryEntry> {
         val query = surface.trim()
         if (query.isEmpty()) return emptyList()
         require(limit in 1..100 && offset >= 0)

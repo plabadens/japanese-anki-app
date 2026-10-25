@@ -20,13 +20,22 @@ class MainActivityLaunchTest {
 
     @Test
     fun coldLaunchReachesResumedWithoutThrowing() {
+        AppServices.clearTestOverrides()
         val controller = Robolectric.buildActivity(MainActivity::class.java).setup()
 
-        shadowOf(Looper.getMainLooper()).idle()
+        try {
+            shadowOf(Looper.getMainLooper()).idle()
 
-        val activity = controller.get()
-        assertNotNull("MainActivity was not created", activity)
-        assertTrue("MainActivity is not finishing right after launch", !activity.isFinishing)
-        controller.pause().stop().destroy()
+            val activity = controller.get()
+            assertNotNull("MainActivity was not created", activity)
+            assertTrue(
+                "MainActivity did not build the real analyzer",
+                activity.offlineAnalyzer is OfflineJapaneseAnalyzer,
+            )
+            assertTrue("MainActivity is not finishing right after launch", !activity.isFinishing)
+        } finally {
+            controller.pause().stop().destroy()
+            AppServices.clearTestOverrides()
+        }
     }
 }

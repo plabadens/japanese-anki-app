@@ -7,11 +7,17 @@ import java.io.File
  * MeCab over the bundled UniDic data. Extraction is a local, one-time unpack of an APK asset; the
  * analyzer never downloads anything.
  */
-internal class OfflineJapaneseAnalyzer(context: Context) {
+internal interface JapaneseAnalyzer {
+    fun loadInstalled(): Boolean
+    fun prepare()
+    fun analyze(sentence: String): List<JapaneseToken>
+}
+
+internal class OfflineJapaneseAnalyzer(context: Context) : JapaneseAnalyzer {
     private val appContext = context.applicationContext
     @Volatile private var tagger: NativeMeCab? = null
 
-    fun loadInstalled(): Boolean {
+    override fun loadInstalled(): Boolean {
         if (tagger != null) return true
         synchronized(installationLock) {
             if (tagger != null) return true
@@ -23,7 +29,7 @@ internal class OfflineJapaneseAnalyzer(context: Context) {
     }
 
     /** Unpacks the bundled dictionary when needed, then opens it. Blocking: call off the main thread. */
-    fun prepare() {
+    override fun prepare() {
         if (tagger != null) return
         synchronized(installationLock) {
             if (tagger != null) return
@@ -32,7 +38,7 @@ internal class OfflineJapaneseAnalyzer(context: Context) {
         }
     }
 
-    fun analyze(sentence: String): List<JapaneseToken> =
+    override fun analyze(sentence: String): List<JapaneseToken> =
         checkNotNull(tagger) { "Offline Japanese analysis is not ready" }.analyze(sentence)
 
     companion object {
@@ -42,5 +48,32 @@ internal class OfflineJapaneseAnalyzer(context: Context) {
         fun shared(context: Context): OfflineJapaneseAnalyzer = shared ?: synchronized(installationLock) {
             shared ?: OfflineJapaneseAnalyzer(context).also { shared = it }
         }
+    }
+}
+
+/** Production defaults to the real local services; tests can replace the startup data boundaries. */
+internal object AppServices {
+    @Volatile private var offlineAnalyzerOverride: ((Context) -> JapaneseAnalyzer)? = null
+    @Volatile private var offlineDictionaryOverride: ((Context) -> OfflineDictionaryService)? = null
+
+    fun offlineAnalyzer(context: Context): JapaneseAnalyzer =
+        offlineAnalyzerOverride?.invoke(context) ?: OfflineJapaneseAnalyzer.shared(context)
+
+    fun offlineDictionary(
+        context: Context,
+        defaultProvider: (Context) -> OfflineDictionaryService,
+    ): OfflineDictionaryService = offlineDictionaryOverride?.invoke(context) ?: defaultProvider(context)
+
+    fun installOfflineAnalyzerForTest(factory: (Context) -> JapaneseAnalyzer) {
+        offlineAnalyzerOverride = factory
+    }
+
+    fun installOfflineDictionaryForTest(factory: (Context) -> OfflineDictionaryService) {
+        offlineDictionaryOverride = factory
+    }
+
+    fun clearTestOverrides() {
+        offlineAnalyzerOverride = null
+        offlineDictionaryOverride = null
     }
 }
