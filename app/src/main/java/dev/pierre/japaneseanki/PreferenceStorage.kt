@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -62,7 +64,8 @@ internal interface AppPreferenceStorage {
 /**
  * SharedPreferences adapter. All Android reads happen on [dispatcher] before composition; every
  * write is serialized through one ordered queue there. Recovery writes use awaited commits. The
- * synchronous settings adapter is used only by its existing background scheduler.
+ * synchronous settings adapter is used only by its existing background scheduler. Production
+ * ownership is application-scoped: pending saves outlive activities and retain their queue order.
  */
 internal class AndroidPreferenceStorage(
     context: Context,
@@ -79,6 +82,8 @@ internal class AndroidPreferenceStorage(
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private val requestLock = Any()
     private val requests = Channel<WriteRequest>(Channel.UNLIMITED)
+    private val loadMutex = Mutex()
+    private var loaded = false
     private lateinit var draftPreferences: SharedPreferences
     private lateinit var settingsPreferences: SharedPreferences
 
@@ -96,8 +101,10 @@ internal class AndroidPreferenceStorage(
         }
     }
 
-    override suspend fun load() {
-        val loaded = kotlinx.coroutines.withContext(dispatcher) {
+    override suspend fun load() = loadMutex.withLock {
+        // A recreated activity must not replace optimistic queued edits with an older disk snapshot.
+        if (loaded) return@withLock
+        val snapshot = kotlinx.coroutines.withContext(dispatcher) {
             val loadedDraft = runCatching {
                 draftPreferences = appContext.getSharedPreferences("draft", Context.MODE_PRIVATE)
                 PreferenceValues(draftPreferences.all.toMap())
@@ -109,9 +116,10 @@ internal class AndroidPreferenceStorage(
             loadedDraft to loadedSettings
         }
         synchronized(requestLock) {
-            mutableDraft.value = loaded.first
-            mutableSettings.value = loaded.second
+            mutableDraft.value = snapshot.first
+            mutableSettings.value = snapshot.second
         }
+        loaded = true
     }
 
     override fun update(file: PreferenceFile, changes: PreferenceChanges) {

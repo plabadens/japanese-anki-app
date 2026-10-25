@@ -133,7 +133,7 @@ import dev.pierre.japaneseanki.speech.decodeVoices
 import dev.pierre.japaneseanki.speech.encodeVoices
 import dev.pierre.japaneseanki.speech.sentenceHintSpans
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -353,7 +353,7 @@ class MainActivity : ComponentActivity() {
         offlineAnalyzer = AppServices.offlineAnalyzer(this)
         japaneseOcr = JapaneseOcr()
         ajtPitchRepository = AjtPitchRepository.shared(this)
-        val preferenceStorage = AndroidPreferenceStorage(this)
+        val preferenceStorage = AppServices.preferenceStorage(this)
         lifecycleScope.launch {
             preferenceStorage.load()
             if (preferenceStorage.draft.value.getString(SubmissionRecoveryKeys.STATUS, null) == "done") {
@@ -362,8 +362,8 @@ class MainActivity : ComponentActivity() {
                 }
             }
             setContent {
-            val preferences by preferenceStorage.draft.collectAsState()
-            val settings by preferenceStorage.settings.collectAsState()
+            val preferences by preferenceStorage.draft.collectAsStateWithLifecycle()
+            val settings by preferenceStorage.settings.collectAsStateWithLifecycle()
             fun updateDraft(changes: PreferenceChanges): Boolean {
                 preferenceStorage.update(PreferenceFile.DRAFT, changes)
                 return true
@@ -562,7 +562,7 @@ class MainActivity : ComponentActivity() {
             var pitchCandidates by remember { mutableStateOf<List<AjtPitchRecord>>(emptyList()) }
             var pitchLookupLoading by remember { mutableStateOf(false) }
             // Observable, process-wide AJT availability: a late Ready or a retry re-keys the query.
-            val ajtAvailability by ajtPitchRepository.availability.collectAsState()
+            val ajtAvailability by ajtPitchRepository.availability.collectAsStateWithLifecycle()
             var noteTypes by remember { mutableStateOf<List<AnkiNoteType>>(emptyList()) }
             var decks by remember { mutableStateOf<List<AnkiDeck>>(emptyList()) }
             var setupLoading by remember { mutableStateOf(false) }

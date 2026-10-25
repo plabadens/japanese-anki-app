@@ -55,6 +55,14 @@ internal class OfflineJapaneseAnalyzer(context: Context) : JapaneseAnalyzer {
 internal object AppServices {
     @Volatile private var offlineAnalyzerOverride: ((Context) -> JapaneseAnalyzer)? = null
     @Volatile private var offlineDictionaryOverride: ((Context) -> OfflineDictionaryService)? = null
+    @Volatile private var preferenceStorageOverride: AppPreferenceStorage? = null
+
+    fun preferenceStorage(context: Context): AppPreferenceStorage =
+        preferenceStorageOverride ?: (context.applicationContext as JapaneseAnkiApplication).preferenceStorage
+
+    fun installPreferenceStorageForTest(storage: AppPreferenceStorage) {
+        preferenceStorageOverride = storage
+    }
 
     fun offlineAnalyzer(context: Context): JapaneseAnalyzer =
         offlineAnalyzerOverride?.invoke(context) ?: OfflineJapaneseAnalyzer.shared(context)
@@ -75,5 +83,6 @@ internal object AppServices {
     fun clearTestOverrides() {
         offlineAnalyzerOverride = null
         offlineDictionaryOverride = null
+        preferenceStorageOverride = null
     }
 }

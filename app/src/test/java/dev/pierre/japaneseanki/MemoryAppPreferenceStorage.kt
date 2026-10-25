@@ -44,6 +44,8 @@ internal class MemoryAppPreferenceStorage(
     private val settingsState = MutableStateFlow(PreferenceValues())
     override val draft: StateFlow<PreferenceValues> = draftState.asStateFlow()
     override val settings: StateFlow<PreferenceValues> = settingsState.asStateFlow()
+    val draftCollectors: Int get() = draftState.subscriptionCount.value
+    val settingsCollectors: Int get() = settingsState.subscriptionCount.value
     private val queued = mutableListOf<Pair<PreferenceFile, PreferenceChanges>>()
 
     override suspend fun load() {

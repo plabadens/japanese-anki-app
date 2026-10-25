@@ -22,8 +22,10 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.lifecycle.Lifecycle
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -44,6 +46,7 @@ class MainActivityRenderingTest {
     val testName = TestName()
 
     private var scenario: ActivityScenario<MainActivity>? = null
+    private var observedStorage: MemoryAppPreferenceStorage? = null
     private val context: Context get() = ApplicationProvider.getApplicationContext()
 
     @Before
@@ -53,6 +56,12 @@ class MainActivityRenderingTest {
         AppServices.installOfflineAnalyzerForTest { RenderingAnalyzer() }
         AppServices.installOfflineDictionaryForTest { RenderingDictionary() }
         seedPreferences(testName.methodName)
+        if (testName.methodName == "preferenceCollectorsFollowTheActivityLifecycle") {
+            observedStorage = MemoryAppPreferenceStorage(
+                initialDraft = PreferenceValues(context.getSharedPreferences("draft", Context.MODE_PRIVATE).all.toMap()),
+                initialSettings = PreferenceValues(context.getSharedPreferences("settings", Context.MODE_PRIVATE).all.toMap()),
+            ).also(AppServices::installPreferenceStorageForTest)
+        }
         scenario = ActivityScenario.launch(MainActivity::class.java)
     }
 
@@ -76,6 +85,50 @@ class MainActivityRenderingTest {
     }
 
     @Test
+    fun preferenceCollectorsFollowTheActivityLifecycle() {
+        val storage = checkNotNull(observedStorage)
+        waitForTag("capture-sentence-field")
+        composeRule.waitUntil { storage.draftCollectors == 1 && storage.settingsCollectors == 1 }
+
+        scenario?.moveToState(Lifecycle.State.CREATED)
+        composeRule.waitUntil { storage.draftCollectors == 0 && storage.settingsCollectors == 0 }
+        storage.update(PreferenceFile.SETTINGS, PreferenceChanges().putString("while_stopped", "retained"))
+        scenario?.moveToState(Lifecycle.State.RESUMED)
+        composeRule.waitUntil { storage.draftCollectors == 1 && storage.settingsCollectors == 1 }
+
+        scenario?.recreate()
+        waitForTag("capture-sentence-field")
+        composeRule.waitUntil { storage.draftCollectors == 1 && storage.settingsCollectors == 1 }
+        assertEquals("retained", storage.settings.value.getString("while_stopped", null))
+
+        scenario?.close()
+        scenario = null
+        composeRule.waitUntil { storage.draftCollectors == 0 && storage.settingsCollectors == 0 }
+    }
+
+    @Test
+    fun recreationAndActivityDestructionKeepTheApplicationWriterAndItsQueuedSaves() {
+        waitForTag("capture-sentence-field")
+        val storage = (context as JapaneseAnkiApplication).preferenceStorage
+        scenario?.onActivity { assertSame(storage, AppServices.preferenceStorage(it)) }
+        storage.update(PreferenceFile.SETTINGS, PreferenceChanges().putString("ownership_probe", "queued"))
+
+        scenario?.recreate()
+        waitForTag("capture-sentence-field")
+        scenario?.onActivity { assertSame(storage, AppServices.preferenceStorage(it)) }
+        scenario?.close()
+        scenario = null
+
+        assertTrue(runSuspendTest {
+            storage.persist(PreferenceFile.SETTINGS, PreferenceChanges().putBoolean("ownership_barrier", true))
+        })
+        val restarted = AndroidPreferenceStorage(context)
+        runSuspendTest { restarted.load() }
+        assertEquals("queued", restarted.settings.value.getString("ownership_probe", null))
+        assertTrue(restarted.settings.value.getBoolean("ownership_barrier", false))
+    }
+
+    @Test
     fun cardRouteRendersTheCommittedSentenceAndTargetWithSetupBlockedSend() {
         waitForTag("sentence-word-0-1")
 
@@ -93,6 +146,8 @@ class MainActivityRenderingTest {
             "sentence-word-text-2-4",
             useUnmergedTree = true,
         ).assertIsDisplayed().assertTextEquals("走る")
+        // Word analysis and setup readiness arrive independently.
+        waitForText(context.getString(R.string.audio_setup_needed))
         composeRule.onNodeWithText(context.getString(R.string.audio_setup_needed)).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.finish_setup))
             .assertIsDisplayed()
