@@ -261,37 +261,22 @@ internal fun CardScreen(
     BoxWithConstraints(modifier) {
         val bandHeight = cardPhotoBandHeight(maxWidth - 32.dp, maxHeight, fontScale)
         val hasPhoto = imagePath != null && File(imagePath).isFile
+        val contentTopPadding = if (hasPhoto || onBack == null) 8.dp else 56.dp
         Column(Modifier.fillMaxSize()) {
-            if (!hasPhoto && onBack != null) {
-                Box(
-                    Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 16.dp),
-                    contentAlignment = Alignment.CenterStart,
-                ) {
-                    CardBackControl(onBack)
-                }
-            }
             Column(
                 Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(top = 8.dp)
+                    .padding(top = contentTopPadding)
                     .verticalScroll(rememberScrollState()),
             ) {
                 if (hasPhoto) {
-                    Box(Modifier.fillMaxWidth()) {
-                        CardPhotoBand(
-                            imagePath = imagePath,
-                            height = bandHeight,
-                            focusY = imageFocusY,
-                            onOpen = { photoExpanded = true },
-                        )
-                        onBack?.let {
-                            CardBackControl(
-                                onBack = it,
-                                modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
-                            )
-                        }
-                    }
+                    CardPhotoBand(
+                        imagePath = imagePath,
+                        height = bandHeight,
+                        focusY = imageFocusY,
+                        onOpen = { photoExpanded = true },
+                    )
                 }
                 Column(
                     Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp),
@@ -487,6 +472,12 @@ internal fun CardScreen(
                 actionEnabled = actionEnabled,
                 actionLoading = actionLoading,
                 onAction = onAction,
+            )
+        }
+        onBack?.let {
+            CardBackControl(
+                onBack = it,
+                modifier = Modifier.align(Alignment.TopStart).padding(start = 16.dp, top = 8.dp),
             )
         }
     }
@@ -752,7 +743,7 @@ private fun CardPhotoBand(imagePath: String, height: Dp, focusY: Float, onOpen: 
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
             .height(height)
-            .clip(FlowStickers.contentCard())
+            .clip(MaterialTheme.shapes.large)
             .clipToBounds()
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .clickable(onClick = onOpen)

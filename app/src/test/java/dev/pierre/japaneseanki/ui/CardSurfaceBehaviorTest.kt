@@ -83,6 +83,11 @@ class CardSurfaceBehaviorTest {
 
         composeRule.onNodeWithContentDescription(composeRule.activity.getString(R.string.back))
             .assertIsDisplayed()
+        val backBounds = composeRule.onNodeWithContentDescription(composeRule.activity.getString(R.string.back))
+            .fetchSemanticsNode().boundsInRoot
+        val sentenceBounds = composeRule.onNodeWithTag("sentence-layout").fetchSemanticsNode().boundsInRoot
+        assertTrue("The floating back control must sit above the sentence", backBounds.bottom <= sentenceBounds.top)
+        composeRule.onNodeWithContentDescription(composeRule.activity.getString(R.string.back))
             .performClick()
         composeRule.runOnIdle { assertEquals(1, backs) }
     }
