@@ -149,7 +149,7 @@ internal class CardScreenStateHolder(
             submitHint = presentationContext.submitHint,
             noWordAction = targetWord == null && presentationContext.analyzerError == null &&
                 !presentationContext.analyzing &&
-                (presentationContext.editingEnabled || presentationContext.frozenRetryReady) &&
+                presentationContext.editingEnabled &&
                 presentationContext.submitMessage == null,
             canSend = presentationContext.canSend,
             submissionLocked = presentationContext.submissionLocked,

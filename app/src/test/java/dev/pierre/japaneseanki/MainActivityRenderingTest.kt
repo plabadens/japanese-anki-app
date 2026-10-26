@@ -18,6 +18,9 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.isDialog
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.core.app.ActivityScenario
@@ -57,10 +60,11 @@ class MainActivityRenderingTest {
         AppServices.installOfflineAnalyzerForTest { RenderingAnalyzer() }
         AppServices.installOfflineDictionaryForTest { RenderingDictionary() }
         seedPreferences(testName.methodName)
-        if (testName.methodName == "preferenceCollectorsFollowTheActivityLifecycle") {
+        if (testName.methodName in setOf("preferenceCollectorsFollowTheActivityLifecycle", "failedSettingsSaveKeepsThePageOpenForToolbarAndSystemBack")) {
             observedStorage = MemoryAppPreferenceStorage(
                 initialDraft = PreferenceValues(context.getSharedPreferences("draft", Context.MODE_PRIVATE).all.toMap()),
                 initialSettings = PreferenceValues(context.getSharedPreferences("settings", Context.MODE_PRIVATE).all.toMap()),
+                failCommits = testName.methodName == "failedSettingsSaveKeepsThePageOpenForToolbarAndSystemBack",
             ).also(AppServices::installPreferenceStorageForTest)
         }
         scenario = ActivityScenario.launch(MainActivity::class.java)
@@ -83,6 +87,40 @@ class MainActivityRenderingTest {
         composeRule.onNodeWithText(context.getString(R.string.choose_word)).assertIsDisplayed()
         composeRule.onAllNodesWithText(context.getString(R.string.card_sentence_audio_field))
             .assertCountEquals(0)
+    }
+
+    @Test
+    fun settingsAndSourcesUseOrdinaryDestinationsAndRestoreTheirBackStack() {
+        waitForTag("capture-sentence-field")
+        composeRule.onNodeWithContentDescription(context.getString(R.string.settings)).performClick()
+        waitForText(context.getString(R.string.default_tags))
+        composeRule.onAllNodes(isDialog()).assertCountEquals(0)
+        composeRule.onAllNodesWithTag("capture-sentence-field").assertCountEquals(0)
+        composeRule.onNodeWithText(context.getString(R.string.sources)).performScrollTo().performClick()
+        composeRule.onAllNodesWithText(context.getString(R.string.default_tags)).assertCountEquals(0)
+        composeRule.onAllNodes(isDialog()).assertCountEquals(0)
+        scenario?.recreate()
+        waitForText(context.getString(R.string.sources))
+        scenario?.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        waitForText(context.getString(R.string.default_tags))
+        composeRule.onNodeWithContentDescription(context.getString(R.string.back)).performClick()
+        waitForTag("capture-sentence-field")
+        composeRule.onAllNodes(isDialog()).assertCountEquals(0)
+    }
+
+    @Test
+    fun failedSettingsSaveKeepsThePageOpenForToolbarAndSystemBack() {
+        waitForTag("capture-sentence-field")
+        composeRule.onNodeWithContentDescription(context.getString(R.string.settings)).performClick()
+        waitForText(context.getString(R.string.default_tags))
+        composeRule.onNodeWithText(context.getString(R.string.default_tags)).performTextReplacement("unsaved-tag")
+        composeRule.onNodeWithContentDescription(context.getString(R.string.back)).performClick()
+        waitForText(context.getString(R.string.save_failed))
+        composeRule.onAllNodesWithTag("capture-sentence-field").assertCountEquals(0)
+        scenario?.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        waitForText(context.getString(R.string.save_failed))
+        composeRule.onNodeWithText("unsaved-tag").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("capture-sentence-field").assertCountEquals(0)
     }
 
     @Test
@@ -233,13 +271,31 @@ class MainActivityRenderingTest {
     }
 
     @Test
+    fun interruptedSendWithoutAValidTargetShowsExactlyOneRecoveryRegion() {
+        waitForText(recoveryMessage())
+        composeRule.waitUntil {
+            composeRule.onAllNodesWithTag("sentence-word-0-1").fetchSemanticsNodes().none {
+                it.config[androidx.compose.ui.semantics.SemanticsProperties.Selected]
+            }
+        }
+        composeRule.onAllNodesWithText(recoveryMessage()).assertCountEquals(1)
+        composeRule.onAllNodesWithText(context.getString(R.string.card_discard_interrupted_send_keep_draft))
+            .assertCountEquals(1)
+    }
+
+    @Test
     fun frozenRetryExplainsTheEditLockAndDiscardUnlocksTheVisibleDraft() {
         waitForText(recoveryMessage())
         composeRule.onNodeWithText(context.getString(R.string.card_retry_media_import_may_duplicate)).performClick()
-        waitForText(context.getString(R.string.card_frozen_send_read_only))
+        waitForText(context.getString(R.string.card_frozen_send_read_only), substring = true)
         composeRule.onNodeWithText(context.getString(R.string.edit_sentence)).assertIsNotEnabled()
         composeRule.onAllNodesWithText(context.getString(R.string.card_still_needed_1_s, "Select a dictionary entry."))
             .assertCountEquals(0)
+        composeRule.onNodeWithText(context.getString(R.string.card_open_settings_action)).performClick()
+        waitForText(context.getString(R.string.default_tags))
+        scenario?.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        waitForText(context.getString(R.string.card_frozen_send_read_only), substring = true)
+        composeRule.onNodeWithText(context.getString(R.string.edit_sentence)).assertIsNotEnabled()
         val discard = context.getString(R.string.card_discard_interrupted_send_keep_draft)
         composeRule.onAllNodesWithText(discard).assertCountEquals(1)
         composeRule.onNodeWithText(discard).performClick()
@@ -261,10 +317,10 @@ class MainActivityRenderingTest {
         }
     }
 
-    private fun waitForText(text: String) {
+    private fun waitForText(text: String, substring: Boolean = false) {
         try {
             composeRule.waitUntil(timeoutMillis = SCREEN_READY_TIMEOUT_MILLIS) {
-                composeRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+                composeRule.onAllNodesWithText(text, substring = substring).fetchSemanticsNodes().isNotEmpty()
             }
         } catch (timeout: Throwable) {
             dumpUi()
@@ -295,6 +351,9 @@ class MainActivityRenderingTest {
             "interruptedWordAudioRecoveryDisplaysItsMessageAndEnabledDiscardAction",
             "discardingInterruptedSendKeepsDraftAndClearsFrozenKeys",
             "frozenRetryExplainsTheEditLockAndDiscardUnlocksTheVisibleDraft" -> interruptedDraft()
+            "interruptedSendWithoutAValidTargetShowsExactlyOneRecoveryRegion" -> interruptedDraft()
+                .putInt(SubmissionRecoveryKeys.TARGET_START, 99)
+                .putInt(SubmissionRecoveryKeys.TARGET_END, 100)
             else -> PreferenceChanges()
                 .putString("route", "Capture")
                 .putString("capture_mode", "Type")

@@ -1,9 +1,7 @@
 package dev.pierre.japaneseanki.ui
 
 import androidx.activity.ComponentActivity
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -19,7 +17,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.DialogProperties
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.pierre.japaneseanki.AnkiDeck
 import dev.pierre.japaneseanki.AnkiFieldContract
@@ -92,7 +89,7 @@ class SetupScreenBehaviorTest {
     )
 
     @Test
-    fun firstRunSetupRendersAndCompletesInsideItsFullScreenFlowDialog() {
+    fun firstRunSetupRendersAndCompletesAsAnOrdinaryPage() {
         val initial = SetupUi(
             audio = AudioSetupUi(
                 key = "",
@@ -121,29 +118,20 @@ class SetupScreenBehaviorTest {
         val state = mutableStateOf(initial)
         var finished = false
         composeRule.setContent {
-            FlowDialog(
-                onDismissRequest = {},
-                properties = DialogProperties(
-                    usePlatformDefaultWidth = false,
-                    decorFitsSystemWindows = false,
-                    dismissOnClickOutside = false,
-                ),
-            ) {
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    SetupScreen(
-                        state = state.value,
-                        onBack = null,
-                        onKeyChange = {},
-                        onVoiceChange = {},
-                        onLoadVoices = {},
-                        onRequestCamera = {},
-                        onConnectAnki = {},
-                        onSelectNoteType = {},
-                        onSelectDeck = {},
-                        onRetryDictionary = {},
-                        onFinish = { finished = true },
-                    )
-                }
+            FlowTheme(darkTheme = false) {
+                SetupScreen(
+                    state = state.value,
+                    onBack = null,
+                    onKeyChange = {},
+                    onVoiceChange = {},
+                    onLoadVoices = {},
+                    onRequestCamera = {},
+                    onConnectAnki = {},
+                    onSelectNoteType = {},
+                    onSelectDeck = {},
+                    onRetryDictionary = {},
+                    onFinish = { finished = true },
+                )
             }
         }
 

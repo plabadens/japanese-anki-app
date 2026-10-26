@@ -16,6 +16,7 @@ import dev.pierre.japaneseanki.AnkiDeck
 import dev.pierre.japaneseanki.AnkiFieldContract
 import dev.pierre.japaneseanki.AnkiNoteType
 import dev.pierre.japaneseanki.JapaneseToken
+import dev.pierre.japaneseanki.PitchAccent
 import dev.pierre.japaneseanki.R
 import dev.pierre.japaneseanki.TargetSpan
 import dev.pierre.japaneseanki.speech.CloudVoice
@@ -103,22 +104,24 @@ private fun CapturePreview(
     cameraPermissionGranted: Boolean = true,
     cameraPreviewState: CaptureCameraPreviewState? = null,
 ) {
-    InputScreen(
-        captureMode = mode,
-        onCaptureModeChange = {},
-        editor = TextFieldValue(sentence),
-        onEditorChange = {},
-        onContinue = {},
-        onOpenGallery = {},
-        onChoosePhoto = {},
-        onCaptured = {},
-        onCameraError = {},
-        outputDirectory = File("/unused-design-preview"),
-        modifier = Modifier.fillMaxSize(),
-        cameraPermissionGranted = cameraPermissionGranted,
-        onRequestCamera = {},
-        cameraPreviewState = cameraPreviewState,
-    )
+    FlowPage {
+        InputScreen(
+            captureMode = mode,
+            onCaptureModeChange = {},
+            editor = TextFieldValue(sentence),
+            onEditorChange = {},
+            onContinue = {},
+            onOpenGallery = {},
+            onChoosePhoto = {},
+            onCaptured = {},
+            onCameraError = {},
+            outputDirectory = File("/unused-design-preview"),
+            modifier = Modifier.fillMaxSize(),
+            cameraPermissionGranted = cameraPermissionGranted,
+            onRequestCamera = {},
+            cameraPreviewState = cameraPreviewState,
+        )
+    }
 }
 
 private val setupPreviewVoices = listOf(
@@ -212,55 +215,59 @@ private fun CardPreview(state: CardFlowPreviewState) {
     val hint = when (state) {
         CardFlowPreviewState.CARD_NO_WORD_CHOSEN -> stringResource(R.string.card_hint_word)
         CardFlowPreviewState.CARD_PRONUNCIATION_PREPARING -> stringResource(R.string.card_hint_preparing)
-        CardFlowPreviewState.CARD_BLOCKED_BY_SETUP -> stringResource(R.string.dictionary_needed)
+        CardFlowPreviewState.CARD_BLOCKED_BY_SETUP -> stringResource(R.string.audio_setup_needed)
         CardFlowPreviewState.CARD_REQUIRED_ITEM_FAILED -> failureMessage
         CardFlowPreviewState.CARD_SENT -> stringResource(R.string.card_note_sent_to_ankidroid)
         else -> null
     }
     val failed = state == CardFlowPreviewState.CARD_REQUIRED_ITEM_FAILED
     val ready = state == CardFlowPreviewState.CARD_READY_TO_SEND
-    CardScreen(
-        sentence = PREVIEW_SENTENCE,
-        tokens = previewTokens,
-        selectedSpan = if (selected) target else null,
-        selectionEnabled = state != CardFlowPreviewState.CARD_SENT,
-        onSelectSpan = {},
-        furigana = emptyList(),
-        onEditSentence = {},
-        translation = "I read an old book.",
-        vocabulary = if (selected) "本" else "",
-        vocabularyReading = if (selected) "ほん" else "",
-        partOfSpeech = if (selected) "noun" else null,
-        definition = if (selected) "book" else "",
-        pitch = null,
-        pitchStatus = null,
-        pitchPending = false,
-        wordStatus = null,
-        wordAudioEnabled = selected && state != CardFlowPreviewState.CARD_BLOCKED_BY_SETUP,
-        meaningAvailable = false,
-        onChangeMeaning = {},
-        imagePath = null,
-        imageFocusY = 0.5f,
-        notes = "",
-        tags = "",
-        onNotesChange = {},
-        onTagsChange = {},
-        sentenceAudio = sentenceAudio,
-        wordAudio = wordAudio,
-        onToggleSentenceAudio = {},
-        onRetrySentenceAudio = {},
-        onToggleWordAudio = {},
-        onRetryWordAudio = {},
-        hint = hint,
-        hintPreparing = state == CardFlowPreviewState.CARD_PRONUNCIATION_PREPARING,
-        actionLabel = if (failed) stringResource(R.string.retry) else stringResource(R.string.send),
-        actionEnabled = ready || failed,
-        actionLoading = false,
-        onAction = {},
-        statusMessage = null,
-        statusContent = {},
-        modifier = Modifier.fillMaxSize(),
-    )
+    FlowPage(topBar = {
+        FlowTopBar(title = stringResource(R.string.card), onBack = {}, onSettings = {})
+    }) {
+        CardScreen(
+            sentence = PREVIEW_SENTENCE,
+            tokens = previewTokens,
+            selectedSpan = if (selected) target else null,
+            selectionEnabled = state != CardFlowPreviewState.CARD_SENT,
+            onSelectSpan = {},
+            furigana = emptyList(),
+            onEditSentence = {},
+            translation = "I read an old book.",
+            vocabulary = if (selected) "本" else "",
+            vocabularyReading = if (selected) "ほん" else "",
+            partOfSpeech = if (selected) "noun" else null,
+            definition = if (selected) "book" else "",
+            pitch = if (selected) PitchAccent.create("ほん", 1) else null,
+            pitchStatus = null,
+            pitchPending = false,
+            wordStatus = null,
+            wordAudioEnabled = selected && state != CardFlowPreviewState.CARD_BLOCKED_BY_SETUP,
+            meaningAvailable = false,
+            onChangeMeaning = {},
+            imagePath = null,
+            imageFocusY = 0.5f,
+            notes = "",
+            tags = "",
+            onNotesChange = {},
+            onTagsChange = {},
+            sentenceAudio = sentenceAudio,
+            wordAudio = wordAudio,
+            onToggleSentenceAudio = {},
+            onRetrySentenceAudio = {},
+            onToggleWordAudio = {},
+            onRetryWordAudio = {},
+            hint = hint,
+            hintPreparing = state == CardFlowPreviewState.CARD_PRONUNCIATION_PREPARING,
+            actionLabel = if (failed) stringResource(R.string.retry) else stringResource(R.string.send),
+            actionEnabled = ready || failed,
+            actionLoading = false,
+            onAction = {},
+            statusMessage = null,
+            statusContent = {},
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
 }
 
 @Preview(name = "Capture / camera idle", widthDp = 390, heightDp = 844)

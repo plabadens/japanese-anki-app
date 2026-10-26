@@ -335,10 +335,3 @@ internal fun visibleRouteForAnalyzer(
     frozenCardActive -> AppRoute.Card
     else -> requestedRoute
 }
-
-internal fun shouldShowSetup(
-    showSetup: Boolean,
-    onboardingComplete: Boolean,
-    analyzerReady: Boolean,
-    showSettings: Boolean,
-): Boolean = !showSettings && (showSetup || !onboardingComplete || !analyzerReady)

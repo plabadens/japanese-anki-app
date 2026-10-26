@@ -31,7 +31,7 @@ internal fun cameraCaptureLayoutDp(availableWidth: Float, availableHeight: Float
     return CameraCaptureLayoutDp(preview, equalGap)
 }
 
-internal const val CAMERA_TOP_BAR_HEIGHT_DP = 56
+internal const val CAMERA_TOP_BAR_HEIGHT_DP = 64
 internal const val CAMERA_CONTROL_ROW_HEIGHT_DP = 72
 internal const val CAMERA_SHUTTER_SIZE_DP = 64
 internal const val CAMERA_SIDE_SLOT_SIZE_DP = 48

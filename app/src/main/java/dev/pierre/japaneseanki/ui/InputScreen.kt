@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -30,6 +31,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
@@ -275,7 +278,7 @@ internal fun InputScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
 private fun CaptureTopBar(
     captureMode: String,
@@ -284,61 +287,63 @@ private fun CaptureTopBar(
     onModeSelectionFeedback: (String) -> Unit,
     onSettings: () -> Unit,
 ) {
-    Box(
-        Modifier.fillMaxWidth().height(CAMERA_TOP_BAR_HEIGHT_DP.dp).testTag("capture-top-bar"),
-    ) {
-        // At large text scales the two labels need their whole half of the bar; the icons are
-        // decoration and step aside so neither label is squeezed.
-        val showIcons = LocalDensity.current.fontScale < 1.5f
-        Row(
-            modifier = Modifier.align(Alignment.Center)
-                .fillMaxWidth()
-                .padding(horizontal = 48.dp)
-                .height(CAMERA_MODE_SWITCH_HEIGHT_DP.dp)
-                .testTag("capture-mode-switch"),
-            horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
-        ) {
-            ModeSelectorOption(
-                label = stringResource(R.string.camera),
-                icon = MaterialSymbols.PhotoCamera,
-                showIcon = showIcons,
-                tag = "capture-mode-camera",
-                selected = captureMode == "Photo",
+    TopAppBar(
+        modifier = Modifier.testTag("capture-top-bar"),
+        windowInsets = WindowInsets(0), // The containing page owns system insets.
+        title = {
+            // At large text scales the two labels need their whole half of the bar; the icons are
+            // decoration and step aside so neither label is squeezed.
+            val showIcons = LocalDensity.current.fontScale < 1.5f
+            Row(
+                modifier = Modifier.fillMaxWidth()
+                    .height(CAMERA_MODE_SWITCH_HEIGHT_DP.dp)
+                    .testTag("capture-mode-switch"),
+                horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
+            ) {
+                ModeSelectorOption(
+                    label = stringResource(R.string.camera),
+                    icon = MaterialSymbols.PhotoCamera,
+                    showIcon = showIcons,
+                    tag = "capture-mode-camera",
+                    selected = captureMode == "Photo",
+                    enabled = enabled,
+                    shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(),
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        onModeSelectionFeedback("Photo")
+                        onCaptureModeChange("Photo")
+                    },
+                )
+                ModeSelectorOption(
+                    label = stringResource(R.string.type),
+                    icon = MaterialSymbols.Keyboard,
+                    showIcon = showIcons,
+                    tag = "capture-mode-type",
+                    selected = captureMode == "Type",
+                    enabled = enabled,
+                    shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        onModeSelectionFeedback("Type")
+                        onCaptureModeChange("Type")
+                    },
+                )
+            }
+        },
+        actions = {
+            androidx.compose.material3.IconButton(
+                onClick = onSettings,
                 enabled = enabled,
-                shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(),
-                modifier = Modifier.weight(1f),
-                onClick = {
-                    onModeSelectionFeedback("Photo")
-                    onCaptureModeChange("Photo")
-                },
-            )
-            ModeSelectorOption(
-                label = stringResource(R.string.type),
-                icon = MaterialSymbols.Keyboard,
-                showIcon = showIcons,
-                tag = "capture-mode-type",
-                selected = captureMode == "Type",
-                enabled = enabled,
-                shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
-                modifier = Modifier.weight(1f),
-                onClick = {
-                    onModeSelectionFeedback("Type")
-                    onCaptureModeChange("Type")
-                },
-            )
-        }
-        androidx.compose.material3.IconButton(
-            onClick = onSettings,
-            enabled = enabled,
-            modifier = Modifier.align(Alignment.CenterEnd).size(48.dp).testTag("capture-settings"),
-        ) {
-            androidx.compose.material3.Icon(
-                MaterialSymbols.Settings,
-                contentDescription = stringResource(R.string.settings),
-                modifier = Modifier.size(24.dp),
-            )
-        }
-    }
+                modifier = Modifier.size(CAMERA_SIDE_SLOT_SIZE_DP.dp).testTag("capture-settings"),
+            ) {
+                androidx.compose.material3.Icon(
+                    MaterialSymbols.Settings,
+                    contentDescription = stringResource(R.string.settings),
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+        },
+    )
 }
 
 /** One half of the connected capture-mode group: icon, label, shape morph and one tick per change. */

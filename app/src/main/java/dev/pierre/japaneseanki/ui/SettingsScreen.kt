@@ -8,10 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -97,14 +94,11 @@ internal fun SettingsScreen(
     val selectedDeck = decks.firstOrNull { it.id == state.values.deckId }
     val selectedVoice = state.voiceCatalog.voices.firstOrNull { it.name == state.values.voiceName }
 
-    Column(modifier.fillMaxSize().imePadding()) {
-        FlowTopBar(
-            title = stringResource(R.string.settings),
-            onBack = onBack,
-            modifier = Modifier.statusBarsPadding().padding(horizontal = 8.dp, vertical = 4.dp),
-        )
+    FlowPage(modifier = modifier, topBar = {
+        FlowTopBar(title = stringResource(R.string.settings), onBack = onBack)
+    }) {
         Column(
-            modifier = Modifier.fillMaxWidth().weight(1f).navigationBarsPadding()
+            modifier = Modifier.fillMaxWidth().weight(1f)
                 .verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {

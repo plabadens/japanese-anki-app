@@ -21,6 +21,8 @@ import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -215,6 +217,7 @@ internal fun FlowTheme(darkTheme: Boolean, content: @Composable () -> Unit) {
 internal val AppContentMaxWidth = 520.dp
 
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun FlowTopBar(
     title: String,
@@ -222,40 +225,32 @@ internal fun FlowTopBar(
     onBack: (() -> Unit)? = null,
     onClose: (() -> Unit)? = null,
     onSettings: (() -> Unit)? = null,
+    navigationEnabled: Boolean = true,
 ) {
     val backLabel = stringResource(R.string.back)
-    val discardLabel = stringResource(R.string.legacy_capture_discard_draft)
-    val settingsLabel = stringResource(R.string.settings)
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        when {
-            onBack != null -> IconButton(
-                onClick = onBack,
-                modifier = Modifier.semantics { contentDescription = backLabel },
-            ) { FlowIcons.Back(Modifier.size(24.dp)) }
-
-            onClose != null -> IconButton(
-                onClick = onClose,
-                modifier = Modifier.semantics { contentDescription = discardLabel },
-            ) { FlowIcons.Close(Modifier.size(22.dp)) }
-
-            else -> Box(Modifier.size(12.dp))
-        }
-        Text(
-            title,
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = if (onBack == null && onClose == null) 4.dp else 0.dp),
-        )
-        if (onSettings != null) {
-            IconButton(onClick = onSettings, modifier = Modifier.semantics { contentDescription = settingsLabel }) {
-                Icon(MaterialSymbols.Settings, contentDescription = null, modifier = Modifier.size(24.dp))
+    val closeLabel = stringResource(R.string.legacy_capture_discard_draft)
+    TopAppBar(
+        modifier = modifier,
+        title = { Text(title) },
+        navigationIcon = {
+            if (onBack != null) {
+                IconButton(onClick = onBack, enabled = navigationEnabled, modifier = Modifier.size(MaterialTheme.flow.touchTarget)) {
+                    FlowIcons.Back(Modifier.size(24.dp).semantics { contentDescription = backLabel })
+                }
+            } else if (onClose != null) {
+                IconButton(onClick = onClose, enabled = navigationEnabled, modifier = Modifier.size(MaterialTheme.flow.touchTarget)) {
+                    FlowIcons.Close(Modifier.size(24.dp).semantics { contentDescription = closeLabel })
+                }
             }
-        }
-    }
+        },
+        actions = {
+            if (onSettings != null) {
+                IconButton(onClick = onSettings, enabled = navigationEnabled, modifier = Modifier.size(MaterialTheme.flow.touchTarget)) {
+                    Icon(MaterialSymbols.Settings, contentDescription = stringResource(R.string.settings))
+                }
+            }
+        },
+    )
 }
 
 /** Primary action: 56 dp high, vermilion container, arrow affordance. */

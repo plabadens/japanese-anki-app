@@ -15,13 +15,12 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.pierre.japaneseanki.AppRoute
 import dev.pierre.japaneseanki.R
 import dev.pierre.japaneseanki.SettingsValues
-import dev.pierre.japaneseanki.shouldShowSetup
+import dev.pierre.japaneseanki.AppNavigationState
+import dev.pierre.japaneseanki.AppDestination
 import dev.pierre.japaneseanki.visibleRouteForAnalyzer
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -111,78 +110,39 @@ class SettingsScreenBehaviorTest {
             visibleRouteForAnalyzer(AppRoute.Card, analyzerReady = true, frozenCardActive = false),
         )
 
-        assertEquals(
-            true,
-            shouldShowSetup(
-                showSetup = false,
-                onboardingComplete = false,
-                analyzerReady = true,
-                showSettings = false,
-            ),
-        )
-        assertEquals(
-            true,
-            shouldShowSetup(
-                showSetup = false,
-                onboardingComplete = true,
-                analyzerReady = false,
-                showSettings = false,
-            ),
-        )
-        assertEquals(
-            false,
-            shouldShowSetup(
-                showSetup = false,
-                onboardingComplete = false,
-                analyzerReady = false,
-                showSettings = true,
-            ),
-        )
-        assertEquals(
-            false,
-            shouldShowSetup(
-                showSetup = false,
-                onboardingComplete = true,
-                analyzerReady = true,
-                showSettings = false,
-            ),
-        )
+        val navigation = AppNavigationState(AppRoute.Card)
+        assertEquals(AppDestination.Setup, navigation.visibleDestination(false, true))
+        assertEquals(AppDestination.Setup, navigation.visibleDestination(true, false))
+        assertEquals(AppDestination.Card, navigation.visibleDestination(true, true))
+        navigation.open(AppDestination.Settings)
+        assertEquals(AppDestination.Settings, navigation.visibleDestination(false, false))
     }
 
     private fun showSettings(preview: SettingsPreviewState): MutableState<SettingsScreenState> {
         val state = mutableStateOf(settingsPreviewScreenState(preview))
         composeRule.setContent {
             FlowTheme(darkTheme = false) {
-                Dialog(
-                    onDismissRequest = {},
-                    properties = DialogProperties(
-                        usePlatformDefaultWidth = false,
-                        decorFitsSystemWindows = false,
-                    ),
-                ) {
-                    Surface(Modifier.fillMaxSize()) {
-                        SettingsScreen(
-                            state = state.value,
-                            noteTypes = settingsPreviewNoteTypes,
-                            decks = settingsPreviewDecks,
-                            onBack = {},
-                            onFinishSetup = {},
-                            onConnectAnki = {},
-                            onModelChange = { id -> state.value = state.value.updated(values = state.value.values.copy(modelId = id)) },
-                            onDeckChange = { id -> state.value = state.value.updated(values = state.value.values.copy(deckId = id)) },
-                            onDefaultTagsChange = { value -> state.value = state.value.updated(values = state.value.values.copy(defaultTags = value)) },
-                            onGoogleKeyChange = { value -> state.value = state.value.updated(googleKey = value, credentialStored = value.isNotBlank()) },
-                            onVoiceChange = { value -> state.value = state.value.updated(values = state.value.values.copy(voiceName = value)) },
-                            onReloadVoices = {},
-                                        onClearCache = {},
-                            onOpenSources = {},
-                        )
-                    }
-                }
+                SettingsScreen(
+                    state = state.value,
+                    noteTypes = settingsPreviewNoteTypes,
+                    decks = settingsPreviewDecks,
+                    onBack = {},
+                    onFinishSetup = {},
+                    onConnectAnki = {},
+                    onModelChange = { id -> state.value = state.value.updated(values = state.value.values.copy(modelId = id)) },
+                    onDeckChange = { id -> state.value = state.value.updated(values = state.value.values.copy(deckId = id)) },
+                    onDefaultTagsChange = { value -> state.value = state.value.updated(values = state.value.values.copy(defaultTags = value)) },
+                    onGoogleKeyChange = { value -> state.value = state.value.updated(googleKey = value, credentialStored = value.isNotBlank()) },
+                    onVoiceChange = { value -> state.value = state.value.updated(values = state.value.values.copy(voiceName = value)) },
+                    onReloadVoices = {},
+                    onClearCache = {},
+                    onOpenSources = {},
+                )
             }
         }
         return state
     }
+
 }
 
 private fun SettingsScreenState.updated(

@@ -288,14 +288,14 @@ class InputScreenLayoutTest {
         val gapAbove = composeRule.onNodeWithTag("camera-gap-above-controls").fetchSemanticsNode().boundsInRoot
         val gapBelow = composeRule.onNodeWithTag("camera-gap-below-controls").fetchSemanticsNode().boundsInRoot
 
-        assertEquals(56f * density, topBar.height, 1f)
+        assertEquals(64f * density, topBar.height, 1f)
         assertEquals(48f * density, modeSwitchBefore.height, 1f)
         assertEquals(48f * density, settingsBefore.width, 1f)
         assertEquals(390f * density, previewBefore.width, 1f)
         assertEquals(520f * density, previewBefore.height, 2f)
         assertEquals(72f * density, controlsBefore.height, 1f)
         assertEquals(gapAbove.height, gapBelow.height, 1f)
-        assertEquals(74f * density, gapAbove.height, 1f)
+        assertEquals(70f * density, gapAbove.height, 1f)
         val galleryCenterX = composeRule.onNodeWithTag("camera-gallery-slot").fetchSemanticsNode().boundsInRoot.center.x
         val shutterCenterX = composeRule.onNodeWithTag("camera-shutter-slot").fetchSemanticsNode().boundsInRoot.center.x
         val torchCenterX = composeRule.onNodeWithTag("camera-torch-slot").fetchSemanticsNode().boundsInRoot.center.x
@@ -456,11 +456,11 @@ class InputScreenLayoutTest {
         }
 
         val density = composeRule.density.density
-        composeRule.onNodeWithTag("capture-top-bar").assertHeightIsEqualTo(56.dp)
+        composeRule.onNodeWithTag("capture-top-bar").assertHeightIsEqualTo(64.dp)
         composeRule.onNodeWithTag("camera-controls-row").assertHeightIsEqualTo(72.dp)
         val preview = composeRule.onNodeWithTag("camera-preview-viewport").fetchSemanticsNode().boundsInRoot
-        assertEquals(315f * density, preview.width, 1f)
-        assertEquals(420f * density, preview.height, 1f)
+        assertEquals(309f * density, preview.width, 1f)
+        assertEquals(412f * density, preview.height, 1f)
         assertEquals(195f * density, preview.center.x, 1f)
         assertEquals(12f * density, composeRule.onNodeWithTag("camera-gap-above-controls").fetchSemanticsNode().boundsInRoot.height, 1f)
         assertEquals(12f * density, composeRule.onNodeWithTag("camera-gap-below-controls").fetchSemanticsNode().boundsInRoot.height, 1f)

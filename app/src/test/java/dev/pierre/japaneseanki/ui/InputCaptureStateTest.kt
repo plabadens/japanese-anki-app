@@ -49,7 +49,7 @@ class InputCaptureStateTest {
         assertEquals(72, CAMERA_CONTROL_ROW_HEIGHT_DP)
         assertEquals(64, CAMERA_SHUTTER_SIZE_DP)
         assertEquals(48, CAMERA_SIDE_SLOT_SIZE_DP)
-        assertEquals(56, CAMERA_TOP_BAR_HEIGHT_DP)
+        assertEquals(64, CAMERA_TOP_BAR_HEIGHT_DP)
         assertEquals(48, CAMERA_MODE_SWITCH_HEIGHT_DP)
         assertFalse(presentations[0].showProgress)
         assertTrue(presentations[1].showProgress)

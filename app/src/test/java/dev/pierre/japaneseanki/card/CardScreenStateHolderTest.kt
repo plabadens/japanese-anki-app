@@ -104,12 +104,24 @@ class CardScreenStateHolderTest {
         assertNull(holder.state.meaningChoice)
     }
 
+    @Test
+    fun frozenRetryUsesSavedFieldsEvenWhenTheLiveTargetCannotBeRestored() {
+        var action: CardAction? = null
+        val holder = holder(initialSpan = null, locked = true, frozenRetryReady = true, dispatch = { action = it })
+        assertNull(holder.state.targetWord)
+        assertTrue(holder.state.presentation.actionEnabled)
+        assertEquals(CardAction.RetrySend, holder.state.presentation.action)
+        holder.onPrimaryAction()
+        assertEquals(CardAction.RetrySend, action)
+    }
+
     private fun holder(
         sentence: String = SENTENCE,
         initialSpan: TargetSpan? = null,
         meaning: DictionaryMeaningChoice? = null,
         committedSentence: String? = sentence,
         locked: Boolean = false,
+        frozenRetryReady: Boolean = false,
         onWordTapped: (TargetSpan) -> Unit = {},
         onMeaningChosen: (DictionaryMeaningChoice) -> Unit = {},
         dispatch: (CardAction) -> Unit = {},
@@ -121,7 +133,7 @@ class CardScreenStateHolderTest {
         presentationContext = context(
             canSend = true,
             submissionLocked = locked,
-        ),
+        ).copy(frozenRetryReady = frozenRetryReady, hasTarget = initialSpan != null, actionHasTarget = initialSpan != null),
         canSelectWords = { !locked },
         isSubmissionLocked = { locked },
         onWordTapped = onWordTapped,

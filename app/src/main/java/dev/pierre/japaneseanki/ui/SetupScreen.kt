@@ -10,18 +10,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -38,8 +35,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -104,14 +99,9 @@ internal fun SetupScreen(
 ) {
     val finishEnabled = state.audioReady && state.ankiReady && !state.dictionaryPreparing &&
         state.dictionaryErrorResource == null && !state.audio.loading
-    Column(
-        Modifier.fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding(),
-    ) {
-        if (onBack != null) {
-            BackRow(onBack)
-        }
+    FlowPage(topBar = {
+        FlowTopBar(title = stringResource(R.string.setup), onBack = onBack)
+    }) {
         Column(
             Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 12.dp),
@@ -140,21 +130,6 @@ internal fun SetupScreen(
             onRetryDictionary = onRetryDictionary,
             onFinish = onFinish,
         )
-    }
-}
-
-/** Back affordance without an app-bar title: the state headline is the only heading. */
-@Composable
-private fun BackRow(onBack: () -> Unit) {
-    val backLabel = stringResource(R.string.back)
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(
-            onClick = onBack,
-            modifier = Modifier.semantics { contentDescription = backLabel },
-        ) { FlowIcons.Back(Modifier.size(24.dp)) }
     }
 }
 
@@ -555,7 +530,7 @@ private fun FinishBar(
 ) {
     Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 8.dp) {
         Column(
-            Modifier.fillMaxWidth().navigationBarsPadding()
+            Modifier.fillMaxWidth()
                 .padding(horizontal = 20.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
