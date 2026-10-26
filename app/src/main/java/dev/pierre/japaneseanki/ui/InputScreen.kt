@@ -635,7 +635,15 @@ private fun CameraPermissionShutter(
                 contentDescription = cameraLabel
                 role = Role.Button
             },
-    )
+        contentAlignment = Alignment.Center,
+    ) {
+        androidx.compose.material3.Icon(
+            MaterialSymbols.PhotoCamera,
+            contentDescription = null,
+            modifier = Modifier.size(28.dp),
+            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+        )
+    }
 }
 
 @Composable

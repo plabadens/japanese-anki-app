@@ -95,6 +95,7 @@
     <string name="deck">Deck</string>
     <string name="audio">Audio</string>
     <string name="google_key">Google Cloud API key</string>
+    <string name="api_key">API key</string>
     <string name="key_required">Enter a Google Cloud API key.</string>
     <string name="show_key">Show API key</string>
     <string name="hide_key">Hide API key</string>

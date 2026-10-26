@@ -37,8 +37,8 @@ class SettingsScreenBehaviorTest {
     fun keyAndTagFieldsAcceptInputInsideFullscreenDialog() {
         val state = showSettings(SettingsPreviewState.KEY_SAVED)
 
-        composeRule.onNodeWithText(composeRule.activity.getString(R.string.google_key)).performClick()
-        composeRule.onNodeWithText(composeRule.activity.getString(R.string.google_key)).performTextInput("-typed-fixture")
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.api_key)).performClick()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.api_key)).performTextInput("-typed-fixture")
         composeRule.onNodeWithText(composeRule.activity.getString(R.string.default_tags)).performClick()
         composeRule.onNodeWithText(composeRule.activity.getString(R.string.default_tags)).performTextInput("fresh-tag")
 

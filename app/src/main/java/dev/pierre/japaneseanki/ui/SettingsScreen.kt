@@ -183,7 +183,7 @@ internal fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         label = {
                             Text(
-                                stringResource(R.string.google_key),
+                                stringResource(R.string.api_key),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )

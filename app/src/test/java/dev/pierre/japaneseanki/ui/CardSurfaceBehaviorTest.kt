@@ -59,6 +59,19 @@ class CardSurfaceBehaviorTest {
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
+    fun noSelectionInstructionAppearsImmediatelyAfterTranslation() {
+        composeRule.setContent {
+            CardFlowPreviewContent(state = CardFlowPreviewState.CARD_NO_WORD_CHOSEN)
+        }
+
+        val translation = composeRule.onNodeWithText("I read an old book.").fetchSemanticsNode().boundsInRoot
+        val instruction = composeRule.onNodeWithTag("card-instruction").fetchSemanticsNode().boundsInRoot
+        composeRule.onAllNodesWithTag("card-instruction").assertCountEquals(1)
+        assertTrue("The pre-selection instruction should follow the translation", instruction.top >= translation.bottom)
+        assertTrue("The pre-selection instruction should remain close to the translation", instruction.top - translation.bottom < 48f)
+    }
+
+    @Test
     fun floatingBackControlIsVisibleAndInvokesBack() {
         var backs = 0
         composeRule.setContent {

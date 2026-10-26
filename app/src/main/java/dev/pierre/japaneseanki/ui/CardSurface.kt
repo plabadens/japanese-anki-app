@@ -332,6 +332,13 @@ internal fun CardScreen(
                         Spacer(Modifier.height(24.dp))
                     }
 
+                    if (selectedSpan == null) {
+                        CardInstruction(
+                            hint = hint,
+                            loading = hintPreparing || wordAudio == ReviewAudioPresentation.Generating,
+                        )
+                    }
+
                     // The word card owns this slot. Reserving its minimum height prevents late
                     // dictionary/audio results from moving the sentence or translation.
                     Box(Modifier.fillMaxWidth().heightIn(min = 152.dp).padding(top = 8.dp)) {
@@ -469,10 +476,12 @@ internal fun CardScreen(
                         )
                     }
                     statusContent()
-                    CardInstruction(
-                        hint = hint,
-                        loading = hintPreparing || wordAudio == ReviewAudioPresentation.Generating,
-                    )
+                    if (selectedSpan != null) {
+                        CardInstruction(
+                            hint = hint,
+                            loading = hintPreparing || wordAudio == ReviewAudioPresentation.Generating,
+                        )
+                    }
                 }
             }
 
