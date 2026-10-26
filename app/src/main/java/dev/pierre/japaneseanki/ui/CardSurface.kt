@@ -261,7 +261,7 @@ internal fun CardScreen(
     BoxWithConstraints(modifier) {
         val bandHeight = cardPhotoBandHeight(maxWidth - 32.dp, maxHeight, fontScale)
         val hasPhoto = imagePath != null && File(imagePath).isFile
-        val contentTopPadding = if (hasPhoto || onBack == null) 8.dp else 56.dp
+        val contentTopPadding = if (hasPhoto || onBack == null) 8.dp else 48.dp
         Column(Modifier.fillMaxSize()) {
             Column(
                 Modifier
@@ -282,39 +282,50 @@ internal fun CardScreen(
                     Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp),
                     verticalArrangement = Arrangement.Top,
                 ) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.Top,
+                    FlowCard(
+                        variant = FlowCardVariant.Outlined,
+                        shape = MaterialTheme.shapes.large,
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+                        modifier = Modifier.testTag("sentence-card"),
                     ) {
-                        SelectableSentence(
-                            sentence = sentence,
-                            tokens = tokens,
-                            selectedSpan = selectedSpan,
-                            selectionEnabled = selectionEnabled,
-                            onSelectSpan = onSelectSpan,
-                            furigana = furigana,
-                            modifier = Modifier.weight(1f),
-                        )
-                        CardAudioButton(
-                            field = stringResource(R.string.card_sentence_audio_field),
-                            audio = sentenceAudio,
-                            onToggle = onToggleSentenceAudio,
-                            onRetry = onRetrySentenceAudio,
-                        )
-                    }
-                    TextButton(
-                        onClick = onEditSentence,
-                        enabled = selectionEnabled,
-                        modifier = Modifier.heightIn(min = 40.dp),
-                    ) { Text(stringResource(R.string.edit_sentence)) }
-                    if (translation.isNotBlank()) {
-                        Text(
-                            translation,
-                            modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
-                            style = MaterialTheme.typography.bodyLarge,
-                        )
-                    } else {
-                        Spacer(Modifier.height(24.dp))
+                        Column(
+                            Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.Top,
+                            ) {
+                                SelectableSentence(
+                                    sentence = sentence,
+                                    tokens = tokens,
+                                    selectedSpan = selectedSpan,
+                                    selectionEnabled = selectionEnabled,
+                                    onSelectSpan = onSelectSpan,
+                                    furigana = furigana,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                CardAudioButton(
+                                    field = stringResource(R.string.card_sentence_audio_field),
+                                    audio = sentenceAudio,
+                                    onToggle = onToggleSentenceAudio,
+                                    onRetry = onRetrySentenceAudio,
+                                )
+                            }
+                            if (translation.isNotBlank()) {
+                                Text(
+                                    translation,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                )
+                            }
+                            TextButton(
+                                onClick = onEditSentence,
+                                enabled = selectionEnabled,
+                                modifier = Modifier.heightIn(min = 48.dp),
+                                contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
+                            ) { Text(stringResource(R.string.edit_sentence)) }
+                        }
                     }
 
                     if (selectedSpan == null) {
@@ -343,68 +354,42 @@ internal fun CardScreen(
                             shape = FlowStickers.contentCard(),
                             contentPadding = PaddingValues(horizontal = 22.dp, vertical = 20.dp),
                         ) {
-                            BoxWithConstraints(Modifier.fillMaxWidth()) {
-                                val useTwoColumns = fontScale < 1.5f && maxWidth >= 280.dp
-                                Column(
+                            Column(
+                                Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                Row(
                                     Modifier.fillMaxWidth(),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalAlignment = Alignment.Top,
                                 ) {
-                                    if (useTwoColumns) {
-                                        Row(
-                                            Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                            verticalAlignment = Alignment.Top,
-                                        ) {
-                                            Column(Modifier.weight(1f)) {
-                                                WordHeroHeading(vocabulary, vocabularyReading, partOfSpeech)
-                                            }
-                                            Column(
-                                                Modifier.weight(1.2f),
-                                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                                            ) {
-                                                CardAudioButton(
-                                                    field = stringResource(R.string.card_word_audio_field),
-                                                    audio = wordAudio,
-                                                    onToggle = onToggleWordAudio,
-                                                    onRetry = onRetryWordAudio,
-                                                    enabled = wordAudioEnabled,
-                                                    unavailableMessage = wordStatus,
-                                                )
-                                                WordPitchContent(pitch, pitchStatus, pitchPending)
-                                            }
-                                        }
-                                    } else {
-                                        Row(verticalAlignment = Alignment.Top) {
-                                            Column(Modifier.weight(1f)) {
-                                                WordHeroHeading(vocabulary, vocabularyReading, partOfSpeech)
-                                            }
-                                            CardAudioButton(
-                                                field = stringResource(R.string.card_word_audio_field),
-                                                audio = wordAudio,
-                                                onToggle = onToggleWordAudio,
-                                                onRetry = onRetryWordAudio,
-                                                enabled = wordAudioEnabled,
-                                                unavailableMessage = wordStatus,
-                                            )
-                                        }
-                                        WordPitchContent(pitch, pitchStatus, pitchPending)
+                                    Column(Modifier.weight(1f)) {
+                                        WordHeroHeading(vocabulary, vocabularyReading, partOfSpeech)
                                     }
-                                    if (definition.isNotBlank()) {
-                                        Text(definition, style = MaterialTheme.typography.bodyLarge)
-                                    }
-                                    wordStatus?.let {
-                                        FlowStatusText(
-                                            it,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
-                                    if (meaningAvailable) {
-                                        TextButton(
-                                            onClick = onChangeMeaning,
-                                            modifier = Modifier.heightIn(min = 40.dp),
-                                        ) { Text(stringResource(R.string.change_meaning)) }
-                                    }
+                                    CardAudioButton(
+                                        field = stringResource(R.string.card_word_audio_field),
+                                        audio = wordAudio,
+                                        onToggle = onToggleWordAudio,
+                                        onRetry = onRetryWordAudio,
+                                        enabled = wordAudioEnabled,
+                                        unavailableMessage = wordStatus,
+                                    )
+                                }
+                                WordPitchContent(pitch, pitchStatus, pitchPending)
+                                if (definition.isNotBlank()) {
+                                    Text(definition, style = MaterialTheme.typography.bodyLarge)
+                                }
+                                wordStatus?.let {
+                                    FlowStatusText(
+                                        it,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                if (meaningAvailable) {
+                                    TextButton(
+                                        onClick = onChangeMeaning,
+                                        modifier = Modifier.heightIn(min = 40.dp),
+                                    ) { Text(stringResource(R.string.change_meaning)) }
                                 }
                             }
                         }
@@ -477,7 +462,7 @@ internal fun CardScreen(
         onBack?.let {
             CardBackControl(
                 onBack = it,
-                modifier = Modifier.align(Alignment.TopStart).padding(start = 16.dp, top = 8.dp),
+                modifier = Modifier.align(Alignment.TopStart).padding(start = 16.dp),
             )
         }
     }

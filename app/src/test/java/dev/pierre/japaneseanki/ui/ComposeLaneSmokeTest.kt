@@ -2,7 +2,6 @@ package dev.pierre.japaneseanki.ui
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -37,7 +36,7 @@ class ComposeLaneSmokeTest {
         val sentenceAudio = mutableStateOf<ReviewAudioPresentation>(ReviewAudioPresentation.Ready)
 
         composeRule.setContent {
-            MaterialTheme {
+            FlowTheme(darkTheme = false) {
                 CardScreen(
                     sentence = "猫は好きです。",
                     tokens = listOf(
@@ -93,14 +92,14 @@ class ComposeLaneSmokeTest {
         }
 
         val sentence = composeRule.onNodeWithTag("sentence-layout")
-        sentence.assertWidthIsEqualTo(310.dp)
+        sentence.assertWidthIsEqualTo(278.dp)
         sentence.assertHeightIsEqualTo(64.dp)
         val readyBounds = sentence.fetchSemanticsNode().boundsInRoot
 
         sentenceAudio.value = ReviewAudioPresentation.Failed("Synthesis timed out")
         composeRule.waitForIdle()
 
-        sentence.assertWidthIsEqualTo(310.dp)
+        sentence.assertWidthIsEqualTo(278.dp)
         sentence.assertHeightIsEqualTo(64.dp)
         assertEquals(readyBounds, sentence.fetchSemanticsNode().boundsInRoot)
     }

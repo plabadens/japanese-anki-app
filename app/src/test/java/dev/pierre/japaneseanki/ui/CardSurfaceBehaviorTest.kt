@@ -5,7 +5,6 @@ import android.graphics.Bitmap
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,6 +30,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
 import androidx.test.espresso.Espresso.pressBack
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -59,16 +59,30 @@ class CardSurfaceBehaviorTest {
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
-    fun noSelectionInstructionAppearsImmediatelyAfterTranslation() {
+    fun noSelectionInstructionAppearsImmediatelyAfterSentenceCard() {
         composeRule.setContent {
             CardFlowPreviewContent(state = CardFlowPreviewState.CARD_NO_WORD_CHOSEN)
         }
 
-        val translation = composeRule.onNodeWithText("I read an old book.").fetchSemanticsNode().boundsInRoot
+        val sentenceCard = composeRule.onNodeWithTag("sentence-card").fetchSemanticsNode().boundsInRoot
         val instruction = composeRule.onNodeWithTag("card-instruction").fetchSemanticsNode().boundsInRoot
         composeRule.onAllNodesWithTag("card-instruction").assertCountEquals(1)
-        assertTrue("The pre-selection instruction should follow the translation", instruction.top >= translation.bottom)
-        assertTrue("The pre-selection instruction should remain close to the translation", instruction.top - translation.bottom < 48f)
+        assertTrue("The pre-selection instruction should follow the sentence card", instruction.top >= sentenceCard.bottom)
+        val cardGap = with(composeRule.density) { 32.dp.toPx() }
+        assertTrue("The pre-selection instruction should remain close to the sentence card", instruction.top - sentenceCard.bottom < cardGap)
+    }
+
+    @Test
+    fun editSentenceFollowsTranslationInsideSentenceCard() {
+        composeRule.setContent {
+            CardFlowPreviewContent(state = CardFlowPreviewState.CARD_READY_TO_SEND)
+        }
+
+        composeRule.onNodeWithTag("sentence-card").assertIsDisplayed()
+        val translation = composeRule.onNodeWithText("I read an old book.").fetchSemanticsNode().boundsInRoot
+        val edit = composeRule.onNodeWithText(composeRule.activity.getString(R.string.edit_sentence))
+            .fetchSemanticsNode().boundsInRoot
+        assertTrue("Edit sentence must follow the translation", edit.top >= translation.bottom)
     }
 
     @Test
@@ -120,7 +134,7 @@ class CardSurfaceBehaviorTest {
                 LocalDensity provides scaledDensity,
                 LocalMotion provides ReducedMotionTestPolicy,
             ) {
-                MaterialTheme {
+                FlowTheme(darkTheme = false) {
                     Box(Modifier.fillMaxSize()) {
                         CardScreen(
                             sentence = "灯籠に触らないで下さい",
