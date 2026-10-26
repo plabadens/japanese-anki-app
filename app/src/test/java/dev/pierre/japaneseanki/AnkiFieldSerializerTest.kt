@@ -31,6 +31,8 @@ class AnkiFieldSerializerTest {
 
     @Test fun wordFuriganaAlignsOkuriganaAndSkipsKanaOnlyRuby() {
         assertEquals("食[た]べる", AnkiFieldSerializer.furiganaWord("食べる", "たべる"))
+        assertEquals("痛[いた]い", AnkiFieldSerializer.furiganaWord("痛い", "いたい"))
+        assertEquals("相合[あいあ]い傘[がさ]", AnkiFieldSerializer.furiganaWord("相合い傘", "あいあいがさ"))
         assertEquals("お金[かね]", AnkiFieldSerializer.furiganaWord("お金", "おかね"))
         assertEquals("引[ひ]き出[だ]し", AnkiFieldSerializer.furiganaWord("引き出し", "ひきだし"))
         assertEquals("猫[ねこ]。", AnkiFieldSerializer.furiganaWord("猫。", "ねこ"))

@@ -33,12 +33,12 @@ internal object SentenceReadings {
         corrections: List<ReadingCorrection>,
     ): List<FuriganaSpan> {
         val automatic = sentenceFuriganaSpans(sentence, tokens, target)
-        val usable = corrections.mapNotNull { correction ->
-            val surface = correction.span.textIn(sentence) ?: return@mapNotNull null
-            if (surface != correction.surface) return@mapNotNull null
-            if (target != null && overlaps(correction.span, target)) return@mapNotNull null
-            if (rejection(sentence, correction.span, correction.reading) != null) return@mapNotNull null
-            FuriganaSpan(correction.span, surface, normalizeReading(correction.reading))
+        val usable = corrections.flatMap { correction ->
+            val surface = correction.span.textIn(sentence) ?: return@flatMap emptyList()
+            if (surface != correction.surface) return@flatMap emptyList()
+            if (target != null && overlaps(correction.span, target)) return@flatMap emptyList()
+            if (rejection(sentence, correction.span, correction.reading) != null) return@flatMap emptyList()
+            furiganaSpansForWord(correction.span, surface, normalizeReading(correction.reading))
         }
         if (usable.isEmpty()) return automatic
 

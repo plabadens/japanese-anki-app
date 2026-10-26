@@ -15,17 +15,39 @@ internal fun sentenceFuriganaSpans(
     sentence: String,
     tokens: List<JapaneseToken>,
     target: TargetSpan?,
-): List<FuriganaSpan> = tokens.mapNotNull { token ->
+): List<FuriganaSpan> {
+    val spans = mutableListOf<FuriganaSpan>()
+    tokens.forEach { token ->
         if (!containsKanji(token.surface) || token.span.textIn(sentence) != token.surface ||
             token.surfaceReading.isBlank()
         ) {
-            return@mapNotNull null
+            return@forEach
         }
         if (target?.let { token.span.start < it.end && token.span.end > it.start } == true) {
-            return@mapNotNull null
+            return@forEach
         }
-        FuriganaSpan(token.span, token.surface, token.surfaceReading)
+        val annotation = furiganaSpansForWord(token.span, token.surface, token.surfaceReading)
+        val previous = spans.lastOrNull()
+        // UniDic can split one learner-facing word into adjacent kanji pieces (雰囲 + 気). The
+        // lookup layer usually joins those, but furigana must not depend on that join.
+        if (annotation.size == 1 && previous != null &&
+            previous.span.end == annotation.single().span.start &&
+            previous.surface.length == previous.span.end - previous.span.start &&
+            annotation.single().surface.length ==
+            annotation.single().span.end - annotation.single().span.start
+        ) {
+            val next = annotation.single()
+            spans[spans.lastIndex] = FuriganaSpan(
+                span = TargetSpan(previous.span.start, next.span.end),
+                surface = previous.surface + next.surface,
+                reading = previous.reading + next.reading,
+            )
+        } else {
+            spans += annotation
+        }
     }
+    return spans
+}
 
 internal fun resolveSurfaceReading(
     sentence: String,

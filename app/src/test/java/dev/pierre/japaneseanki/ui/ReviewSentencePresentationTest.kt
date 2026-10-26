@@ -41,9 +41,10 @@ class ReviewSentencePresentationTest {
         val furigana = sentenceFuriganaSpans(sentence, tokens, target)
         val parts = reviewSentenceParts(sentence, target, "とうきょうへ", furigana)
 
-        assertEquals(listOf(FuriganaSpan(TargetSpan(3, 5), "行く", "いく")), furigana)
+        assertEquals(listOf(FuriganaSpan(TargetSpan(3, 4), "行", "い")), furigana)
         assertEquals(ReviewSentencePart("東京へ", "とうきょうへ", highlighted = true), parts[0])
-        assertEquals(ReviewSentencePart("行く", "いく"), parts[1])
+        assertEquals(ReviewSentencePart("行", "い"), parts[1])
+        assertEquals(ReviewSentencePart("く"), parts[2])
     }
 
     @Test fun invalidTargetThatSplitsSupplementaryCharacterLeavesSentenceIntact() {

@@ -70,74 +70,26 @@ object AnkiFieldSerializer {
     fun imageReference(filename: String): String? =
         safeMediaName(filename)?.let { "<img src=\"${escapeHtml(it)}\">" }
 
-    private enum class FuriganaSegmentKind { KANJI, KANA, OTHER }
-    private data class FuriganaSegment(val text: String, val kind: FuriganaSegmentKind)
-
     private fun furiganaUnit(surface: String, reading: String): String? {
         if (surface.isEmpty() || reading.any { it == '[' || it == ']' }) return null
         if (reading.isBlank() || !containsKanji(surface)) return escapeHtml(surface)
 
-        val segments = buildList {
-            var start = 0
-            var kind = segmentKind(surface.codePointAt(0))
-            var index = Character.charCount(surface.codePointAt(0))
-            while (index < surface.length) {
-                val nextKind = segmentKind(surface.codePointAt(index))
-                if (nextKind != kind) {
-                    add(FuriganaSegment(surface.substring(start, index), kind))
-                    start = index
-                    kind = nextKind
-                }
-                index += Character.charCount(surface.codePointAt(index))
+        val spans = furiganaSpansForWord(TargetSpan(0, surface.length), surface, reading)
+        if (spans.isEmpty()) return fullWordRuby(surface, reading)
+        return buildString {
+            var cursor = 0
+            spans.forEach { span ->
+                append(escapeHtml(surface.substring(cursor, span.span.start)))
+                append(escapeHtml(span.surface))
+                append('[').append(escapeHtml(span.reading)).append(']')
+                cursor = span.span.end
             }
-            add(FuriganaSegment(surface.substring(start), kind))
+            append(escapeHtml(surface.substring(cursor)))
         }
-        val rendered = StringBuilder()
-        var readingIndex = 0
-        segments.forEachIndexed { index, segment ->
-            when (segment.kind) {
-                FuriganaSegmentKind.KANA -> {
-                    val kana = katakanaToHiragana(segment.text)
-                    if (!reading.startsWith(kana, readingIndex)) return fullWordRuby(surface, reading)
-                    rendered.append(escapeHtml(segment.text))
-                    readingIndex += kana.length
-                }
-                FuriganaSegmentKind.OTHER -> rendered.append(escapeHtml(segment.text))
-                FuriganaSegmentKind.KANJI -> {
-                    val nextKana = segments.drop(index + 1).firstOrNull {
-                        it.kind == FuriganaSegmentKind.KANA
-                    }
-                    if (nextKana == null && segments.drop(index + 1).any {
-                            it.kind == FuriganaSegmentKind.KANJI
-                        }
-                    ) return fullWordRuby(surface, reading)
-                    val end = nextKana?.let {
-                        reading.indexOf(katakanaToHiragana(it.text), readingIndex)
-                    } ?: reading.length
-                    if (end <= readingIndex) return fullWordRuby(surface, reading)
-                    rendered.append(escapeHtml(segment.text))
-                        .append('[').append(escapeHtml(reading.substring(readingIndex, end))).append(']')
-                    readingIndex = end
-                }
-            }
-        }
-        return if (readingIndex == reading.length) rendered.toString() else fullWordRuby(surface, reading)
     }
 
     private fun fullWordRuby(surface: String, reading: String): String =
         "${escapeHtml(surface)}[${escapeHtml(reading)}]"
-
-    private fun segmentKind(codePoint: Int): FuriganaSegmentKind = when {
-        isKana(codePoint) -> FuriganaSegmentKind.KANA
-        Character.UnicodeScript.of(codePoint) == Character.UnicodeScript.HAN -> FuriganaSegmentKind.KANJI
-        else -> FuriganaSegmentKind.OTHER
-    }
-
-    private fun isKana(codePoint: Int): Boolean = codePoint == 0x30FC ||
-        when (Character.UnicodeScript.of(codePoint)) {
-            Character.UnicodeScript.HIRAGANA, Character.UnicodeScript.KATAKANA -> true
-            else -> false
-        }
 
     private fun safeMediaName(name: String): String? {
         if (name.isBlank() || name == "." || name == "..") return null

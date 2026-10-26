@@ -70,6 +70,7 @@ import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.isTraversalGroup
@@ -79,11 +80,14 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.traversalIndex
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -92,6 +96,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.DialogProperties
 import dev.pierre.japaneseanki.FuriganaSpan
 import dev.pierre.japaneseanki.JapaneseToken
+import dev.pierre.japaneseanki.furiganaSpansForWord
 import dev.pierre.japaneseanki.OcrBounds
 import dev.pierre.japaneseanki.PitchAccent
 import dev.pierre.japaneseanki.PitchPatternDiagram
@@ -525,7 +530,6 @@ internal fun SelectableSentence(
     furigana: List<FuriganaSpan>,
     modifier: Modifier = Modifier,
 ) {
-    val readingBySpan = furigana.associateBy { it.span }
     val selectedLabel = stringResource(R.string.card_word_selected_state)
     val unselectedLabel = stringResource(R.string.card_word_not_selected_state)
     val feedback = rememberChangeFeedback(
@@ -536,8 +540,10 @@ internal fun SelectableSentence(
     val readingStyle = TextStyle(
         fontSize = 11.sp,
         lineHeight = 11.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         platformStyle = PlatformTextStyle(includeFontPadding = false),
     )
+    val readingTextMeasurer = rememberTextMeasurer()
     val sentenceStyle = MaterialTheme.typography.headlineMedium.copy(
         lineHeight = 34.sp,
         platformStyle = PlatformTextStyle(includeFontPadding = false),
@@ -572,8 +578,20 @@ internal fun SelectableSentence(
                 label = "word-highlight-radius",
             )
             val wordLabel = stringResource(R.string.card_word_accessibility, token.surface)
-            val reading = readingBySpan[token.span]?.reading
-                ?: token.surfaceReading.takeIf { containsKanjiForCard(token.surface) }
+            val tokenFurigana = furigana.filter {
+                it.span.start >= token.span.start && it.span.end <= token.span.end &&
+                    it.span.textIn(sentence) == it.surface
+            }
+            val readings = tokenFurigana.ifEmpty {
+                if (token.surfaceReading.isNotBlank() && containsKanjiForCard(token.surface)) {
+                    furiganaSpansForWord(token.span, token.surface, token.surfaceReading)
+                } else {
+                    emptyList()
+                }
+            }
+            val readingForBand = token.surfaceReading.takeIf {
+                it.isNotBlank() && containsKanjiForCard(token.surface)
+            }
             val baseStart = pill.prefix.length
             val baseEnd = baseStart + token.surface.length
             val display = buildAnnotatedString {
@@ -588,6 +606,25 @@ internal fun SelectableSentence(
                 append(pill.suffix)
             }
             val layoutResult = remember(token.span, display.text) { mutableStateOf<TextLayoutResult?>(null) }
+            val readingDraws = remember(token.span, readings, baseStart, display.length, readingStyle) {
+                readings.mapNotNull { event ->
+                    val start = baseStart + (event.span.start - token.span.start)
+                    val end = baseStart + (event.span.end - token.span.start)
+                    if (start < 0 || end > display.length || start >= end) {
+                        null
+                    } else {
+                        ReadingDraw(
+                            start = start,
+                            end = end,
+                            layout = readingTextMeasurer.measure(
+                                text = AnnotatedString(event.reading),
+                                style = readingStyle,
+                                maxLines = 1,
+                            ),
+                        )
+                    }
+                }
+            }
             // Read the latest enabled state at gesture time so a press highlight cannot cancel its tap.
             val currentSelectionEnabled by rememberUpdatedState(selectionEnabled)
             val currentSelectedSpan by rememberUpdatedState(selectedSpan)
@@ -622,11 +659,11 @@ internal fun SelectableSentence(
                 verticalArrangement = Arrangement.Bottom,
             ) {
                 Box(Modifier.heightIn(min = readingBandHeight), contentAlignment = Alignment.BottomCenter) {
-                    if (!reading.isNullOrBlank()) {
+                    if (readingForBand != null) {
                         Text(
-                            reading,
-                            style = readingStyle,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            readingForBand,
+                            style = readingStyle.copy(color = Color.Transparent),
+                            modifier = Modifier.clearAndSetSemantics {},
                         )
                     }
                 }
@@ -657,8 +694,28 @@ internal fun SelectableSentence(
                             }
                         }
                         .drawBehind {
-                            if (!isSelected && !isPressed) return@drawBehind
                             val textLayout = layoutResult.value ?: return@drawBehind
+                            readingDraws.forEach { reading ->
+                                val boxes = (reading.start until reading.end).mapNotNull { offset ->
+                                    if (offset < textLayout.layoutInput.text.length) {
+                                        textLayout.getBoundingBox(offset)
+                                    } else {
+                                        null
+                                    }
+                                }
+                                if (boxes.isNotEmpty()) {
+                                    val left = boxes.minOf { it.left }
+                                    val right = boxes.maxOf { it.right }
+                                    drawText(
+                                        textLayoutResult = reading.layout,
+                                        topLeft = Offset(
+                                            (left + right) / 2f - reading.layout.size.width / 2f,
+                                            -reading.layout.size.height.toFloat(),
+                                        ),
+                                    )
+                                }
+                            }
+                            if (!isSelected && !isPressed) return@drawBehind
                             val strokeWidth = 2.dp.toPx()
                             val padX = 4.dp.toPx()
                             val padY = 1.dp.toPx()
@@ -695,6 +752,12 @@ internal fun SelectableSentence(
         }
     }
 }
+
+private data class ReadingDraw(
+    val start: Int,
+    val end: Int,
+    val layout: TextLayoutResult,
+)
 
 private fun containsKanjiForCard(value: String): Boolean = value.any {
     Character.UnicodeScript.of(it.code) == Character.UnicodeScript.HAN

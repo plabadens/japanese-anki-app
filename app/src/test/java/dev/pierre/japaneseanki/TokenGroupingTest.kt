@@ -86,13 +86,13 @@ class TokenGroupingTest {
     }
 
     @Test
-    fun furiganaUsesTheGroupedWordNotTheMorphemePieces() {
+    fun furiganaAnnotatesOnlyTheKanjiRunOfTheGroupedWord() {
         val grouped = groupTokens(morphemes)
 
         assertEquals(
             listOf(
                 FuriganaSpan(TargetSpan(0, 3), "図書館", "としょかん"),
-                FuriganaSpan(TargetSpan(6, 11), "読みました", "よみました"),
+                FuriganaSpan(TargetSpan(6, 7), "読", "よ"),
             ),
             sentenceFuriganaSpans(sentence, grouped, TargetSpan(4, 5)),
         )
