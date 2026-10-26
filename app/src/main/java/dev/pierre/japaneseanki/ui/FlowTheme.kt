@@ -76,6 +76,8 @@ internal object FlowPalette {
     val lightSelectedOutline = Color(0xFF795247)
     val lightTertiary = Color(0xFF354B70)
     val lightError = Color(0xFFA51D26)
+    val lightErrorContainer = Color(0xFFF9DEDC)
+    val lightOnErrorContainer = Color(0xFF410E0B)
     val lightSurfaceVariant = Color(0xFFF6E7DE)
     val lightSurfaceDim = Color(0xFFE8D9D1)
     val lightSurfaceBright = Color(0xFFFFFDFC)
@@ -100,6 +102,8 @@ internal object FlowPalette {
     val darkSelectedOutline = Color(0xFFD2A693)
     val darkTertiary = Color(0xFFB3C8EE)
     val darkError = Color(0xFFFFB2B7)
+    val darkErrorContainer = Color(0xFF93000A)
+    val darkOnErrorContainer = Color(0xFFFFDAD6)
     val darkSurfaceVariant = Color(0xFF2E211C)
     val darkSurfaceDim = Color(0xFF1C1411)
     val darkSurfaceBright = Color(0xFF3A2C26)
@@ -147,8 +151,8 @@ internal val FlowLightColors = lightColorScheme(
     outlineVariant = Color(0xFFD8C3B7),
     error = FlowPalette.lightError,
     onError = Color(0xFFFFFFFF),
-    errorContainer = Color(0xFFF8E6B7),
-    onErrorContainer = Color(0xFF4C370A),
+    errorContainer = FlowPalette.lightErrorContainer,
+    onErrorContainer = FlowPalette.lightOnErrorContainer,
 )
 
 internal val FlowDarkColors = darkColorScheme(
@@ -185,8 +189,8 @@ internal val FlowDarkColors = darkColorScheme(
     outlineVariant = Color(0xFF5A4339),
     error = FlowPalette.darkError,
     onError = Color(0xFF5D160D),
-    errorContainer = Color(0xFF4A3B1D),
-    onErrorContainer = Color(0xFFF8E6B7),
+    errorContainer = FlowPalette.darkErrorContainer,
+    onErrorContainer = FlowPalette.darkOnErrorContainer,
 )
 
 /**

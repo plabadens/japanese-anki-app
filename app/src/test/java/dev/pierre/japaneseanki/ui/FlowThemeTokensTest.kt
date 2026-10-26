@@ -133,6 +133,14 @@ class FlowThemeTokensTest {
     }
 
     @Test
+    fun flowColorSchemesUseRedConsistentErrorContainerRoles() {
+        assertEquals(Color(0xFFF9DEDC), FlowLightColors.errorContainer)
+        assertEquals(Color(0xFF410E0B), FlowLightColors.onErrorContainer)
+        assertEquals(Color(0xFF93000A), FlowDarkColors.errorContainer)
+        assertEquals(Color(0xFFFFDAD6), FlowDarkColors.onErrorContainer)
+    }
+
+    @Test
     fun settingsPickerRowExposesRadioRoleAndFortyEightDpTarget() {
         composeRule.setContent {
             SettingsPreviewContent(state = SettingsPreviewState.KEY_SAVED)

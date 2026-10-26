@@ -165,7 +165,7 @@ private fun SetupHeader(state: SetupUi) {
     val complete = state.audioReady && state.ankiReady && !state.dictionaryPreparing &&
         state.dictionaryErrorResource == null
     Row(
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         if (complete) {
@@ -226,7 +226,7 @@ private fun AudioCard(
     var listOpen by remember { mutableStateOf(false) }
     val selected = state.voices.firstOrNull { it.name == state.selectedVoice }
     FlowCard(
-        shape = FlowStickers.contentCard(),
+        shape = MaterialTheme.shapes.large,
         contentPadding = PaddingValues(horizontal = 22.dp, vertical = 20.dp),
     ) {
         Column(

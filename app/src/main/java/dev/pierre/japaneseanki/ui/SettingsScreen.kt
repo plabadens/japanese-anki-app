@@ -166,7 +166,7 @@ internal fun SettingsScreen(
             }
 
             FlowCard(
-                shape = FlowStickers.contentCard(),
+                shape = MaterialTheme.shapes.large,
                 contentPadding = PaddingValues(horizontal = 22.dp, vertical = 20.dp),
             ) {
                 Column(

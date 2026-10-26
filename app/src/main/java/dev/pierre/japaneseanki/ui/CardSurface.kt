@@ -358,55 +358,51 @@ internal fun CardScreen(
                             shape = FlowStickers.contentCard(),
                             contentPadding = PaddingValues(horizontal = 22.dp, vertical = 20.dp),
                         ) {
+                            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                                val useTwoColumns = fontScale < 1.5f && maxWidth >= 280.dp
                                 Column(
                                     Modifier.fillMaxWidth(),
                                     verticalArrangement = Arrangement.spacedBy(10.dp),
                                 ) {
-                                    Row(verticalAlignment = Alignment.Top) {
-                                        Column(Modifier.weight(1f)) {
-                                            Text(vocabulary, style = MaterialTheme.typography.displayMedium)
-                                            FlowRow(
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                                    if (useTwoColumns) {
+                                        Row(
+                                            Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                            verticalAlignment = Alignment.Top,
+                                        ) {
+                                            Column(Modifier.weight(1f)) {
+                                                WordHeroHeading(vocabulary, vocabularyReading, partOfSpeech)
+                                            }
+                                            Column(
+                                                Modifier.weight(1.2f),
+                                                verticalArrangement = Arrangement.spacedBy(8.dp),
                                             ) {
-                                                if (vocabularyReading.isNotBlank()) {
-                                                    Text(
-                                                        vocabularyReading,
-                                                        style = MaterialTheme.typography.titleMedium,
-                                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                    )
-                                                }
-                                                partOfSpeech?.let {
-                                                    FlowTag(
-                                                        text = it,
-                                                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
-                                                        contentColor = MaterialTheme.colorScheme.onSurface,
-                                                    )
-                                                }
+                                                CardAudioButton(
+                                                    field = stringResource(R.string.card_word_audio_field),
+                                                    audio = wordAudio,
+                                                    onToggle = onToggleWordAudio,
+                                                    onRetry = onRetryWordAudio,
+                                                    enabled = wordAudioEnabled,
+                                                    unavailableMessage = wordStatus,
+                                                )
+                                                WordPitchContent(pitch, pitchStatus, pitchPending)
                                             }
                                         }
-                                        CardAudioButton(
-                                            field = stringResource(R.string.card_word_audio_field),
-                                            audio = wordAudio,
-                                            onToggle = onToggleWordAudio,
-                                            onRetry = onRetryWordAudio,
-                                            enabled = wordAudioEnabled,
-                                            unavailableMessage = wordStatus,
-                                        )
-                                    }
-                                    when {
-                                        pitch != null -> PitchPatternDiagram(pitch = pitch)
-                                        pitchStatus != null -> Text(
-                                            pitchStatus,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                        pitchPending -> Spacer(Modifier.height(24.dp))
-                                        else -> Text(
-                                            stringResource(R.string.no_pitch),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
+                                    } else {
+                                        Row(verticalAlignment = Alignment.Top) {
+                                            Column(Modifier.weight(1f)) {
+                                                WordHeroHeading(vocabulary, vocabularyReading, partOfSpeech)
+                                            }
+                                            CardAudioButton(
+                                                field = stringResource(R.string.card_word_audio_field),
+                                                audio = wordAudio,
+                                                onToggle = onToggleWordAudio,
+                                                onRetry = onRetryWordAudio,
+                                                enabled = wordAudioEnabled,
+                                                unavailableMessage = wordStatus,
+                                            )
+                                        }
+                                        WordPitchContent(pitch, pitchStatus, pitchPending)
                                     }
                                     if (definition.isNotBlank()) {
                                         Text(definition, style = MaterialTheme.typography.bodyLarge)
@@ -428,6 +424,7 @@ internal fun CardScreen(
                             }
                         }
                         }
+                    }
                     }
 
                     if (selectedSpan != null) {
@@ -495,6 +492,49 @@ internal fun CardScreen(
     }
     if (photoExpanded && imagePath != null && File(imagePath).isFile) {
         FullPhotoDialog(imagePath = imagePath, onDismiss = { photoExpanded = false })
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun WordHeroHeading(vocabulary: String, reading: String, partOfSpeech: String?) {
+    Text(vocabulary, style = MaterialTheme.typography.displayMedium)
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        if (reading.isNotBlank()) {
+            Text(
+                reading,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+        }
+        partOfSpeech?.let {
+            FlowTag(
+                text = it,
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+                contentColor = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+    }
+}
+
+@Composable
+private fun WordPitchContent(pitch: PitchAccent?, pitchStatus: String?, pitchPending: Boolean) {
+    when {
+        pitch != null -> PitchPatternDiagram(pitch = pitch)
+        pitchStatus != null -> Text(
+            pitchStatus,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        pitchPending -> Spacer(Modifier.height(24.dp))
+        else -> Text(
+            stringResource(R.string.no_pitch),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
