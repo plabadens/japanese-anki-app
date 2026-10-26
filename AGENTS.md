@@ -53,6 +53,7 @@ nix develop --command ./scripts/ci-build-apk.sh   # full CI: gate + render + APK
 
 Design screenshots are artifacts, not sources: never commit PNGs, and put regression value in numeric
 assertions rather than image diffs. Use the emulator only when the task asks for device work, always
-through `nix develop --command ./scripts/emulator-adb run …` — never bare `adb`, and never uninstall
+through `nix develop --command ./scripts/emulator-adb run …` (`ANDROID_DEVICE_SERIAL=<serial>` for an
+attached physical device) — never bare `adb`, and never uninstall
 when `install -r` will do. If the toolchain misbehaves, report it and propose a fix; do not work
 around it silently.

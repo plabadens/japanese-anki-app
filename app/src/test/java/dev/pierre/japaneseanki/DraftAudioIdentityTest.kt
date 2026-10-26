@@ -31,18 +31,18 @@ class DraftAudioIdentityTest {
         )
     }
 
-    @Test fun sentenceRequestIdentityDoesNotDependOnSelectedVocabulary() {
-        val hints = listOf(
-            dev.pierre.japaneseanki.speech.ReadingHintSpan(0, 2, "昨日", "きのう"),
-            dev.pierre.japaneseanki.speech.ReadingHintSpan(6, 9, "喫茶店", "きっさてん"),
-        )
+    @Test fun sentenceRecordingIdentityIsTheSpokenTextAndVoice() {
         assertEquals(
-            DraftAudioIdentity.sentenceRequest(sentence, hints, "voice"),
-            DraftAudioIdentity.sentenceRequest(sentence, hints, "voice"),
+            DraftAudioIdentity.sentenceRequest(sentence, "voice"),
+            DraftAudioIdentity.sentenceRequest(sentence, "voice"),
         )
         assertNotEquals(
-            DraftAudioIdentity.sentenceRequest(sentence, hints, "voice-a"),
-            DraftAudioIdentity.sentenceRequest(sentence, hints, "voice-b"),
+            DraftAudioIdentity.sentenceRequest(sentence, "voice-a"),
+            DraftAudioIdentity.sentenceRequest(sentence, "voice-b"),
+        )
+        assertNotEquals(
+            DraftAudioIdentity.sentenceRequest(sentence, "voice"),
+            DraftAudioIdentity.sentenceRequest("$sentence。", "voice"),
         )
     }
 

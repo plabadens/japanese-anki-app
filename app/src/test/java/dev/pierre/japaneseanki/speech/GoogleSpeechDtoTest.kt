@@ -12,7 +12,6 @@ class GoogleSpeechDtoTest {
         val request = SentenceSpeechRequest(
             text = sentence,
             voice = CloudVoice("ja-JP-Chirp3-HD-Achernar", "Achernar", listOf("ja-JP"), 24_000),
-            hints = emptyList(),
         )
 
         val serialized = buildSynthesisJson(request)

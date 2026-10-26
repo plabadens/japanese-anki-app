@@ -61,6 +61,7 @@ class EmulatorAdbTests(unittest.TestCase):
         )
         self.env.pop("EMULATOR_PORT", None)
         self.env.pop("ANDROID_SERIAL", None)
+        self.env.pop("ANDROID_DEVICE_SERIAL", None)
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -100,6 +101,36 @@ class EmulatorAdbTests(unittest.TestCase):
         result = self.invoke("run", "logcat", "-d", env=serial_env)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.calls()[-1]["argv"], ["-s", "emulator-5558", "logcat", "-d"])
+
+    def test_physical_device_serial_is_pinned_and_forwards_exact_argv(self) -> None:
+        env = self.env.copy()
+        env["ANDROID_DEVICE_SERIAL"] = "33031FDH2009P1"
+        self.assertEqual(self.invoke("serial", env=env).stdout.strip(), "33031FDH2009P1")
+        result = self.invoke("run", "logcat", "-d", "-s", "AnkiSend", env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            self.calls()[-1]["argv"],
+            ["-s", "33031FDH2009P1", "logcat", "-d", "-s", "AnkiSend"],
+        )
+        self.assertEqual(self.calls()[-1]["socket"], "<unset>")
+
+    def test_physical_device_selector_never_accepts_an_emulator_or_a_conflict(self) -> None:
+        # An empty value means "unset", exactly as for ANDROID_SERIAL.
+        for value in ("emulator-5554", "bad serial", "-leading", "a" * 65):
+            with self.subTest(serial=value):
+                env = self.env.copy()
+                env["ANDROID_DEVICE_SERIAL"] = value
+                result = self.invoke("run", "shell", "getprop", env=env)
+                self.assertNotEqual(result.returncode, 0)
+        for extra in ({"EMULATOR_PORT": "5554"}, {"ANDROID_SERIAL": "emulator-5556"}):
+            with self.subTest(extra=extra):
+                env = self.env.copy()
+                env["ANDROID_DEVICE_SERIAL"] = "33031FDH2009P1"
+                env.update(extra)
+                result = self.invoke("run", "shell", "getprop", env=env)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("conflicting device selectors", result.stderr)
+        self.assertEqual(self.calls(), [])
 
     def test_conflicting_selectors_fail_before_adb(self) -> None:
         env = self.env.copy()

@@ -8,7 +8,6 @@ import dev.pierre.japaneseanki.card.CardSendBlocker
 import dev.pierre.japaneseanki.card.CardSendBlockerKind
 import dev.pierre.japaneseanki.send.SendOutcome
 import dev.pierre.japaneseanki.send.SendRequest
-import dev.pierre.japaneseanki.speech.sentenceHintSpans
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -81,9 +80,9 @@ internal data class CardUiState(
     fun audioState(item: AudioItem): DraftAudioState? {
         if (frozen != null) return audio?.items?.get(item)
         val expected = when (item) {
-            AudioItem.SENTENCE -> configuration.values.voiceName.takeIf(String::isNotBlank)?.let { voiceName -> DraftAudioIdentity.sentenceRequest(
-                record.draft.sentence, sentenceHintSpans(record.draft.sentence, tokens, record.draft.readingCorrections), voiceName,
-            ) }
+            AudioItem.SENTENCE -> configuration.values.voiceName.takeIf(String::isNotBlank)?.let { voiceName ->
+                DraftAudioIdentity.sentenceRequest(record.draft.sentence, voiceName)
+            }
             AudioItem.VOCABULARY -> meaning?.entry?.let { DraftAudioIdentity.word(it.id, it.expression, it.reading) }
         }
         return audio?.items?.get(item)?.takeIf { expected != null && it.identity == expected }
@@ -319,7 +318,23 @@ internal class CardViewModel(private val repository: DraftRepository, private va
         mutableState.update { it.copy(record = it.record.copy(translation = it.record.translation.requestStarted())) }
         prepareSentence()
     }
-    fun retryAudio(item: AudioItem) { viewModelScope.launch { generateAudio(item, true) } }
+    /**
+     * The one "do this audio work now" intent. Audio belongs to the committed sentence, so asking
+     * for it on an uncommitted draft commits first; a retryable failure is retried; a permanent one
+     * is left to its explanation instead of spinning a control that cannot succeed.
+     */
+    fun requestAudio(item: AudioItem) {
+        val state = uiState.value
+        if (!state.editingEnabled) return
+        if (state.record.activeSentence != state.record.draft.sentence) {
+            commit()
+            return
+        }
+        if (!state.local.ready) return
+        val current = state.audioState(item)
+        if (current is DraftAudioState.Failed && !current.retryable) return
+        viewModelScope.launch { generateAudio(item, retry = current is DraftAudioState.Failed) }
+    }
     private suspend fun generateAudio(item: AudioItem, retry: Boolean = false) {
         val state = uiState.value
         if (!state.editingEnabled || state.record.activeSentence != state.record.draft.sentence) return

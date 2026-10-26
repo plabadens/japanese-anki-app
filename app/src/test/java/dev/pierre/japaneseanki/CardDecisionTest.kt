@@ -2,7 +2,6 @@ package dev.pierre.japaneseanki
 
 import dev.pierre.japaneseanki.card.CardSendBlockerKind
 import dev.pierre.japaneseanki.speech.CloudVoice
-import dev.pierre.japaneseanki.speech.sentenceHintSpans
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -61,7 +60,7 @@ class CardDecisionTest {
         val entry = DictionaryEntry(1, "猫", "ねこ", listOf(DictionarySense(listOf("cat"), emptyList(), emptyList())))
         val voice = CloudVoice("ja-JP-Chirp3-HD-Aoede", "Aoede", listOf("ja-JP"), 24_000)
         val draft = DraftModel("猫", TargetSpan(0, 1), "猫", "ねこ", "cat", "0", "ねこ")
-        val sentenceIdentity = DraftAudioIdentity.sentenceRequest("猫", sentenceHintSpans("猫", emptyList(), emptyList()), voice.name)
+        val sentenceIdentity = DraftAudioIdentity.sentenceRequest("猫", voice.name)
         val wordIdentity = DraftAudioIdentity.word(1, "猫", "ねこ")
         val file = DraftAudioFile("/fixture", "mp3", 1, 1)
         return CardUiState(

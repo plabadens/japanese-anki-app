@@ -271,20 +271,11 @@ fun buildSynthesisJson(request: SentenceSpeechRequest): String {
             ),
         )
     }
-    val input = GoogleSpeechInputDto(
-        text = request.text,
-        customPronunciations = request.hints.takeIf { it.isNotEmpty() }?.let { hints ->
-            GoogleSpeechCustomPronunciationsDto(
-                pronunciations = hints.map { hint ->
-                    GoogleSpeechPronunciationDto(
-                        phrase = hint.phrase,
-                        phoneticEncoding = "PHONETIC_ENCODING_JAPANESE_YOMIGANA",
-                        pronunciation = hint.reading,
-                    )
-                },
-            )
-        },
-    )
+    // Cloud Text-to-Speech rejects input.customPronunciations for Japanese Chirp 3: HD voices with
+    // INVALID_ARGUMENT, in both the documented shapes and with PHONETIC_ENCODING_JAPANESE_YOMIGANA,
+    // which its schema otherwise accepts (verified against the live v1 endpoint). Sending it fails
+    // every sentence containing kanji, so the reading is left to the model's own kanji handling.
+    val input = GoogleSpeechInputDto(text = request.text)
     return GoogleJson.encodeToString(
         GoogleSpeechSynthesisRequestDto(
             input = input,
@@ -294,12 +285,8 @@ fun buildSynthesisJson(request: SentenceSpeechRequest): String {
     )
 }
 
-private fun synthesisContentBytes(request: SentenceSpeechRequest): Int {
-    val bytes = request.text.toByteArray(Charsets.UTF_8).size.toLong() + request.hints.sumOf { hint ->
-        hint.phrase.toByteArray(Charsets.UTF_8).size.toLong() + hint.reading.toByteArray(Charsets.UTF_8).size.toLong()
-    }
-    return bytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-}
+private fun synthesisContentBytes(request: SentenceSpeechRequest): Int =
+    request.text.toByteArray(Charsets.UTF_8).size.coerceAtMost(Int.MAX_VALUE)
 
 private fun synthesisRequestMetadata(
     request: SentenceSpeechRequest,
@@ -310,7 +297,6 @@ private fun synthesisRequestMetadata(
     inputBytes = inputBytes,
     requestBytes = requestBytes,
     voiceName = request.voice.name.takeIf(::isSafeVoiceId),
-    hintCount = request.hints.size,
 )
 
 private fun isSafeVoiceId(value: String): Boolean =

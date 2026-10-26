@@ -32,6 +32,19 @@ if [[ -n "${ANDROID_SERIAL:-}" ]]; then
   serial="$ANDROID_SERIAL"
 fi
 
+# Physical devices are addressed explicitly and never by accident: the serial is pinned here, in
+# one place, exactly like the emulator target. Bare `adb` still has no way in.
+if [[ -n "${ANDROID_DEVICE_SERIAL:-}" ]]; then
+  [[ "$ANDROID_DEVICE_SERIAL" =~ ^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$ ]] \
+    || fail "invalid device serial: $ANDROID_DEVICE_SERIAL"
+  [[ ! "$ANDROID_DEVICE_SERIAL" =~ ^emulator- ]] \
+    || fail 'ANDROID_DEVICE_SERIAL is for physical devices; use ANDROID_SERIAL or EMULATOR_PORT for emulators'
+  if [[ -n "${ANDROID_SERIAL:-}" || -n "${EMULATOR_PORT:-}" ]]; then
+    fail "conflicting device selectors: ANDROID_DEVICE_SERIAL=$ANDROID_DEVICE_SERIAL cannot be combined with ANDROID_SERIAL or EMULATOR_PORT"
+  fi
+  serial="$ANDROID_DEVICE_SERIAL"
+fi
+
 [[ $# -gt 0 ]] || fail 'expected serial, run, devices, or start-server command'
 mode=$1
 shift

@@ -116,8 +116,8 @@ internal fun JapaneseAnkiApp(
             CardPrimary.Setup -> open("Setup")
             CardPrimary.Settings -> open("Settings")
             CardPrimary.Translation -> card.retryTranslation()
-            CardPrimary.SentenceAudio -> card.retryAudio(AudioItem.SENTENCE)
-            CardPrimary.WordAudio -> card.retryAudio(AudioItem.VOCABULARY)
+            CardPrimary.SentenceAudio -> card.requestAudio(AudioItem.SENTENCE)
+            CardPrimary.WordAudio -> card.requestAudio(AudioItem.VOCABULARY)
             CardPrimary.Send, CardPrimary.RetrySend -> card.send()
         }
     }
@@ -215,7 +215,7 @@ internal fun JapaneseAnkiApp(
                     onToggleSentenceAudio = { scope.launch { card.playback(AudioItem.SENTENCE)?.let(onPlay) } },
                     onRetrySentenceAudio = { perform(if (state.configuration.audio.voice == null) CardPrimary.Settings else CardPrimary.SentenceAudio) },
                     onToggleWordAudio = { scope.launch { card.playback(AudioItem.VOCABULARY)?.let(onPlay) } },
-                    onRetryWordAudio = { card.retryAudio(AudioItem.VOCABULARY) },
+                    onRetryWordAudio = { card.requestAudio(AudioItem.VOCABULARY) },
                     hint = hint, hintPreparing = state.analyzing || state.searching,
                     actionLabel = stringResource(when (decision.action) {
                         CardPrimary.Setup -> R.string.finish_setup

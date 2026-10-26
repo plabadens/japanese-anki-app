@@ -1,6 +1,7 @@
 package dev.pierre.japaneseanki
 
 import android.content.Context
+import android.util.Log
 import android.net.Uri
 import androidx.core.content.ContextCompat
 import dev.pierre.japaneseanki.send.SendCoordinator
@@ -8,14 +9,13 @@ import dev.pierre.japaneseanki.send.SendOutcome
 import dev.pierre.japaneseanki.send.SendRequest
 import dev.pierre.japaneseanki.speech.CloudVoice
 import dev.pierre.japaneseanki.speech.GoogleChirpSpeechProvider
-import dev.pierre.japaneseanki.speech.HintResult
-import dev.pierre.japaneseanki.speech.ReadingHintBuilder
 import dev.pierre.japaneseanki.speech.SentenceSpeechRequest
-import dev.pierre.japaneseanki.speech.sentenceHintSpans
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
+
+private const val AUDIO_LOG = "DraftAudio"
 
 internal data class DraftRecord(
     val draft: DraftModel = DraftModel(),
@@ -161,13 +161,10 @@ internal class DraftRepository(
     suspend fun sentenceAudio(record: DraftRecord, tokens: List<JapaneseToken>, voice: CloudVoice, retry: Boolean, onStarted: (DraftAudioSnapshot) -> Unit): DraftAudioSnapshot =
         withContext(Dispatchers.IO) {
             val sentence = record.draft.sentence
-            val spans = sentenceHintSpans(sentence, tokens, record.draft.readingCorrections)
-            val hints = ReadingHintBuilder.build(sentence, spans)
-            require(hints is HintResult.Ready)
-            val request = SentenceSpeechRequest(sentence, voice, hints.hints)
+            val request = SentenceSpeechRequest(sentence, voice)
             prepareAudio(DraftAudioInput(
-                AudioItem.SENTENCE, DraftAudioIdentity.sentenceRequest(sentence, spans, voice.name), sentence, 0,
-                cacheKey = AudioCacheKey("google-chirp3-hd", sentence, voice.name, request.speakingRate.toFloat(), hintIdentity = ReadingHintBuilder.cacheFragment(hints.hints)),
+                AudioItem.SENTENCE, DraftAudioIdentity.sentenceRequest(sentence, voice.name), sentence, 0,
+                cacheKey = AudioCacheKey("google-chirp3-hd", sentence, voice.name, request.speakingRate.toFloat()),
                 expectedFormat = AudioFormat.MP3, providerPayload = request,
             ), retry, onStarted)
         }
@@ -185,8 +182,37 @@ internal class DraftRepository(
         audio.setInput(input)
         val attempt = audio.confirm(input.item) ?: if (retry) audio.retry(input.item) else null
         onStarted(audio.snapshot())
-        if (attempt != null) audio.runAttempt(attempt)
+        val result = attempt?.let { audio.runAttempt(it) }
+        logAudioOutcome(input, result)
         return audio.snapshot()
+    }
+
+    /**
+     * Local diagnostics only: bounded enums, HTTP codes, voice ids and counts. Never the sentence,
+     * the reading, a path, or the credential.
+     */
+    private fun logAudioOutcome(input: DraftAudioInput, result: DraftAudioAttemptResult?) {
+        when (result) {
+            is DraftAudioAttemptResult.Accepted ->
+                Log.i(AUDIO_LOG, "${input.item.name} accepted fromCache=${result.fromCache}")
+            is DraftAudioAttemptResult.Failed -> {
+                val diagnostic = result.diagnostic
+                Log.e(
+                    AUDIO_LOG,
+                    "${input.item.name} generation failed retryable=${result.retryable}" +
+                        " category=${diagnostic?.category ?: "UNKNOWN"}" +
+                        " http=${diagnostic?.httpStatus ?: "-"}" +
+                        " status=${diagnostic?.googleStatus ?: "-"}" +
+                        " reason=${diagnostic?.googleReason ?: "-"}" +
+                        " voice=${diagnostic?.voiceName ?: "-"}" +
+                        " hints=${diagnostic?.hintCount ?: "-"}" +
+                        " inputBytes=${diagnostic?.inputBytes ?: "-"}" +
+                        " requestBytes=${diagnostic?.requestBytes ?: "-"}",
+                )
+            }
+            DraftAudioAttemptResult.Stale -> Log.i(AUDIO_LOG, "${input.item.name} attempt became stale")
+            null -> Log.w(AUDIO_LOG, "${input.item.name} was not authorized; no attempt started")
+        }
     }
     suspend fun invalidateAudio(item: AudioItem) = withContext(Dispatchers.IO) { audio.clear(item); audio.snapshot() }
     fun audioSnapshot(): DraftAudioSnapshot = audio.snapshot()
