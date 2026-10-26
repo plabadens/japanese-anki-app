@@ -187,9 +187,7 @@ internal fun JapaneseAnkiApp(
                 state.analysisFailed -> stringResource(R.string.card_could_not_analyze_this_sentence_select_a_t)
                 else -> blocker
             }
-            FlowPage(topBar = {
-                FlowTopBar(title = stringResource(R.string.card), onBack = ::cardBack, onSettings = { open("Settings") }, navigationEnabled = !busy)
-            }) {
+            FlowPage {
                 val draft = state.displayDraft
                 CardScreen(
                     sentence = draft.sentence, tokens = state.tokens, selectedSpan = draft.target,
@@ -245,6 +243,7 @@ internal fun JapaneseAnkiApp(
                             TextButton(onClick = card::discardPending) { Text(stringResource(R.string.card_edit_and_recheck)) }
                         }
                     },
+                    onBack = ::cardBack,
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                 )
             }

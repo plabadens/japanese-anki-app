@@ -19,7 +19,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -163,13 +162,28 @@ private fun SetupHeader(state: SetupUi) {
             body = R.string.setup_anki_left_body
         }
     }
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(stringResource(headline), style = MaterialTheme.typography.headlineMedium)
-        Text(
-            stringResource(body),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+    val complete = state.audioReady && state.ankiReady && !state.dictionaryPreparing &&
+        state.dictionaryErrorResource == null
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        if (complete) {
+            FlowStickerBadge(Modifier.size(52.dp)) {
+                FlowIcons.Check(Modifier.size(26.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
+            }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                stringResource(headline),
+                style = if (complete) MaterialTheme.typography.displaySmall else MaterialTheme.typography.headlineMedium,
+            )
+            Text(
+                stringResource(body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
@@ -184,12 +198,22 @@ private fun finishReason(state: SetupUi): Int? = when {
 
 @Composable
 private fun SectionLabel(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    Row(
         modifier = Modifier.padding(top = 2.dp),
-    )
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(
+            Modifier.size(7.dp)
+                .clip(RoundedCornerShape(percent = 50))
+                .background(MaterialTheme.colorScheme.primary),
+        )
+        Text(
+            text,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 @Composable
@@ -201,7 +225,10 @@ private fun AudioCard(
 ) {
     var listOpen by remember { mutableStateOf(false) }
     val selected = state.voices.firstOrNull { it.name == state.selectedVoice }
-    FlowCard(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 18.dp)) {
+    FlowCard(
+        shape = FlowStickers.contentCard(),
+        contentPadding = PaddingValues(horizontal = 22.dp, vertical = 20.dp),
+    ) {
         Column(
             Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -211,7 +238,13 @@ private fun AudioCard(
                 value = state.key,
                 onValueChange = onKeyChange,
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text(stringResource(R.string.google_key)) },
+                label = {
+                    Text(
+                        stringResource(R.string.google_key),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
                 enabled = !state.loading,
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
@@ -229,7 +262,10 @@ private fun AudioCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    LinearProgressIndicator(Modifier.width(72.dp))
+                    MotionAwareLinearProgressIndicator(
+                        modifier = Modifier.width(72.dp),
+                        stateDescription = stringResource(R.string.loading_voices),
+                    )
                     Text(stringResource(R.string.loading_voices), style = MaterialTheme.typography.bodyMedium)
                 }
                 state.voices.isNotEmpty() && listOpen -> VoiceList(
@@ -343,23 +379,33 @@ private fun AnkiCard(
 
     FlowCard(
         variant = FlowCardVariant.Outlined,
-        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
+        shape = MaterialTheme.shapes.large,
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 18.dp),
     ) {
         Column(
             Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(stringResource(R.string.anki), style = MaterialTheme.typography.titleLarge)
-                Text(
-                    stringResource(if (state.connected) R.string.connected else R.string.not_connected),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = if (state.connected) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FlowTag(
+                        text = stringResource(if (state.connected) R.string.connected else R.string.not_connected),
+                        containerColor = if (state.connected) {
+                            MaterialTheme.colorScheme.secondaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        },
+                        contentColor = if (state.connected) {
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
             }
             if (!state.connected) {
                 Text(
@@ -432,7 +478,7 @@ private fun AnkiCard(
 private fun PickerRow(label: String, value: String, interactive: Boolean, onClick: () -> Unit) {
     FlowCard(
         variant = FlowCardVariant.Outlined,
-        shape = MaterialTheme.shapes.small,
+        shape = MaterialTheme.shapes.medium,
         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
         onClick = onClick.takeIf { interactive },
     ) {
@@ -468,11 +514,11 @@ private fun PickerRow(label: String, value: String, interactive: Boolean, onClic
 private fun CameraRow(granted: Boolean, denied: Boolean, onRequest: () -> Unit) {
     Row(
         Modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
+            .clip(MaterialTheme.shapes.extraLarge)
             .background(MaterialTheme.colorScheme.surface)
             .border(
                 BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
-                RoundedCornerShape(20.dp),
+                MaterialTheme.shapes.extraLarge,
             )
             .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,

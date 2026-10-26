@@ -59,6 +59,22 @@ class CardSurfaceBehaviorTest {
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
+    fun floatingBackControlIsVisibleAndInvokesBack() {
+        var backs = 0
+        composeRule.setContent {
+            CardFlowPreviewContent(
+                state = CardFlowPreviewState.CARD_READY_TO_SEND,
+                onBack = { backs++ },
+            )
+        }
+
+        composeRule.onNodeWithContentDescription(composeRule.activity.getString(R.string.back))
+            .assertIsDisplayed()
+            .performClick()
+        composeRule.runOnIdle { assertEquals(1, backs) }
+    }
+
+    @Test
     fun meaningSheetPreservesChoiceAndAudioStatusKeepsCardGeometry() {
         val selected = mutableStateOf(choice(index = 0, definition = "garden lantern"))
         val choices = mutableStateOf(listOf(selected.value))

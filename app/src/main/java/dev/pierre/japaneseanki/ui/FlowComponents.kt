@@ -1,6 +1,8 @@
 package dev.pierre.japaneseanki.ui
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -8,6 +10,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -15,12 +18,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,6 +36,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -113,6 +119,50 @@ internal fun FlowCard(
     }
 }
 
+/** A small tonal label used for state and part-of-speech, not for instructions. */
+@Composable
+internal fun FlowTag(
+    text: String,
+    modifier: Modifier = Modifier,
+    containerColor: Color = MaterialTheme.colorScheme.secondaryContainer,
+    contentColor: Color = MaterialTheme.colorScheme.onSecondaryContainer,
+) {
+    Surface(
+        modifier = modifier,
+        shape = CircleShape,
+        color = containerColor,
+        contentColor = contentColor,
+    ) {
+        Text(
+            text,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** A sticker-like container for one successful-state glyph. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+internal fun FlowStickerBadge(
+    modifier: Modifier = Modifier,
+    containerColor: Color = MaterialTheme.colorScheme.secondaryContainer,
+    contentColor: Color = MaterialTheme.colorScheme.onSecondaryContainer,
+    content: @Composable () -> Unit,
+) {
+    Surface(
+        modifier = modifier,
+        shape = FlowStickers.badge(),
+        color = containerColor,
+        contentColor = contentColor,
+    ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
+    }
+}
+
 /** One accessible radio option row shared by the settings and setup pickers. */
 @Composable
 internal fun FlowPickerField(
@@ -125,11 +175,19 @@ internal fun FlowPickerField(
     supportingTextColor: Color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
 ) {
     val disabledAlpha = MaterialTheme.flow.disabledAlpha
+    val rowShape = MaterialTheme.shapes.medium
+    val background by animateColorAsState(
+        targetValue = if (selected && enabled) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+        animationSpec = rememberFlowMotion().colour(),
+        label = "picker-selected-background",
+    )
     RowContent(
         modifier = modifier.fillMaxWidth()
             .heightIn(min = MaterialTheme.flow.touchTarget)
-            .clip(MaterialTheme.shapes.small)
-            .clickable(enabled = enabled, role = Role.RadioButton, onClick = onSelect),
+            .clip(rowShape)
+            .background(background)
+            .clickable(enabled = enabled, role = Role.RadioButton, onClick = onSelect)
+            .padding(horizontal = 4.dp),
         selected = selected,
         label = label,
         enabled = enabled,

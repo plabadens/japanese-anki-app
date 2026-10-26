@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,6 +32,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import dev.pierre.japaneseanki.AnkiDeck
@@ -111,91 +113,153 @@ internal fun SettingsScreen(
                 }
             }
 
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+            FlowCard(
+                variant = FlowCardVariant.Outlined,
+                shape = MaterialTheme.shapes.large,
+                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
             ) {
-                Text(stringResource(R.string.anki), style = MaterialTheme.typography.bodyLarge)
-                Text(if (state.ankiConnected) stringResource(R.string.connected) else stringResource(R.string.not_connected))
-                if (!state.ankiConnected) {
-                    TextButton(onClick = onConnectAnki) {
-                        Text(if (state.ankiInstalled) stringResource(R.string.connect_anki) else stringResource(R.string.install_anki))
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            stringResource(R.string.anki),
+                            style = MaterialTheme.typography.titleLarge,
+                        )
+                        FlowTag(
+                            text = if (state.ankiConnected) {
+                                stringResource(R.string.connected)
+                            } else {
+                                stringResource(R.string.not_connected)
+                            },
+                            containerColor = if (state.ankiConnected) {
+                                MaterialTheme.colorScheme.secondaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            },
+                            contentColor = if (state.ankiConnected) {
+                                MaterialTheme.colorScheme.onSecondaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                    }
+                    if (!state.ankiConnected) {
+                        TextButton(onClick = onConnectAnki) {
+                            Text(if (state.ankiInstalled) stringResource(R.string.connect_anki) else stringResource(R.string.install_anki))
+                        }
+                    }
+                    PickerField(
+                        label = stringResource(R.string.note_type),
+                        value = selectedModel?.name.orEmpty(),
+                        enabled = !state.loading && compatibleNoteTypes.isNotEmpty(),
+                        onClick = { modelPickerOpen = true },
+                    )
+                    PickerField(
+                        label = stringResource(R.string.deck),
+                        value = selectedDeck?.name.orEmpty(),
+                        enabled = !state.loading && decks.isNotEmpty(),
+                        onClick = { deckPickerOpen = true },
+                    )
+                }
+            }
+
+            FlowCard(
+                shape = FlowStickers.contentCard(),
+                contentPadding = PaddingValues(horizontal = 22.dp, vertical = 20.dp),
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.sentence_audio),
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                    OutlinedTextField(
+                        value = state.googleKey,
+                        onValueChange = onGoogleKeyChange,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = {
+                            Text(
+                                stringResource(R.string.google_key),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        },
+                        singleLine = true,
+                        enabled = !state.loading,
+                        visualTransformation = if (showKey) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(
+                            onClick = { showKey = !showKey },
+                            enabled = !state.loading,
+                            modifier = Modifier.semantics {
+                                contentDescription = if (showKey) hideKeyLabel else showKeyLabel
+                            },
+                        ) { Text(if (showKey) hideKeyLabel else showKeyLabel) }
+                    }
+                    PickerField(
+                        label = stringResource(R.string.sentence_voice),
+                        value = selectedVoice?.displayName ?: state.values.voiceName,
+                        enabled = !state.loading,
+                        onClick = { voicePickerOpen = true },
+                    )
+                    TextButton(
+                        enabled = !state.loading && !state.voiceCatalog.loading,
+                        onClick = onReloadVoices,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text(stringResource(R.string.reload_voices)) }
+                    state.voiceCatalog.error?.let { message ->
+                        Text(message, color = MaterialTheme.colorScheme.error)
+                    }
+                    if (state.voiceCatalog.selectedVoiceMissing(state.values.voiceName)) {
+                        Text(stringResource(R.string.voice_unavailable), color = MaterialTheme.colorScheme.error)
+                    }
+                    if (state.voiceCatalog.loading) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            MotionAwareProgressIndicator(
+                                modifier = Modifier.padding(2.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                progressSize = ProgressSize.Large,
+                                stateDescription = stringResource(R.string.loading_voices),
+                            )
+                            Text(stringResource(R.string.loading_voices))
+                        }
                     }
                 }
             }
-            PickerField(
-                label = stringResource(R.string.note_type),
-                value = selectedModel?.name.orEmpty(),
-                enabled = !state.loading && compatibleNoteTypes.isNotEmpty(),
-                onClick = { modelPickerOpen = true },
-            )
-            PickerField(
-                label = stringResource(R.string.deck),
-                value = selectedDeck?.name.orEmpty(),
-                enabled = !state.loading && decks.isNotEmpty(),
-                onClick = { deckPickerOpen = true },
-            )
 
-            OutlinedTextField(
-                value = state.googleKey,
-                onValueChange = onGoogleKeyChange,
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text(stringResource(R.string.google_key)) },
-                singleLine = true,
-                enabled = !state.loading,
-                visualTransformation = if (showKey) VisualTransformation.None else PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(
-                    onClick = { showKey = !showKey },
-                    enabled = !state.loading,
-                    modifier = Modifier.semantics {
-                        contentDescription = if (showKey) hideKeyLabel else showKeyLabel
-                    },
-                ) { Text(if (showKey) hideKeyLabel else showKeyLabel) }
-            }
-            PickerField(
-                label = stringResource(R.string.sentence_voice),
-                value = selectedVoice?.displayName ?: state.values.voiceName,
-                enabled = !state.loading,
-                onClick = { voicePickerOpen = true },
-            )
-            TextButton(
-                enabled = !state.loading && !state.voiceCatalog.loading,
-                onClick = onReloadVoices,
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text(stringResource(R.string.reload_voices)) }
-            state.voiceCatalog.error?.let { message ->
-                Text(message, color = MaterialTheme.colorScheme.error)
-            }
-            if (state.voiceCatalog.selectedVoiceMissing(state.values.voiceName)) {
-                Text(stringResource(R.string.voice_unavailable), color = MaterialTheme.colorScheme.error)
-            }
-            if (state.voiceCatalog.loading) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+            FlowCard(
+                variant = FlowCardVariant.Outlined,
+                shape = MaterialTheme.shapes.large,
+                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    MotionAwareProgressIndicator(
-                        modifier = Modifier.padding(2.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                        progressSize = ProgressSize.Large,
-                        stateDescription = stringResource(R.string.loading_voices),
+                    Text(
+                        stringResource(R.string.tags),
+                        style = MaterialTheme.typography.titleLarge,
                     )
-                    Text(stringResource(R.string.loading_voices))
+                    OutlinedTextField(
+                        value = state.values.defaultTags,
+                        onValueChange = onDefaultTagsChange,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(R.string.default_tags)) },
+                        minLines = 1,
+                        maxLines = 3,
+                        enabled = !state.loading,
+                    )
                 }
             }
-
-            OutlinedTextField(
-                value = state.values.defaultTags,
-                onValueChange = onDefaultTagsChange,
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text(stringResource(R.string.default_tags)) },
-                minLines = 1,
-                maxLines = 3,
-                enabled = !state.loading,
-            )
 
             TextButton(
                 enabled = !state.cacheBusy,

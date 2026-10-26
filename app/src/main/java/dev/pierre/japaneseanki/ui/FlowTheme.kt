@@ -1,6 +1,9 @@
 package dev.pierre.japaneseanki.ui
 
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -12,24 +15,27 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
-import androidx.compose.material3.MotionScheme
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -40,6 +46,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
@@ -61,25 +68,49 @@ internal object FlowPalette {
     val lightOnSurface = Color(0xFF2B1712)
     val lightPrimary = Color(0xFF9C3329)
     val lightOnPrimary = Color(0xFFFFFFFF)
-    val lightSecondaryContainer = Color(0xFFF1DDD2)
-    val lightOnSecondaryContainer = Color(0xFF4B2B20)
+    val lightSecondary = Color(0xFF3F6549)
+    val lightOnSecondary = Color(0xFFFFFFFF)
+    val lightSecondaryContainer = Color(0xFFDDEBD6)
+    val lightOnSecondaryContainer = Color(0xFF1C3324)
     val lightOutline = Color(0xFF8B6D60)
     val lightSelectedOutline = Color(0xFF795247)
     val lightTertiary = Color(0xFF354B70)
     val lightError = Color(0xFFA51D26)
     val lightSurfaceVariant = Color(0xFFF6E7DE)
+    val lightSurfaceDim = Color(0xFFE8D9D1)
+    val lightSurfaceBright = Color(0xFFFFFDFC)
+    val lightSurfaceContainerLowest = Color(0xFFFFFFFF)
+    val lightSurfaceContainerLow = Color(0xFFFFF3EE)
+    val lightSurfaceContainer = Color(0xFFF8ECE6)
+    val lightSurfaceContainerHigh = Color(0xFFF2E5DE)
+    val lightSurfaceContainerHighest = Color(0xFFEDE0D9)
+    val lightInverseSurface = Color(0xFF35241E)
+    val lightInverseOnSurface = Color(0xFFFFF8F5)
+    val lightInversePrimary = Color(0xFFFFB4A3)
 
     val darkSurface = Color(0xFF1C1411)
     val darkOnSurface = Color(0xFFF5DED4)
     val darkPrimary = Color(0xFFFFB4A3)
     val darkOnPrimary = Color(0xFF5D160D)
-    val darkSecondaryContainer = Color(0xFF4A3329)
-    val darkOnSecondaryContainer = Color(0xFFF5DCCC)
+    val darkSecondary = Color(0xFFB5D3A9)
+    val darkOnSecondary = Color(0xFF20341F)
+    val darkSecondaryContainer = Color(0xFF35472F)
+    val darkOnSecondaryContainer = Color(0xFFD5E8C7)
     val darkOutline = Color(0xFFB89D8E)
     val darkSelectedOutline = Color(0xFFD2A693)
     val darkTertiary = Color(0xFFB3C8EE)
     val darkError = Color(0xFFFFB2B7)
     val darkSurfaceVariant = Color(0xFF2E211C)
+    val darkSurfaceDim = Color(0xFF1C1411)
+    val darkSurfaceBright = Color(0xFF3A2C26)
+    val darkSurfaceContainerLowest = Color(0xFF160F0D)
+    val darkSurfaceContainerLow = Color(0xFF211815)
+    val darkSurfaceContainer = Color(0xFF251B17)
+    val darkSurfaceContainerHigh = Color(0xFF2B201B)
+    val darkSurfaceContainerHighest = Color(0xFF31251F)
+    val darkInverseSurface = Color(0xFFFFF8F5)
+    val darkInverseOnSurface = Color(0xFF2B1712)
+    val darkInversePrimary = Color(0xFF9C3329)
 }
 
 internal val FlowLightColors = lightColorScheme(
@@ -87,8 +118,8 @@ internal val FlowLightColors = lightColorScheme(
     onPrimary = FlowPalette.lightOnPrimary,
     primaryContainer = FlowPalette.lightSelectedOutline,
     onPrimaryContainer = Color(0xFFFFF8F5),
-    secondary = FlowPalette.lightSelectedOutline,
-    onSecondary = Color(0xFFFFF8F5),
+    secondary = FlowPalette.lightSecondary,
+    onSecondary = FlowPalette.lightOnSecondary,
     secondaryContainer = FlowPalette.lightSecondaryContainer,
     onSecondaryContainer = FlowPalette.lightOnSecondaryContainer,
     tertiary = FlowPalette.lightTertiary,
@@ -100,6 +131,17 @@ internal val FlowLightColors = lightColorScheme(
     surface = FlowPalette.lightSurface,
     onSurface = FlowPalette.lightOnSurface,
     surfaceVariant = FlowPalette.lightSurfaceVariant,
+    surfaceDim = FlowPalette.lightSurfaceDim,
+    surfaceBright = FlowPalette.lightSurfaceBright,
+    surfaceContainerLowest = FlowPalette.lightSurfaceContainerLowest,
+    surfaceContainerLow = FlowPalette.lightSurfaceContainerLow,
+    surfaceContainer = FlowPalette.lightSurfaceContainer,
+    surfaceContainerHigh = FlowPalette.lightSurfaceContainerHigh,
+    surfaceContainerHighest = FlowPalette.lightSurfaceContainerHighest,
+    inverseSurface = FlowPalette.lightInverseSurface,
+    inverseOnSurface = FlowPalette.lightInverseOnSurface,
+    inversePrimary = FlowPalette.lightInversePrimary,
+    surfaceTint = FlowPalette.lightPrimary,
     onSurfaceVariant = Color(0xFF6B554B),
     outline = FlowPalette.lightOutline,
     outlineVariant = Color(0xFFD8C3B7),
@@ -114,8 +156,8 @@ internal val FlowDarkColors = darkColorScheme(
     onPrimary = FlowPalette.darkOnPrimary,
     primaryContainer = FlowPalette.darkSelectedOutline,
     onPrimaryContainer = Color(0xFF2B1712),
-    secondary = FlowPalette.darkSelectedOutline,
-    onSecondary = Color(0xFF2B1712),
+    secondary = FlowPalette.darkSecondary,
+    onSecondary = FlowPalette.darkOnSecondary,
     secondaryContainer = FlowPalette.darkSecondaryContainer,
     onSecondaryContainer = FlowPalette.darkOnSecondaryContainer,
     tertiary = FlowPalette.darkTertiary,
@@ -127,6 +169,17 @@ internal val FlowDarkColors = darkColorScheme(
     surface = FlowPalette.darkSurface,
     onSurface = FlowPalette.darkOnSurface,
     surfaceVariant = FlowPalette.darkSurfaceVariant,
+    surfaceDim = FlowPalette.darkSurfaceDim,
+    surfaceBright = FlowPalette.darkSurfaceBright,
+    surfaceContainerLowest = FlowPalette.darkSurfaceContainerLowest,
+    surfaceContainerLow = FlowPalette.darkSurfaceContainerLow,
+    surfaceContainer = FlowPalette.darkSurfaceContainer,
+    surfaceContainerHigh = FlowPalette.darkSurfaceContainerHigh,
+    surfaceContainerHighest = FlowPalette.darkSurfaceContainerHighest,
+    inverseSurface = FlowPalette.darkInverseSurface,
+    inverseOnSurface = FlowPalette.darkInverseOnSurface,
+    inversePrimary = FlowPalette.darkInversePrimary,
+    surfaceTint = FlowPalette.darkPrimary,
     onSurfaceVariant = Color(0xFFD3B6A9),
     outline = FlowPalette.darkOutline,
     outlineVariant = Color(0xFF5A4339),
@@ -136,25 +189,50 @@ internal val FlowDarkColors = darkColorScheme(
     onErrorContainer = Color(0xFFF8E6B7),
 )
 
-/** Type scale named by the study (titleLarge 22/500, displaySmall 36/700, bodyLarge 16). */
+/**
+ * Expressive type scale: display sizes carry hero moments, body stays quiet for reading.
+ * Japanese glyphs are visually heavy, so the display weights stay at SemiBold.
+ */
 internal val FlowTypography: Typography = Typography().run {
     copy(
-        headlineMedium = headlineMedium.copy(fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.Medium),
-        titleLarge = titleLarge.copy(fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.Medium),
-        displaySmall = displaySmall.copy(fontSize = 36.sp, lineHeight = 40.sp, fontWeight = FontWeight.Bold),
+        displayMedium = displayMedium.copy(fontSize = 44.sp, lineHeight = 50.sp, fontWeight = FontWeight.SemiBold),
+        displaySmall = displaySmall.copy(fontSize = 40.sp, lineHeight = 46.sp, fontWeight = FontWeight.SemiBold),
+        headlineMedium = headlineMedium.copy(fontSize = 30.sp, lineHeight = 36.sp, fontWeight = FontWeight.SemiBold),
+        titleLarge = titleLarge.copy(fontSize = 24.sp, lineHeight = 30.sp, fontWeight = FontWeight.SemiBold),
+        titleMedium = titleMedium.copy(fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.Medium),
         bodyLarge = bodyLarge.copy(fontSize = 16.sp, lineHeight = 24.sp),
         bodyMedium = bodyMedium.copy(fontSize = 14.sp, lineHeight = 20.sp),
-        labelLarge = labelLarge.copy(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium),
+        labelLarge = labelLarge.copy(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold),
     )
 }
 
+/** Rounded scale with a wider expressive range than a default Material app. */
 internal val FlowShapes: Shapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
+    extraSmall = RoundedCornerShape(10.dp),
     small = RoundedCornerShape(14.dp),
     medium = RoundedCornerShape(20.dp),
-    large = RoundedCornerShape(24.dp),
-    extraLarge = RoundedCornerShape(28.dp),
+    large = RoundedCornerShape(26.dp),
+    extraLarge = RoundedCornerShape(32.dp),
 )
+
+/**
+ * Sticker shapes for the few surfaces that should read as playful rather than as chrome.
+ * Shape carries meaning here: an asymmetric card is the selected word, a cookie badge marks a
+ * completed state. Content-bearing cards keep convex edges so text can never be clipped.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+internal object FlowStickers {
+    @Composable
+    fun contentCard(): Shape = RoundedCornerShape(
+        topStart = 38.dp,
+        topEnd = 16.dp,
+        bottomEnd = 38.dp,
+        bottomStart = 16.dp,
+    )
+
+    @Composable
+    fun badge(): Shape = MaterialShapes.Cookie9Sided.toShape()
+}
 
 @Immutable
 internal data class FlowTokens(
@@ -253,7 +331,7 @@ internal fun FlowTopBar(
     )
 }
 
-/** Primary action: 56 dp high, vermilion container, arrow affordance. */
+/** Primary action: 56 dp high, vermilion container, arrow affordance, presses morph its shape. */
 @Composable
 internal fun FlowPrimaryButton(
     text: String,
@@ -262,11 +340,20 @@ internal fun FlowPrimaryButton(
     enabled: Boolean = true,
     showArrow: Boolean = true,
 ) {
+    val motion = rememberFlowMotion()
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val cornerRadius by animateDpAsState(
+        targetValue = if (pressed && enabled) 18.dp else 28.dp,
+        animationSpec = motion.containerSpatial(),
+        label = "primary-button-shape",
+    )
     Button(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier.fillMaxWidth().height(56.dp),
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(cornerRadius),
+        interactionSource = interactionSource,
         colors = ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,

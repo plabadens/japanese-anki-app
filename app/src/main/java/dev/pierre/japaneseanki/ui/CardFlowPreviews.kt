@@ -62,6 +62,7 @@ internal fun CardFlowPreviewContent(
     state: CardFlowPreviewState,
     darkTheme: Boolean = false,
     fontScale: Float = 1f,
+    onBack: () -> Unit = {},
 ) {
     val configuration = android.content.res.Configuration(LocalConfiguration.current).apply {
         this.fontScale = fontScale
@@ -91,7 +92,7 @@ internal fun CardFlowPreviewContent(
                     mode = "Type",
                     sentence = PREVIEW_SENTENCE,
                 )
-                else -> CardPreview(state)
+                else -> CardPreview(state, onBack = onBack)
             }
         }
     }
@@ -187,7 +188,7 @@ private fun SetupPreview(ready: Boolean) {
 }
 
 @Composable
-private fun CardPreview(state: CardFlowPreviewState) {
+private fun CardPreview(state: CardFlowPreviewState, onBack: () -> Unit = {}) {
     val target = TargetSpan(2, 3)
     val selected = state != CardFlowPreviewState.CARD_NO_WORD_CHOSEN
     val wordAudio = when (state) {
@@ -222,9 +223,7 @@ private fun CardPreview(state: CardFlowPreviewState) {
     }
     val failed = state == CardFlowPreviewState.CARD_REQUIRED_ITEM_FAILED
     val ready = state == CardFlowPreviewState.CARD_READY_TO_SEND
-    FlowPage(topBar = {
-        FlowTopBar(title = stringResource(R.string.card), onBack = {}, onSettings = {})
-    }) {
+    FlowPage {
         CardScreen(
             sentence = PREVIEW_SENTENCE,
             tokens = previewTokens,
@@ -265,6 +264,7 @@ private fun CardPreview(state: CardFlowPreviewState) {
             onAction = {},
             statusMessage = null,
             statusContent = {},
+            onBack = onBack,
             modifier = Modifier.fillMaxSize(),
         )
     }

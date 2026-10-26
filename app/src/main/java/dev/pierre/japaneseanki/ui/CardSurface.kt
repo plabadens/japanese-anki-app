@@ -9,6 +9,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.Canvas
@@ -34,12 +35,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -50,8 +53,10 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -76,6 +81,8 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.traversalIndex
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -242,6 +249,7 @@ internal fun CardScreen(
     onAction: () -> Unit,
     statusMessage: String?,
     statusContent: @Composable () -> Unit,
+    onBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var photoExpanded by remember { mutableStateOf(false) }
@@ -251,21 +259,39 @@ internal fun CardScreen(
     val motion = rememberFlowMotion()
 
     BoxWithConstraints(modifier) {
-        val bandHeight = cardPhotoBandHeight(maxWidth, maxHeight, fontScale)
+        val bandHeight = cardPhotoBandHeight(maxWidth - 32.dp, maxHeight, fontScale)
+        val hasPhoto = imagePath != null && File(imagePath).isFile
         Column(Modifier.fillMaxSize()) {
+            if (!hasPhoto && onBack != null) {
+                Box(
+                    Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    CardBackControl(onBack)
+                }
+            }
             Column(
                 Modifier
                     .weight(1f)
                     .fillMaxWidth()
+                    .padding(top = 8.dp)
                     .verticalScroll(rememberScrollState()),
             ) {
-                if (imagePath != null && File(imagePath).isFile) {
-                    CardPhotoBand(
-                        imagePath = imagePath,
-                        height = bandHeight,
-                        focusY = imageFocusY,
-                        onOpen = { photoExpanded = true },
-                    )
+                if (hasPhoto) {
+                    Box(Modifier.fillMaxWidth()) {
+                        CardPhotoBand(
+                            imagePath = imagePath,
+                            height = bandHeight,
+                            focusY = imageFocusY,
+                            onOpen = { photoExpanded = true },
+                        )
+                        onBack?.let {
+                            CardBackControl(
+                                onBack = it,
+                                modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
+                            )
+                        }
+                    }
                 }
                 Column(
                     Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp),
@@ -321,23 +347,35 @@ internal fun CardScreen(
                         },
                         exit = ExitTransition.None,
                     ) {
-                        FlowCard(contentPadding = PaddingValues(16.dp)) {
+                        FlowCard(
+                            shape = FlowStickers.contentCard(),
+                            contentPadding = PaddingValues(horizontal = 22.dp, vertical = 20.dp),
+                        ) {
                                 Column(
                                     Modifier.fillMaxWidth(),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
                                 ) {
                                     Row(verticalAlignment = Alignment.Top) {
                                         Column(Modifier.weight(1f)) {
-                                            Text(vocabulary, style = MaterialTheme.typography.displaySmall)
-                                            if (vocabularyReading.isNotBlank()) {
-                                                Text(
-                                                    vocabularyReading,
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                )
-                                            }
-                                            partOfSpeech?.let {
-                                                Text(it, style = MaterialTheme.typography.labelMedium)
+                                            Text(vocabulary, style = MaterialTheme.typography.displayMedium)
+                                            FlowRow(
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                                            ) {
+                                                if (vocabularyReading.isNotBlank()) {
+                                                    Text(
+                                                        vocabularyReading,
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                    )
+                                                }
+                                                partOfSpeech?.let {
+                                                    FlowTag(
+                                                        text = it,
+                                                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+                                                        contentColor = MaterialTheme.colorScheme.onSurface,
+                                                    )
+                                                }
                                             }
                                         }
                                         CardAudioButton(
@@ -470,10 +508,19 @@ internal fun SelectableSentence(
         enabled = selectionEnabled,
     )
     val motion = rememberFlowMotion()
-    val readingBandHeight = with(LocalDensity.current) { 13.sp.toDp().coerceAtLeast(14.dp) }
+    val readingStyle = TextStyle(
+        fontSize = 11.sp,
+        lineHeight = 11.sp,
+        platformStyle = PlatformTextStyle(includeFontPadding = false),
+    )
+    val sentenceStyle = MaterialTheme.typography.headlineMedium.copy(
+        lineHeight = 34.sp,
+        platformStyle = PlatformTextStyle(includeFontPadding = false),
+    )
+    val readingBandHeight = with(LocalDensity.current) { 11.sp.toDp().coerceAtLeast(12.dp) }
     val touchTarget = LocalViewConfiguration.current.minimumTouchTargetSize
     if (tokens.isEmpty() || sentence.isBlank()) {
-        Text(sentence, modifier = modifier, style = MaterialTheme.typography.headlineMedium)
+        Text(sentence, modifier = modifier, style = sentenceStyle)
         return
     }
     FlowRow(
@@ -494,6 +541,11 @@ internal fun SelectableSentence(
             val selectedText = MaterialTheme.colorScheme.onSecondaryContainer
             val unselectedText = MaterialTheme.colorScheme.onSurface
             val selectedUnderline = MaterialTheme.colorScheme.primary
+            val highlightRadius by animateDpAsState(
+                targetValue = if (isSelected || isPressed) 14.dp else 6.dp,
+                animationSpec = motion.containerSpatial(),
+                label = "word-highlight-radius",
+            )
             val wordLabel = stringResource(R.string.card_word_accessibility, token.surface)
             val reading = readingBySpan[token.span]?.reading
                 ?: token.surfaceReading.takeIf { containsKanjiForCard(token.surface) }
@@ -504,7 +556,6 @@ internal fun SelectableSentence(
                 pushStyle(
                     SpanStyle(
                         color = if (isSelected || isPressed) selectedText else unselectedText,
-                        background = selectionFill,
                     ),
                 )
                 append(token.surface)
@@ -545,12 +596,11 @@ internal fun SelectableSentence(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Bottom,
             ) {
-                Box(Modifier.heightIn(min = readingBandHeight), contentAlignment = Alignment.Center) {
+                Box(Modifier.heightIn(min = readingBandHeight), contentAlignment = Alignment.BottomCenter) {
                     if (!reading.isNullOrBlank()) {
                         Text(
                             reading,
-                            fontSize = 11.sp,
-                            lineHeight = 13.sp,
+                            style = readingStyle,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -582,15 +632,26 @@ internal fun SelectableSentence(
                             }
                         }
                         .drawBehind {
-                            if (isSelected) {
-                                val textLayout = layoutResult.value ?: return@drawBehind
-                                val strokeWidth = 2.dp.toPx()
-                                (baseStart until baseEnd)
-                                    .groupBy(textLayout::getLineForOffset)
-                                    .forEach { (line, offsets) ->
-                                        val boxes = offsets.map(textLayout::getBoundingBox)
-                                        val left = boxes.minOf { it.left }
-                                        val right = boxes.maxOf { it.right }
+                            if (!isSelected && !isPressed) return@drawBehind
+                            val textLayout = layoutResult.value ?: return@drawBehind
+                            val strokeWidth = 2.dp.toPx()
+                            val padX = 4.dp.toPx()
+                            val padY = 1.dp.toPx()
+                            (baseStart until baseEnd)
+                                .groupBy(textLayout::getLineForOffset)
+                                .forEach { (line, offsets) ->
+                                    val boxes = offsets.map(textLayout::getBoundingBox)
+                                    val left = boxes.minOf { it.left }
+                                    val right = boxes.maxOf { it.right }
+                                    val top = boxes.minOf { it.top }
+                                    val bottom = boxes.maxOf { it.bottom }
+                                    drawRoundRect(
+                                        color = selectionFill,
+                                        topLeft = Offset(left - padX, top - padY),
+                                        size = Size(right - left + padX * 2f, bottom - top + padY * 2f),
+                                        cornerRadius = CornerRadius(highlightRadius.toPx()),
+                                    )
+                                    if (isSelected) {
                                         val y = textLayout.getLineBottom(line) - strokeWidth / 2f
                                         drawLine(
                                             color = selectedUnderline,
@@ -599,9 +660,9 @@ internal fun SelectableSentence(
                                             strokeWidth = strokeWidth,
                                         )
                                     }
-                            }
+                                }
                         },
-                    style = MaterialTheme.typography.headlineMedium,
+                    style = sentenceStyle,
                     textAlign = TextAlign.Center,
                     onTextLayout = { layoutResult.value = it },
                 )
@@ -615,12 +676,34 @@ private fun containsKanjiForCard(value: String): Boolean = value.any {
 }
 
 @Composable
+private fun CardBackControl(
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val label = stringResource(R.string.back)
+    Surface(
+        onClick = onBack,
+        modifier = modifier.size(48.dp).semantics { contentDescription = label },
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        shadowElevation = 2.dp,
+    ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            FlowIcons.Back(Modifier.size(24.dp))
+        }
+    }
+}
+
+@Composable
 private fun CardPhotoBand(imagePath: String, height: Dp, focusY: Float, onOpen: () -> Unit) {
     val description = stringResource(R.string.view_photo)
     Box(
         Modifier
             .fillMaxWidth()
+            .padding(horizontal = 16.dp)
             .height(height)
+            .clip(FlowStickers.contentCard())
             .clipToBounds()
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .clickable(onClick = onOpen)
@@ -707,19 +790,26 @@ private fun CardAudioButton(
         is ReviewAudioPresentation.Advisory -> MaterialTheme.colorScheme.onSurfaceVariant
         else -> MaterialTheme.colorScheme.primary
     }
-    IconButton(
-        onClick = action,
-        enabled = enabled && audio != ReviewAudioPresentation.Generating && audio != ReviewAudioPresentation.SourceMissing,
-        modifier = Modifier.size(48.dp).semantics {
-            contentDescription = description
-            stateDescription = state
-        },
+    Box(
+        modifier = Modifier.size(48.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)),
+        contentAlignment = Alignment.Center,
     ) {
-        AudioControlGlyph(
-            playing = audio == ReviewAudioPresentation.Playing,
-            color = glyphColor,
-            modifier = Modifier.size(24.dp),
-        )
+        IconButton(
+            onClick = action,
+            enabled = enabled && audio != ReviewAudioPresentation.Generating && audio != ReviewAudioPresentation.SourceMissing,
+            modifier = Modifier.size(48.dp).semantics {
+                contentDescription = description
+                stateDescription = state
+            },
+        ) {
+            AudioControlGlyph(
+                playing = audio == ReviewAudioPresentation.Playing,
+                color = glyphColor,
+                modifier = Modifier.size(24.dp),
+            )
+        }
     }
 }
 

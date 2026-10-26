@@ -29,8 +29,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
@@ -42,6 +44,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.TextFieldValue
@@ -197,6 +200,38 @@ class InputScreenLayoutTest {
         assertEquals("Disabling system touch feedback must not block mode changes", "Type", mode.value)
         composeRule.onNodeWithTag("capture-sentence-field").assertIsDisplayed()
         captureMotionEvidence("system-touch-feedback-disabled-type-mode.png")
+    }
+
+    @Test
+    fun switchingBetweenPhotoAndTypeFocusesAndClearsSentenceField() {
+        val mode = mutableStateOf("Photo")
+        composeRule.setContent {
+            MaterialTheme {
+                InputScreen(
+                    captureMode = mode.value,
+                    onCaptureModeChange = { mode.value = it },
+                    editor = TextFieldValue(""),
+                    onEditorChange = {},
+                    onContinue = {},
+                    onOpenGallery = {},
+                    onChoosePhoto = {},
+                    onCaptured = {},
+                    onCameraError = {},
+                    outputDirectory = File("/unused-focus-test"),
+                    modifier = Modifier.fillMaxSize(),
+                    cameraPermissionGranted = false,
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("capture-sentence-field").assertDoesNotExist()
+        composeRule.onNodeWithTag("capture-mode-type").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("capture-sentence-field").assertIsFocused()
+
+        composeRule.onNodeWithTag("capture-mode-camera").performClick()
+        composeRule.waitForIdle()
+        composeRule.onAllNodes(isFocused()).assertCountEquals(0)
     }
 
     @Test

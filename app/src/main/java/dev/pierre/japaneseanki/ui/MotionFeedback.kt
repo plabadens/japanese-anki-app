@@ -10,7 +10,8 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MotionScheme
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.CircularWavyProgressIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
@@ -195,6 +196,7 @@ internal fun StaticProgressIndicator(
 }
 
 /** Motion-aware busy indicator; the non-animated branch remains a labelled progress node. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun MotionAwareProgressIndicator(
     modifier: Modifier = Modifier,
@@ -203,13 +205,12 @@ internal fun MotionAwareProgressIndicator(
     stateDescription: String,
 ) {
     if (LocalMotion.current.animated) {
-        CircularProgressIndicator(
+        CircularWavyProgressIndicator(
             modifier = modifier.size(progressSize.diameter).semantics {
                 progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
                 this.stateDescription = stateDescription
             },
             color = color,
-            strokeWidth = progressSize.strokeWidth,
         )
     } else {
         StaticProgressIndicator(
@@ -218,5 +219,47 @@ internal fun MotionAwareProgressIndicator(
             progressSize = progressSize,
             stateDescription = stateDescription,
         )
+    }
+}
+
+/** Wavy linear progress for inline setup work, with a still branch for reduced motion. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+internal fun MotionAwareLinearProgressIndicator(
+    modifier: Modifier = Modifier,
+    color: Color = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+    stateDescription: String,
+) {
+    if (LocalMotion.current.animated) {
+        LinearWavyProgressIndicator(
+            modifier = modifier.semantics {
+                progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
+                this.stateDescription = stateDescription
+            },
+            color = color,
+        )
+    } else {
+        Canvas(
+            modifier = modifier.size(width = 72.dp, height = 8.dp).semantics {
+                progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
+                this.stateDescription = stateDescription
+            },
+        ) {
+            val stroke = size.height / 2f
+            drawLine(
+                color = color.copy(alpha = 0.24f),
+                start = Offset(0f, size.height / 2f),
+                end = Offset(size.width, size.height / 2f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+            )
+            drawLine(
+                color = color,
+                start = Offset(size.width * 0.18f, size.height / 2f),
+                end = Offset(size.width * 0.62f, size.height / 2f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+            )
+        }
     }
 }

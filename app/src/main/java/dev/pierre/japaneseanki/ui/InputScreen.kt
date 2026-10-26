@@ -61,9 +61,13 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import dev.pierre.japaneseanki.R
@@ -129,6 +133,18 @@ internal fun InputScreen(
         enabled = actionsEnabled && !captureOperationGate.isActive,
     )
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val sentenceFieldFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(captureMode) {
+        if (captureMode == "Type") {
+            sentenceFieldFocusRequester.requestFocus()
+            keyboardController?.show()
+        } else if (captureMode == "Photo") {
+            focusManager.clearFocus()
+            keyboardController?.hide()
+        }
+    }
     val hasTorch = cameraPreviewState?.hasTorch
         ?: if (cameraController != null) rememberTorchAvailability(cameraController) else false
     var liveTorchOn by remember(cameraController) { mutableStateOf(false) }
@@ -250,6 +266,7 @@ internal fun InputScreen(
                 editor = editor,
                 onEditorChange = onEditorChange,
                 enabled = actionsEnabled,
+                focusRequester = sentenceFieldFocusRequester,
             )
             TextButton(
                 enabled = actionsEnabled && !captureOperationGate.isActive,
@@ -439,17 +456,26 @@ private fun InputStatusPanel(
             .testTag("capture-status-line"),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AnimatedVisibility(
-            visible = confirmationMessage != null && message == confirmationMessage,
-            enter = if (LocalMotion.current.animated) {
-                fadeIn(motion.colour()) +
-                    scaleIn(initialScale = 0.88f, animationSpec = motion.smallSpatial())
-            } else {
-                EnterTransition.None
-            },
-            exit = ExitTransition.None,
-        ) {
-            FlowIcons.Check(Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+        if (ocrLoading) {
+            MotionAwareProgressIndicator(
+                modifier = Modifier.padding(end = 6.dp),
+                color = MaterialTheme.colorScheme.primary,
+                progressSize = ProgressSize.Small,
+                stateDescription = message,
+            )
+        } else {
+            AnimatedVisibility(
+                visible = confirmationMessage != null && message == confirmationMessage,
+                enter = if (LocalMotion.current.animated) {
+                    fadeIn(motion.colour()) +
+                        scaleIn(initialScale = 0.88f, animationSpec = motion.smallSpatial())
+                } else {
+                    EnterTransition.None
+                },
+                exit = ExitTransition.None,
+            ) {
+                FlowIcons.Check(Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+            }
         }
         FlowStatusText(
             message,
@@ -618,6 +644,7 @@ private fun WritingPane(
     editor: TextFieldValue,
     onEditorChange: (TextFieldValue) -> Unit,
     enabled: Boolean,
+    focusRequester: FocusRequester,
 ) {
     val sentenceFieldLabel = stringResource(R.string.sentence)
     BasicTextField(
@@ -626,8 +653,11 @@ private fun WritingPane(
         enabled = enabled,
         modifier = modifier
             .fillMaxSize()
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .clip(MaterialTheme.shapes.extraLarge)
             .background(MaterialTheme.colorScheme.secondaryContainer)
-            .padding(16.dp)
+            .padding(18.dp)
+            .focusRequester(focusRequester)
             .semantics { contentDescription = sentenceFieldLabel }
             .testTag("capture-sentence-field"),
         textStyle = TextStyle(
