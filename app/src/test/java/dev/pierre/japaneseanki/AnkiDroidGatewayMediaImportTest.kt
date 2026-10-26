@@ -37,8 +37,12 @@ class AnkiDroidGatewayMediaImportTest {
                 val source = requireNotNull(values?.getAsString("file_uri"))
                 val preferredName = requireNotNull(values.getAsString("preferred_name"))
                 mediaOperations += source to preferredName
-                importedNames += preferredName
-                Uri.parse("file:///collection.media/$preferredName")
+                // Android's MIME mapping lets AnkiDroid normalize audio/ogg to .oga.
+                val importedName = if (preferredName.endsWith(".ogg")) {
+                    preferredName.removeSuffix(".ogg") + ".oga"
+                } else preferredName
+                importedNames += importedName
+                Uri.parse("file:///collection.media/$importedName")
             }
             "notes" -> {
                 noteInsertCount++
@@ -164,7 +168,8 @@ class AnkiDroidGatewayMediaImportTest {
                 assertEquals(SendOutcome.Created(501L), coordinator.submit(request) {})
             }
             assertEquals(3, provider.importedNames.size)
-            assertEquals(listOf("mp3", "ogg", "webp"), provider.importedNames.map { it.substringAfterLast('.') })
+            assertEquals(listOf("mp3", "oga", "webp"), provider.importedNames.map { it.substringAfterLast('.') })
+            assertEquals(listOf("mp3", "ogg", "webp"), provider.mediaOperations.map { it.second.substringAfterLast('.') })
             assertEquals(3, provider.mediaOperations.size)
             assertEquals(1, provider.noteInsertCount)
             val insertedFields = requireNotNull(provider.insertedFields)

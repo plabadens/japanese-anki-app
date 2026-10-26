@@ -14,7 +14,8 @@ internal object AnkiMediaImporter {
 
     fun sanitizeAudioFilename(filename: String): String? {
         if (!SAFE_FILENAME.matches(filename) || filename.startsWith('.')) return null
-        if (AudioFormat.fromFilename(filename) == null) return null
+        // AnkiDroid derives the extension from MIME type; audio/ogg can become .oga.
+        if (AudioFormat.fromFilename(filename) == null && !filename.endsWith(".oga", ignoreCase = true)) return null
         return filename
     }
 

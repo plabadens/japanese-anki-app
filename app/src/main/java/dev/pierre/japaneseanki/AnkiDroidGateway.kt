@@ -89,8 +89,13 @@ internal class AnkiDroidGateway(
         providerFailure?.let { throw MediaImportException(operation, MediaImportFailureStage.PROVIDER_IMPORT, it) }
         val returnedUri = importedUri?.toString()
             ?: throw MediaImportException(operation, MediaImportFailureStage.PROVIDER_IMPORT)
-        return AnkiMediaImporter.importedFilename(returnedUri, kind)
-            ?: throw MediaImportException(operation, MediaImportFailureStage.RETURNED_MEDIA_VALIDATION)
+        return AnkiMediaImporter.importedFilename(returnedUri, kind) ?: run {
+            val uri = Uri.parse(returnedUri)
+            val extension = uri.lastPathSegment?.substringAfterLast('.', "")
+                ?.takeIf { it.matches(Regex("[A-Za-z0-9]{1,8}")) }
+            android.util.Log.w("AnkiSend", "Returned media rejected: kind=$kind extension=$extension")
+            throw MediaImportException(operation, MediaImportFailureStage.RETURNED_MEDIA_VALIDATION)
+        }
     }
     fun noteTypes(): List<AnkiNoteType> = try {
         resolver.query(

@@ -43,6 +43,56 @@ class FrozenMediaReceiptTest {
     }
 
     @Test
+    fun receiptForOlderMediaDoesNotBlockAnUnimportedSnapshot() {
+        for ((operation, keys, filename) in listOf(
+            Triple(MediaImportOperation.SENTENCE_AUDIO, SENTENCE_AUDIO_RECEIPT_KEYS, "old.mp3"),
+            Triple(MediaImportOperation.WORD_AUDIO, WORD_AUDIO_RECEIPT_KEYS, "old.ogg"),
+            Triple(MediaImportOperation.IMAGE, IMAGE_RECEIPT_KEYS, "old.webp"),
+        )) {
+            val oldSource = MediaIdentity("/draft/$filename", 10L, 20L)
+            val preferences = PreferenceValues().changed(PreferenceChanges().putMediaReceipt(
+                ImportedMediaReceipt(operation, oldSource, filename),
+            ))
+            for (source in listOf(oldSource.copy(path = "/draft/new-$filename"), oldSource.copy(modified = 21L))) {
+                val request = mediaImportRequest(preferences, keys, operation, source, frozenFilename = null)
+                assertEquals(MediaImportRequest(source), request)
+            }
+        }
+    }
+
+    @Test
+    fun matchingReceiptIsReusedEvenBeforeItsFilenameIsFrozen() {
+        val receipt = ImportedMediaReceipt(
+            MediaImportOperation.SENTENCE_AUDIO, MediaIdentity("/draft/sentence.mp3", 10L, 20L), "sentence.mp3",
+        )
+        val preferences = PreferenceValues().changed(PreferenceChanges().putMediaReceipt(receipt))
+        val request = mediaImportRequest(
+            preferences, SENTENCE_AUDIO_RECEIPT_KEYS, receipt.operation, receipt.source, frozenFilename = null,
+        )
+        assertEquals(receipt, request.existingReceipt)
+    }
+
+    @Test
+    fun conflictingFrozenReceiptAndIncompleteSavedReceiptStillRequireRecovery() {
+        val source = MediaIdentity("/draft/sentence.mp3", 10L, 20L)
+        val receipt = ImportedMediaReceipt(MediaImportOperation.SENTENCE_AUDIO, source, "sentence.mp3")
+        val complete = PreferenceValues().changed(PreferenceChanges().putMediaReceipt(receipt))
+        val incomplete = PreferenceValues().changed(PreferenceChanges().putString(SENTENCE_AUDIO_RECEIPT_FILENAME, "sentence.mp3"))
+        val requests = listOf(
+            mediaImportRequest(complete, SENTENCE_AUDIO_RECEIPT_KEYS, receipt.operation, source.copy(modified = 21L), "sentence.mp3"),
+            mediaImportRequest(complete, SENTENCE_AUDIO_RECEIPT_KEYS, receipt.operation, source, "different.mp3"),
+            mediaImportRequest(incomplete, SENTENCE_AUDIO_RECEIPT_KEYS, receipt.operation, source, null),
+        )
+        for (request in requests) {
+            val error = org.junit.Assert.assertThrows(MediaImportException::class.java) {
+                importSendMedia(request, null, null, { _, _ -> error("Must not mark import") },
+                    { _, _ -> error("Must not import") }, { error("Must not save receipt") })
+            }
+            assertEquals(MediaImportFailureStage.INVALID_SAVED_RECEIPT, error.stage)
+        }
+    }
+
+    @Test
     fun sentenceAudioReceiptUpdatesOnlyItsFrozenFieldAndIdentity() {
         val original = snapshot()
         val source = requireNotNull(original.sentenceAudio.identity)

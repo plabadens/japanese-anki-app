@@ -19,6 +19,8 @@ class AnkiMediaImporterTest {
     @Test fun acceptsOnlySafeWavOggAndMp3AudioNames() {
         assertEquals("sentence-1.wav", AnkiMediaImporter.sanitizeAudioFilename("sentence-1.wav"))
         assertEquals("word.OGG", AnkiMediaImporter.sanitizeAudioFilename("word.OGG"))
+        assertEquals("word.OGA", AnkiMediaImporter.sanitizeAudioFilename("word.OGA"))
+        assertNull(AnkiMediaImporter.sanitizeAudioFilename("../word.oga"))
         assertEquals("sentence.mp3", AnkiMediaImporter.sanitizeAudioFilename("sentence.mp3"))
         assertNull(AnkiMediaImporter.sanitizeAudioFilename("../word.ogg"))
         assertNull(AnkiMediaImporter.sanitizeAudioFilename(".hidden.wav"))
@@ -29,6 +31,7 @@ class AnkiMediaImporterTest {
     @Test fun extractsSafeAudioReferencesOnlyFromLocalFileUris() {
         assertEquals("voice.wav", AnkiMediaImporter.importedAudioFilename("file:///data/collection.media/voice.wav"))
         assertEquals("voice.ogg", AnkiMediaImporter.importedAudioFilename("file:///data/collection.media/voice.ogg"))
+        assertEquals("voice.oga", AnkiMediaImporter.importedAudioFilename("file:///data/collection.media/voice.oga"))
         assertEquals("voice.mp3", AnkiMediaImporter.importedAudioFilename("file:///data/collection.media/voice.mp3"))
         assertNull(AnkiMediaImporter.importedAudioFilename("file:///data/collection.media/voice.m4a"))
         assertNull(AnkiMediaImporter.importedAudioFilename("content://provider/voice.wav"))
@@ -36,7 +39,7 @@ class AnkiMediaImporterTest {
     }
 
     @Test fun providerReturnValidationUsesTheImportedMediaType() {
-        listOf("voice.mp3", "voice.ogg", "voice.wav").forEach { filename ->
+        listOf("voice.mp3", "voice.ogg", "voice.oga", "voice.wav").forEach { filename ->
             val uri = "file:///data/collection.media/$filename"
             assertEquals(filename, AnkiMediaImporter.importedFilename(uri, AnkiMediaKind.AUDIO))
             assertNull(AnkiMediaImporter.importedFilename(uri, AnkiMediaKind.IMAGE))

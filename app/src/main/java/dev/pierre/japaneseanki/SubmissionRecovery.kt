@@ -226,6 +226,17 @@ internal fun mediaImportRequest(
         frozenFilename != null -> ImportedMediaReceipt(operation, source, frozenFilename)
         else -> null
     }
+    // A live receipt can outlast regenerated media or a discarded Send. Without a frozen
+    // filename, a complete receipt for another source is stale, not a corrupt current receipt.
+    if (frozenFilename == null && savedReceipt != null && savedReceipt.source != source) {
+        val sanitize = when (operation.kind) {
+            AnkiMediaKind.IMAGE -> AnkiMediaImporter::sanitizeFilename
+            AnkiMediaKind.AUDIO -> AnkiMediaImporter::sanitizeAudioFilename
+        }
+        if (matchImportedReceipt(savedReceipt.source, savedReceipt.filename, savedReceipt.source, sanitize) != null) {
+            return MediaImportRequest(source)
+        }
+    }
     val receipt = if (frozenFilename != null && savedReceipt != null && savedReceipt.filename != frozenFilename) {
         savedReceipt.copy(source = MediaIdentity("", -1L, -1L))
     } else savedReceipt

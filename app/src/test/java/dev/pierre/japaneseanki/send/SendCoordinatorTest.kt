@@ -15,6 +15,11 @@ import dev.pierre.japaneseanki.DraftAudioFileStore
 import dev.pierre.japaneseanki.DraftAudioInput
 import dev.pierre.japaneseanki.DraftAudioPersistence
 import dev.pierre.japaneseanki.ManualNoteDraft
+import dev.pierre.japaneseanki.ImportedMediaReceipt
+import dev.pierre.japaneseanki.MediaIdentity
+import dev.pierre.japaneseanki.PreferenceChanges
+import dev.pierre.japaneseanki.PreferenceFile
+import dev.pierre.japaneseanki.putMediaReceipt
 import dev.pierre.japaneseanki.MemoryAppPreferenceStorage
 import dev.pierre.japaneseanki.MediaImportException
 import dev.pierre.japaneseanki.MediaImportFailureStage
@@ -271,6 +276,36 @@ class SendCoordinatorTest {
         assertEquals(1, fixture.sink.insertCalls)
         assertEquals(1, fixture.sink.verifyCalls)
         assertEquals(200L, fixture.sink.verifiedDeckId)
+    }
+
+    @Test
+    fun staleReceiptDoesNotBlockFreshSendOrExplicitFrozenRetry() {
+        for (retryFrozen in listOf(false, true)) withFixture { fixture ->
+            val request = fixture.request()
+            val frozen = if (retryFrozen) {
+                fixture.sink.failureOperation = MediaImportOperation.SENTENCE_AUDIO
+                runSuspendTest { fixture.coordinator.submit(request) {} }
+                fixture.sink.failureOperation = null
+                requireNotNull(readFrozenSubmission(fixture.storage.draft.value))
+            } else null
+            fixture.storage.update(PreferenceFile.DRAFT, PreferenceChanges().putMediaReceipt(
+                ImportedMediaReceipt(
+                    MediaImportOperation.SENTENCE_AUDIO,
+                    MediaIdentity("/draft/older-sentence.mp3", 14016L, 20L),
+                    "older-sentence.mp3",
+                ),
+            ))
+            fixture.sink.mediaOperations.clear()
+
+            val outcome = runSuspendTest {
+                fixture.coordinator.submit(request.copy(restoredFrozen = frozen)) {}
+            }
+
+            assertEquals(SendOutcome.Created(501L), outcome)
+            assertEquals(listOf(MediaImportOperation.SENTENCE_AUDIO, MediaImportOperation.WORD_AUDIO), fixture.sink.mediaOperations)
+            assertEquals(1, fixture.sink.insertCalls)
+            assertEquals(1, fixture.sink.verifyCalls)
+        }
     }
 
     @Test

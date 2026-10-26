@@ -348,6 +348,11 @@ internal class SendCoordinator(
             storage.persistBlocking(PreferenceFile.DRAFT, clearFrozenSubmission())
             return SubmissionRun(SendOutcome.InsertFailed(error.message.orEmpty()), frozen)
         } catch (error: MediaImportException) {
+            // Local diagnostics only: never include provider messages, paths, or card content.
+            android.util.Log.w(
+                "AnkiSend",
+                "Media import failed: operation=${error.operation} stage=${error.stage} cause=${error.cause?.javaClass?.simpleName}",
+            )
             audio.releaseFreeze(retainFiles = true)
             durableSnapshot = readFrozenSubmission(preferences) ?: durableSnapshot
             return SubmissionRun(
