@@ -25,19 +25,12 @@ import dev.pierre.japaneseanki.MediaImportException
 import dev.pierre.japaneseanki.MediaImportFailureStage
 import dev.pierre.japaneseanki.MediaImportOperation
 import dev.pierre.japaneseanki.PitchAccent
-import dev.pierre.japaneseanki.PreferenceFrozenSubmissionStore
 import dev.pierre.japaneseanki.SubmissionPhase
 import dev.pierre.japaneseanki.SubmissionRecoveryKeys
 import dev.pierre.japaneseanki.readFrozenSubmission
 import dev.pierre.japaneseanki.TargetSpan
 import dev.pierre.japaneseanki.liveMediaIdentity
 import dev.pierre.japaneseanki.runAttemptForTest
-import dev.pierre.japaneseanki.ui.CardAction
-import dev.pierre.japaneseanki.ui.CardPresentationCopy
-import dev.pierre.japaneseanki.ui.CardPresentationInput
-import dev.pierre.japaneseanki.ui.SendPhase
-import dev.pierre.japaneseanki.ui.SendState
-import dev.pierre.japaneseanki.ui.cardPresentation
 import dev.pierre.japaneseanki.runSuspendTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -46,7 +39,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import java.io.File
-import java.util.concurrent.atomic.AtomicReference
 
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [37])
@@ -138,7 +130,6 @@ class SendCoordinatorTest {
             gateway = sink,
             storage = storage,
             audio = audio,
-            repository = PreferenceFrozenSubmissionStore(storage, draftDirectory),
         )
 
         init {
@@ -207,7 +198,7 @@ class SendCoordinatorTest {
     fun duplicateReturnsDuplicateWithoutInserting() = withFixture { fixture ->
         fixture.sink.duplicateId = 812L
 
-        val outcome = runSuspendTest { fixture.coordinator.submit(fixture.request()) {} }
+        val outcome = runSuspendTest { fixture.coordinator.submit(fixture.request()) }
 
         assertEquals(SendOutcome.Duplicate(812L), outcome)
         assertEquals(0, fixture.sink.insertCalls)
@@ -216,7 +207,7 @@ class SendCoordinatorTest {
 
     @Test
     fun frozenSendPhaseIsDurablyRecordedBeforeInsertSinkCall() = withFixture { fixture ->
-        val outcome = runSuspendTest { fixture.coordinator.submit(fixture.request()) {} }
+        val outcome = runSuspendTest { fixture.coordinator.submit(fixture.request()) }
         val durableMarker = fixture.eventIndex("persist:started")
         val insert = fixture.eventIndex("insert")
 
@@ -231,7 +222,7 @@ class SendCoordinatorTest {
         fixture.sink.failureOperation = MediaImportOperation.WORD_AUDIO
         fixture.sink.failureStage = MediaImportFailureStage.PROVIDER_IMPORT
 
-        val outcome = runSuspendTest { fixture.coordinator.submit(fixture.request(withImage = true)) {} }
+        val outcome = runSuspendTest { fixture.coordinator.submit(fixture.request(withImage = true)) }
 
         assertEquals(
             SendOutcome.MediaFailed(
@@ -258,7 +249,7 @@ class SendCoordinatorTest {
     fun insertExceptionIsIndeterminateAndNeverCreated() = withFixture { fixture ->
         fixture.sink.insertFailure = IllegalStateException("provider outcome uncertain")
 
-        val outcome = runSuspendTest { fixture.coordinator.submit(fixture.request()) {} }
+        val outcome = runSuspendTest { fixture.coordinator.submit(fixture.request()) }
 
         assertTrue(outcome is SendOutcome.Indeterminate)
         assertEquals(0, fixture.sink.verifyCalls)
@@ -270,7 +261,7 @@ class SendCoordinatorTest {
     fun destinationVerificationFailureIsNotCreated() = withFixture { fixture ->
         fixture.sink.verificationResult = false
 
-        val outcome = runSuspendTest { fixture.coordinator.submit(fixture.request()) {} }
+        val outcome = runSuspendTest { fixture.coordinator.submit(fixture.request()) }
 
         assertEquals(SendOutcome.DestinationUnverified(501L), outcome)
         assertEquals(1, fixture.sink.insertCalls)
@@ -284,7 +275,7 @@ class SendCoordinatorTest {
             val request = fixture.request()
             val frozen = if (retryFrozen) {
                 fixture.sink.failureOperation = MediaImportOperation.SENTENCE_AUDIO
-                runSuspendTest { fixture.coordinator.submit(request) {} }
+                runSuspendTest { fixture.coordinator.submit(request) }
                 fixture.sink.failureOperation = null
                 requireNotNull(readFrozenSubmission(fixture.storage.draft.value))
             } else null
@@ -298,7 +289,7 @@ class SendCoordinatorTest {
             fixture.sink.mediaOperations.clear()
 
             val outcome = runSuspendTest {
-                fixture.coordinator.submit(request.copy(restoredFrozen = frozen)) {}
+                fixture.coordinator.submit(request.copy(restoredFrozen = frozen))
             }
 
             assertEquals(SendOutcome.Created(501L), outcome)
@@ -310,7 +301,7 @@ class SendCoordinatorTest {
 
     @Test
     fun happyPathInsertsOnceAndVerifiesDestination() = withFixture { fixture ->
-        val outcome = runSuspendTest { fixture.coordinator.submit(fixture.request()) {} }
+        val outcome = runSuspendTest { fixture.coordinator.submit(fixture.request()) }
 
         assertEquals(SendOutcome.Created(501L), outcome)
         assertEquals(1, fixture.sink.insertCalls)
@@ -320,7 +311,7 @@ class SendCoordinatorTest {
 
     @Test
     fun mediaOrderIsSentenceWordImageAndFailureStopsTheSequence() = withFixture { fixture ->
-        val outcome = runSuspendTest { fixture.coordinator.submit(fixture.request(withImage = true)) {} }
+        val outcome = runSuspendTest { fixture.coordinator.submit(fixture.request(withImage = true)) }
 
         assertEquals(SendOutcome.Created(501L), outcome)
         assertEquals(
@@ -329,72 +320,6 @@ class SendCoordinatorTest {
         )
         assertEquals(1, fixture.sink.insertCalls)
     }
-
-    @Test
-    fun cardPrimarySubmitClickReachesCoordinatorAndLockedClickDoesNot() = withFixture { fixture ->
-        val request = fixture.request()
-        val result = AtomicReference<SendOutcome?>()
-        val clickSubmit = {
-            result.set(runSuspendTest { fixture.coordinator.submit(request) {} })
-        }
-        val nominalAction = cardPresentation(cardInput(locked = false)).action
-        assertEquals(CardAction.Submit, nominalAction)
-        cardActionClickHandler(
-            action = nominalAction,
-            sendState = SendState(),
-            frozenRetryReady = false,
-            onSubmit = clickSubmit,
-            onRetryAnalysis = {},
-            onRecovery = {},
-        ).invoke()
-        assertEquals(SendOutcome.Created(501L), result.get())
-        assertEquals(1, fixture.sink.insertCalls)
-
-        val lockedAction = cardPresentation(cardInput(locked = true)).action
-        assertEquals(CardAction.Submit, lockedAction)
-        cardActionClickHandler(
-            action = lockedAction,
-            sendState = SendState(phase = SendPhase.Submitting),
-            frozenRetryReady = false,
-            onSubmit = clickSubmit,
-            onRetryAnalysis = {},
-            onRecovery = {},
-        ).invoke()
-        assertEquals("locked click must not re-enter Send", 1, fixture.sink.insertCalls)
-    }
-
-    private fun cardInput(locked: Boolean) = CardPresentationInput(
-        hasTarget = true,
-        analyzerError = null,
-        analyzing = false,
-        completed = false,
-        duplicateBlocked = false,
-        recoveryRequired = false,
-        submitting = false,
-        sendBlocked = false,
-        submitMessage = null,
-        recoveryActionLabel = null,
-        translationFailure = null,
-        wordAudioGenerating = false,
-        submitHint = null,
-        noWordAction = false,
-        canSend = true,
-        submissionLocked = locked,
-        actionHasTarget = true,
-        recoveryMessage = null,
-        copy = CardPresentationCopy(
-            noTargetHint = "Choose a word",
-            analyzingHint = "Analyzing",
-            sendingHint = "Sending",
-            wordAudioPreparingHint = "Preparing audio",
-            completedStatusFallback = "Sent",
-            duplicateStatusFallback = "Duplicate",
-            recoveryStatusFallback = "Recovery",
-            sendActionLabel = "Send",
-            retryActionLabel = "Retry",
-            retrySendActionLabel = "Retry send",
-        ),
-    )
 
     private inline fun withFixture(block: (Fixture) -> Unit) {
         val fixture = Fixture()

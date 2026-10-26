@@ -2,7 +2,8 @@ package dev.pierre.japaneseanki
 
 import android.app.Application
 
-/** One preference snapshot and ordered writer queue for the lifetime of this process. */
+/** Application-owned DataStores; screen state belongs to ViewModels. */
 class JapaneseAnkiApplication : Application() {
-    internal val preferenceStorage: AppPreferenceStorage by lazy { AndroidPreferenceStorage(this) }
+    internal val preferenceStorage: AppPreferenceStorage by lazy { DataStorePreferenceStorage(this) }
+    internal val audioCache by lazy { ReusableAudioCache(java.io.File(cacheDir, "audio")) }
 }

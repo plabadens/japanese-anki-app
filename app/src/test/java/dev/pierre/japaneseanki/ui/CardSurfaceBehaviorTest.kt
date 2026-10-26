@@ -34,7 +34,6 @@ import androidx.compose.ui.test.performClick
 import androidx.test.espresso.Espresso.pressBack
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import dev.pierre.japaneseanki.DraftAudio
 import dev.pierre.japaneseanki.DictionaryEntry
 import dev.pierre.japaneseanki.DictionaryMeaningChoice
 import dev.pierre.japaneseanki.DictionarySense
@@ -224,10 +223,7 @@ class CardSurfaceBehaviorTest {
         val openSettings = composeRule.activity.getString(R.string.card_open_settings_action)
         val advisoryHeadline = composeRule.activity.getString(R.string.card_audio_setup_needed_headline, sentenceField)
         val advisoryMessage = "No verified sentence voice is configured."
-        val advisoryAudio = DraftAudio(
-            advisoryHeadline = advisoryHeadline,
-            advisoryMessage = advisoryMessage,
-        ).presentation(openSettings)
+        val advisoryAudio = ReviewAudioPresentation.Advisory(advisoryHeadline, advisoryMessage, openSettings)
         val advisoryHint = reviewAudioSendBlocker(sentenceField, advisoryAudio)!!.resolve(composeRule.activity)
         sentenceAudio.value = advisoryAudio
         footerHint.value = advisoryHint

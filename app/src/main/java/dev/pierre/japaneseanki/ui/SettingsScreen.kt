@@ -43,7 +43,7 @@ import dev.pierre.japaneseanki.R
 import dev.pierre.japaneseanki.speech.CloudVoice
 
 /** Secret is deliberately held outside the settings data class to avoid accidental data-class logs. */
-internal class SettingsScreenState(
+internal data class SettingsScreenState(
     val values: SettingsValues,
     val googleKey: String,
     val credentialStored: Boolean,
@@ -56,7 +56,10 @@ internal class SettingsScreenState(
     val onboardingIncomplete: Boolean = false,
     val cacheBusy: Boolean = false,
     val cacheMessage: String? = null,
-)
+    val problem: dev.pierre.japaneseanki.SettingsProblem? = null,
+) {
+    override fun toString(): String = "SettingsScreenState(values=$values, loading=$loading, problem=$problem)"
+}
 
 /** Autosaved Settings surface. Back flushes pending changes; no Save action is shown. */
 @Composable
@@ -201,7 +204,7 @@ internal fun SettingsScreen(
             ) { Text(stringResource(R.string.clear_cache)) }
             state.cacheMessage?.let { message ->
                 Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (message == "Could not clear the cache.") {
+                if (state.problem == dev.pierre.japaneseanki.SettingsProblem.Cache) {
                     TextButton(onClick = onClearCache) { Text(stringResource(R.string.retry)) }
                 }
             }
@@ -210,7 +213,7 @@ internal fun SettingsScreen(
             }
             state.error?.let { message ->
                 Text(message, color = MaterialTheme.colorScheme.error)
-                if (message == "Could not save your changes.") {
+                if (state.problem == dev.pierre.japaneseanki.SettingsProblem.Save) {
                     TextButton(onClick = onBack) { Text(stringResource(R.string.retry)) }
                 }
             }

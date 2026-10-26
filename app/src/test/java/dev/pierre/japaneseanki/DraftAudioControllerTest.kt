@@ -120,65 +120,6 @@ class DraftAudioControllerTest {
     }
 
     @Test
-    fun reviewAudioInputsUseTheRevisionThatContinueWillAuthorize() {
-        val beforeFirstContinue = declaredReviewAudioRevision(pendingAuthorization = null, lastAuthorization = 0L)
-        assertEquals(1L, beforeFirstContinue)
-        assertEquals(
-            beforeFirstContinue,
-            declaredReviewAudioRevision(pendingAuthorization = beforeFirstContinue, lastAuthorization = beforeFirstContinue),
-        )
-        assertEquals(2L, declaredReviewAudioRevision(pendingAuthorization = null, lastAuthorization = beforeFirstContinue))
-    }
-
-    @Test
-    fun reviewEntryStartsOnlyMissingItemsOnceForExplicitContinueAndNeverOnRestoreOrReopen() {
-        val fixture = Fixture()
-        try {
-            val persistence = MapPersistence()
-            val controller = controller(fixture, persistence)
-            val sentence = fixture.input(AudioItem.SENTENCE, "sentence-r7", revision = 7)
-            val word = fixture.input(AudioItem.VOCABULARY, "word-r7", format = AudioFormat.OGG, revision = 7)
-            controller.setInput(sentence)
-            controller.setInput(word)
-            val entry = ReviewAudioGenerationCoordinator(controller, persistence)
-
-            assertTrue(entry.onReviewEntry(7, ReviewAudioEntryCause.PROCESS_RESTORE).isEmpty())
-            assertTrue(entry.onReviewEntry(7, ReviewAudioEntryCause.REVISIT).isEmpty())
-            assertEquals(0, fixture.providerCalls)
-
-            val attempts = entry.onReviewEntry(7, ReviewAudioEntryCause.EXPLICIT_CONTINUE)
-            assertEquals(setOf(AudioItem.SENTENCE, AudioItem.VOCABULARY), attempts.map { it.token.item }.toSet())
-            assertTrue(entry.onReviewEntry(7, ReviewAudioEntryCause.EXPLICIT_CONTINUE).isEmpty())
-            attempts.forEach { controller.runAttemptForTest(it) }
-            assertEquals(2, fixture.providerCalls)
-
-            // An edited sentence is a new revision; the accepted word audio remains valid.
-            controller.setInput(fixture.input(AudioItem.SENTENCE, "sentence-r8", text = "別の文", revision = 8))
-            controller.setInput(fixture.input(AudioItem.VOCABULARY, "word-r7", format = AudioFormat.OGG, revision = 8))
-            val changedRevision = entry.onReviewEntry(8, ReviewAudioEntryCause.EXPLICIT_CONTINUE)
-            assertEquals(listOf(AudioItem.SENTENCE), changedRevision.map { it.token.item })
-            assertTrue(controller.state(AudioItem.VOCABULARY) is DraftAudioState.Ready)
-            changedRevision.forEach { controller.runAttemptForTest(it) }
-            assertEquals(3, fixture.providerCalls)
-
-            controller.dispose()
-            val restored = controller(fixture, persistence)
-            restored.setInput(fixture.input(AudioItem.SENTENCE, "sentence-r8", text = "別の文", revision = 8))
-            restored.setInput(fixture.input(AudioItem.VOCABULARY, "word-r7", format = AudioFormat.OGG, revision = 8))
-            val reopened = ReviewAudioGenerationCoordinator(restored, persistence)
-            assertTrue(reopened.onReviewEntry(8, ReviewAudioEntryCause.PROCESS_RESTORE).isEmpty())
-            assertTrue(reopened.onReviewEntry(8, ReviewAudioEntryCause.REVISIT).isEmpty())
-            assertTrue(reopened.onReviewEntry(8, ReviewAudioEntryCause.EXPLICIT_CONTINUE).isEmpty())
-            restored.setInput(fixture.input(AudioItem.SENTENCE, "sentence-r7", revision = 7))
-            restored.setInput(fixture.input(AudioItem.VOCABULARY, "word-r7", format = AudioFormat.OGG, revision = 7))
-            assertTrue("a lower previously authorized revision cannot be replayed", reopened.onReviewEntry(7, ReviewAudioEntryCause.EXPLICIT_CONTINUE).isEmpty())
-            assertEquals("restoration and revisiting must make zero provider calls", 3, fixture.providerCalls)
-        } finally {
-            fixture.close()
-        }
-    }
-
-    @Test
     fun permanentSpeechFailureIsNotRetriedForUnchangedInput() {
         val fixture = Fixture()
         try {

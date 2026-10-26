@@ -81,11 +81,15 @@ class ReviewAudioPresentationTest {
     @Test fun translationSetupAndInterruptedGenerationUseDifferentRolesAndHeadlines() {
         assertEquals(
             TranslationFailurePresentation(R.string.card_translation_setup_needed),
-            reviewTranslationFailureStatus("Add your Google Cloud API key in Settings."),
+            reviewTranslationFailureStatus(dev.pierre.japaneseanki.TranslationResult.Failed(
+                "Texte localisé sans mot-clé anglais.", dev.pierre.japaneseanki.TranslatorFailure.MISSING_CREDENTIALS,
+            )),
         )
         assertEquals(
             TranslationFailurePresentation(R.string.card_translation_interrupted),
-            reviewTranslationFailureStatus("Translation was interrupted. Tap Retry to continue."),
+            reviewTranslationFailureStatus(dev.pierre.japaneseanki.TranslationResult.Failed(
+                "Génération arrêtée.", dev.pierre.japaneseanki.TranslatorFailure.INTERRUPTED,
+            )),
         )
     }
 

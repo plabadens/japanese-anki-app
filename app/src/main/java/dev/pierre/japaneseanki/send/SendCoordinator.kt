@@ -54,9 +54,6 @@ import dev.pierre.japaneseanki.AppPreferenceStorage
 import dev.pierre.japaneseanki.PreferenceChanges
 import dev.pierre.japaneseanki.PreferenceFile
 import dev.pierre.japaneseanki.receiptIdentity
-import dev.pierre.japaneseanki.ui.CardAction
-import dev.pierre.japaneseanki.ui.SendPhase
-import dev.pierre.japaneseanki.ui.SendState
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -71,12 +68,6 @@ internal interface AnkiNoteSink {
     fun noteCards(noteId: Long): List<AnkiCardLocation>
     fun importAudio(file: File, operation: MediaImportOperation): String
     fun importProcessedImage(file: File): String
-}
-
-/** Side effects that belong to the completed draft rather than the Anki provider. */
-internal interface FrozenSubmissionStore {
-    fun persistLastSentTags(tags: Set<String>): Boolean
-    fun clearDraft()
 }
 
 
@@ -127,59 +118,36 @@ internal class SendCoordinator(
     private val gateway: AnkiNoteSink,
     private val storage: AppPreferenceStorage,
     private val audio: DraftAudioController,
-    private val repository: FrozenSubmissionStore,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
-    private val preferences get() = storage.draft.value
+    private val preferences get() = storage.readBlocking(PreferenceFile.DRAFT)
 
-    suspend fun submit(request: SendRequest, onState: (SendState) -> Unit): SendOutcome {
-        val result = withContext(ioDispatcher) { submitBlocking(request) }
-        result.frozen?.let { snapshot ->
-            onState(SendState(phase = SendPhase.Submitting, frozen = snapshot))
-        }
-        return result.outcome
-    }
+    suspend fun submit(request: SendRequest): SendOutcome = withContext(ioDispatcher) { submitBlocking(request) }
 
-    suspend fun recover(state: SendState): SendOutcome = withContext(ioDispatcher) {
-        recoverBlocking(state)
-    }
+    suspend fun recover(): SendOutcome = withContext(ioDispatcher) { recoverBlocking() }
 
-    private data class SubmissionRun(val outcome: SendOutcome, val frozen: FrozenSubmission?)
-
-    private fun submitBlocking(request: SendRequest): SubmissionRun {
+    private fun submitBlocking(request: SendRequest): SendOutcome {
         val restored = request.restoredFrozen
         if (restored != null && (
                 restored.modelId != request.model.id || restored.deckId != request.deck.id ||
                     restored.modelFields != request.model.fields
                 )
-        ) return SubmissionRun(SendOutcome.NotReady(SendNotReadyReason.INVALID_FIELDS), restored)
+        ) return SendOutcome.NotReady(SendNotReadyReason.INVALID_FIELDS)
 
         val frozenAudio = if (restored == null) {
             when (val freeze = audio.freezeForSend()) {
                 is DraftAudioFreeze.Frozen -> freeze.snapshot
-                is DraftAudioFreeze.Incomplete -> return SubmissionRun(
-                    SendOutcome.NotReady(SendNotReadyReason.AUDIO_INCOMPLETE),
-                    null,
-                )
-                DraftAudioFreeze.Disposed -> return SubmissionRun(
-                    SendOutcome.NotReady(SendNotReadyReason.AUDIO_DISPOSED),
-                    null,
-                )
+                is DraftAudioFreeze.Incomplete -> return SendOutcome.NotReady(SendNotReadyReason.AUDIO_INCOMPLETE)
+                DraftAudioFreeze.Disposed -> return SendOutcome.NotReady(SendNotReadyReason.AUDIO_DISPOSED)
             }
         } else null
 
-        var frozen: FrozenSubmission? = restored
-        var durableSnapshot: FrozenSubmission? = restored
         try {
             val fields = restored?.modelFields?.zip(restored.orderedFields)?.toMap() ?: request.fieldsByName
             val tagSet = restored?.tags ?: request.tags
-            if (restored == null) {
-                frozen = createInitialSnapshot(request, fields, tagSet)
-                    ?: run {
-                        audio.releaseFreeze(retainFiles = false)
-                        return SubmissionRun(SendOutcome.NotReady(SendNotReadyReason.INVALID_FIELDS), null)
-                    }
-                durableSnapshot = frozen
+            if (!AnkiFieldContract.mapToModelOrder(request.model.fields, fields).isValid) {
+                audio.releaseFreeze(retainFiles = false)
+                return SendOutcome.NotReady(SendNotReadyReason.INVALID_FIELDS)
             }
             val duplicateId = gateway.hasDuplicate(request.model, request.deck, fields)
             if (duplicateId != null) {
@@ -189,15 +157,13 @@ internal class SendCoordinator(
                 )
                 audio.releaseFreeze(retainFiles = false)
                 if (restored != null) storage.persistBlocking(PreferenceFile.DRAFT, clearFrozenSubmission())
-                return SubmissionRun(SendOutcome.Duplicate(duplicateId), frozen)
+                return SendOutcome.Duplicate(duplicateId)
             }
 
             val startingSnapshot = restored ?: createFrozenSubmission(
                 request,
                 frozenAudio ?: error("Draft audio was not frozen."),
             )
-            frozen = startingSnapshot
-            durableSnapshot = startingSnapshot
             if (restored != null) {
                 val localFile = restored.media?.let { File(it.path) }
                 val localExists = localFile?.exists() == true
@@ -294,8 +260,6 @@ internal class SendCoordinator(
             importedReceipts.forEach { receipt ->
                 check(persistReceipt(receipt)) { "Could not save the ${receipt.operation.label} receipt." }
             }
-            frozen = snapshot
-            durableSnapshot = snapshot
             check(storage.persistBlocking(PreferenceFile.DRAFT, PreferenceChanges()
                 .putFrozenSubmission(snapshot, SubmissionPhase.MEDIA_IMPORTED)
                 .remove(SubmissionRecoveryKeys.MEDIA_OPERATION)
@@ -320,25 +284,22 @@ internal class SendCoordinator(
                 PreferenceFile.DRAFT,
                 PreferenceChanges().putFrozenSubmission(insertedSnapshot, SubmissionPhase.NOTE_INSERTED),
             )) { "Could not save the inserted note ID." }
-            frozen = insertedSnapshot
-            durableSnapshot = insertedSnapshot
 
             if (!gateway.ensureNoteInDeck(insertedNoteId, request.deck.id)) {
                 audio.releaseFreeze(retainFiles = true)
-                return SubmissionRun(SendOutcome.DestinationUnverified(insertedNoteId), insertedSnapshot)
+                return SendOutcome.DestinationUnverified(insertedNoteId)
             }
             check(storage.persistBlocking(
                 PreferenceFile.DRAFT,
                 PreferenceChanges().putFrozenSubmission(insertedSnapshot, SubmissionPhase.DESTINATION_VERIFIED),
             )) { "Could not save the verified destination." }
-            check(repository.persistLastSentTags(insertedSnapshot.tags)) { "Could not save tags from the verified note." }
+            check(persistLastSentTags(insertedSnapshot.tags)) { "Could not save tags from the verified note." }
             check(storage.persistBlocking(
                 PreferenceFile.DRAFT,
                 PreferenceChanges().putString(SubmissionRecoveryKeys.STATUS, "done"),
             ))
-            repository.clearDraft()
             audio.releaseFreeze(retainFiles = false)
-            return SubmissionRun(SendOutcome.Created(insertedNoteId), insertedSnapshot)
+            return SendOutcome.Created(insertedNoteId)
         } catch (cancelled: java.util.concurrent.CancellationException) {
             val phase = SubmissionPhase.fromPersisted(preferences.getString(SubmissionRecoveryKeys.STATUS, null))
             audio.releaseFreeze(retainFiles = phase != null)
@@ -346,7 +307,7 @@ internal class SendCoordinator(
         } catch (error: AnkiProviderDefiniteInsertException) {
             audio.releaseFreeze(retainFiles = false)
             storage.persistBlocking(PreferenceFile.DRAFT, clearFrozenSubmission())
-            return SubmissionRun(SendOutcome.InsertFailed(error.message.orEmpty()), frozen)
+            return SendOutcome.InsertFailed(error.message.orEmpty())
         } catch (error: MediaImportException) {
             // Local diagnostics only: never include provider messages, paths, or card content.
             android.util.Log.w(
@@ -354,21 +315,15 @@ internal class SendCoordinator(
                 "Media import failed: operation=${error.operation} stage=${error.stage} cause=${error.cause?.javaClass?.simpleName}",
             )
             audio.releaseFreeze(retainFiles = true)
-            durableSnapshot = readFrozenSubmission(preferences) ?: durableSnapshot
-            return SubmissionRun(
-                SendOutcome.MediaFailed(error.operation, error.stage, error.message.orEmpty()),
-                durableSnapshot,
-            )
+            return SendOutcome.MediaFailed(error.operation, error.stage, error.message.orEmpty())
         } catch (error: Exception) {
             val phase = SubmissionPhase.fromPersisted(preferences.getString(SubmissionRecoveryKeys.STATUS, null))
             audio.releaseFreeze(retainFiles = phase != null)
-            durableSnapshot = readFrozenSubmission(preferences) ?: durableSnapshot
             return if (phase != null) {
-                SubmissionRun(SendOutcome.Indeterminate(phase, error.message.orEmpty()), durableSnapshot)
+                SendOutcome.Indeterminate(phase, error.message.orEmpty())
             } else {
-                val reason = if (request.imageAttached) SendNotReadyReason.IMAGE_NOT_READY
-                else SendNotReadyReason.INVALID_FIELDS
-                SubmissionRun(SendOutcome.NotReady(reason), durableSnapshot)
+                val reason = if (request.imageAttached) SendNotReadyReason.IMAGE_NOT_READY else SendNotReadyReason.INVALID_FIELDS
+                SendOutcome.NotReady(reason)
             }
         }
     }
@@ -440,46 +395,17 @@ internal class SendCoordinator(
         )
     }
 
-    private fun createInitialSnapshot(
-        request: SendRequest,
-        fieldsByName: Map<String, String>,
-        tags: Set<String>,
-    ): FrozenSubmission? {
-        val mapping = AnkiFieldContract.mapToModelOrder(request.model.fields, fieldsByName)
-        if (!mapping.isValid) return null
-        return FrozenSubmission(
-            revision = nextSubmissionRevision(
-                preferences.getLong(SubmissionRecoveryKeys.REVISION_SEQUENCE, 0L),
-                preferences.getLong(SubmissionRecoveryKeys.REVISION, 0L),
-            ),
-            modelId = request.model.id,
-            deckId = request.deck.id,
-            modelFields = request.model.fields,
-            orderedFields = mapping.values,
-            sentence = request.draft.sentence,
-            lemma = request.draft.vocabulary,
-            vocabularyReading = request.draft.vocabularyReading,
-            sentenceReading = request.draft.sentenceReading,
-            definition = request.draft.definition,
-            translation = request.draft.translation,
-            notes = request.draft.notes,
-            tags = tags,
-            pitchAccentText = request.pitchAccentText,
-            targetStart = request.draft.target?.start ?: -1,
-            targetEnd = request.draft.target?.end ?: -1,
-            media = request.processedImageIdentity,
-            importedFilename = request.imageReceiptFilename,
-            noteId = null,
-        )
-    }
+    private fun persistLastSentTags(tags: Set<String>): Boolean = storage.persistBlocking(
+        PreferenceFile.SETTINGS, PreferenceChanges().putString("last_note_tags", tags.joinToString(" ")),
+    )
 
-    private fun recoverBlocking(state: SendState): SendOutcome {
+    private fun recoverBlocking(): SendOutcome {
         val phase = SubmissionPhase.fromPersisted(preferences.getString(SubmissionRecoveryKeys.STATUS, null))
             ?: return SendOutcome.Indeterminate(null, "No pending submission phase.")
         if (phase == SubmissionPhase.MEDIA_IMPORTING || phase == SubmissionPhase.MEDIA_IMPORTED) {
             return SendOutcome.PendingRecovery
         }
-        val snapshot = state.frozen ?: readFrozenSubmission(preferences)
+        val snapshot = readFrozenSubmission(preferences)
             ?: return SendOutcome.Indeterminate(phase, "Frozen submission is unavailable.")
         return try {
             if (phase == SubmissionPhase.NOTE_INSERTED || phase == SubmissionPhase.DESTINATION_VERIFIED) {
@@ -494,7 +420,7 @@ internal class SendCoordinator(
                                 SubmissionPhase.DESTINATION_VERIFIED.persisted,
                             ),
                         ))
-                        check(repository.persistLastSentTags(snapshot.tags))
+                        check(persistLastSentTags(snapshot.tags))
                         check(storage.persistBlocking(
                             PreferenceFile.DRAFT,
                             PreferenceChanges().putString(SubmissionRecoveryKeys.STATUS, "done"),
@@ -529,20 +455,4 @@ internal class SendCoordinator(
     }
 
     private class ImageNotReadyException : IllegalStateException()
-}
-
-/** Route the Card's primary click without ever retaining a forward-assigned placeholder lambda. */
-internal fun cardActionClickHandler(
-    action: CardAction,
-    sendState: SendState,
-    frozenRetryReady: Boolean,
-    onSubmit: () -> Unit,
-    onRetryAnalysis: () -> Unit,
-    onRecovery: () -> Unit,
-): () -> Unit = when (action) {
-    CardAction.None -> ({})
-    CardAction.RetryAnalysis -> onRetryAnalysis
-    CardAction.RetrySend -> ({ if (!sendState.locked || frozenRetryReady) onSubmit() })
-    CardAction.Recovery -> onRecovery
-    CardAction.Submit -> ({ if (!sendState.locked || frozenRetryReady) onSubmit() })
 }

@@ -1,26 +1,11 @@
 package dev.pierre.japaneseanki
 
-import android.content.Context
-import android.content.SharedPreferences
-import android.os.Looper
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.atomic.AtomicBoolean
+import java.io.File
 
 internal enum class PreferenceFile { DRAFT, SETTINGS }
 
-/** Immutable, non-blocking view of values loaded once before composition starts. */
+/** Immutable committed snapshot. No optimistic second source of truth over DataStore. */
 internal class PreferenceValues internal constructor(private val values: Map<String, Any?> = emptyMap()) {
     fun contains(key: String): Boolean = values.containsKey(key)
     fun getString(key: String, default: String?): String? = values[key] as? String ?: default
@@ -29,19 +14,19 @@ internal class PreferenceValues internal constructor(private val values: Map<Str
     fun getBoolean(key: String, default: Boolean): Boolean = values[key] as? Boolean ?: default
     fun getStringSet(key: String, default: Set<String>?): Set<String>? =
         (values[key] as? Set<*>)?.filterIsInstance<String>()?.toSet() ?: default
-
+    internal fun sameValues(other: PreferenceValues): Boolean = values == other.values
     internal fun changed(changes: PreferenceChanges): PreferenceValues {
-        val updated = values.toMutableMap()
-        changes.values.forEach { (key, value) ->
-            if (value == null) updated.remove(key) else updated[key] = value
-        }
+        val updated = if (changes.clearFirst) mutableMapOf() else values.toMutableMap()
+        changes.values.forEach { (key, value) -> if (value == null) updated.remove(key) else updated[key] = value }
         return PreferenceValues(updated)
     }
 }
 
-/** A small, Android-free batch of preference changes. Null string values mean removal. */
 internal class PreferenceChanges {
     internal val values = linkedMapOf<String, Any?>()
+    internal var clearFirst = false
+        private set
+    fun clear(): PreferenceChanges = apply { clearFirst = true; values.clear() }
     fun putString(key: String, value: String?): PreferenceChanges = set(key, value)
     fun putInt(key: String, value: Int): PreferenceChanges = set(key, value)
     fun putLong(key: String, value: Long): PreferenceChanges = set(key, value)
@@ -51,7 +36,6 @@ internal class PreferenceChanges {
     private fun set(key: String, value: Any?): PreferenceChanges = apply { values[key] = value }
 }
 
-/** The only persistence boundary for drafts, settings, and frozen-send recovery. */
 internal interface AppPreferenceStorage {
     val draft: StateFlow<PreferenceValues>
     val settings: StateFlow<PreferenceValues>
@@ -59,237 +43,32 @@ internal interface AppPreferenceStorage {
     fun update(file: PreferenceFile, changes: PreferenceChanges)
     suspend fun persist(file: PreferenceFile, changes: PreferenceChanges): Boolean
     fun persistBlocking(file: PreferenceFile, changes: PreferenceChanges): Boolean
-}
-
-/**
- * SharedPreferences adapter. All Android reads happen on [dispatcher] before composition; every
- * write is serialized through one ordered queue there. Recovery writes use awaited commits. The
- * synchronous settings adapter is used only by its existing background scheduler. Production
- * ownership is application-scoped: pending saves outlive activities and retain their queue order.
- */
-internal class AndroidPreferenceStorage(
-    context: Context,
-    private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
-) : AppPreferenceStorage {
-    private data class WriteRequest(
-        val file: PreferenceFile,
-        val changes: PreferenceChanges,
-        val await: Boolean,
-        val completion: (Boolean) -> Unit,
-    )
-
-    private val appContext = context.applicationContext
-    private val scope = CoroutineScope(SupervisorJob() + dispatcher)
-    private val requestLock = Any()
-    private val requests = Channel<WriteRequest>(Channel.UNLIMITED)
-    private val loadMutex = Mutex()
-    private var loaded = false
-    private lateinit var draftPreferences: SharedPreferences
-    private lateinit var settingsPreferences: SharedPreferences
-
-    private val mutableDraft = MutableStateFlow(PreferenceValues())
-    private val mutableSettings = MutableStateFlow(PreferenceValues())
-    override val draft: StateFlow<PreferenceValues> = mutableDraft.asStateFlow()
-    override val settings: StateFlow<PreferenceValues> = mutableSettings.asStateFlow()
-
-    init {
-        scope.launch {
-            for (request in requests) {
-                val saved = runCatching { write(request.file, request.changes, request.await) }.getOrDefault(false)
-                request.completion(saved)
-            }
-        }
-    }
-
-    override suspend fun load() = loadMutex.withLock {
-        // A recreated activity must not replace optimistic queued edits with an older disk snapshot.
-        if (loaded) return@withLock
-        val snapshot = kotlinx.coroutines.withContext(dispatcher) {
-            val loadedDraft = runCatching {
-                draftPreferences = appContext.getSharedPreferences("draft", Context.MODE_PRIVATE)
-                PreferenceValues(draftPreferences.all.toMap())
-            }.getOrDefault(PreferenceValues())
-            val loadedSettings = runCatching {
-                settingsPreferences = appContext.getSharedPreferences("settings", Context.MODE_PRIVATE)
-                PreferenceValues(settingsPreferences.all.toMap())
-            }.getOrDefault(PreferenceValues())
-            loadedDraft to loadedSettings
-        }
-        synchronized(requestLock) {
-            mutableDraft.value = snapshot.first
-            mutableSettings.value = snapshot.second
-        }
-        loaded = true
-    }
-
-    override fun update(file: PreferenceFile, changes: PreferenceChanges) {
-        if (changes.values.isEmpty()) return
-        synchronized(requestLock) {
-            state(file).value = state(file).value.changed(changes)
-            check(requests.trySend(WriteRequest(file, changes, await = false) {}).isSuccess) {
-                "Preference writer is closed."
-            }
-        }
-    }
-
-    override suspend fun persist(file: PreferenceFile, changes: PreferenceChanges): Boolean {
-        if (changes.values.isEmpty()) return true
-        val completion = CompletableDeferred<Boolean>()
-        synchronized(requestLock) {
-            state(file).value = state(file).value.changed(changes)
-            check(requests.trySend(WriteRequest(file, changes, await = true, completion::complete)).isSuccess) {
-                "Preference writer is closed."
-            }
-        }
-        return completion.await()
-    }
-
-    override fun persistBlocking(file: PreferenceFile, changes: PreferenceChanges): Boolean {
-        check(Looper.myLooper() != Looper.getMainLooper()) { "Preference commits must not run on the main thread." }
-        if (changes.values.isEmpty()) return true
-        val result = AtomicBoolean(false)
-        val completed = CountDownLatch(1)
-        synchronized(requestLock) {
-            state(file).value = state(file).value.changed(changes)
-            check(requests.trySend(
-                WriteRequest(file, changes, await = true) { saved ->
-                    result.set(saved)
-                    completed.countDown()
-                },
-            ).isSuccess) { "Preference writer is closed." }
-        }
-        completed.await()
-        return result.get()
-    }
-
-    private fun state(file: PreferenceFile): MutableStateFlow<PreferenceValues> = when (file) {
-        PreferenceFile.DRAFT -> mutableDraft
-        PreferenceFile.SETTINGS -> mutableSettings
-    }
-
-    private fun preferences(file: PreferenceFile): SharedPreferences = when (file) {
-        PreferenceFile.DRAFT -> draftPreferences
-        PreferenceFile.SETTINGS -> settingsPreferences
-    }
-
-    private fun write(file: PreferenceFile, changes: PreferenceChanges, await: Boolean): Boolean {
-        val editor = preferences(file).edit()
-        for ((key, value) in changes.values) {
-            when (value) {
-                null -> editor.remove(key)
-                is String -> editor.putString(key, value)
-                is Int -> editor.putInt(key, value)
-                is Long -> editor.putLong(key, value)
-                is Boolean -> editor.putBoolean(key, value)
-                is Set<*> -> editor.putStringSet(key, value.filterIsInstance<String>().toMutableSet())
-                else -> error("Unsupported preference value for $key")
-            }
-        }
-        return if (await) editor.commit() else {
-            editor.apply()
-            true
-        }
+    /** Blocking adapters are confined to existing audio/provider boundaries, always off main. */
+    fun readBlocking(file: PreferenceFile): PreferenceValues = when (file) {
+        PreferenceFile.DRAFT -> draft.value
+        PreferenceFile.SETTINGS -> settings.value
     }
 }
 
-/** Adapter for the draft audio controller; its values are queued on the storage dispatcher. */
+/** Publication of an audio file must actually be durable before its predecessor is retired. */
 internal class PreferenceDraftAudioPersistence(private val storage: AppPreferenceStorage) : DraftAudioPersistence {
-    override fun read(key: String): String? = storage.draft.value.getString(key, null)
-    override fun write(changes: Map<String, String?>): Boolean {
-        storage.update(PreferenceFile.DRAFT, PreferenceChanges().also { editor ->
-            changes.forEach { (key, value) -> editor.putString(key, value) }
-        })
-        return true
-    }
-}
-
-/** Side effects attached to a verified send, invoked from SendCoordinator's I/O dispatcher. */
-internal class PreferenceFrozenSubmissionStore(
-    private val storage: AppPreferenceStorage,
-    private val draftDirectory: java.io.File,
-) : dev.pierre.japaneseanki.send.FrozenSubmissionStore {
-    override fun persistLastSentTags(tags: Set<String>): Boolean = storage.persistBlocking(
-        PreferenceFile.SETTINGS,
-        PreferenceChanges().putString("last_note_tags", tags.joinToString(" ")),
+    override fun read(key: String): String? = storage.readBlocking(PreferenceFile.DRAFT).getString(key, null)
+    override fun write(changes: Map<String, String?>): Boolean = storage.persistBlocking(
+        PreferenceFile.DRAFT,
+        PreferenceChanges().also { editor -> changes.forEach { (key, value) -> editor.putString(key, value) } },
     )
-
-    override fun clearDraft() {
-        // Called from composition (a LaunchedEffect when a submission completes, and discard click
-        // handlers), i.e. on the main thread. persistBlocking deliberately rejects the main thread,
-        // so clear the in-memory state synchronously and move the commit + file deletion off it.
-        if (Looper.myLooper() != Looper.getMainLooper()) {
-            clearPersistedDraftBlocking(storage, draftDirectory)
-        } else {
-            val ownedFiles = ownedDraftFiles(storage.draft.value, draftDirectory)
-            storage.update(PreferenceFile.DRAFT, draftClearChanges())
-            draftClearScope.launch { ownedFiles.forEach { file -> runCatching { file.delete() } } }
-        }
-    }
 }
 
-/** Shared off-main host for draft clears requested from composition. */
-private val draftClearScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
-/** Draft image files this app owns, resolved before the draft that names them is cleared. */
-private fun ownedDraftFiles(preferences: PreferenceValues, draftDirectory: java.io.File?): List<java.io.File> {
-    val ownedDirectory = draftDirectory?.canonicalFile ?: return emptyList()
-    return listOf("photo_source_path", "note_image_path", "processed_image_path", "pending_replacement_image_path")
-        .mapNotNull { preferences.getString(it, null) }
-        .distinct()
-        .map { java.io.File(it) }
-        .filter { file -> file.exists() && runCatching { file.canonicalFile.parentFile == ownedDirectory }.getOrDefault(false) }
+internal fun clearPersistedDraftBlocking(storage: AppPreferenceStorage, draftDirectory: File?) {
+    val snapshot = storage.readBlocking(PreferenceFile.DRAFT)
+    val directory = draftDirectory?.canonicalFile
+    val files = listOf("photo_source_path", "note_image_path", "processed_image_path", "pending_replacement_image_path")
+        .mapNotNull { snapshot.getString(it, null) }.distinct().map(::File)
+        .filter { directory != null && it.canonicalFile.parentFile == directory }
+    check(storage.persistBlocking(PreferenceFile.DRAFT, draftClearChanges())) { "Could not clear the saved draft." }
+    // Never delete a file still referenced by a failed persistence transaction.
+    files.forEach { it.delete() }
 }
 
-internal fun clearPersistedDraftBlocking(storage: AppPreferenceStorage, draftDirectory: java.io.File?) {
-    val preferences = storage.draft.value
-    val ownedDirectory = draftDirectory?.canonicalFile
-    listOf("photo_source_path", "note_image_path", "processed_image_path", "pending_replacement_image_path")
-        .mapNotNull { preferences.getString(it, null) }
-        .distinct()
-        .forEach { path ->
-            val file = java.io.File(path)
-            if (ownedDirectory != null && file.exists() && file.canonicalFile.parentFile == ownedDirectory) file.delete()
-        }
-    storage.persistBlocking(PreferenceFile.DRAFT, draftClearChanges())
-}
-
-internal fun draftClearChanges(): PreferenceChanges {
-    val keys = listOf(
-        "sentence", "selection_start", "selection_end", "target_start", "target_end", "vocabulary",
-        "vocabulary_reading", "pitch_accent", "definition", "definition_manual_stale", "sentence_reading",
-        "sentence_reading_corrections", "leave_sentence_target_unannotated", "leave_vocabulary_unannotated",
-        "dependent_fields_stale", "definition_manual", "translation", "translation_sentence", "translation_source",
-        "translation_manual", "translation_stale", "translation_pending", "translation_error", "translation_suggestion",
-        "translation_suggestion_source", "translation_suggestion_error", "translation_attempted_sentence", "notes", "tags",
-        "submission_status", "pending_model_id", "pending_deck_id", "pending_sentence", "pending_lemma",
-        "dictionary_entry_id", "dictionary_sense_indices", "sentence_furigana_corrections", "photo_source_path",
-        "note_image_path", "processed_image_path", IMAGE_RECEIPT_PATH, IMAGE_RECEIPT_FILENAME, IMAGE_RECEIPT_SIZE,
-        IMAGE_RECEIPT_MODIFIED, SENTENCE_AUDIO_RECEIPT_PATH, SENTENCE_AUDIO_RECEIPT_FILENAME,
-        SENTENCE_AUDIO_RECEIPT_SIZE, SENTENCE_AUDIO_RECEIPT_MODIFIED, WORD_AUDIO_RECEIPT_PATH,
-        WORD_AUDIO_RECEIPT_FILENAME, WORD_AUDIO_RECEIPT_SIZE, WORD_AUDIO_RECEIPT_MODIFIED,
-        SubmissionRecoveryKeys.MEDIA_OPERATION, SubmissionRecoveryKeys.MEDIA_SOURCE_PATH,
-        SubmissionRecoveryKeys.MEDIA_SOURCE_SIZE, SubmissionRecoveryKeys.MEDIA_SOURCE_MODIFIED,
-        "pending_replacement_image_path", "draft_origin", SubmissionRecoveryKeys.REVISION,
-        SubmissionRecoveryKeys.MODEL_FIELDS, SubmissionRecoveryKeys.ORDERED_FIELDS, SubmissionRecoveryKeys.VOCABULARY_READING,
-        SubmissionRecoveryKeys.SENTENCE_READING, SubmissionRecoveryKeys.DEFINITION, SubmissionRecoveryKeys.TRANSLATION,
-        SubmissionRecoveryKeys.NOTES, SubmissionRecoveryKeys.TAGS, SubmissionRecoveryKeys.PITCH,
-        SubmissionRecoveryKeys.TARGET_START, SubmissionRecoveryKeys.TARGET_END, SubmissionRecoveryKeys.MEDIA_PATH,
-        SubmissionRecoveryKeys.MEDIA_SIZE, SubmissionRecoveryKeys.MEDIA_MODIFIED, SubmissionRecoveryKeys.IMPORTED_FILENAME,
-        SubmissionRecoveryKeys.NOTE_ID,
-    ) + draftAudioPreferenceKeys()
-    return PreferenceChanges().also { editor -> keys.forEach(editor::remove) }
-}
-
-private fun draftAudioPreferenceKeys(): List<String> = buildList {
-    add(DraftAudioPreferences.VERSION)
-    add(DraftAudioPreferences.EPOCH)
-    for (item in AudioItem.entries) {
-        add(DraftAudioPreferences.identity(item))
-        add(DraftAudioPreferences.status(item))
-        add(DraftAudioPreferences.path(item))
-        add(DraftAudioPreferences.format(item))
-        add(DraftAudioPreferences.size(item))
-        add(DraftAudioPreferences.modified(item))
-        add(DraftAudioPreferences.frozenPath(item))
-    }
-}
+/** The draft has its own store. Clear it atomically instead of maintaining a list of retired keys. */
+internal fun draftClearChanges(): PreferenceChanges = PreferenceChanges().clear()

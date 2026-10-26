@@ -86,7 +86,7 @@ class AnkiDroidGatewayMediaImportTest {
         val existingNames = draftDirectory.list()?.toSet().orEmpty()
         val provider = FakeAnkiProvider()
         ShadowContentResolver.registerProviderInternal("com.ichi2.anki.flashcards", provider)
-        val storage = AndroidPreferenceStorage(context)
+        val storage = DataStorePreferenceStorage(context)
         val persistence = object : DraftAudioPersistence {
             private val values = mutableMapOf<String, String>()
             override fun read(key: String): String? = values[key]
@@ -116,7 +116,6 @@ class AnkiDroidGatewayMediaImportTest {
             gateway = gateway,
             storage = storage,
             audio = audio,
-            repository = PreferenceFrozenSubmissionStore(storage, draftDirectory),
             ioDispatcher = Dispatchers.IO,
         )
         fun prepareAudio(item: AudioItem, format: AudioFormat, identity: String, text: String) {
@@ -165,7 +164,7 @@ class AnkiDroidGatewayMediaImportTest {
                 storage.load()
                 prepareAudio(AudioItem.SENTENCE, AudioFormat.MP3, "sentence-$suffix", "猫が走る")
                 prepareAudio(AudioItem.VOCABULARY, AudioFormat.OGG, "word-$suffix", "猫")
-                assertEquals(SendOutcome.Created(501L), coordinator.submit(request) {})
+                assertEquals(SendOutcome.Created(501L), coordinator.submit(request))
             }
             assertEquals(3, provider.importedNames.size)
             assertEquals(listOf("mp3", "oga", "webp"), provider.importedNames.map { it.substringAfterLast('.') })
@@ -176,8 +175,9 @@ class AnkiDroidGatewayMediaImportTest {
             assertTrue(insertedFields.contains("[sound:${provider.importedNames[0]}]"))
             assertTrue(insertedFields.contains("[sound:${provider.importedNames[1]}]"))
             assertTrue(insertedFields.contains("<img src=\"${provider.importedNames[2]}\">"))
-            assertEquals(null, SubmissionPhase.fromPersisted(storage.draft.value.getString(SubmissionRecoveryKeys.STATUS, null)))
-            assertEquals(null, readFrozenSubmission(storage.draft.value))
+            assertEquals("done", storage.draft.value.getString(SubmissionRecoveryKeys.STATUS, null))
+            assertEquals(501L, readFrozenSubmission(storage.draft.value)?.noteId)
+            storage.close()
         } finally {
             audio.dispose()
             ShadowContentResolver.reset()

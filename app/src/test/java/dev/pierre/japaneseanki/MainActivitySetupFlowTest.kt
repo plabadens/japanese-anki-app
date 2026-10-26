@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
@@ -12,7 +13,7 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** The first-run dialog must be wired into MainActivity, not merely render in isolation. */
+/** First-run Setup is an ordinary destination, after its persisted configuration is loaded. */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [37], qualifiers = "w390dp-h844dp-xxhdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -21,7 +22,10 @@ class MainActivitySetupFlowTest {
     val composeRule = createAndroidComposeRule<MainActivity>()
 
     @Test
-    fun freshLaunchShowsTheSetupFlowInItsFullScreenDialog() {
+    fun freshLaunchShowsTheSetupDestination() {
+        composeRule.waitUntil(20_000) {
+            composeRule.onAllNodesWithText(composeRule.activity.getString(R.string.sentence_audio)).fetchSemanticsNodes().isNotEmpty()
+        }
         composeRule.onNodeWithText(composeRule.activity.getString(R.string.sentence_audio)).assertIsDisplayed()
         composeRule.onNodeWithText(composeRule.activity.getString(R.string.install_anki)).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText(composeRule.activity.getString(R.string.finish_setup)).assertIsNotEnabled()

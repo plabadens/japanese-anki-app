@@ -104,6 +104,7 @@
     <string name="loading_audio">Preparing audio</string>
     <string name="default_tags">Default tags</string>
     <string name="clear_cache">Clear cache</string>
+    <string name="legacy_settings_could_not_clear_the_cache">Could not clear the cache.</string>
     <string name="clear_cache_title">Clear cache?</string>
     <string name="clear_cache_body">Your current draft and saved notes will be kept.</string>
     <string name="cache_cleared">Cache cleared</string>

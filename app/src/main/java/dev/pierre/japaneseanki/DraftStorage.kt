@@ -26,7 +26,12 @@ internal fun restoreTranslationDraft(preferences: PreferenceValues): RestoredTra
         !committedSentence.isNullOrBlank() &&
         committedSentence == preferences.getString("sentence", "").orEmpty() &&
         preferences.getString("translation_attempted_sentence", null) != committedSentence
-    val interrupted = TranslationResult.Failed("Translation was interrupted. Tap Retry to continue.")
+    fun savedFailure(key: String, message: String): TranslationResult.Failed = TranslationResult.Failed(
+        message,
+        TranslatorFailure.entries.firstOrNull { it.name == preferences.getString(key, null) }
+            ?: TranslatorFailure.UNKNOWN,
+    )
+    val interrupted = TranslationResult.Failed("Translation was interrupted. Tap Retry to continue.", TranslatorFailure.INTERRUPTED)
     return RestoredTranslationDraft(
         draft = TranslationDraft(
             sentence = preferences.getString(
@@ -38,7 +43,7 @@ internal fun restoreTranslationDraft(preferences: PreferenceValues): RestoredTra
                 source != null && text.isNotBlank() -> TranslationResult.Ready(text, source)
                 text.isNotBlank() -> TranslationResult.Ready(text, TranslationSource.MANUAL)
                 wasPending -> interrupted
-                translationError != null -> TranslationResult.Failed(translationError)
+                translationError != null -> savedFailure("translation_failure", translationError)
                 committedTranslationWasNotAttempted -> interrupted
                 else -> TranslationResult.Pending
             },
@@ -48,7 +53,7 @@ internal fun restoreTranslationDraft(preferences: PreferenceValues): RestoredTra
                 suggestionText != null && suggestionSource != null ->
                     TranslationResult.Ready(suggestionText, suggestionSource)
                 wasPending && manuallyEdited && stale -> interrupted
-                suggestionError != null -> TranslationResult.Failed(suggestionError)
+                suggestionError != null -> savedFailure("translation_suggestion_failure", suggestionError)
                 else -> null
             },
         ),
@@ -122,12 +127,14 @@ internal fun persistDraftPreferences(
         .putBoolean("translation_stale", translationDraft.stale)
         .putBoolean("translation_pending", activeTranslationResult is TranslationResult.Pending)
         .putString("translation_error", (activeTranslationResult as? TranslationResult.Failed)?.message)
+        .putString("translation_failure", (activeTranslationResult as? TranslationResult.Failed)?.failure?.name)
         .putString("translation_suggestion", (translationDraft.suggestion as? TranslationResult.Ready)?.text)
         .putString(
             "translation_suggestion_source",
             (translationDraft.suggestion as? TranslationResult.Ready)?.source?.name,
         )
         .putString("translation_suggestion_error", (translationDraft.suggestion as? TranslationResult.Failed)?.message)
+        .putString("translation_suggestion_failure", (translationDraft.suggestion as? TranslationResult.Failed)?.failure?.name)
         .putString("translation_attempted_sentence", translationAttemptedSentence)
         .putBoolean("card_invalidated", cardInvalidated)
         .putString("notes", draft.notes)

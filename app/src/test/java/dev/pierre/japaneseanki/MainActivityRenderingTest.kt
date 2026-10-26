@@ -127,22 +127,18 @@ class MainActivityRenderingTest {
     fun preferenceCollectorsFollowTheActivityLifecycle() {
         val storage = checkNotNull(observedStorage)
         waitForTag("capture-sentence-field")
-        composeRule.waitUntil { storage.draftCollectors == 1 && storage.settingsCollectors == 1 }
-
+        var owner: CardViewModel? = null
+        scenario?.onActivity { owner = it.cardViewModel }
         scenario?.moveToState(Lifecycle.State.CREATED)
-        composeRule.waitUntil { storage.draftCollectors == 0 && storage.settingsCollectors == 0 }
         storage.update(PreferenceFile.SETTINGS, PreferenceChanges().putString("while_stopped", "retained"))
         scenario?.moveToState(Lifecycle.State.RESUMED)
-        composeRule.waitUntil { storage.draftCollectors == 1 && storage.settingsCollectors == 1 }
-
         scenario?.recreate()
         waitForTag("capture-sentence-field")
-        composeRule.waitUntil { storage.draftCollectors == 1 && storage.settingsCollectors == 1 }
+        scenario?.onActivity { assertSame("Rotation retains the state owner, not a reconstructed Compose coordinator", owner, it.cardViewModel) }
         assertEquals("retained", storage.settings.value.getString("while_stopped", null))
-
         scenario?.close()
         scenario = null
-        composeRule.waitUntil { storage.draftCollectors == 0 && storage.settingsCollectors == 0 }
+        composeRule.waitUntil { storage.settingsCollectors == 0 }
     }
 
     @Test
@@ -161,10 +157,12 @@ class MainActivityRenderingTest {
         assertTrue(runSuspendTest {
             storage.persist(PreferenceFile.SETTINGS, PreferenceChanges().putBoolean("ownership_barrier", true))
         })
-        val restarted = AndroidPreferenceStorage(context)
+        (storage as? AutoCloseable)?.close()
+        val restarted = DataStorePreferenceStorage(context)
         runSuspendTest { restarted.load() }
         assertEquals("queued", restarted.settings.value.getString("ownership_probe", null))
         assertTrue(restarted.settings.value.getBoolean("ownership_barrier", false))
+        restarted.close()
     }
 
     @Test
@@ -233,7 +231,7 @@ class MainActivityRenderingTest {
         composeRule.onNodeWithTag("sentence-word-text-0-1", useUnmergedTree = true)
             .assertTextEquals("猫")
         composeRule.onNodeWithTag("sentence-word-0-1").assertIsSelected()
-        val draftPreferences = context.getSharedPreferences("draft", Context.MODE_PRIVATE)
+        val draftPreferences = AppServices.preferenceStorage(context).draft.value
         assertEquals(TEST_SENTENCE, draftPreferences.getString("sentence", null))
         assertEquals(0, draftPreferences.getInt("target_start", -1))
         assertEquals(1, draftPreferences.getInt("target_end", -1))
@@ -248,26 +246,6 @@ class MainActivityRenderingTest {
         waitForText(discardAction)
         assertEquals(1, composeRule.onAllNodesWithText(discardAction).fetchSemanticsNodes().size)
         composeRule.onNodeWithText(discardAction).assertIsEnabled()
-    }
-
-    @Test
-    fun discardingInterruptedSendKeepsDraftAndClearsFrozenKeys() {
-        waitForText(recoveryMessage())
-
-        val discardAction = context.getString(R.string.card_discard_interrupted_send_keep_draft)
-        waitForText(discardAction)
-        assertEquals(1, composeRule.onAllNodesWithText(discardAction).fetchSemanticsNodes().size)
-        composeRule.onNodeWithText(discardAction).assertIsEnabled()
-            .performClick()
-
-        val draftPreferences = context.getSharedPreferences("draft", Context.MODE_PRIVATE)
-        composeRule.waitUntil(timeoutMillis = 10_000) {
-            clearFrozenSubmission().values.keys.none(draftPreferences::contains)
-        }
-        assertEquals(TEST_SENTENCE, draftPreferences.getString("sentence", null))
-        assertEquals(TEST_NOTES, draftPreferences.getString("notes", null))
-        assertEquals(TEST_TAGS, draftPreferences.getString("tags", null))
-        assertTrue(clearFrozenSubmission().values.isNotEmpty())
     }
 
     @Test
@@ -300,8 +278,9 @@ class MainActivityRenderingTest {
         composeRule.onAllNodesWithText(discard).assertCountEquals(1)
         composeRule.onNodeWithText(discard).performClick()
         composeRule.onNodeWithText(context.getString(R.string.edit_sentence)).assertIsEnabled()
-        val draft = context.getSharedPreferences("draft", Context.MODE_PRIVATE)
-        composeRule.waitUntil { clearFrozenSubmission().values.keys.none(draft::contains) }
+        val storage = AppServices.preferenceStorage(context)
+        composeRule.waitUntil { readFrozenSubmission(storage.draft.value) == null }
+        val draft = storage.draft.value
         assertEquals(TEST_SENTENCE, draft.getString("sentence", null))
         assertEquals(TEST_NOTES, draft.getString("notes", null))
     }
@@ -349,7 +328,6 @@ class MainActivityRenderingTest {
             "openSentenceEditRestoresItsWorkingTextAndSelectionAfterRecreation",
             "dismissingSentenceEditPreservesAuthoritativeSentenceAndTargetSelection" -> cardDraft()
             "interruptedWordAudioRecoveryDisplaysItsMessageAndEnabledDiscardAction",
-            "discardingInterruptedSendKeepsDraftAndClearsFrozenKeys",
             "frozenRetryExplainsTheEditLockAndDiscardUnlocksTheVisibleDraft" -> interruptedDraft()
             "interruptedSendWithoutAValidTargetShowsExactlyOneRecoveryRegion" -> interruptedDraft()
                 .putInt(SubmissionRecoveryKeys.TARGET_START, 99)

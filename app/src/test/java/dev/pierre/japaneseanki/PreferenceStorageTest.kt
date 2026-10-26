@@ -20,20 +20,6 @@ class PreferenceStorageTest {
     }
 
     @Test
-    fun voiceCacheSaveQueuesWithoutWaitingForDisk() {
-        val storage = MemoryAppPreferenceStorage(deferUpdates = true)
-        val voices = listOf(CloudVoice("ja-JP-Test", "Japanese Test", listOf("ja-JP"), 24_000))
-        val persistence = PreferenceBackedSettingsPersistence(storage)
-
-        assertTrue(persistence.saveVoiceCache(voices))
-        assertEquals(
-            encodeVoices(voices),
-            storage.settings.value.getString(SettingsPreferenceKeys.VOICE_CACHE, null),
-        )
-        assertNull(storage.durable(PreferenceFile.SETTINGS).getString(SettingsPreferenceKeys.VOICE_CACHE, null))
-    }
-
-    @Test
     fun failedPreferenceReadKeepsNamedDraftAndRecoveryDefaults() = runSuspendTest {
         val unreadableDraft = PreferenceValues().changed(
             PreferenceChanges()

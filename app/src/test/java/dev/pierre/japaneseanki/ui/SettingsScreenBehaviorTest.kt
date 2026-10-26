@@ -19,9 +19,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.pierre.japaneseanki.AppRoute
 import dev.pierre.japaneseanki.R
 import dev.pierre.japaneseanki.SettingsValues
-import dev.pierre.japaneseanki.AppNavigationState
-import dev.pierre.japaneseanki.AppDestination
-import dev.pierre.japaneseanki.visibleRouteForAnalyzer
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -89,33 +86,6 @@ class SettingsScreenBehaviorTest {
         showSettings(SettingsPreviewState.VOICE_LIST_FAILED)
         composeRule.onNodeWithText(composeRule.activity.getString(R.string.sentence_voice)).performScrollTo()
         composeRule.onNodeWithText(composeRule.activity.getString(R.string.voices_failed)).assertIsDisplayed()
-    }
-
-    @Test
-    fun restoredCardAndIncompleteSetupStayBehindTheAnalyzerGate() {
-        assertEquals(
-            AppRoute.Capture,
-            visibleRouteForAnalyzer(AppRoute.Card, analyzerReady = false, frozenCardActive = false),
-        )
-        assertEquals(
-            AppRoute.Capture,
-            visibleRouteForAnalyzer(AppRoute.Capture, analyzerReady = false, frozenCardActive = true),
-        )
-        assertEquals(
-            AppRoute.Card,
-            visibleRouteForAnalyzer(AppRoute.Capture, analyzerReady = true, frozenCardActive = true),
-        )
-        assertEquals(
-            AppRoute.Card,
-            visibleRouteForAnalyzer(AppRoute.Card, analyzerReady = true, frozenCardActive = false),
-        )
-
-        val navigation = AppNavigationState(AppRoute.Card)
-        assertEquals(AppDestination.Setup, navigation.visibleDestination(false, true))
-        assertEquals(AppDestination.Setup, navigation.visibleDestination(true, false))
-        assertEquals(AppDestination.Card, navigation.visibleDestination(true, true))
-        navigation.open(AppDestination.Settings)
-        assertEquals(AppDestination.Settings, navigation.visibleDestination(false, false))
     }
 
     private fun showSettings(preview: SettingsPreviewState): MutableState<SettingsScreenState> {

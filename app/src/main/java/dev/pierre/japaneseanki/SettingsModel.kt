@@ -2,6 +2,8 @@ package dev.pierre.japaneseanki
 
 import dev.pierre.japaneseanki.speech.CloudVoice
 
+enum class AppRoute { Capture, Card }
+
 /** Non-secret settings persisted in the app's protected settings preferences. */
 internal data class SettingsValues(
     val modelId: Long? = null,

@@ -51,7 +51,7 @@ class TranslationServiceDtoTest {
         val result = runSuspendTest { service.translate("文") }
 
         assertEquals(
-            TranslationResult.Failed("Translation did not return exactly one result."),
+            TranslationResult.Failed("Translation did not return exactly one result.", TranslatorFailure.INVALID_RESPONSE),
             result,
         )
     }

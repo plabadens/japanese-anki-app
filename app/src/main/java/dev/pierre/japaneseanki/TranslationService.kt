@@ -12,7 +12,7 @@ enum class TranslationSource { GOOGLE, MANUAL }
 sealed interface TranslationResult {
     data class Ready(val text: String, val source: TranslationSource) : TranslationResult
     data object Pending : TranslationResult
-    data class Failed(val message: String) : TranslationResult
+    data class Failed(val message: String, val failure: TranslatorFailure = TranslatorFailure.UNKNOWN) : TranslationResult
 }
 
 /** A manual edit is preserved as stale when its source sentence changes. */
@@ -147,6 +147,9 @@ class GoogleTranslationClient(
     }
 
     private fun messageFor(failure: TranslatorFailure): String = when (failure) {
+        TranslatorFailure.MISSING_CREDENTIALS -> "Add your Google Cloud API key in Settings."
+        TranslatorFailure.INTERRUPTED -> "Translation was interrupted."
+        TranslatorFailure.UNKNOWN -> "Translation failed."
         TranslatorFailure.AUTHORIZATION -> "Google Cloud rejected the API key for translation."
         TranslatorFailure.API_NOT_ENABLED ->
             "The Cloud Translation API is not enabled for this Google Cloud project."
@@ -210,6 +213,9 @@ internal fun unescapeTranslationEntities(text: String): String {
 }
 
 enum class TranslatorFailure {
+    MISSING_CREDENTIALS,
+    INTERRUPTED,
+    UNKNOWN,
     NETWORK,
     AUTHORIZATION,
 
@@ -247,15 +253,15 @@ class TranslationService(
     private val credential: () -> String? = { null },
 ) {
     suspend fun translate(sentence: String): TranslationResult {
-        if (sentence.isBlank()) return TranslationResult.Failed("Sentence is empty.")
+        if (sentence.isBlank()) return TranslationResult.Failed("Sentence is empty.", TranslatorFailure.INVALID_REQUEST)
         val key = credential()?.trim().orEmpty()
-        if (key.isEmpty()) return TranslationResult.Failed("Add your Google Cloud API key in Settings.")
+        if (key.isEmpty()) return TranslationResult.Failed("Add your Google Cloud API key in Settings.", TranslatorFailure.MISSING_CREDENTIALS)
         return try {
             TranslationResult.Ready(translator.translate(key, sentence), TranslationSource.GOOGLE)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: TranslatorException) {
-            TranslationResult.Failed(error.message ?: "Translation failed.")
+            TranslationResult.Failed(error.message ?: "Translation failed.", error.failure)
         } catch (_: Exception) {
             TranslationResult.Failed("Translation failed.")
         }

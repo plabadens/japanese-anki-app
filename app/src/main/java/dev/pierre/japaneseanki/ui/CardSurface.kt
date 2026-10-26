@@ -146,13 +146,15 @@ internal fun reviewAudioPlaybackFailureMessage(field: String): ResourceCopy =
 
 internal data class TranslationFailurePresentation(@StringRes val headlineResource: Int)
 
-internal fun reviewTranslationFailureStatus(message: String): TranslationFailurePresentation = when {
-    message.contains("Google Cloud API key", ignoreCase = true) || message.contains("credential", ignoreCase = true) ->
-        TranslationFailurePresentation(R.string.card_translation_setup_needed)
-    message.contains("interrupted", ignoreCase = true) ->
-        TranslationFailurePresentation(R.string.card_translation_interrupted)
-    else -> TranslationFailurePresentation(R.string.card_translation_failed)
-}
+internal fun reviewTranslationFailureStatus(failure: dev.pierre.japaneseanki.TranslationResult.Failed): TranslationFailurePresentation =
+    when (failure.failure) {
+        dev.pierre.japaneseanki.TranslatorFailure.MISSING_CREDENTIALS,
+        dev.pierre.japaneseanki.TranslatorFailure.AUTHORIZATION ->
+            TranslationFailurePresentation(R.string.card_translation_setup_needed)
+        dev.pierre.japaneseanki.TranslatorFailure.INTERRUPTED ->
+            TranslationFailurePresentation(R.string.card_translation_interrupted)
+        else -> TranslationFailurePresentation(R.string.card_translation_failed)
+    }
 
 internal fun focalCropOffsets(
     imageWidth: Int,

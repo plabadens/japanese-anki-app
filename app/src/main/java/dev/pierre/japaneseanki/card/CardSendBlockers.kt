@@ -7,6 +7,14 @@ import dev.pierre.japaneseanki.R
 import dev.pierre.japaneseanki.ui.ReviewAudioPresentation
 import dev.pierre.japaneseanki.ui.reviewAudioSendBlocker
 
+internal enum class CardSendBlockerKind {
+    Target, AudioSetup, ImagePreparing, ImageMissing, SentenceAudio, WordAudio,
+    Permission, Model, Deck, Fields, Validation, Mapping, FrozenDestination,
+    Pitch, Translation, DictionaryLoading, SetupError, SetupNotLoaded, SetupLoading, Preparation,
+}
+
+internal data class CardSendBlocker(val kind: CardSendBlockerKind, val detail: String? = null)
+
 @Composable
 internal fun cardSendBlockerMessage(
     blocker: CardSendBlocker?,
