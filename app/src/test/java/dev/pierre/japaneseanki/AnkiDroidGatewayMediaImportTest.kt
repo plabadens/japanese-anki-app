@@ -108,7 +108,6 @@ class AnkiDroidGatewayMediaImportTest {
                     AudioFormat.OGG -> AudioFixtures.ogg(output)
                     AudioFormat.MP3 -> AudioFixtures.mp3(output)
                 }
-                Unit
             },
         )
         val gateway = AnkiDroidGateway(context.contentResolver, context)

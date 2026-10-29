@@ -2,6 +2,7 @@ package dev.pierre.japaneseanki
 
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
+import androidx.core.graphics.scale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -48,11 +49,11 @@ object ImageMediaProcessor {
             bitmap = decoded
             val fitted = fitWithin(decoded.width, decoded.height, MAX_EDGE)
             if (fitted != decoded.width to decoded.height) {
-                val scaled = Bitmap.createScaledBitmap(decoded, fitted.first, fitted.second, true)
+                val scaled = decoded.scale(fitted.first, fitted.second)
                 if (scaled !== decoded) decoded.recycle()
                 bitmap = scaled
             }
-            val target = bitmap!!
+            val target = bitmap
             val encoded = openOutput(temporary).use { output ->
                 target.compress(Bitmap.CompressFormat.WEBP_LOSSY, QUALITY, output)
             }
@@ -68,7 +69,7 @@ object ImageMediaProcessor {
             } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
                 Files.move(temporary.toPath(), destination.toPath(), StandardCopyOption.REPLACE_EXISTING)
             }
-            ProcessedImage(destination, bitmap!!.width, bitmap!!.height)
+            ProcessedImage(destination, target.width, target.height)
         } finally {
             bitmap?.recycle()
             temporary.delete()

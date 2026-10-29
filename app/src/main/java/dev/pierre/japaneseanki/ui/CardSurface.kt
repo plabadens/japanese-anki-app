@@ -105,7 +105,7 @@ import dev.pierre.japaneseanki.TargetSpan
 import java.io.File
 import kotlin.math.max
 
-internal data class ResourceCopy(@StringRes val resourceId: Int, val formatArgs: List<Any> = emptyList()) {
+internal data class ResourceCopy(@param:StringRes val resourceId: Int, val formatArgs: List<Any> = emptyList()) {
     fun resolve(context: Context): String = context.getString(resourceId, *formatArgs.toTypedArray())
 }
 
@@ -156,7 +156,7 @@ internal fun reviewAudioGenerationFailureMessage(field: String, detail: String, 
 internal fun reviewAudioPlaybackFailureMessage(field: String): ResourceCopy =
     ResourceCopy(R.string.card_audio_playback_failed, listOf(field))
 
-internal data class TranslationFailurePresentation(@StringRes val headlineResource: Int)
+internal data class TranslationFailurePresentation(@param:StringRes val headlineResource: Int)
 
 internal fun reviewTranslationFailureStatus(failure: dev.pierre.japaneseanki.TranslationResult.Failed): TranslationFailurePresentation =
     when (failure.failure) {
@@ -254,8 +254,8 @@ internal fun CardScreen(
     onAction: () -> Unit,
     statusMessage: String?,
     statusContent: @Composable () -> Unit,
-    onBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    onBack: (() -> Unit)? = null,
 ) {
     var photoExpanded by remember { mutableStateOf(false) }
     var editingNotes by remember { mutableStateOf(false) }

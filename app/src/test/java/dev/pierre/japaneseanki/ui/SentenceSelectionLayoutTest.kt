@@ -29,7 +29,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -80,7 +80,7 @@ class SentenceSelectionLayoutTest {
                 LocalTouchFeedbackDispatcher provides dispatcher,
             ) {
                 MaterialTheme(colorScheme = lightColorScheme()) {
-                    sentencePane(current) { span -> scene.value = scene.value.copy(selected = span) }
+                    SentencePane(current) { span -> scene.value = scene.value.copy(selected = span) }
                 }
             }
         }
@@ -114,7 +114,7 @@ class SentenceSelectionLayoutTest {
                 LocalTouchFeedbackDispatcher provides dispatcher,
             ) {
                 MaterialTheme(colorScheme = lightColorScheme()) {
-                    sentencePane(current) { span -> scene.value = scene.value.copy(selected = span) }
+                    SentencePane(current) { span -> scene.value = scene.value.copy(selected = span) }
                 }
             }
         }
@@ -141,7 +141,7 @@ class SentenceSelectionLayoutTest {
             CompositionLocalProvider(
                 LocalDensity provides Density(composeRule.density.density, current.fontScale),
             ) {
-                sentencePane(current) { span -> scene.value = scene.value.copy(selected = span) }
+                SentencePane(current) { span -> scene.value = scene.value.copy(selected = span) }
             }
         }
 
@@ -207,7 +207,7 @@ class SentenceSelectionLayoutTest {
                 LocalDensity provides Density(composeRule.density.density, current.fontScale),
             ) {
                 MaterialTheme(colorScheme = lightColorScheme()) {
-                    sentencePane(current) { span -> scene.value = scene.value.copy(selected = span) }
+                    SentencePane(current) { span -> scene.value = scene.value.copy(selected = span) }
                 }
             }
         }
@@ -348,7 +348,7 @@ class SentenceSelectionLayoutTest {
     }
 
     @Composable
-    private fun sentencePane(scene: Scene, onSelect: (TargetSpan) -> Unit) {
+    private fun SentencePane(scene: Scene, onSelect: (TargetSpan) -> Unit) {
         MaterialTheme(colorScheme = if (scene.dark) darkColorScheme() else lightColorScheme()) {
             Surface(
                 modifier = Modifier.width(scene.width.dp),

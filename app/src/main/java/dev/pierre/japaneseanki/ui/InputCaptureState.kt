@@ -44,8 +44,8 @@ internal fun captureActionsEnabled(screenEnabled: Boolean, captureInProgress: Bo
 internal data class CaptureShutterPresentation(
     val diameterDp: Int,
     val showProgress: Boolean,
-    @StringRes val contentDescription: Int,
-    @StringRes val stateDescription: Int,
+    @param:StringRes val contentDescription: Int,
+    @param:StringRes val stateDescription: Int,
 )
 
 /** Keep the button's measured bounds identical in ready, pending and failed states. */

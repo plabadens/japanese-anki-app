@@ -12,7 +12,7 @@ import androidx.compose.runtime.Composable
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-internal fun material3ExpressiveApiCompileSmoke() {
+internal fun Material3ExpressiveApiCompileSmoke() {
     val standardMotion = MotionScheme.standard()
     val expressiveMotion = MotionScheme.expressive()
 

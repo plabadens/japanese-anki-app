@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.core.content.FileProvider
+import androidx.core.net.toUri
 import dev.pierre.japaneseanki.send.AnkiNoteSink
 import java.io.File
 
@@ -82,7 +83,7 @@ internal class AnkiDroidGateway(
                     throw cancelled
                 } catch (error: Exception) {
                     if (providerFailure == null) providerFailure = error
-                    else providerFailure?.addSuppressed(error)
+                    else providerFailure.addSuppressed(error)
                 }
             }
         }
@@ -90,7 +91,7 @@ internal class AnkiDroidGateway(
         val returnedUri = importedUri?.toString()
             ?: throw MediaImportException(operation, MediaImportFailureStage.PROVIDER_IMPORT)
         return AnkiMediaImporter.importedFilename(returnedUri, kind) ?: run {
-            val uri = Uri.parse(returnedUri)
+            val uri = returnedUri.toUri()
             val extension = uri.lastPathSegment?.substringAfterLast('.', "")
                 ?.takeIf { it.matches(Regex("[A-Za-z0-9]{1,8}")) }
             android.util.Log.w("AnkiSend", "Returned media rejected: kind=$kind extension=$extension")
@@ -309,7 +310,7 @@ internal class AnkiDroidGateway(
         private const val NOTE_ID = "_id"
         private const val CARD_ORD = "ord"
         private const val CARD_DECK_ID = "deck_id"
-        private val BASE_URI = Uri.parse("content://$AUTHORITY")
+        private val BASE_URI = "content://$AUTHORITY".toUri()
         private val MODELS_URI = Uri.withAppendedPath(BASE_URI, "models")
         private val DECKS_URI = Uri.withAppendedPath(BASE_URI, "decks")
         private val NOTES_URI = Uri.withAppendedPath(BASE_URI, "notes")

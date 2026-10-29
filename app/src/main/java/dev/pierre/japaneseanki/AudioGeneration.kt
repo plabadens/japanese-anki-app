@@ -153,10 +153,10 @@ class ReusableAudioCache(
      */
     @Synchronized
     @Throws(IOException::class)
-    override fun store(key: AudioCacheKey, completedFile: File): AudioCacheStoreResult {
-        val format = AudioFileValidator.requireContentFormat(completedFile)
+    override fun store(key: AudioCacheKey, source: File): AudioCacheStoreResult {
+        val format = AudioFileValidator.requireContentFormat(source)
         return try {
-            storeValidated(key, completedFile, format)
+            storeValidated(key, source, format)
         } catch (error: IOException) {
             AudioCacheStoreResult.Failed("Reusable audio cache is unavailable (${error.javaClass.simpleName})")
         } catch (error: SecurityException) {

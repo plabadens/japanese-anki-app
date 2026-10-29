@@ -185,7 +185,7 @@ class SubmissionRecoveryTest {
 
     @Test
     fun audioReceiptValidationRejectsMissingAndChangedSourcesAndAcceptsExactRoundTrip() {
-        val directory = createTempDir(prefix = "audio-receipt-")
+        val directory = Files.createTempDirectory("audio-receipt-").toFile()
         try {
             val source = File(directory, "source.wav").apply { writeBytes(byteArrayOf(1, 2, 3)) }
             val identity = MediaIdentity.fromFile(source)

@@ -346,8 +346,9 @@ class TranslationServiceTest {
         assertEquals("New", (finished.suggestion as TranslationResult.Ready).text)
 
         val kept = finished.keepMyText()
-        assertEquals("My version", (kept.result as TranslationResult.Ready).text)
-        assertEquals(TranslationSource.MANUAL, (kept.result as TranslationResult.Ready).source)
+        val keptResult = kept.result as TranslationResult.Ready
+        assertEquals("My version", keptResult.text)
+        assertEquals(TranslationSource.MANUAL, keptResult.source)
         assertEquals("New", (finished.useSuggestion().result as TranslationResult.Ready).text)
     }
 

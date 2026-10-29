@@ -62,9 +62,9 @@ internal suspend fun request(
             override fun onResponse(call: Call, response: Response) {
                 try {
                     val result = response.use {
-                        val responseBody = it.body?.byteStream()?.use { stream ->
+                        val responseBody = it.body.byteStream().use { stream ->
                             readBounded(stream, maxResponseBytes)
-                        } ?: ByteArray(0)
+                        }
                         GoogleHttpResponse(it.code, responseBody)
                     }
                     continuation.resume(result)

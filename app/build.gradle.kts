@@ -190,7 +190,7 @@ if (System.getenv("IN_GRADLE_UPDATE_DEPS") == "1") {
 dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
-    implementation("com.google.mlkit:text-recognition-japanese:16.0.1")
+    implementation(libs.mlkit.text.recognition.japanese)
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)

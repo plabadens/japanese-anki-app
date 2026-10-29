@@ -49,8 +49,7 @@ class Nhk2016PronunciationSource(
                     throw AudioSourceMissingException("No NHK recording matches this spelling")
                 }
                 if (status != 200) throw IOException("NHK recording service is unavailable")
-                val input = response.body?.byteStream()
-                    ?: throw IOException("NHK recording response was empty")
+                val input = response.body.byteStream()
                 input.use {
                     temporary.outputStream().use { stream ->
                         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)

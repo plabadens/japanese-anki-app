@@ -1,6 +1,7 @@
 package dev.pierre.japaneseanki
 
 import android.content.Context
+import android.os.storage.StorageManager
 import kotlinx.coroutines.CancellationException
 import java.io.File
 import java.io.FileOutputStream
@@ -65,7 +66,7 @@ internal object BundledDictionary {
     fun install(context: Context, filesDir: File = context.filesDir) {
         val destination = directory(filesDir)
         if (isInstalled(destination)) return
-        if (filesDir.usableSpace < TOTAL_BYTES) {
+        if (allocatableBytes(context, filesDir) < TOTAL_BYTES) {
             throw BundledDictionaryStorageException("Not enough free storage for the offline dictionary")
         }
 
@@ -91,6 +92,18 @@ internal object BundledDictionary {
             }
             throw BundledDictionaryException("Could not unpack the bundled dictionary", failure)
         }
+    }
+
+    /**
+     * Free space the system is willing to make available, which includes cache it may evict.
+     * A missing manager or a non-positive answer is treated as unknown so the check never fails
+     * a device that simply cannot report it; [File.getUsableSpace] is the conservative fallback.
+     */
+    private fun allocatableBytes(context: Context, filesDir: File): Long {
+        val reported = runCatching {
+            context.getSystemService(StorageManager::class.java)?.getAllocatableBytes(StorageManager.UUID_DEFAULT)
+        }.getOrNull()
+        return if (reported != null && reported > 0) reported else filesDir.usableSpace
     }
 
     private fun extract(context: Context, staging: File) {

@@ -15,6 +15,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.net.toUri
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -86,7 +87,7 @@ class MainActivity : ComponentActivity() {
     }
     private fun connectAnki() {
         if (cardViewModel.uiState.value.connection.installed) apiPermission.launch(ANKIDROID_READ_WRITE_PERMISSION)
-        else runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.ichi2.anki"))) }
+        else runCatching { startActivity(Intent(Intent.ACTION_VIEW, "market://details?id=com.ichi2.anki".toUri())) }
     }
     private fun play(audio: Pair<DraftAudioFile, AudioFileLease>) {
         stopPlayback()

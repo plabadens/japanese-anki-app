@@ -2,6 +2,7 @@ package dev.pierre.japaneseanki
 
 import android.content.Intent
 import android.net.Uri
+import androidx.core.net.toUri
 
 internal const val ANKIDROID_READ_WRITE_PERMISSION = "com.ichi2.anki.permission.READ_WRITE_DATABASE"
 internal const val IMAGE_RECEIPT_PATH = "image_import_receipt_path"
@@ -24,7 +25,7 @@ internal fun ankiBrowserUriText(noteId: Long): String {
     require(noteId > 0)
     return "anki://x-callback-url/browser?search=nid%3A$noteId"
 }
-internal fun ankiBrowserUri(noteId: Long): Uri = Uri.parse(ankiBrowserUriText(noteId))
+internal fun ankiBrowserUri(noteId: Long): Uri = ankiBrowserUriText(noteId).toUri()
 internal fun ankiBrowserIntent(noteId: Long): Intent = Intent(Intent.ACTION_VIEW, ankiBrowserUri(noteId)).setPackage("com.ichi2.anki")
 
 internal fun draftCallbackIsCurrent(callbackGeneration: Long, currentGeneration: Long, locked: Boolean): Boolean =

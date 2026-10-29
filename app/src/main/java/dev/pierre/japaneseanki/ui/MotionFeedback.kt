@@ -16,7 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -25,7 +25,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
@@ -35,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 internal enum class TouchFeedbackEvent {
     WORD_SELECTION,
@@ -136,7 +136,7 @@ internal class PlatformTouchFeedbackDispatcher(
 @Composable
 internal fun rememberSystemMotionDurationScale(): Float {
     val lifecycleOwner = LocalLifecycleOwner.current
-    var durationScale by remember { mutableStateOf(readSystemMotionDurationScale()) }
+    var durationScale by remember { mutableFloatStateOf(readSystemMotionDurationScale()) }
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) durationScale = readSystemMotionDurationScale()
@@ -147,8 +147,7 @@ internal fun rememberSystemMotionDurationScale(): Float {
     return durationScale
 }
 
-private fun readSystemMotionDurationScale(): Float =
-    if (Build.VERSION.SDK_INT < 26) 1f else ValueAnimator.getDurationScale()
+private fun readSystemMotionDurationScale(): Float = ValueAnimator.getDurationScale()
 
 internal enum class ProgressSize(val diameter: Dp, val strokeWidth: Dp) {
     Small(16.dp, 2.dp),

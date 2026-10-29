@@ -143,7 +143,7 @@ private fun SetupHeader(state: SetupUi) {
         }
         state.dictionaryErrorResource != null -> {
             headline = R.string.setup_dictionary_failed
-            body = state.dictionaryErrorResource ?: R.string.setup_dictionary_failed_body
+            body = state.dictionaryErrorResource
         }
         state.audioReady && state.ankiReady -> {
             headline = R.string.setup_ready

@@ -141,7 +141,7 @@ class GoogleSpeechProviderTest {
         assertEquals(400, error.diagnostic?.httpStatus)
         assertEquals("INVALID_ARGUMENT", error.diagnostic?.googleStatus)
         assertEquals("INVALID_ARGUMENT", error.diagnostic?.googleReason)
-        assertTrue(error.diagnostic?.durationMillis != null && error.diagnostic!!.durationMillis!! >= 0)
+        assertTrue((error.diagnostic?.durationMillis ?: -1L) >= 0)
         assertEquals("SYNTHESIS", error.diagnostic?.request?.operation?.name)
         assertEquals("悪逆".toByteArray(Charsets.UTF_8).size, error.diagnostic?.request?.inputBytes)
         val diagnostics = error.diagnostic.toString()

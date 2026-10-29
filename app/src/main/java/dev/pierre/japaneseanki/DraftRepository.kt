@@ -2,8 +2,8 @@ package dev.pierre.japaneseanki
 
 import android.content.Context
 import android.util.Log
-import android.net.Uri
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import dev.pierre.japaneseanki.send.SendCoordinator
 import dev.pierre.japaneseanki.send.SendOutcome
 import dev.pierre.japaneseanki.send.SendRequest
@@ -78,7 +78,6 @@ internal class DraftRepository(
                 is AudioSynthesisRequest -> wordAudio.synthesize(payload, file)
                 else -> error("Unsupported audio request")
             }
-            Unit
         }, cache = cache)
         sender = SendCoordinator(AnkiDroidGateway(context.contentResolver, context), storage, audio)
         val sentence = saved.getString("sentence", "").orEmpty()
@@ -237,7 +236,7 @@ internal class DraftRepository(
     suspend fun copyImage(uri: String): File = withContext(Dispatchers.IO) {
         val file = File(directory, "source-${UUID.randomUUID()}.image")
         try {
-            context.contentResolver.openInputStream(Uri.parse(uri))?.use { input -> file.outputStream().use(input::copyTo) }
+            context.contentResolver.openInputStream(uri.toUri())?.use { input -> file.outputStream().use(input::copyTo) }
                 ?: error("Image unavailable")
             check(file.length() > 0)
             file

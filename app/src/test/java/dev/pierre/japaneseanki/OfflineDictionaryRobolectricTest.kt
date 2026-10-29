@@ -109,7 +109,7 @@ class OfflineDictionaryAndroidTest {
         try {
             dictionary.prepare()
             openReadWrite(file).use { database ->
-                database.execSQL("INSERT INTO forms (expression, reading, entry_id) VALUES (?, ?, ?)", arrayOf("zzz孤児", "zzzこじ", 987654321L))
+                database.execSQL("INSERT INTO forms (expression, reading, entry_id) VALUES (?, ?, ?)", arrayOf<Any>("zzz孤児", "zzzこじ", 987654321L))
                 database.rawQuery("SELECT 1 FROM forms WHERE expression='zzz孤児'", null).use { cursor ->
                     assertTrue("fixture must contain the orphan form", cursor.moveToFirst())
                 }
