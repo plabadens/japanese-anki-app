@@ -1,8 +1,8 @@
 # AGENTS.md
 
-**The code and its tests are the contract.** `USER-STORY.md` says why the app exists; `SCREENS.md`
-says what each screen is for and what must not appear on it. When behaviour changes, its tests change
-with it — a behaviour change with no test change is not finished.
+Code and tests describe current behaviour; `USER-STORY.md` and `SCREENS.md` describe intended
+behaviour. Resolve contradictions explicitly. Behaviour changes update affected tests and
+documentation together.
 
 ## Design
 
@@ -13,11 +13,14 @@ Authorities: [architecture](https://developer.android.com/topic/architecture/rec
 [Material Design 3](https://m3.material.io/). Local taste yields to them.
 
 - Layer and flow one way: UI → state holder → repository → data source; nothing above it reaches a source.
-- One state holder per screen, ViewModel or plain class; composables take values and callbacks, not holders.
-- One abstraction level per function: policy decides, orchestration sequences, mechanism touches the world.
+- Screen state belongs in a ViewModel or plain state holder; composables take values and callbacks.
+  Give each state one owner; distinguish transient UI state from durable user work.
+- Reuse existing code and standard Android/library mechanisms before writing custom infrastructure.
+  Add abstractions only for a current need.
 - Name composables; keep state in the narrowest scope that reads it.
 - Interfaces only at a boundary you do not own; fakes over mocks.
-- Test behaviour at the lowest layer that fails for the right reason.
+- Test behaviour at the lowest useful layer, plus affected launch, navigation and primary-action wiring.
+  Bug fixes include a regression test that fails before the fix.
 - Theme, don't style: M3 roles, type and shape scales, tokens; no literal hex, `sp` or `dp` in a screen.
 - Material component before a custom one; one primary action, one instruction per state.
 - Respect the system: dynamic colour, light and dark, reduced motion.
@@ -33,8 +36,8 @@ Authorities: [architecture](https://developer.android.com/topic/architecture/rec
 ## Git
 
 - Author and committer: `Pierre Labadens <labadens.pierre@gmail.com>`. No agent identities, no co-author trailers.
-- Work on your own task branch; it stays local — never push it, not for CI, backup or review.
-- `dev` is the integration branch: merge into it, and push it only once the gate below is green.
+- `dev` is the integration branch: merge into it, and push it only once the 
+  gate below is green.
 - Before merging: `scripts/dev.sh test` green, `scripts/dev.sh render` complete, `git diff --check` clean.
 
 ## Build
@@ -42,6 +45,9 @@ Authorities: [architecture](https://developer.android.com/topic/architecture/rec
 No Gradle wrapper; the toolchain is Nix. Go through `scripts/dev.sh`, which caches the dev-shell
 environment and keeps the Gradle daemon warm — a bare `nix develop` per command costs ~12 s and a cold
 context.
+
+Report the revision, checks actually run, and remaining gaps. Local tests and renders do not
+establish device or live-service behaviour.
 
 ```sh
 scripts/dev.sh test [Class]   # verifyFast: unit, Robolectric and Compose assertions
